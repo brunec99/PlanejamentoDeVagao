@@ -4,5 +4,6 @@ export function formatTimestamp(value: string) { return new Intl.DateTimeFormat(
 export const statusLabels = { terminal: 'Terminal', in_production: 'Em produção', restricted: 'Com restrição', not_started: 'Não iniciado' };
 export const activityLabels = { not_started: 'Não iniciada', in_progress: 'Em andamento', completed: 'Concluída' };
 export const releaseLabels = { initial: 'Inicial', normal: 'Normal', exceptional: 'Excepcional' };
+export const roleLabels = { manager: 'Gestor', planner: 'Planejador', viewer: 'Consulta', admin: 'Admin' };
 export const planningPath = (workId: string) => `/obras/${encodeURIComponent(workId)}/planejamento`;
 export const wagonPath = (workId: string, wagonId: string) => `/obras/${encodeURIComponent(workId)}/vagoes/${encodeURIComponent(wagonId)}`;

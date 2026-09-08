@@ -11,7 +11,7 @@ npm ci
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Login é obrigatório (Supabase Auth) — crie o projeto Supabase e rode o seed antes de testar, veja a seção [Supabase](#supabase) abaixo. Depois acesse http://127.0.0.1:3000/login. O ambiente de validação usa a data fixa **08/09/2026**, indicada na interface. Os dados agora persistem no Postgres do Supabase, não mais em memória do navegador.
+Login é obrigatório e feito só por Google Workspace (domínio `atrincorporadora.com.br`) — configure o Supabase e o provedor Google antes de testar, veja as seções [Supabase](#supabase) e [Login com Google](#login-com-google) abaixo. Depois acesse http://127.0.0.1:3000/login. O ambiente de validação usa a data fixa **08/09/2026**, indicada na interface. Os dados persistem no Postgres do Supabase, não mais em memória do navegador.
 
 ```sh
 npm test
@@ -29,7 +29,8 @@ npm run build
 - Liberações inicial, normal e excepcional, com validação, justificativa e histórico.
 - Dívidas próprias e herdadas, sem duplicação; filtros de abertas, vencidas e resolvidas.
 - Reabertura de terminalidade exige gestor e justificativa, preserva liberações e alerta sucessores.
-- Login real (Supabase Auth) com papéis de gestor, planejador e consulta; autorização por obra aplicada no servidor a cada comando.
+- Login real via Google Workspace (domínio restrito), com papéis de gestor, planejador, consulta e admin; autorização por obra aplicada no servidor a cada comando.
+- Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/admin`, sem mexer em planejamento.
 - Consulta de obras/atividades e importação revisada do Prevision.
 
 A liberação excepcional cria a autorização e as dívidas na mesma transação. Falhas descartam todo o rascunho. Dívidas herdadas mantêm o prazo original, e uma nova autorização registra seu reconhecimento. Resolver a pendência encerra a dívida sem apagar sua origem. Restrições impeditivas não podem ser contornadas por liberação excepcional. Correções que reduzam progresso exigem justificativa.
@@ -58,14 +59,26 @@ Consultas têm timeout, mensagens sem credenciais, cache local de um minuto e in
 ## Supabase
 
 1. Crie um projeto em https://supabase.com/dashboard.
-2. Rode a migração `supabase/migrations/0001_init.sql` no SQL Editor do projeto (ou `supabase db push` pela CLI).
+2. Rode as migrações `supabase/migrations/0001_init.sql`, `0002_commit_planning_profiles.sql` e `0003_admin_role.sql`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI).
 3. Em Project Settings → API, copie a URL e as chaves `anon` e `service_role` para `.env.local` (a partir de `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-4. Rode `npm run seed` uma única vez: cria os três usuários de demonstração (gestor, planejador, consulta) via Supabase Auth e os mesmos dados fictícios do protótipo anterior. As credenciais de login são impressas no terminal ao final.
+4. Configure o login com Google — veja [Login com Google](#login-com-google) abaixo. Não há mais login por senha nem script de seed com usuários fictícios: o primeiro acesso via Google já provisiona o usuário.
 5. `npm run dev` e acesse `/login`.
 
-`SUPABASE_SERVICE_ROLE_KEY` nunca deve ter o prefixo `NEXT_PUBLIC_` — ela ignora Row Level Security e só é usada no servidor (repositório e script de seed). O navegador nunca acessa o Postgres diretamente, só as rotas `/api/planning` e `/api/planning/commands`, autenticadas pela sessão do Supabase Auth.
+`SUPABASE_SERVICE_ROLE_KEY` nunca deve ter o prefixo `NEXT_PUBLIC_` — ela ignora Row Level Security e só é usada no servidor (repositório e rota de callback). O navegador nunca acessa o Postgres diretamente, só as rotas `/api/planning` e `/api/planning/commands`, autenticadas pela sessão do Supabase Auth.
 
 Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) em Project Settings → Environment Variables.
+
+## Login com Google
+
+Autenticação exclusivamente via Google OAuth, restrita ao domínio `atrincorporadora.com.br` (checado no servidor em `src/app/auth/callback/route.ts`, não só pelo parâmetro `hd` do Google). Não existe mais login por e-mail/senha.
+
+1. No [Google Cloud Console](https://console.cloud.google.com/), crie (ou reaproveite) um projeto → **APIs & Services → Credentials → Create Credentials → OAuth client ID** → tipo *Web application*.
+2. Em **Authorized redirect URIs**, adicione exatamente: `https://<seu-projeto>.supabase.co/auth/v1/callback` (URL do próprio Supabase, não do app — pegue o `<seu-projeto>` da URL do seu `NEXT_PUBLIC_SUPABASE_URL`).
+3. Copie o **Client ID** e o **Client Secret** gerados.
+4. No Supabase Dashboard → **Authentication → Providers → Google**, ative o provedor e cole as duas credenciais.
+5. Acesse `/login` e entre com uma conta `@atrincorporadora.com.br`. O primeiro login de `bruno.engenharia@atrincorporadora.com.br` cria automaticamente o perfil administrador (com acesso a todas as obras já cadastradas); qualquer outra conta do domínio é criada como "Consulta" sem acesso a nenhuma obra até um admin liberar em `/admin`.
+
+Contas fora do domínio configurado são barradas e deslogadas no próprio callback, mesmo que completem o login no Google.
 
 ## Arquitetura e evolução
 

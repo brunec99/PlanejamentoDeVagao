@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
 import { getAuthUser, getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { roleLabels } from '@/shared/format';
 import { signOut } from './login/actions';
 import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 export const metadata: Metadata = { title: { default: 'Sistema de Planejamento Vagão', template: '%s | Planejamento Vagão' }, description: 'Planejamento de produção por períodos de takt e controle de terminalidade.' };
-const roleLabels = { manager: 'Gestor', planner: 'Planejador', viewer: 'Consulta' } as const;
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const authUser = await getAuthUser();
   const profile = authUser ? await getRouteProfile() : null;
@@ -20,6 +20,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <span className="text-[14.5px]">Planejamento Vagão</span>
           </Link>
           <Link className="text-[13.5px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]" href="/integracoes">Prevision</Link>
+          {profile?.role === 'admin' && <Link className="text-[13.5px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]" href="/admin">Administração</Link>}
         </div>
         <div className="flex items-center gap-4">
           <span className="badge-muted">Ambiente de validação</span>
