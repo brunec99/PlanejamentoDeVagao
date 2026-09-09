@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Download, Wallet } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Wallet } from 'lucide-react';
 import { PlanningActions } from './planning-actions';
 import { usePlanning } from './planning-provider';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
@@ -32,7 +32,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <Link className="button-ghost" href={`/obras/${workId}/dividas`}><Wallet size={15} />Dívidas</Link>
-        <Link className="button" href={`/obras/${workId}/importar`}><Download size={15} />Importar do Prevision</Link>
+        <Link className="button" href={`/obras/${workId}/importar`}><RefreshCw size={15} />Atualizar tarefas</Link>
       </div>
     </div>
 
