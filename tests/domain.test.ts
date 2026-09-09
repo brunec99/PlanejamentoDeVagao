@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockData, DEMO_DATE } from '../src/mocks/planning';
+import { sliceActivity } from '../src/application/use-cases/slice-activity';
 import { isTerminal, isOverdue, wagonStatus, weightedProgress, validateSequence } from '../src/domain/rules';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
 import { getPlanning } from '../src/application/use-cases/get-planning';
@@ -40,4 +41,33 @@ test('cenários respeitam janelas temporais, locais da obra e liberações', () 
       assert.equal(d.locations.find(l => l.id === activity.locationId)?.workId, sequence.workId);
     }
   }
+});
+
+test('fatia divide a atividade pelos vagões preservando 100% e o período de cada janela', () => {
+  const wagons = [
+    { id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-21' },
+    { id: 'w2', plannedStart: '2026-09-22', plannedEnd: '2026-10-12' },
+    { id: 'w3', plannedStart: '2026-10-13', plannedEnd: '2026-11-02' },
+  ];
+  const row = { externalId: '9', name: 'Estrutura de concreto', location: 'Térreo', plannedStart: '2026-09-10', plannedEnd: '2026-10-20', progress: 0 };
+  const slices = sliceActivity(row, wagons);
+  assert.equal(slices.length, 3);
+  assert.equal(slices.reduce((s, x) => s + x.percent, 0), 100);
+  assert.deepEqual(slices.map(s => s.wagonId), ['w1', 'w2', 'w3']);
+  // cada fatia cabe inteira na janela do seu vagão
+  slices.forEach((slice, i) => {
+    assert.ok(slice.row.plannedStart >= wagons[i].plannedStart && slice.row.plannedEnd <= wagons[i].plannedEnd);
+    assert.match(slice.row.name, /—\s\d+%$/);
+  });
+  assert.equal(slices[0].row.plannedStart, '2026-09-10');
+  assert.equal(slices[2].row.plannedEnd, '2026-10-20');
+});
+
+test('atividade contida num único vagão não vira fatia', () => {
+  const wagons = [{ id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-21' }];
+  const slices = sliceActivity({ externalId: '3', name: 'Alvenaria', location: '2º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-12', progress: 0 }, wagons);
+  assert.equal(slices.length, 1);
+  assert.equal(slices[0].percent, 100);
+  assert.equal(slices[0].row.name, 'Alvenaria');
+  assert.equal(slices[0].row.externalId, '3');
 });

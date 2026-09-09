@@ -5,16 +5,29 @@ import { planningDataToPayload, rowsToPlanningData, type Rows } from './mappers'
 
 const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'history_events', 'profiles'] as const;
 const MAX_ATTEMPTS = 5;
+const PAGE = 1000;
+
+/** O PostgREST devolve no máximo 1000 linhas por requisição; sem paginar, o snapshot
+ * viria truncado e o domínio decidiria sobre dados incompletos. */
+async function fetchAll(table: string): Promise<unknown[]> {
+  const client = getServiceClient();
+  const all: unknown[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client.from(table).select('*').range(from, from + PAGE - 1);
+    if (error) throw new Error(`Falha ao ler ${table}: ${error.message}`);
+    all.push(...data);
+    if (data.length < PAGE) return all;
+  }
+}
 
 async function fetchSnapshotWithVersion(): Promise<{ data: PlanningData; version: number }> {
   const client = getServiceClient();
   const [rows, meta] = await Promise.all([
-    Promise.all(TABLES.map(table => client.from(table).select('*'))),
+    Promise.all(TABLES.map(fetchAll)),
     client.from('planning_meta').select('version').eq('id', 1).single(),
   ]);
-  rows.forEach((result, i) => { if (result.error) throw new Error(`Falha ao ler ${TABLES[i]}: ${result.error.message}`); });
   if (meta.error) throw new Error(`Falha ao ler planning_meta: ${meta.error.message}`);
-  const byTable = Object.fromEntries(TABLES.map((table, i) => [table, rows[i].data])) as unknown as Rows;
+  const byTable = Object.fromEntries(TABLES.map((table, i) => [table, rows[i]])) as unknown as Rows;
   return { data: rowsToPlanningData(byTable), version: meta.data.version as number };
 }
 

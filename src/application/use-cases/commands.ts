@@ -22,7 +22,7 @@ export type Command =
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
   | { type: 'set_takt'; sequenceId: string; taktDays: number };
-export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string }
+export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
 
 function wagonFor(data: PlanningData, id: string): Wagon {
@@ -214,7 +214,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         const locationName = requireText(row.location, 'Local');
         let location = data.locations.find(l => l.workId === workId && l.name === locationName);
         if (!location) { location = { ...base(), workId, name: locationName, code: '' }; data.locations.push(location); }
-        const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(row.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: row.plannedStart, plannedEnd: row.plannedEnd, progress: row.progress, status: row.progress === 100 ? 'completed' : row.progress > 0 ? 'in_progress' : 'not_started', weight: 1, mandatory: true, origin: 'prevision', previsionExternalId: externalId };
+        const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(row.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: row.plannedStart, plannedEnd: row.plannedEnd, progress: row.progress, status: row.progress === 100 ? 'completed' : row.progress > 0 ? 'in_progress' : 'not_started', weight: typeof row.weight === 'number' && row.weight > 0 ? row.weight : 1, mandatory: true, origin: 'prevision', previsionExternalId: externalId };
         validateActivity(activity); data.activities.push(activity);
         // External completion never implies locally accepted terminality.
         data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local da atividade importada', mandatory: true, fulfilled: false });

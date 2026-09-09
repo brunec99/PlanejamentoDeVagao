@@ -1,18 +1,19 @@
 'use client';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Download, Link2, PackageOpen, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download, Flag, Link2, PackageOpen, RefreshCw, Search } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing } from '@/modules/planejamento/ui';
 import { formatDate, formatTimestamp, planningPath, wagonLabel, wagonPath } from '@/shared/format';
 import type { ImportedActivity } from '@/application/use-cases/commands';
+import { sliceActivity } from '@/application/use-cases/slice-activity';
 
 const MS = 86400000;
 const days = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / MS) + 1;
 
 export function PrevisionImport({ workId }: { workId: string }) {
   const c = usePlanning();
-  const [tab, setTab] = useState<'pool' | 'wagon'>('pool');
+  const [tab, setTab] = useState<'pool' | 'milestones' | 'wagon'>('pool');
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [pickedProjectId, setPickedProjectId] = useState('');
   const [rows, setRows] = useState<ImportedActivity[]>([]);
@@ -22,7 +23,6 @@ export function PrevisionImport({ workId }: { workId: string }) {
   const [search, setSearch] = useState('');
   const [wagonId, setWagonId] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [assign, setAssign] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -51,8 +51,9 @@ export function PrevisionImport({ workId }: { workId: string }) {
   const canImport = actor.role === 'planner' || actor.role === 'manager';
   const projectId = work.previsionProjectId ?? (pickedProjectId || undefined);
 
-  const isImported = (row: ImportedActivity) => data.activities.some(a => a.previsionExternalId === `${projectId}:${row.externalId}`);
-  const fitting = (row: ImportedActivity) => wagons.filter(w => row.plannedStart >= w.plannedStart && row.plannedEnd <= w.plannedEnd);
+  // Uma atividade pode ter virado várias fatias (`id#1`, `id#2`...), então basta uma delas existir.
+  const isImported = (row: ImportedActivity) => data.activities.some(a => a.previsionExternalId === `${projectId}:${row.externalId}` || a.previsionExternalId?.startsWith(`${projectId}:${row.externalId}#`));
+  const slicesFor = (row: ImportedActivity) => sliceActivity(row, wagons);
 
   const listProjects = async () => {
     setBusy(true); setError('');
@@ -80,6 +81,21 @@ export function PrevisionImport({ workId }: { workId: string }) {
     finally { setBusy(false); }
   };
 
+  const addSliced = async (row: ImportedActivity) => {
+    const slices = slicesFor(row);
+    if (!slices.length) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      for (const slice of slices) {
+        await c.execute({ type: 'import_activities', wagonId: slice.wagonId, projectId: projectId!, responsibleId, rows: [slice.row] });
+      }
+      setMessage(slices.length === 1
+        ? `"${row.name}" adicionada ao ${wagonLabel(wagons.find(w => w.id === slices[0].wagonId)!.number)}.`
+        : `"${row.name}" dividida em ${slices.length} fatias (${slices.map(s => `${s.percent}%`).join(' · ')}).`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível adicionar.'); }
+    finally { setBusy(false); }
+  };
+
   const importRows = async (targetWagonId: string, chosen: ImportedActivity[]) => {
     if (!chosen.length) return;
     setBusy(true); setError(''); setMessage('');
@@ -95,8 +111,8 @@ export function PrevisionImport({ workId }: { workId: string }) {
   const matches = (r: ImportedActivity) => `${r.name} ${r.location}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'));
   const pending = rows.filter(r => !isImported(r));
   const pool = pending.filter(matches);
-  const placeable = pool.filter(r => fitting(r).length > 0);
-  const orphan = pool.filter(r => fitting(r).length === 0);
+  const placeable = pool.filter(r => slicesFor(r).length > 0);
+  const orphan = pool.filter(r => slicesFor(r).length === 0);
   const importedCount = rows.length - pending.length;
   const wagon = wagons.find(w => w.id === wagonId);
   const wagonFits = wagon ? pool.filter(r => r.plannedStart >= wagon.plannedStart && r.plannedEnd <= wagon.plannedEnd) : [];
@@ -145,7 +161,10 @@ export function PrevisionImport({ workId }: { workId: string }) {
     ) : <>
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('pool')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'pool' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
-          Fora de vagões ({pending.length})
+          Disponíveis para vagão ({placeable.length})
+        </button>
+        <button onClick={() => setTab('milestones')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'milestones' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+          Fora do período dos vagões ({orphan.length})
         </button>
         <button onClick={() => setTab('wagon')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'wagon' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
           Escolher por vagão
@@ -159,17 +178,16 @@ export function PrevisionImport({ workId }: { workId: string }) {
       {tab === 'pool' ? (
         <section className="panel mt-4 overflow-hidden">
           <div className="border-b border-slate-100 px-5 py-3.5">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><PackageOpen size={15} className="text-blue-600" />Atividades disponíveis</h2>
-            <p className="mt-0.5 text-xs text-slate-500">{placeable.length} podem entrar em algum vagão · {orphan.length} sem vagão compatível</p>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><PackageOpen size={15} className="text-blue-600" />Disponíveis para vagão</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Atividades que ainda não estão em vagão. As que atravessam vários takts entram fatiadas em percentual.</p>
           </div>
-          {pool.length === 0
-            ? <div className="p-5"><Empty>Todas as atividades desse filtro já estão em vagões.</Empty></div>
+          {placeable.length === 0
+            ? <div className="p-5"><Empty>Todas as atividades do cronograma já estão em vagões.</Empty></div>
             : <div className="max-h-[560px] overflow-auto custom-scrollbar">
                 <table className="data-table min-w-[1000px]">
-                  <thead className="sticky top-0"><tr><th>Atividade / local</th><th>Previsão</th><th>Linha de base</th><th>Duração</th><th>Vagão compatível</th></tr></thead>
-                  <tbody>{pool.map(row => {
-                    const options = fitting(row);
-                    const chosen = assign[row.externalId] ?? (options.length === 1 ? options[0].id : '');
+                  <thead className="sticky top-0"><tr><th>Atividade / local</th><th>Previsão</th><th>Linha de base</th><th>Duração</th><th>Distribuição nos vagões</th></tr></thead>
+                  <tbody>{placeable.map(row => {
+                    const slices = slicesFor(row);
                     return <tr key={row.externalId}>
                       <th scope="row">{row.name}<span className="mt-0.5 block text-xs font-normal text-slate-500">{row.location}</span></th>
                       <td className="whitespace-nowrap">{formatDate(row.plannedStart)}<span className="block text-xs text-slate-400">a {formatDate(row.plannedEnd)}</span></td>
@@ -177,21 +195,49 @@ export function PrevisionImport({ workId }: { workId: string }) {
                         ? <>{formatDate(row.baselineStart)}<span className="block text-slate-400">a {formatDate(row.baselineEnd)}</span></>
                         : <span className="text-slate-300">—</span>}</td>
                       <td className="whitespace-nowrap tabular-nums">{days(row.plannedStart, row.plannedEnd)} dias</td>
-                      <td>{options.length === 0
-                        ? <span className="text-xs text-slate-400">Nenhum vagão comporta este período</span>
-                        : <div className="flex flex-wrap items-center gap-2">
-                            <select className="field w-auto min-w-56 py-1.5 text-xs" value={chosen} onChange={e => setAssign(a => ({ ...a, [row.externalId]: e.target.value }))}>
-                              {options.length > 1 && <option value="">Selecione o vagão</option>}
-                              {options.map(w => <option key={w.id} value={w.id}>{wagonLabel(w.number)} · {formatDate(w.plannedStart)} a {formatDate(w.plannedEnd)}</option>)}
-                            </select>
-                            {canImport && <button className="button px-3 py-1.5 text-xs" disabled={busy || !chosen || !responsibleId} onClick={() => importRows(chosen, [row])}>Adicionar</button>}
-                          </div>}
+                      <td>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="flex flex-wrap gap-1">{slices.map(slice => {
+                            const w = wagons.find(x => x.id === slice.wagonId)!;
+                            return <span key={slice.wagonId} className="badge-muted px-2 py-0.5 text-[11px]">{wagonLabel(w.number)} · {slice.percent}%</span>;
+                          })}</span>
+                          {canImport && <button className="button px-3 py-1.5 text-xs" disabled={busy || !responsibleId} onClick={() => addSliced(row)}>
+                            {slices.length === 1 ? 'Adicionar' : `Adicionar ${slices.length} fatias`}
+                          </button>}
+                        </div>
                       </td>
                     </tr>;
                   })}</tbody>
                 </table>
               </div>}
-          {!responsibleId && pool.length > 0 && canImport && <div className="border-t border-slate-100 p-4"><Callout tone="warning">Selecione o responsável local acima para conseguir adicionar atividades.</Callout></div>}
+          {!responsibleId && placeable.length > 0 && canImport && <div className="border-t border-slate-100 p-4"><Callout tone="warning">Selecione o responsável local acima para conseguir adicionar atividades.</Callout></div>}
+        </section>
+      ) : tab === 'milestones' ? (
+        <section className="panel mt-4 overflow-hidden">
+          <div className="border-b border-slate-100 px-5 py-3.5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Flag size={15} className="text-amber-500" />Fora do período dos vagões</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Atividades que não cruzam nenhum vagão existente — normalmente por serem anteriores ao início do planejamento.</p>
+          </div>
+          {orphan.length === 0
+            ? <div className="p-5"><Empty>Nenhuma atividade fora do alcance dos vagões.</Empty></div>
+            : <div className="max-h-[560px] overflow-auto custom-scrollbar">
+                <table className="data-table min-w-[900px]">
+                  <thead className="sticky top-0"><tr><th>Atividade / local</th><th>Previsão</th><th>Linha de base</th><th>Duração</th><th>Progresso</th></tr></thead>
+                  <tbody>{orphan.map(row => {
+                    const drift = row.baselineEnd && row.baselineEnd !== row.plannedEnd ? days(row.baselineEnd, row.plannedEnd) - 1 : 0;
+                    return <tr key={row.externalId}>
+                      <th scope="row">{row.name}<span className="mt-0.5 block text-xs font-normal text-slate-500">{row.location}</span></th>
+                      <td className="whitespace-nowrap">{formatDate(row.plannedStart)}<span className="block text-xs text-slate-400">a {formatDate(row.plannedEnd)}</span></td>
+                      <td className="whitespace-nowrap text-xs">{row.baselineStart && row.baselineEnd
+                        ? <>{formatDate(row.baselineStart)}<span className="block text-slate-400">a {formatDate(row.baselineEnd)}</span></>
+                        : <span className="text-slate-300">—</span>}
+                        {drift !== 0 && <span className={`mt-0.5 block font-semibold ${drift > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{drift > 0 ? `+${drift}` : drift} dias</span>}</td>
+                      <td className="whitespace-nowrap tabular-nums">{days(row.plannedStart, row.plannedEnd)} dias</td>
+                      <td className="tabular-nums">{row.progress}%</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>}
         </section>
       ) : (
         <section className="panel mt-4 overflow-hidden">
