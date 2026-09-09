@@ -19,7 +19,9 @@ export type Command =
   | { type: 'release'; wagonId: string; mode: 'initial' | 'normal' | 'exceptional'; justification?: string; responsibleId?: string; dueDate?: string }
   | { type: 'import_activities'; wagonId: string; projectId: string; responsibleId: string; rows: ImportedActivity[]; reason?: string }
   | { type: 'grant_access'; userId: string; workId: string }
-  | { type: 'revoke_access'; userId: string; workId: string };
+  | { type: 'revoke_access'; userId: string; workId: string }
+  | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
+  | { type: 'set_takt'; sequenceId: string; taktDays: number };
 export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
 
@@ -227,6 +229,18 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (command.type === 'grant_access') { if (!target.workIds.includes(command.workId)) target.workIds.push(command.workId); }
       else { target.workIds = target.workIds.filter(id => id !== command.workId); }
       touch(target); entityId = target.id; break;
+    }
+    case 'set_role': {
+      if (actor.role !== 'admin') throw new Error('Somente administradores podem alterar papéis.');
+      const target = data.users.find(u => u.id === command.userId); if (!target) throw new Error('Usuário não encontrado.');
+      if (target.id === actorId && command.role !== 'admin') throw new Error('Você não pode remover seu próprio acesso de administrador.');
+      target.role = command.role; touch(target); entityId = target.id; break;
+    }
+    case 'set_takt': {
+      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      if (actor.role !== 'admin') checkWork(sequence.workId);
+      if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365) throw new Error('Takt deve ter entre 1 e 365 dias.');
+      sequence.defaultTaktDays = command.taktDays; touch(sequence); entityId = sequence.id; break;
     }
   }
   data.history.push({ id: newId(), entityId: wagonId ?? entityId, entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning', action: command.type, authorId: actorId, occurredAt: now, changes: { targetId: entityId, ...command } });

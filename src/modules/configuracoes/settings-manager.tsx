@@ -1,0 +1,105 @@
+'use client';
+import { useState } from 'react';
+import { Check, Timer, Users } from 'lucide-react';
+import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { Empty, LoadState } from '@/modules/planejamento/ui';
+import { roleLabels } from '@/shared/format';
+import type { Command } from '@/application/use-cases/commands';
+
+function useCommand() {
+  const c = usePlanning();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async (command: Command) => {
+    if (c.state !== 'ready' || busy) return;
+    setBusy(true); setError('');
+    try { await c.execute(command); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao salvar.'); }
+    finally { setBusy(false); }
+  };
+  return { busy, error, run };
+}
+
+function AccessChip({ userId, workId, name, granted }: { userId: string; workId: string; name: string; granted: boolean }) {
+  const { busy, run } = useCommand();
+  return <button type="button" disabled={busy} onClick={() => run({ type: granted ? 'revoke_access' : 'grant_access', userId, workId })}
+    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${granted ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
+    {granted && <Check size={12} />}{name}
+  </button>;
+}
+
+function RoleSelect({ userId, role, self }: { userId: string; role: string; self: boolean }) {
+  const { busy, error, run } = useCommand();
+  return <div>
+    <select className="field w-auto py-1.5 text-xs" value={role} disabled={busy || self}
+      onChange={e => run({ type: 'set_role', userId, role: e.target.value as 'viewer' | 'planner' | 'manager' | 'admin' })}>
+      {(['viewer', 'planner', 'manager', 'admin'] as const).map(r => <option key={r} value={r}>{roleLabels[r]}</option>)}
+    </select>
+    {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+  </div>;
+}
+
+function TaktField({ sequenceId, taktDays }: { sequenceId: string; taktDays: number }) {
+  const { busy, error, run } = useCommand();
+  const [value, setValue] = useState(String(taktDays));
+  const dirty = value !== String(taktDays);
+  return <div className="flex items-center gap-2">
+    <input className="field w-20 py-1.5 text-sm" type="number" min={1} max={365} value={value} onChange={e => setValue(e.target.value)} />
+    <span className="text-xs text-slate-400">dias</span>
+    {dirty && <button className="button px-3 py-1.5 text-xs" disabled={busy} onClick={() => run({ type: 'set_takt', sequenceId, taktDays: Number(value) })}>Salvar</button>}
+    {error && <span className="text-xs text-rose-600">{error}</span>}
+  </div>;
+}
+
+export function SettingsManager() {
+  const c = usePlanning();
+  if (c.state !== 'ready') return <LoadState error={c.state === 'error'} />;
+  const { data } = c.planning;
+  const actor = data.users.find(u => u.id === c.actorId);
+  if (actor?.role !== 'admin') return <div className="panel p-6"><Empty>Acesso restrito a administradores.</Empty></div>;
+
+  return <div className="space-y-8">
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Timer size={16} className="text-blue-600" />Takt por obra</h2>
+      <div className="panel divide-y divide-slate-100">
+        {data.works.length === 0 && <div className="p-5"><Empty>Nenhuma obra cadastrada.</Empty></div>}
+        {data.works.map(work => {
+          const sequences = data.sequences.filter(s => s.workId === work.id);
+          return <div key={work.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{work.name}</p>
+              <p className="text-xs text-slate-400">{work.code}</p>
+            </div>
+            <div className="space-y-2">
+              {sequences.length === 0
+                ? <p className="text-xs text-slate-400">Nenhuma sequência cadastrada</p>
+                : sequences.map(s => <div key={s.id} className="flex items-center gap-3">
+                    <span className="text-xs text-slate-500">{s.name}</span>
+                    <TaktField sequenceId={s.id} taktDays={s.defaultTaktDays} />
+                  </div>)}
+            </div>
+          </div>;
+        })}
+      </div>
+    </section>
+
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Users size={16} className="text-blue-600" />Usuários e acessos</h2>
+      <div className="panel divide-y divide-slate-100">
+        {data.users.map(user => (
+          <div key={user.id} className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+              <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.works.length === 0
+                ? <span className="text-xs text-slate-400">Nenhuma obra para liberar</span>
+                : data.works.map(work => <AccessChip key={work.id} userId={user.id} workId={work.id} name={work.name} granted={user.workIds.includes(work.id)} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  </div>;
+}
