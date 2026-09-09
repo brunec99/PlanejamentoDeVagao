@@ -1,7 +1,7 @@
 import type { ImportedActivity } from './commands';
 
 export interface WagonWindow { id: string; plannedStart: string; plannedEnd: string }
-export interface ActivitySlice { wagonId: string; percent: number; row: ImportedActivity }
+export interface ActivitySlice { wagonId: string; percent: number; part: number; parts: number; row: ImportedActivity }
 
 const MS = 86400000;
 const parse = (value: string) => Date.parse(`${value}T00:00:00Z`);
@@ -39,10 +39,13 @@ export function sliceActivity(row: ImportedActivity, wagons: WagonWindow[]): Act
   return overlaps.map((overlap, index) => ({
     wagonId: overlap.wagon.id,
     percent: percents[index],
+    part: index + 1,
+    parts: overlaps.length,
     row: {
       ...row,
       externalId: single ? row.externalId : `${row.externalId}#${index + 1}`,
-      name: single ? row.name : `${row.name} — ${percents[index]}%`,
+      // A fatia se identifica por posição e tamanho: "parte 2 de 3 · 35%".
+      name: single ? row.name : `${row.name} — parte ${index + 1} de ${overlaps.length} · ${percents[index]}%`,
       plannedStart: overlap.start,
       plannedEnd: overlap.end,
       weight: percents[index] / 100,

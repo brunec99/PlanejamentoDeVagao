@@ -57,7 +57,9 @@ test('fatia divide a atividade pelos vagões preservando 100% e o período de ca
   // cada fatia cabe inteira na janela do seu vagão
   slices.forEach((slice, i) => {
     assert.ok(slice.row.plannedStart >= wagons[i].plannedStart && slice.row.plannedEnd <= wagons[i].plannedEnd);
-    assert.match(slice.row.name, /—\s\d+%$/);
+    assert.match(slice.row.name, /— parte \d+ de 3 · \d+%$/);
+    assert.equal(slice.part, i + 1);
+    assert.equal(slice.parts, 3);
   });
   assert.equal(slices[0].row.plannedStart, '2026-09-10');
   assert.equal(slices[2].row.plannedEnd, '2026-10-20');

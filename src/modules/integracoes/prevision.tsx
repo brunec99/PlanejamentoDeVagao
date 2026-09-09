@@ -199,7 +199,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="flex flex-wrap gap-1">{slices.map(slice => {
                             const w = wagons.find(x => x.id === slice.wagonId)!;
-                            return <span key={slice.wagonId} className="badge-muted px-2 py-0.5 text-[11px]">{wagonLabel(w.number)} · {slice.percent}%</span>;
+                            return <span key={slice.wagonId} className="badge-muted px-2 py-0.5 text-[11px]">{wagonLabel(w.number)}{slice.parts > 1 && ` · parte ${slice.part}/${slice.parts}`} · {slice.percent}%</span>;
                           })}</span>
                           {canImport && <button className="button px-3 py-1.5 text-xs" disabled={busy || !responsibleId} onClick={() => addSliced(row)}>
                             {slices.length === 1 ? 'Adicionar' : `Adicionar ${slices.length} fatias`}
