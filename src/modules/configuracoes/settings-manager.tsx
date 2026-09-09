@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Check, Timer, Users } from 'lucide-react';
+import { Check, Mail, Timer, UserPlus, Users } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { roleLabels } from '@/shared/format';
@@ -51,6 +51,43 @@ function TaktField({ sequenceId, taktDays }: { sequenceId: string; taktDays: num
   </div>;
 }
 
+function InviteForm({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('viewer');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  return <form className="panel p-5" onSubmit={async e => {
+    e.preventDefault(); if (busy) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const res = await fetch('/api/admin/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name, role }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? 'Não foi possível convidar.');
+      setMessage(`Convite enviado para ${body.email}. Ele também pode entrar direto com a conta Google.`);
+      setEmail(''); setName(''); onDone();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível convidar.'); }
+    finally { setBusy(false); }
+  }}>
+    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><UserPlus size={16} className="text-blue-600" />Convidar usuário</h2>
+    <p className="mt-1 text-sm text-slate-500">Envia um convite por e-mail e já cria o perfil com o papel escolhido. O acesso às obras é liberado abaixo.</p>
+    <div className="mt-4 flex flex-wrap items-end gap-3">
+      <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">E-mail</span>
+        <input className="field w-72" type="email" required placeholder="nome@atrincorporadora.com.br" value={email} onChange={e => setEmail(e.target.value)} /></label>
+      <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Nome (opcional)</span>
+        <input className="field w-56" value={name} onChange={e => setName(e.target.value)} /></label>
+      <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Papel</span>
+        <select className="field w-40" value={role} onChange={e => setRole(e.target.value)}>
+          {(['viewer', 'planner', 'manager', 'admin'] as const).map(r => <option key={r} value={r}>{roleLabels[r]}</option>)}
+        </select></label>
+      <button className="button" type="submit" disabled={busy}><Mail size={15} />{busy ? 'Enviando…' : 'Enviar convite'}</button>
+    </div>
+    {error && <p className="callout callout-danger mt-3" role="alert">{error}</p>}
+    {message && <p className="callout callout-success mt-3" role="status">{message}</p>}
+  </form>;
+}
+
 export function SettingsManager() {
   const c = usePlanning();
   if (c.state !== 'ready') return <LoadState error={c.state === 'error'} />;
@@ -85,6 +122,7 @@ export function SettingsManager() {
 
     <section>
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Users size={16} className="text-blue-600" />Usuários e acessos</h2>
+      <div className="mb-4"><InviteForm onDone={() => c.refresh()} /></div>
       <div className="panel divide-y divide-slate-100">
         {data.users.map(user => (
           <div key={user.id} className="p-4">

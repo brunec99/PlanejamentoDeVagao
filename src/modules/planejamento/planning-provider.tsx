@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Planning } from '@/application/use-cases/get-planning';
 import type { Command } from '@/application/use-cases/commands';
-type PlanningState = { state: 'loading' } | { state: 'error' } | { state: 'ready'; planning: Planning; actorId: string; execute: (command: Command) => Promise<string> };
+type PlanningState = { state: 'loading' } | { state: 'error' } | { state: 'ready'; planning: Planning; actorId: string; execute: (command: Command) => Promise<string>; refresh: () => Promise<void> };
 type Loaded = { planning: Planning; actorId: string };
 const Context = createContext<PlanningState>({ state: 'loading' });
 
@@ -21,6 +21,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     fetchPlanning().then(result => { if (active) setLoaded(result); }).catch(() => { if (active) setError(true); });
     return () => { active = false; };
   }, []);
+  const refresh = async () => { setLoaded(await fetchPlanning()); };
   const execute = async (command: Command) => {
     const res = await fetch('/api/planning/commands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) });
     const body = await res.json();
@@ -28,7 +29,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     setLoaded(await fetchPlanning());
     return body.id as string;
   };
-  const value: PlanningState = error ? { state: 'error' } : loaded ? { state: 'ready', planning: loaded.planning, actorId: loaded.actorId, execute } : { state: 'loading' };
+  const value: PlanningState = error ? { state: 'error' } : loaded ? { state: 'ready', planning: loaded.planning, actorId: loaded.actorId, execute, refresh } : { state: 'loading' };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function usePlanning() { return useContext(Context); }

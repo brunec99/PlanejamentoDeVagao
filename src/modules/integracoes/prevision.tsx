@@ -1,29 +1,44 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Download, Link2, RefreshCw, Search } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, CheckCircle2, Download, Link2, PackageOpen, RefreshCw, Search } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing } from '@/modules/planejamento/ui';
-import { formatDate, planningPath, wagonLabel, wagonPath } from '@/shared/format';
+import { formatDate, formatTimestamp, planningPath, wagonLabel, wagonPath } from '@/shared/format';
 import type { ImportedActivity } from '@/application/use-cases/commands';
 
-type Fit = 'imported' | 'fits' | 'outside';
+const MS = 86400000;
+const days = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / MS) + 1;
 
 export function PrevisionImport({ workId }: { workId: string }) {
   const c = usePlanning();
+  const [tab, setTab] = useState<'pool' | 'wagon'>('pool');
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [pickedProjectId, setPickedProjectId] = useState('');
   const [rows, setRows] = useState<ImportedActivity[]>([]);
-  const [skipped, setSkipped] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [wagonId, setWagonId] = useState('');
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [responsibleId, setResponsibleId] = useState('');
   const [search, setSearch] = useState('');
-  const [onlyEligible, setOnlyEligible] = useState(true);
+  const [wagonId, setWagonId] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [assign, setAssign] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [pickedProjectId, setPickedProjectId] = useState('');
+
+  const loadCache = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/prevision/schedule?workId=${encodeURIComponent(workId)}`, { cache: 'no-store' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? 'Falha ao ler o cronograma salvo.');
+      setRows(body.rows); setSyncedAt(body.syncedAt);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Falha ao ler o cronograma salvo.'); }
+    finally { setLoading(false); }
+  }, [workId]);
+
+  useEffect(() => { loadCache(); }, [loadCache]);
 
   if (c.state !== 'ready') return <LoadState error={c.state === 'error'} />;
   const { data } = c.planning;
@@ -33,158 +48,198 @@ export function PrevisionImport({ workId }: { workId: string }) {
 
   const sequences = data.sequences.filter(s => s.workId === workId);
   const wagons = data.wagons.filter(w => sequences.some(s => s.id === w.sequenceId)).sort((a, b) => a.plannedStart.localeCompare(b.plannedStart));
-  const wagon = wagons.find(w => w.id === wagonId);
   const canImport = actor.role === 'planner' || actor.role === 'manager';
-  // O vínculo definitivo obra↔projeto é gravado pelo próprio comando de importação;
-  // até lá basta escolher o projeto para conseguir consultar as atividades.
   const projectId = work.previsionProjectId ?? (pickedProjectId || undefined);
 
-  const classify = (row: ImportedActivity): Fit => {
-    if (data.activities.some(a => a.previsionExternalId === `${projectId}:${row.externalId}`)) return 'imported';
-    if (wagon && row.plannedStart >= wagon.plannedStart && row.plannedEnd <= wagon.plannedEnd) return 'fits';
-    return 'outside';
-  };
+  const isImported = (row: ImportedActivity) => data.activities.some(a => a.previsionExternalId === `${projectId}:${row.externalId}`);
+  const fitting = (row: ImportedActivity) => wagons.filter(w => row.plannedStart >= w.plannedStart && row.plannedEnd <= w.plannedEnd);
 
-  async function query(kind: 'projects' | 'activities') {
-    setBusy(true); setError(''); setMessage('');
+  const listProjects = async () => {
+    setBusy(true); setError('');
     try {
-      const response = await fetch(kind === 'projects' ? '/api/prevision' : `/api/prevision?projectId=${encodeURIComponent(projectId!)}`);
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Falha na consulta.');
-      if (kind === 'projects') { setProjects(result.projects); }
-      else { setRows(result.rows); setSkipped(result.skipped); setLoaded(true); setSelected([]); setMessage(`${result.rows.length} atividades carregadas do Prevision.`); }
+      const res = await fetch('/api/prevision');
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? 'Falha na consulta.');
+      setProjects(body.projects);
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível consultar o Prevision.'); }
     finally { setBusy(false); }
-  }
+  };
 
-  const visible = rows
-    .filter(r => `${r.name} ${r.location}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')))
-    .filter(r => !onlyEligible || classify(r) === 'fits');
-  const eligibleCount = rows.filter(r => classify(r) === 'fits').length;
-  const importedCount = rows.filter(r => classify(r) === 'imported').length;
+  const sync = async () => {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const res = await fetch(`/api/prevision/schedule?workId=${encodeURIComponent(workId)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectId && !work.previsionProjectId ? { projectId } : {}),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? 'Falha ao atualizar.');
+      await loadCache();
+      setMessage(`Cronograma atualizado: ${body.count} atividades salvas${body.skipped ? ` · ${body.skipped} registros inválidos ignorados` : ''}.`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível atualizar.'); }
+    finally { setBusy(false); }
+  };
+
+  const importRows = async (targetWagonId: string, chosen: ImportedActivity[]) => {
+    if (!chosen.length) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await c.execute({ type: 'import_activities', wagonId: targetWagonId, projectId: projectId!, responsibleId, rows: chosen });
+      const wagon = wagons.find(w => w.id === targetWagonId)!;
+      setSelected([]);
+      setMessage(`${chosen.length} ${chosen.length === 1 ? 'atividade adicionada' : 'atividades adicionadas'} ao ${wagonLabel(wagon.number)}.`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível adicionar.'); }
+    finally { setBusy(false); }
+  };
+
+  const matches = (r: ImportedActivity) => `${r.name} ${r.location}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'));
+  const pending = rows.filter(r => !isImported(r));
+  const pool = pending.filter(matches);
+  const placeable = pool.filter(r => fitting(r).length > 0);
+  const orphan = pool.filter(r => fitting(r).length === 0);
+  const importedCount = rows.length - pending.length;
+  const wagon = wagons.find(w => w.id === wagonId);
+  const wagonFits = wagon ? pool.filter(r => r.plannedStart >= wagon.plannedStart && r.plannedEnd <= wagon.plannedEnd) : [];
 
   return <>
     <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800" href={planningPath(workId)}><ArrowLeft size={15} />{work.name}</Link>
-    <p className="eyebrow mt-5">Prevision</p>
-    <h1 className="page-title">Importar atividades</h1>
-    <p className="mt-1 max-w-3xl text-sm text-slate-500">Escolha o vagão de destino e selecione as atividades que acontecem dentro daquele período. A importação não altera nada no Prevision.</p>
+    <p className="eyebrow mt-5">Prevision · {work.code}</p>
+    <h1 className="page-title">Atividades</h1>
+    <p className="mt-1 max-w-3xl text-sm text-slate-500">O cronograma fica salvo aqui; o Prevision só é consultado quando você pedir. Cada atividade só entra num vagão cujo período a contenha inteira.</p>
 
-    {!projectId ? (
-      <div className="panel mt-6 p-5">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Link2 size={15} className="text-blue-600" />Escolher o projeto no Prevision</h2>
-        <p className="mt-1 text-sm text-slate-500">Esta obra ainda não está vinculada. O vínculo fica gravado na primeira importação e não pode ser trocado depois.</p>
+    <div className="panel mt-6 flex flex-wrap items-end justify-between gap-4 p-5">
+      <div>
+        <h2 className="text-sm font-bold text-slate-800">Cronograma salvo</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {work.previsionProjectId ? `Projeto ${work.previsionProjectId}` : 'Obra ainda não vinculada'}
+          {rows.length > 0 && ` · ${rows.length} atividades · ${importedCount} em vagões · ${pending.length} fora`}
+          {syncedAt && ` · atualizado em ${formatTimestamp(syncedAt)}`}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Responsável local</span>
+          <select className="field w-56" value={responsibleId} onChange={e => setResponsibleId(e.target.value)}>
+            <option value="">Selecione</option>
+            {data.users.filter(u => u.workIds.includes(workId) && u.role !== 'viewer').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select></label>
+        {canImport && projectId && <button className="button" disabled={busy} onClick={sync}><RefreshCw size={15} className={busy ? 'animate-spin' : ''} />Atualizar do Prevision</button>}
+      </div>
+    </div>
+
+    {!work.previsionProjectId && (
+      <div className="panel mt-4 p-5">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Link2 size={15} className="text-blue-600" />Vincular ao projeto do Prevision</h2>
+        <p className="mt-1 text-sm text-slate-500">Escolha o projeto para trazer o cronograma. O vínculo fica gravado na primeira atividade adicionada a um vagão.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button className="button-ghost" disabled={busy} onClick={() => query('projects')}><RefreshCw size={15} className={busy ? 'animate-spin' : ''} />Listar projetos</button>
-          {projects.length > 0 && <select className="field w-auto min-w-64" value={pickedProjectId} onChange={e => { setPickedProjectId(e.target.value); setRows([]); setLoaded(false); }}>
+          <button className="button-ghost" disabled={busy} onClick={listProjects}><RefreshCw size={15} className={busy ? 'animate-spin' : ''} />Listar projetos</button>
+          {projects.length > 0 && <select className="field w-auto min-w-64" value={pickedProjectId} onChange={e => setPickedProjectId(e.target.value)}>
             <option value="">Selecione o projeto</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>}
         </div>
       </div>
-    ) : (
-      <>
-        <ol className="mt-6 space-y-4">
-          <li className="panel p-5">
-            <p className="eyebrow">Passo 1</p>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Carregar atividades do Prevision</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Projeto vinculado: <span className="font-semibold text-slate-700">{projectId}</span>{loaded && ` · ${rows.length} atividades · ${importedCount} já importadas`}</p>
-              </div>
-              <button className="button" disabled={busy} onClick={() => query('activities')}>
-                <RefreshCw size={15} className={busy ? 'animate-spin' : ''} />{loaded ? 'Recarregar' : 'Carregar atividades'}
-              </button>
+    )}
+
+    {loading ? <div className="mt-4"><LoadState /></div> : rows.length === 0 ? (
+      <div className="panel mt-4 p-6"><Empty>Nenhum cronograma salvo ainda. Use &quot;Atualizar do Prevision&quot; para trazer as atividades.</Empty></div>
+    ) : <>
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <button onClick={() => setTab('pool')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'pool' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+          Fora de vagões ({pending.length})
+        </button>
+        <button onClick={() => setTab('wagon')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'wagon' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+          Escolher por vagão
+        </button>
+        <div className="relative ml-auto">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input className="field w-64 pl-8" placeholder="Buscar atividade ou local" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      </div>
+
+      {tab === 'pool' ? (
+        <section className="panel mt-4 overflow-hidden">
+          <div className="border-b border-slate-100 px-5 py-3.5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><PackageOpen size={15} className="text-blue-600" />Atividades disponíveis</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{placeable.length} podem entrar em algum vagão · {orphan.length} sem vagão compatível</p>
+          </div>
+          {pool.length === 0
+            ? <div className="p-5"><Empty>Todas as atividades desse filtro já estão em vagões.</Empty></div>
+            : <div className="max-h-[560px] overflow-auto custom-scrollbar">
+                <table className="data-table min-w-[1000px]">
+                  <thead className="sticky top-0"><tr><th>Atividade / local</th><th>Previsão</th><th>Linha de base</th><th>Duração</th><th>Vagão compatível</th></tr></thead>
+                  <tbody>{pool.map(row => {
+                    const options = fitting(row);
+                    const chosen = assign[row.externalId] ?? (options.length === 1 ? options[0].id : '');
+                    return <tr key={row.externalId}>
+                      <th scope="row">{row.name}<span className="mt-0.5 block text-xs font-normal text-slate-500">{row.location}</span></th>
+                      <td className="whitespace-nowrap">{formatDate(row.plannedStart)}<span className="block text-xs text-slate-400">a {formatDate(row.plannedEnd)}</span></td>
+                      <td className="whitespace-nowrap text-xs">{row.baselineStart && row.baselineEnd
+                        ? <>{formatDate(row.baselineStart)}<span className="block text-slate-400">a {formatDate(row.baselineEnd)}</span></>
+                        : <span className="text-slate-300">—</span>}</td>
+                      <td className="whitespace-nowrap tabular-nums">{days(row.plannedStart, row.plannedEnd)} dias</td>
+                      <td>{options.length === 0
+                        ? <span className="text-xs text-slate-400">Nenhum vagão comporta este período</span>
+                        : <div className="flex flex-wrap items-center gap-2">
+                            <select className="field w-auto min-w-56 py-1.5 text-xs" value={chosen} onChange={e => setAssign(a => ({ ...a, [row.externalId]: e.target.value }))}>
+                              {options.length > 1 && <option value="">Selecione o vagão</option>}
+                              {options.map(w => <option key={w.id} value={w.id}>{wagonLabel(w.number)} · {formatDate(w.plannedStart)} a {formatDate(w.plannedEnd)}</option>)}
+                            </select>
+                            {canImport && <button className="button px-3 py-1.5 text-xs" disabled={busy || !chosen || !responsibleId} onClick={() => importRows(chosen, [row])}>Adicionar</button>}
+                          </div>}
+                      </td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>}
+          {!responsibleId && pool.length > 0 && canImport && <div className="border-t border-slate-100 p-4"><Callout tone="warning">Selecione o responsável local acima para conseguir adicionar atividades.</Callout></div>}
+        </section>
+      ) : (
+        <section className="panel mt-4 overflow-hidden">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Escolher o vagão e marcar várias atividades</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Só aparecem atividades que cabem inteiras no período do vagão.</p>
             </div>
-          </li>
-
-          <li className={`panel p-5 ${loaded ? '' : 'opacity-50'}`}>
-            <p className="eyebrow">Passo 2</p>
-            <h2 className="mt-2 text-sm font-bold text-slate-800">Vagão de destino</h2>
-            {wagons.length === 0
-              ? <div className="mt-2"><Empty>Esta obra ainda não tem vagões. Crie um vagão no planejamento antes de importar.</Empty></div>
-              : <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <select className="field w-auto min-w-80" value={wagonId} disabled={!loaded} onChange={e => { setWagonId(e.target.value); setSelected([]); }}>
-                    <option value="">Selecione o vagão</option>
-                    {wagons.map(w => {
-                      const count = data.activities.filter(a => a.wagonId === w.id).length;
-                      return <option key={w.id} value={w.id}>{wagonLabel(w.number)} · {formatDate(w.plannedStart)} a {formatDate(w.plannedEnd)} · {count} atividades</option>;
-                    })}
-                  </select>
-                  {wagon && <span className="badge-muted">{eligibleCount} atividades cabem neste período</span>}
-                </div>}
-          </li>
-
-          <li className={`panel p-5 ${wagon && loaded ? '' : 'opacity-50'}`}>
-            <p className="eyebrow">Passo 3</p>
-            <h2 className="mt-2 text-sm font-bold text-slate-800">Responsável local</h2>
-            <select className="field mt-3 w-auto min-w-64" value={responsibleId} disabled={!wagon} onChange={e => setResponsibleId(e.target.value)}>
-              <option value="">Selecione o responsável</option>
-              {data.users.filter(u => u.workIds.includes(workId) && u.role !== 'viewer').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </li>
-        </ol>
-
-        {loaded && wagon && (
-          <section className="panel mt-4 overflow-hidden">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 p-5">
-              <div>
-                <p className="eyebrow">Passo 4</p>
-                <h2 className="mt-2 text-sm font-bold text-slate-800">Selecionar atividades</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Período do {wagonLabel(wagon.number)}: {formatDate(wagon.plannedStart)} a {formatDate(wagon.plannedEnd)}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input className="field w-56 pl-8" placeholder="Buscar atividade ou local" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <input type="checkbox" className="accent-blue-700" checked={onlyEligible} onChange={e => setOnlyEligible(e.target.checked)} />
-                  Só as que cabem
-                </label>
-                {canImport && <button className="button-ghost" onClick={() => setSelected(visible.filter(r => classify(r) === 'fits').map(r => r.externalId))}>Selecionar todas</button>}
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select className="field w-auto min-w-72" value={wagonId} onChange={e => { setWagonId(e.target.value); setSelected([]); }}>
+                <option value="">Selecione o vagão</option>
+                {wagons.map(w => <option key={w.id} value={w.id}>{wagonLabel(w.number)} · {formatDate(w.plannedStart)} a {formatDate(w.plannedEnd)} · {data.activities.filter(a => a.wagonId === w.id).length} atividades</option>)}
+              </select>
+              {wagon && canImport && <button className="button-ghost" onClick={() => setSelected(wagonFits.map(r => r.externalId))}>Marcar todas ({wagonFits.length})</button>}
             </div>
-            {visible.length === 0
-              ? <div className="p-5"><Empty>Nenhuma atividade encontrada com esses filtros.</Empty></div>
-              : <div className="max-h-[480px] overflow-auto custom-scrollbar">
-                  <table className="data-table">
-                    <thead className="sticky top-0"><tr><th className="w-10"></th><th>Atividade / local</th><th>Previsão</th><th>Progresso</th><th>Situação</th></tr></thead>
-                    <tbody>{visible.map(row => {
-                      const fit = classify(row);
-                      return <tr key={row.externalId}>
-                        <td><input type="checkbox" className="accent-blue-700" aria-label={`Selecionar ${row.name}`} checked={selected.includes(row.externalId)} disabled={fit !== 'fits' || busy || !canImport}
+          </div>
+          {!wagon
+            ? <div className="p-5"><Empty>Selecione um vagão para ver as atividades que cabem nele.</Empty></div>
+            : wagonFits.length === 0
+              ? <div className="p-5"><Empty>Nenhuma atividade pendente cabe no período deste vagão.</Empty></div>
+              : <>
+                  <div className="max-h-[480px] overflow-auto custom-scrollbar">
+                    <table className="data-table min-w-[850px]">
+                      <thead className="sticky top-0"><tr><th className="w-10"></th><th>Atividade / local</th><th>Previsão</th><th>Linha de base</th><th>Progresso</th></tr></thead>
+                      <tbody>{wagonFits.map(row => <tr key={row.externalId}>
+                        <td><input type="checkbox" className="accent-blue-700" aria-label={`Selecionar ${row.name}`} checked={selected.includes(row.externalId)} disabled={busy || !canImport}
                           onChange={e => setSelected(ids => e.target.checked ? [...ids, row.externalId] : ids.filter(id => id !== row.externalId))} /></td>
                         <th scope="row">{row.name}<span className="mt-0.5 block text-xs font-normal text-slate-500">{row.location}</span></th>
                         <td className="whitespace-nowrap">{formatDate(row.plannedStart)}<span className="block text-xs text-slate-400">a {formatDate(row.plannedEnd)}</span></td>
+                        <td className="whitespace-nowrap text-xs">{row.baselineStart && row.baselineEnd ? <>{formatDate(row.baselineStart)}<span className="block text-slate-400">a {formatDate(row.baselineEnd)}</span></> : <span className="text-slate-300">—</span>}</td>
                         <td className="tabular-nums">{row.progress}%</td>
-                        <td>{fit === 'imported'
-                          ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><CheckCircle2 size={13} />Já importada</span>
-                          : fit === 'fits' ? <span className="status in_production">Cabe no vagão</span>
-                          : <span className="text-xs text-slate-400">Fora do período</span>}</td>
-                      </tr>;
-                    })}</tbody>
-                  </table>
-                </div>}
-            {skipped > 0 && <div className="p-4"><Callout tone="warning">{skipped} registros do Prevision não puderam ser lidos por falta de datas válidas.</Callout></div>}
-            {canImport && <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 p-5">
-              <button className="button" disabled={busy || selected.length === 0 || !responsibleId} onClick={async () => {
-                setBusy(true); setError(''); setMessage('');
-                try {
-                  const chosen = rows.filter(r => selected.includes(r.externalId) && classify(r) === 'fits');
-                  if (chosen.length === 0) throw new Error('Revise as atividades selecionadas.');
-                  await c.execute({ type: 'import_activities', wagonId: wagon.id, projectId: projectId!, responsibleId, rows: chosen });
-                  setSelected([]);
-                  setMessage(`${chosen.length} atividades importadas para o ${wagonLabel(wagon.number)}.`);
-                } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível importar.'); }
-                finally { setBusy(false); }
-              }}><Download size={15} />Importar {selected.length > 0 ? `${selected.length} atividades` : 'selecionadas'}</button>
-              <Link className="text-link text-sm" href={wagonPath(workId, wagon.id)}>Abrir {wagonLabel(wagon.number)} →</Link>
-              {!responsibleId && selected.length > 0 && <span className="text-xs text-amber-600">Selecione o responsável no passo 3.</span>}
-            </div>}
-          </section>
-        )}
-      </>
-    )}
+                      </tr>)}</tbody>
+                    </table>
+                  </div>
+                  {canImport && <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 p-5">
+                    <button className="button" disabled={busy || selected.length === 0 || !responsibleId}
+                      onClick={() => importRows(wagon.id, wagonFits.filter(r => selected.includes(r.externalId)))}>
+                      <Download size={15} />Adicionar {selected.length > 0 ? `${selected.length} atividades` : 'selecionadas'}
+                    </button>
+                    <Link className="text-link text-sm" href={wagonPath(workId, wagon.id)}>Abrir {wagonLabel(wagon.number)} →</Link>
+                    {!responsibleId && <span className="text-xs text-amber-600">Selecione o responsável local acima.</span>}
+                  </div>}
+                </>}
+        </section>
+      )}
+
+      {importedCount > 0 && <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600"><CheckCircle2 size={13} />{importedCount} atividades já estão distribuídas em vagões.</p>}
+    </>}
 
     {error && <div className="mt-4"><Callout tone="danger" role="alert">{error}</Callout></div>}
     {message && <div className="mt-4"><Callout tone="success" role="status">{message}</Callout></div>}

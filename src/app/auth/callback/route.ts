@@ -15,12 +15,21 @@ function loginError(request: NextRequest, message: string) {
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
+  const tokenHash = request.nextUrl.searchParams.get('token_hash');
+  const type = request.nextUrl.searchParams.get('type');
   const redirectTo = request.nextUrl.searchParams.get('redirect') || '/obras';
-  if (!code) return loginError(request, 'Login com Google incompleto. Tente novamente.');
-
   const supabase = await createServerSupabase();
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) return loginError(request, 'Falha ao entrar com Google. Tente novamente.');
+
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) return loginError(request, 'Falha ao entrar com Google. Tente novamente.');
+  } else if (tokenHash && type) {
+    // Link de convite enviado por e-mail (Supabase Auth).
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as 'invite' | 'magiclink' | 'email' });
+    if (error) return loginError(request, 'Convite inválido ou expirado. Entre com sua conta Google.');
+  } else {
+    return loginError(request, 'Login incompleto. Tente novamente.');
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email || !user.email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {

@@ -22,7 +22,7 @@ export type Command =
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
   | { type: 'set_takt'; sequenceId: string; taktDays: number };
-export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number }
+export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
 
 function wagonFor(data: PlanningData, id: string): Wagon {
