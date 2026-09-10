@@ -1,7 +1,7 @@
 import type { PlanningRepository } from '../../../application/ports/planning-repository';
 import type { PlanningData } from '../../../domain/entities';
 import { getServiceClient } from './client';
-import { planningDataToPayload, rowsToPlanningData, type Rows } from './mappers';
+import { diffDeletedIds, planningDataToPayload, rowsToPlanningData, type Rows } from './mappers';
 
 const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'history_events', 'profiles'] as const;
 const MAX_ATTEMPTS = 5;
@@ -43,7 +43,7 @@ export class SupabasePlanningRepository implements PlanningRepository {
       const { data, version } = await fetchSnapshotWithVersion();
       const draft = structuredClone(data);
       const result = operation(draft);
-      const { error } = await client.rpc('commit_planning', { p_expected_version: version, p_payload: planningDataToPayload(draft) });
+      const { error } = await client.rpc('commit_planning', { p_expected_version: version, p_payload: planningDataToPayload(draft), p_deletes: diffDeletedIds(data, draft) });
       if (!error) return result;
       if (!error.message.includes('version_conflict')) throw new Error(error.message);
     }

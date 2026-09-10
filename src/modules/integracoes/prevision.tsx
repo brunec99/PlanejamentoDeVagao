@@ -75,8 +75,14 @@ export function PrevisionImport({ workId }: { workId: string }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? 'Falha ao atualizar.');
-      await loadCache();
-      setMessage(`Cronograma atualizado: ${body.count} atividades salvas${body.skipped ? ` · ${body.skipped} registros inválidos ignorados` : ''}.`);
+      await loadCache(); await c.refresh();
+      type RegenSummary = { sequenceName: string; aborted: boolean; reason?: string; removedWagons?: number; createdWagons?: number; placedActivities?: number; removedWithProgressOrCriteria?: number; skippedTooLong?: number; skippedProgress?: number };
+      const regen = (body.regeneration ?? []) as RegenSummary[];
+      const regenText = regen.map(r => r.aborted
+        ? `${r.sequenceName}: não regenerada (${r.reason})`
+        : `${r.sequenceName}: ${r.removedWagons} vagão(ões) refeito(s), ${r.createdWagons} vagão(ões) criado(s), ${r.placedActivities} atividades encaixadas${r.removedWithProgressOrCriteria ? ` · ⚠ ${r.removedWithProgressOrCriteria} com progresso/critério preenchido foram removidas` : ''}`,
+      ).join(' | ');
+      setMessage(`Cronograma atualizado: ${body.count} atividades salvas${body.skipped ? ` · ${body.skipped} registros inválidos ignorados` : ''}.${regenText ? ` ${regenText}.` : ''}`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível atualizar.'); }
     finally { setBusy(false); }
   };

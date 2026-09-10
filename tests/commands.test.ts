@@ -124,3 +124,21 @@ test('editar peso de fatia sem seguinte suficiente é recusado',()=>{
   assert.throws(()=>run(d,{type:'update_activity',activityId:'s1',activity:input({...slice1,weight:0.9}),progress:0,status:'not_started'}),/fatia seguinte/);
   assert.equal(d.activities.find(a=>a.id==='s1')!.weight,0.6,'nada deve mudar quando a operação falha');
 });
+
+test('regenerate_sequence remove a cauda não liberada e cria vagões novos preservando o liberado',()=>{
+  const d=createMockData();
+  const rows=[{externalId:'x1',name:'Nova atividade',location:'Novo local',plannedStart:'2026-09-16',plannedEnd:'2026-09-18',progress:0}];
+  const id=run(d,{type:'regenerate_sequence',sequenceId:'seq-2',projectId:'99999',rows,responsibleId:'user-1'});
+  assert.equal(id,'seq-2');
+  assert.ok(!d.wagons.some(w=>w.id==='v5'),'v5 não liberado deve ter sido removido');
+  assert.ok(d.wagons.some(w=>w.id==='v4'),'v4 liberado deve continuar existindo');
+  const created=d.wagons.filter(w=>w.predecessorId==='v4');
+  assert.equal(created.length,1);
+  const newActivities=d.activities.filter(a=>a.wagonId===created[0].id);
+  assert.equal(newActivities.length,1);
+  assert.equal(newActivities[0].previsionExternalId,'99999:x1');
+});
+test('regenerate_sequence é bloqueado para quem só tem consulta',()=>{
+  const d=createMockData();
+  assert.throws(()=>run(d,{type:'regenerate_sequence',sequenceId:'seq-1',projectId:'1',rows:[],responsibleId:'user-1'},'user-3'),/apenas consulta/);
+});

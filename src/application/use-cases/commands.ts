@@ -1,5 +1,6 @@
 import type { Activity, PlanningData, RecordBase, Wagon } from '../../domain/entities';
 import { isTerminal, validateActivity, validateSequence } from '../../domain/rules';
+import { planSequenceRegeneration } from './regenerate-sequence';
 import { periodDays, requireText, validateDate, validatePeriod } from '../../domain/validation';
 export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
 export type Command =
@@ -21,7 +22,8 @@ export type Command =
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
-  | { type: 'set_takt'; sequenceId: string; taktDays: number };
+  | { type: 'set_takt'; sequenceId: string; taktDays: number }
+  | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
 export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
 
@@ -255,6 +257,39 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (actor.role !== 'admin') checkWork(sequence.workId);
       if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365) throw new Error('Takt deve ter entre 1 e 365 dias.');
       sequence.defaultTaktDays = command.taktDays; touch(sequence); entityId = sequence.id; break;
+    }
+    case 'regenerate_sequence': {
+      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      const workId = sequence.workId; checkWork(workId); responsible(command.responsibleId, workId);
+      const work = data.works.find(w => w.id === workId)!;
+      if (work.previsionProjectId && work.previsionProjectId !== command.projectId) throw new Error('A obra selecionada não corresponde ao vínculo com este projeto Prevision.');
+      const plan = planSequenceRegeneration(data, command.sequenceId, command.projectId, command.rows, sequence.defaultTaktDays, today);
+      if (plan.aborted) throw new Error(plan.reason);
+      const removedWagons = new Set(plan.removedWagonIds), removedActivities = new Set(plan.removedActivityIds);
+      const removedCriteria = new Set(plan.removedCriterionIds), removedPending = new Set(plan.removedPendingIds), removedRestrictions = new Set(plan.removedRestrictionIds);
+      data.wagons = data.wagons.filter(w => !removedWagons.has(w.id));
+      data.activities = data.activities.filter(a => !removedActivities.has(a.id));
+      data.criteria = data.criteria.filter(c => !removedCriteria.has(c.id));
+      data.pendingItems = data.pendingItems.filter(p => !removedPending.has(p.id));
+      data.restrictions = data.restrictions.filter(r => !removedRestrictions.has(r.id));
+      if (!work.previsionProjectId) { work.previsionProjectId = command.projectId; touch(work); }
+      let predecessorId = plan.frozenWagonId; let number = plan.startNumber;
+      for (const window of plan.windows) {
+        const taktDays = periodDays(window.plannedStart, window.plannedEnd, sequence.calendar === 'business_days');
+        if (!taktDays) continue;
+        const wagon = { ...base(), sequenceId: sequence.id, number, predecessorId, plannedStart: window.plannedStart, plannedEnd: window.plannedEnd, taktDays, responsibleIds: [command.responsibleId] };
+        data.wagons.push(wagon); predecessorId = wagon.id; number++;
+        for (const member of window.members) {
+          const externalId = `${command.projectId}:${member.externalId}`;
+          let location = data.locations.find(l => l.workId === workId && l.name === member.location);
+          if (!location) { location = { ...base(), workId, name: member.location, code: '' }; data.locations.push(location); }
+          const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(member.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: member.plannedStart, plannedEnd: member.plannedEnd, progress: member.progress, status: member.progress === 100 ? 'completed' : member.progress > 0 ? 'in_progress' : 'not_started', weight: typeof member.weight === 'number' && member.weight > 0 ? member.weight : 1, mandatory: true, origin: 'prevision', previsionExternalId: externalId };
+          validateActivity(activity); data.activities.push(activity);
+          data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local da atividade importada', mandatory: true, fulfilled: false });
+        }
+      }
+      validateSequence(data.wagons);
+      entityId = sequence.id; break;
     }
   }
   data.history.push({ id: newId(), entityId: wagonId ?? entityId, entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning', action: command.type, authorId: actorId, occurredAt: now, changes: { targetId: entityId, ...command } });

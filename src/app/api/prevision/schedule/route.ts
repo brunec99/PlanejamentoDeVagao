@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { listActivities, PrevisionError } from '@/infrastructure/integrations/prevision/client';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
-import type { ImportedActivity } from '@/application/use-cases/commands';
+import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
+import { applyCommand, type ImportedActivity } from '@/application/use-cases/commands';
+import { planSequenceRegeneration } from '@/application/use-cases/regenerate-sequence';
+import { DEMO_DATE } from '@/mocks/planning';
 
 export const runtime = 'nodejs';
 
@@ -64,5 +67,36 @@ export async function POST(request: NextRequest) {
     const { error } = await service.from('prevision_activities').upsert(payload, { onConflict: 'work_id,external_id' });
     if (error) return NextResponse.json({ error: `Falha ao salvar o cronograma: ${error.message}` }, { status: 500 });
   }
-  return NextResponse.json({ count: payload.length, skipped, syncedAt }, { headers: { 'Cache-Control': 'no-store' } });
+
+  // Depois de atualizar o cache, estica cada sequência da obra com o cronograma novo — só a
+  // cauda ainda não liberada é apagada e recriada; vagões liberados nunca são tocados.
+  const repo = new SupabasePlanningRepository();
+  const snapshot = await repo.getSnapshot();
+  const sequences = snapshot.sequences.filter(s => s.workId === auth.workId);
+  const regeneration = [];
+  for (const sequence of sequences) {
+    const preview = planSequenceRegeneration(snapshot, sequence.id, projectId, rows, sequence.defaultTaktDays, DEMO_DATE);
+    if (preview.aborted) {
+      regeneration.push({ sequenceName: sequence.name, aborted: true, reason: preview.reason });
+      continue;
+    }
+    try {
+      const command = { type: 'regenerate_sequence' as const, sequenceId: sequence.id, projectId, rows, responsibleId: auth.profile.id };
+      const context = { actorId: auth.profile.id, today: DEMO_DATE, now: new Date().toISOString(), newId: () => crypto.randomUUID() };
+      await repo.transaction(draft => applyCommand(draft, command, context));
+      regeneration.push({
+        sequenceName: sequence.name, aborted: false,
+        removedWagons: preview.removedWagonIds.length,
+        createdWagons: preview.windows.length,
+        placedActivities: preview.windows.reduce((sum, w) => sum + w.members.length, 0),
+        removedWithProgressOrCriteria: preview.removedWithProgressOrCriteria,
+        skippedTooLong: preview.skippedTooLong,
+        skippedProgress: preview.skippedProgress,
+      });
+    } catch (error) {
+      regeneration.push({ sequenceName: sequence.name, aborted: true, reason: error instanceof Error ? error.message : 'Falha ao regenerar.' });
+    }
+  }
+
+  return NextResponse.json({ count: payload.length, skipped, syncedAt, regeneration }, { headers: { 'Cache-Control': 'no-store' } });
 }

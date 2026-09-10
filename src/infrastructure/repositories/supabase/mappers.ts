@@ -60,3 +60,19 @@ export function planningDataToPayload(data: PlanningData) {
     profiles: data.users.map(u => ({ id: u.id, created_at: u.createdAt, updated_at: u.updatedAt, name: u.name, role: u.role, work_ids: u.workIds })),
   };
 }
+
+/** Ids present in `before` but missing from `after`, per table — what regenerate_sequence
+ * (the only command that removes rows) needs `commit_planning` to actually delete. */
+export function diffDeletedIds(before: PlanningData, after: PlanningData) {
+  const removed = <T extends { id: string }>(from: T[], to: T[]) => {
+    const keep = new Set(to.map(x => x.id));
+    return from.filter(x => !keep.has(x.id)).map(x => x.id);
+  };
+  return {
+    wagons: removed(before.wagons, after.wagons),
+    activities: removed(before.activities, after.activities),
+    terminality_criteria: removed(before.criteria, after.criteria),
+    pending_items: removed(before.pendingItems, after.pendingItems),
+    restrictions: removed(before.restrictions, after.restrictions),
+  };
+}
