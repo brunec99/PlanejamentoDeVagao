@@ -25,7 +25,7 @@
 }
 
 @layer components {
-  .panel { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
+  .panel { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
   .eyebrow { @apply text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400; }
   .page-title { @apply mt-1 text-2xl font-bold tracking-tight text-slate-900; }
   .text-link { @apply font-semibold text-blue-700 hover:text-blue-900 hover:underline underline-offset-4; }
@@ -46,6 +46,8 @@
   .callout-success { @apply border-emerald-200 bg-emerald-50 text-emerald-800; }
   .badge-muted { @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600; }
   .stat-card { @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm; }
+  .card-accent { @apply relative overflow-hidden rounded-2xl border shadow-sm bg-white; }
+  .card-accent-bar { @apply h-1 w-full bg-gradient-to-r; }
 }
 
 .command-box summary { @apply flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-700; }
@@ -53,15 +55,15 @@
 .command-box summary::before { content: "›"; @apply text-base leading-none text-slate-400 transition-transform; display: inline-block; }
 .command-box[open] summary::before { transform: rotate(90deg); }
 
-.status { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold; }
+.status { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold; }
 .status::before { content: ""; @apply h-1.5 w-1.5 shrink-0 rounded-full; }
-.terminal { @apply bg-emerald-50 text-emerald-700; }
+.terminal { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
 .terminal::before { @apply bg-emerald-500; }
-.in_production { @apply bg-blue-50 text-blue-700; }
+.in_production { @apply bg-blue-50 text-blue-700 border-blue-200; }
 .in_production::before { @apply bg-blue-600; }
-.restricted { @apply bg-amber-50 text-amber-700; }
+.restricted { @apply bg-amber-50 text-amber-700 border-amber-200; }
 .restricted::before { @apply bg-amber-500; }
-.not_started { @apply bg-slate-100 text-slate-500; }
+.not_started { @apply bg-slate-100 text-slate-500 border-slate-200; }
 .not_started::before { @apply bg-slate-400; }
 
 .skip-link { position: absolute; top: -100px; left: 1rem; z-index: 50; padding: 1rem; background: #fff; border-radius: .5rem; }
