@@ -24,4 +24,4 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|login|auth/callback).*)'] };
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico)$).*)'] };

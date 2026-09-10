@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { signInWithGoogle } from './actions';
 export const metadata = { title: 'Entrar' };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; redirect?: string }> }) {
@@ -10,7 +11,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="z-10 w-full max-w-xl overflow-hidden rounded-2xl shadow-xl" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #0d3d2e 100%)' }}>
         <div className="h-0.5 bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-500" />
         <div className="px-7 py-6">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-blue-300">ATR Incorporadora · Engenharia</p>
+          <div className="mb-4 flex items-center gap-4 rounded-xl bg-white/95 px-4 py-3 w-fit">
+            <Image src="/logo-atr.png" alt="ATR Incorporadora" width={110} height={48} className="h-8 w-auto object-contain" priority />
+            <div className="h-8 w-px bg-slate-200" />
+            <Image src="/logo-takt.png" alt="Takt Engenharia" width={150} height={84} className="h-9 w-auto object-contain" priority />
+          </div>
           <h1 className="text-xl font-bold leading-snug text-white">Planejamento Vagão</h1>
           <p className="text-base font-light text-blue-100">Planejamento por período de takt</p>
         </div>

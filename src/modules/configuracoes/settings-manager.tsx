@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { Check, Mail, Timer, UserPlus, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, Mail, Timer, Trash2, UserPlus, Users } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { roleLabels } from '@/shared/format';
@@ -88,7 +88,34 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   </form>;
 }
 
+function DeleteUserButton({ userId, name, onDone }: { userId: string; name: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return <div>
+    <button type="button" disabled={busy}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
+      onClick={async () => {
+        if (!confirm(`Excluir ${name}? Essa ação não pode ser desfeita — a pessoa perde o acesso e precisa ser convidada de novo.`)) return;
+        setBusy(true); setError('');
+        try {
+          const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error ?? 'Não foi possível excluir.');
+          onDone();
+        } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível excluir.'); }
+        finally { setBusy(false); }
+      }}>
+      <Trash2 size={13} />{busy ? 'Excluindo…' : 'Excluir'}
+    </button>
+    {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+  </div>;
+}
+
 export function SettingsManager() {
+  const [emails, setEmails] = useState<Record<string, string>>({});
+  const loadEmails = () => fetch('/api/admin/users', { cache: 'no-store' }).then(r => r.json()).then(b => setEmails(b.emails ?? {})).catch(() => {});
+  useEffect(() => { loadEmails(); }, []);
+
   const c = usePlanning();
   if (c.state !== 'ready') return <LoadState error={c.state === 'error'} />;
   const { data } = c.planning;
@@ -122,13 +149,19 @@ export function SettingsManager() {
 
     <section>
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Users size={16} className="text-blue-600" />Usuários e acessos</h2>
-      <div className="mb-4"><InviteForm onDone={() => c.refresh()} /></div>
+      <div className="mb-4"><InviteForm onDone={() => { c.refresh(); loadEmails(); }} /></div>
       <div className="panel divide-y divide-slate-100">
         {data.users.map(user => (
           <div key={user.id} className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-800">{user.name}</p>
-              <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+                <p className="text-xs text-slate-400">{emails[user.id] ?? '—'}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
+                {user.id !== c.actorId && <DeleteUserButton userId={user.id} name={user.name} onDone={() => { c.refresh(); loadEmails(); }} />}
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {data.works.length === 0

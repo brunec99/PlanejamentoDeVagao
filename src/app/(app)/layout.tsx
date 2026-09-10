@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Building2, Settings, LogOut } from 'lucide-react';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
@@ -17,9 +18,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <a className="skip-link" href="#main">Ir para o conteúdo</a>
       <SidebarWrapper>
         <div className="space-y-3 border-b border-slate-100 p-5">
-          <Link href="/obras" className="flex items-center gap-2.5">
-            <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-700 text-sm font-bold text-white">V</span>
-            <span className="text-sm font-bold leading-tight text-slate-900">Planejamento<br />Vagão</span>
+          <Link href="/obras" className="block space-y-2.5">
+            <Image src="/logo-atr.png" alt="ATR Incorporadora" width={140} height={61} className="h-7 w-auto object-contain" priority />
+            <Image src="/logo-takt.png" alt="Takt Engenharia" width={200} height={112} className="h-8 w-auto object-contain" priority />
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4">
@@ -55,8 +56,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       </SidebarWrapper>
       <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto bg-slate-100">
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 md:hidden">
-          <Link href="/obras" className="flex items-center gap-2 text-sm font-bold text-slate-900">
-            <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-md bg-blue-700 text-xs font-bold text-white">V</span>Planejamento Vagão
+          <Link href="/obras" className="flex items-center gap-2.5">
+            <Image src="/logo-atr.png" alt="ATR Incorporadora" width={90} height={39} className="h-6 w-auto object-contain" priority />
+            <Image src="/logo-takt.png" alt="Takt Engenharia" width={110} height={62} className="h-7 w-auto object-contain" priority />
           </Link>
           {profile?.role === 'admin' && <Link href="/configuracoes" className="text-slate-500"><Settings size={18} /></Link>}
         </header>
