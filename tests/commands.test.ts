@@ -106,3 +106,21 @@ test('vínculo da obra impede misturar projetos externos',async()=>{
   await assert.rejects(repo.transaction(d=>run(d,{type:'import_activities',wagonId:'v6',projectId:'123',responsibleId:'user-1',rows:[{externalId:'99',name:'Importada',location:'Cobertura',plannedStart:'2026-09-01',plannedEnd:'2026-09-05',progress:0}]})),/vínculo/);
   assert.deepEqual(await repo.getSnapshot(),before);
 });
+
+test('editar o peso de uma fatia subtrai a diferença da fatia seguinte',()=>{
+  const d=createMockData();
+  const slice1:Activity={...d.activities[0],id:'s1',wagonId:'v4',plannedStart:'2026-09-06',plannedEnd:'2026-09-10',mandatory:false,progress:0,status:'not_started',name:'EST - fatia 1',weight:0.6,previsionExternalId:'29875:9000#1'};
+  const slice2:Activity={...d.activities[0],id:'s2',wagonId:'v5',plannedStart:'2026-09-11',plannedEnd:'2026-09-15',mandatory:false,progress:0,status:'not_started',name:'EST - fatia 2',weight:0.4,previsionExternalId:'29875:9000#2'};
+  d.activities.push(slice1,slice2);
+  run(d,{type:'update_activity',activityId:'s1',activity:input({...slice1,weight:0.8}),progress:0,status:'not_started'});
+  assert.equal(d.activities.find(a=>a.id==='s1')!.weight,0.8);
+  assert.equal(d.activities.find(a=>a.id==='s2')!.weight,0.2);
+});
+test('editar peso de fatia sem seguinte suficiente é recusado',()=>{
+  const d=createMockData();
+  const slice1:Activity={...d.activities[0],id:'s1',wagonId:'v4',plannedStart:'2026-09-06',plannedEnd:'2026-09-10',mandatory:false,progress:0,status:'not_started',name:'EST - fatia 1',weight:0.6,previsionExternalId:'29875:9001#1'};
+  const slice2:Activity={...d.activities[0],id:'s2',wagonId:'v5',plannedStart:'2026-09-11',plannedEnd:'2026-09-15',mandatory:false,progress:0,status:'not_started',name:'EST - fatia 2',weight:0.1,previsionExternalId:'29875:9001#2'};
+  d.activities.push(slice1,slice2);
+  assert.throws(()=>run(d,{type:'update_activity',activityId:'s1',activity:input({...slice1,weight:0.9}),progress:0,status:'not_started'}),/fatia seguinte/);
+  assert.equal(d.activities.find(a=>a.id==='s1')!.weight,0.6,'nada deve mudar quando a operação falha');
+});

@@ -145,6 +145,20 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (command.status === 'not_started' && command.progress !== 0) throw new Error('Atividade não iniciada deve ter progresso zero.');
       if (isTerminal(wagon.id, data)) checkReopen(wagon, command.reason);
       if (command.progress < activity.progress || (activity.status === 'completed' && command.status !== 'completed')) requireText(command.reason ?? '', 'Justificativa da correção');
+      // Atividade fatiada entre vagões (id termina em "#N"): mexer no peso de uma fatia
+      // subtrai a diferença da fatia seguinte, para as partes continuarem somando o peso
+      // original da atividade inteira em vez de inflar o progresso ponderado do vagão.
+      const weightDelta = next.weight - activity.weight;
+      const sliceMatch = activity.previsionExternalId?.match(/^(.+)#(\d+)$/);
+      if (weightDelta !== 0 && sliceMatch) {
+        const [, base, index] = sliceMatch;
+        const sibling = data.activities.find(a => a.previsionExternalId === `${base}#${Number(index) + 1}`);
+        if (sibling) {
+          const siblingWeight = sibling.weight - weightDelta;
+          if (siblingWeight <= 0) throw new Error(`Esse ajuste zeraria o peso da fatia seguinte (${sibling.name}). Reduza menos.`);
+          sibling.weight = Math.round(siblingWeight * 100) / 100; touch(sibling);
+        }
+      }
       Object.assign(activity, next); touch(activity);
       if ((activity.progress > 0 || activity.status !== 'not_started') && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
       entityId = activity.id; wagonId = wagon.id; break;
