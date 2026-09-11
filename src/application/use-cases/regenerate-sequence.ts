@@ -84,8 +84,12 @@ export function planSequenceRegeneration(data: PlanningData, sequenceId: string,
     data.activities.filter(a => removedActivityIdSet.has(a.id) && a.progress > 0).length +
     data.criteria.filter(c => removedCriterionIds.includes(c.id) && c.fulfilled).length;
 
+  // Sem vagão liberado ainda, o ponto de partida é a data de início configurada na sequência
+  // (se houver) em vez de "hoje" — permite adiar o primeiro vagão sem editá-lo manualmente,
+  // já que uma edição manual seria apagada no próximo ciclo de regeneração da cauda.
+  const sequence = data.sequences.find(s => s.id === sequenceId);
   const frozenWagon = frozenIndex >= 0 ? ordered[frozenIndex] : undefined;
-  const frontier = frozenWagon ? addDays(frozenWagon.plannedEnd, 1) : today;
+  const frontier = frozenWagon ? addDays(frozenWagon.plannedEnd, 1) : (sequence?.startDate ?? today);
   const startFrontier = frontier > today ? frontier : today;
 
   // Atividades já presentes em vagões que ficam de pé (liberados ou não) não voltam pro funil —

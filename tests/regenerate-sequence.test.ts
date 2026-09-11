@@ -56,6 +56,19 @@ test('atividades muito longas ou com progresso ficam de fora e são contadas', (
   assert.equal(plan.windows.flatMap(w => w.members).length, 1);
 });
 
+test('sem vagão liberado, usa a data de início configurada na sequência em vez de hoje', () => {
+  const d = createMockData();
+  // seq-2 sem nenhuma liberação: nenhum vagão congelado, ponto de partida vem da config.
+  d.releases = d.releases.filter(r => r.wagonId !== 'v4');
+  const sequence = d.sequences.find(s => s.id === 'seq-2')!;
+  sequence.startDate = '2026-09-21';
+  const plan = planSequenceRegeneration(d, 'seq-2', '99999', [row('z', '2026-09-19', '2026-09-23')], 5, DEMO_DATE);
+  assert.equal(plan.aborted, false);
+  assert.equal(plan.frozenWagonId, undefined);
+  assert.equal(plan.windows.length, 1);
+  assert.equal(plan.windows[0].plannedStart, '2026-09-21');
+});
+
 test('diffDeletedIds encontra só os ids que desapareceram entre dois snapshots', () => {
   const before = createMockData();
   const after = createMockData();

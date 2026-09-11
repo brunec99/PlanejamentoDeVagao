@@ -23,6 +23,7 @@ export type Command =
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
+  | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
 export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
@@ -257,6 +258,12 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (actor.role !== 'admin') checkWork(sequence.workId);
       if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365) throw new Error('Takt deve ter entre 1 e 365 dias.');
       sequence.defaultTaktDays = command.taktDays; touch(sequence); entityId = sequence.id; break;
+    }
+    case 'set_sequence_start': {
+      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      if (actor.role !== 'admin') checkWork(sequence.workId);
+      if (command.startDate !== null) validateDate(command.startDate);
+      sequence.startDate = command.startDate ?? undefined; touch(sequence); entityId = sequence.id; break;
     }
     case 'regenerate_sequence': {
       const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');

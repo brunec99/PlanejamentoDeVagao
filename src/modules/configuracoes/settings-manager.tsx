@@ -51,6 +51,17 @@ function TaktField({ sequenceId, taktDays }: { sequenceId: string; taktDays: num
   </div>;
 }
 
+function StartDateField({ sequenceId, startDate }: { sequenceId: string; startDate?: string }) {
+  const { busy, error, run } = useCommand();
+  const [value, setValue] = useState(startDate ?? '');
+  const dirty = value !== (startDate ?? '');
+  return <div className="flex items-center gap-2">
+    <input className="field w-36 py-1.5 text-sm" type="date" value={value} onChange={e => setValue(e.target.value)} />
+    {dirty && <button className="button px-3 py-1.5 text-xs" disabled={busy} onClick={() => run({ type: 'set_sequence_start', sequenceId, startDate: value || null })}>Salvar</button>}
+    {error && <span className="text-xs text-rose-600">{error}</span>}
+  </div>;
+}
+
 function InviteForm({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -137,9 +148,11 @@ export function SettingsManager() {
             <div className="space-y-2">
               {sequences.length === 0
                 ? <p className="text-xs text-slate-400">Nenhuma sequência cadastrada</p>
-                : sequences.map(s => <div key={s.id} className="flex items-center gap-3">
+                : sequences.map(s => <div key={s.id} className="flex flex-wrap items-center gap-3">
                     <span className="text-xs text-slate-500">{s.name}</span>
                     <TaktField sequenceId={s.id} taktDays={s.defaultTaktDays} />
+                    <span className="text-xs text-slate-400">início do 1º vagão (até liberar)</span>
+                    <StartDateField sequenceId={s.id} startDate={s.startDate} />
                   </div>)}
             </div>
           </div>;

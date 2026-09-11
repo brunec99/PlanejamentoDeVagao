@@ -4,7 +4,7 @@ export type LocalDate = string;
 export interface RecordBase { id: Id; createdAt: string; updatedAt: string }
 export interface Work extends RecordBase { name: string; code: string; description: string; active: boolean; previsionProjectId?: string }
 export interface Location extends RecordBase { workId: Id; name: string; code: string; parentId?: Id }
-export interface ProductionSequence extends RecordBase { workId: Id; name: string; defaultTaktDays: number; calendar: 'calendar_days' | 'business_days' }
+export interface ProductionSequence extends RecordBase { workId: Id; name: string; defaultTaktDays: number; calendar: 'calendar_days' | 'business_days'; startDate?: string }
 /** A wagon is a temporal production cycle. Locations belong only to activities. */
 export interface Wagon extends RecordBase { sequenceId: Id; number: number; predecessorId?: Id; plannedStart: LocalDate; plannedEnd: LocalDate; taktDays: number; actualStart?: LocalDate; responsibleIds: Id[] }
 export type ActivityStatus = 'not_started' | 'in_progress' | 'completed';
