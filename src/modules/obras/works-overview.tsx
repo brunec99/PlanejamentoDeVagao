@@ -17,10 +17,10 @@ export function WorksOverview() {
     <p className="eyebrow">Planejamento de produção</p>
     <h1 className="page-title">Obras</h1>
     <p className="mt-1 text-sm text-slate-500">Selecione uma obra para acompanhar seus ciclos de produção.</p>
-    <WorkActions />
+    <div data-tour="obras-actions"><WorkActions /></div>
     {works.length === 0
       ? <div className="panel mt-6 p-6"><Empty>Você ainda não tem acesso a nenhuma obra. Peça a um administrador para liberar em Configurações.</Empty></div>
-      : <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{works.map(work => {
+      : <div data-tour="obras-grid" className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{works.map(work => {
           const selected = selectWorkPlanning(planning, work.id)!;
           const terminais = selected.wagons.filter(w => w.status === 'terminal').length;
           const atividades = planning.data.activities.filter(a => selected.wagons.some(w => w.id === a.wagonId)).length;

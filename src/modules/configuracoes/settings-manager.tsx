@@ -55,7 +55,7 @@ function StartDateField({ sequenceId, startDate }: { sequenceId: string; startDa
   const { busy, error, run } = useCommand();
   const [value, setValue] = useState(startDate ?? '');
   const dirty = value !== (startDate ?? '');
-  return <div className="flex items-center gap-2">
+  return <div data-tour="config-start-date" className="flex items-center gap-2">
     <input className="field w-36 py-1.5 text-sm" type="date" value={value} onChange={e => setValue(e.target.value)} />
     {dirty && <button className="button px-3 py-1.5 text-xs" disabled={busy} onClick={() => run({ type: 'set_sequence_start', sequenceId, startDate: value || null })}>Salvar</button>}
     {error && <span className="text-xs text-rose-600">{error}</span>}
@@ -69,7 +69,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  return <form className="panel p-5" onSubmit={async e => {
+  return <form data-tour="config-invite" className="panel p-5" onSubmit={async e => {
     e.preventDefault(); if (busy) return;
     setBusy(true); setError(''); setMessage('');
     try {
@@ -136,7 +136,7 @@ export function SettingsManager() {
   return <div className="space-y-8">
     <section>
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Timer size={16} className="text-blue-600" />Takt por obra</h2>
-      <div className="panel divide-y divide-slate-100">
+      <div data-tour="config-takt" className="panel divide-y divide-slate-100">
         {data.works.length === 0 && <div className="p-5"><Empty>Nenhuma obra cadastrada.</Empty></div>}
         {data.works.map(work => {
           const sequences = data.sequences.filter(s => s.workId === work.id);
@@ -163,7 +163,7 @@ export function SettingsManager() {
     <section>
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Users size={16} className="text-blue-600" />Usuários e acessos</h2>
       <div className="mb-4"><InviteForm onDone={() => { c.refresh(); loadEmails(); }} /></div>
-      <div className="panel divide-y divide-slate-100">
+      <div data-tour="config-users" className="panel divide-y divide-slate-100">
         {data.users.map(user => (
           <div key={user.id} className="p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">

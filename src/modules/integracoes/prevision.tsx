@@ -139,12 +139,12 @@ export function PrevisionImport({ workId }: { workId: string }) {
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Responsável local</span>
+        <label data-tour="prevision-responsible" className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Responsável local</span>
           <select className="field w-56" value={responsibleId} onChange={e => setResponsibleId(e.target.value)}>
             <option value="">Selecione</option>
             {data.users.filter(u => u.workIds.includes(workId) && u.role !== 'viewer').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select></label>
-        {canImport && projectId && <button className="button" disabled={busy} onClick={sync}><RefreshCw size={15} className={busy ? 'animate-spin' : ''} />Atualizar do Prevision</button>}
+        {canImport && projectId && <button data-tour="prevision-sync" className="button" disabled={busy} onClick={sync}><RefreshCw size={15} className={busy ? 'animate-spin' : ''} />Atualizar do Prevision</button>}
       </div>
     </div>
 
@@ -165,7 +165,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
     {loading ? <div className="mt-4"><LoadState /></div> : rows.length === 0 ? (
       <div className="panel mt-4 p-6"><Empty>Nenhum cronograma salvo ainda. Use &quot;Atualizar do Prevision&quot; para trazer as atividades.</Empty></div>
     ) : <>
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div data-tour="prevision-tabs" className="mt-5 flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('pool')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === 'pool' ? 'bg-blue-700 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
           Disponíveis para vagão ({placeable.length})
         </button>
@@ -182,7 +182,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
       </div>
 
       {tab === 'pool' ? (
-        <section className="panel mt-4 overflow-hidden">
+        <section data-tour="prevision-pool" className="panel mt-4 overflow-hidden">
           <div className="border-b border-slate-100 px-5 py-3.5">
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><PackageOpen size={15} className="text-blue-600" />Disponíveis para vagão</h2>
             <p className="mt-0.5 text-xs text-slate-500">Atividades que ainda não estão em vagão. As que atravessam vários takts entram fatiadas em percentual.</p>

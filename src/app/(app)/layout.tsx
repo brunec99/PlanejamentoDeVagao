@@ -4,6 +4,9 @@ import { Building2, Settings, LogOut } from 'lucide-react';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
+import { TourProvider } from '@/modules/tour/tour-provider';
+import { TourOverlay } from '@/modules/tour/tour-overlay';
+import { HelpButton } from '@/modules/tour/help-button';
 import { signOut } from '../login/actions';
 import { roleLabels } from '@/shared/format';
 
@@ -14,6 +17,7 @@ function initials(name: string) {
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const profile = await getRouteProfile();
   return (
+    <TourProvider>
     <div className="flex h-screen overflow-hidden bg-slate-100">
       <a className="skip-link" href="#main">Ir para o conteúdo</a>
       <SidebarWrapper>
@@ -47,6 +51,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
               <p className="truncate text-xs text-slate-400">{roleLabels[profile.role]}</p>
             </div>
           </div>}
+          <HelpButton />
           <form action={signOut}>
             <button type="submit" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600">
               <LogOut size={16} />Sair do sistema
@@ -60,12 +65,17 @@ export default async function AppLayout({ children }: Readonly<{ children: React
             <Image src="/logo-atr.png" alt="ATR Incorporadora" width={90} height={39} className="h-6 w-auto object-contain" priority />
             <Image src="/logo-takt.png" alt="Takt Engenharia" width={110} height={62} className="h-7 w-auto object-contain" priority />
           </Link>
-          {profile?.role === 'admin' && <Link href="/configuracoes" className="text-slate-500"><Settings size={18} /></Link>}
+          <div className="flex items-center gap-3">
+            <HelpButton variant="icon" />
+            {profile?.role === 'admin' && <Link href="/configuracoes" className="text-slate-500"><Settings size={18} /></Link>}
+          </div>
         </header>
         <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 p-5 md:p-8">
           <PlanningProvider>{children}</PlanningProvider>
         </main>
       </div>
+      <TourOverlay />
     </div>
+    </TourProvider>
   );
 }

@@ -31,12 +31,12 @@ export function PlanningOverview({ workId }: { workId: string }) {
         <p className="mt-1 text-sm text-slate-500">Cada vagão reúne as atividades previstas entre seus marcos de início e término.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Link className="button-ghost" href={`/obras/${workId}/dividas`}><Wallet size={15} />Dívidas</Link>
-        <Link className="button" href={`/obras/${workId}/importar`}><RefreshCw size={15} />Atualizar tarefas</Link>
+        <Link data-tour="planejamento-debts-link" className="button-ghost" href={`/obras/${workId}/dividas`}><Wallet size={15} />Dívidas</Link>
+        <Link data-tour="planejamento-sync-link" className="button" href={`/obras/${workId}/importar`}><RefreshCw size={15} />Atualizar tarefas</Link>
       </div>
     </div>
 
-    <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div data-tour="planejamento-stats" className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard label="Vagões planejados" value={wagons.length} />
       <StatCard label="Terminais" value={wagons.filter(w => w.status === 'terminal').length} />
       <StatCard label="Takt vencido" value={wagons.filter(w => w.overdue).length} tone={wagons.some(w => w.overdue) ? 'warning' : 'default'} />
@@ -49,7 +49,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
 
     {pastCount > 0 && <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-sm">
       <span className="text-slate-500">{pastCount} {pastCount === 1 ? 'vagão encerrou' : 'vagões encerraram'} antes de hoje ({formatDate(today)}).</span>
-      <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600">
+      <label data-tour="planejamento-show-past" className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600">
         <input type="checkbox" className="accent-blue-700" checked={showPast} onChange={e => setShowPast(e.target.checked)} />Mostrar passado
       </label>
     </div>}
@@ -65,7 +65,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
         {rows.length === 0
           ? <div className="p-5"><Empty>{all.length === 0 ? 'Nenhum vagão nesta sequência.' : 'Todos os vagões desta sequência já são passado. Marque "Mostrar passado" para vê-los.'}</Empty></div>
           : <div className="overflow-x-auto custom-scrollbar" role="region" aria-label={`Vagões de ${sequence.name}`} tabIndex={0}>
-              <table className="data-table min-w-[900px]">
+              <table data-tour="planejamento-wagon-table" className="data-table min-w-[900px]">
                 <thead><tr>{['Vagão', 'Período previsto', 'Atividades', 'Progresso', 'Status', 'Prazo', 'Liberação'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
                 <tbody>{rows.map(w => {
                   const release = data.releases.find(r => r.wagonId === w.id);

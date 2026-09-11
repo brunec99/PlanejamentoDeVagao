@@ -9,7 +9,7 @@ export function Progress({ value, label }: { value: number; label: string }) {
     <span className="text-xs font-semibold tabular-nums text-slate-500">{Math.round(value)}%</span>
   </div>;
 }
-export function Panel({ title, children }: { title: string; children: ReactNode }) { return <section className="panel"><h2 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">{title}</h2><div className="p-5">{children}</div></section>; }
+export function Panel({ title, tourId, children }: { title: string; tourId?: string; children: ReactNode }) { return <section data-tour={tourId} className="panel"><h2 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">{title}</h2><div className="p-5">{children}</div></section>; }
 export function Empty({ children }: { children: ReactNode }) { return <p className="text-sm leading-6 text-slate-500">{children}</p>; }
 export function LoadState({ error = false }: { error?: boolean }) { return <div className="panel p-6"><p role={error ? 'alert' : 'status'} className="text-sm text-slate-500">{error ? 'Não foi possível carregar os dados. Atualize a página para tentar novamente.' : 'Carregando planejamento…'}</p></div>; }
 export function Missing({ label, href = '/obras' }: { label: string; href?: string }) { return <div className="panel p-6"><h1 className="text-lg font-bold text-slate-900">{label}</h1><p className="my-2 text-sm text-slate-500">Confira o endereço ou retorne à lista.</p><Link className="text-link text-sm" href={href}>Voltar</Link></div>; }
