@@ -26,6 +26,12 @@ export function sliceActivity(row: ImportedActivity, wagons: WagonWindow[]): Act
     .filter(overlap => overlap.days > 0)
     .sort((a, b) => a.start.localeCompare(b.start));
   if (overlaps.length === 0) return [];
+  // Se os vagões cobrem só um trecho do período da atividade (ex.: ela começa antes do
+  // primeiro vagão da sequência), não force um encaixe: sem cobertura total, a atividade não
+  // entra em vagão nenhum — fica em "fora do período" em vez de aparecer como 100% num vagão
+  // que na verdade só contém uma fração dela.
+  const coveredDays = overlaps.reduce((sum, o) => sum + o.days, 0);
+  if (coveredDays < total) return [];
 
   const percents = overlaps.map(o => Math.max(1, Math.round((o.days / total) * 100)));
   // O arredondamento sobra ou falta: o ajuste vai para a maior fatia, para o total fechar em 100%.

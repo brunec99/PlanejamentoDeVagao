@@ -65,6 +65,15 @@ test('fatia divide a atividade pelos vagões preservando 100% e o período de ca
   assert.equal(slices[2].row.plannedEnd, '2026-10-20');
 });
 
+test('atividade que começa antes do primeiro vagão não é forçada a caber 100% nele', () => {
+  // Caso real: atividade com progresso >0 iniciada antes do vagão 1 existir — 14 de 21 dias
+  // ficam fora de qualquer vagão. Antes da correção, o arredondamento "completava" para 100%
+  // no vagão 1, fazendo a atividade parecer inteiramente contida nele sem estar.
+  const wagons = [{ id: 'w1', plannedStart: '2026-09-08', plannedEnd: '2026-09-28' }];
+  const slices = sliceActivity({ externalId: '9', name: 'Estrutura de concreto', location: '4º pav', plannedStart: '2026-08-25', plannedEnd: '2026-09-14', progress: 62.5 }, wagons);
+  assert.equal(slices.length, 0);
+});
+
 test('atividade contida num único vagão não vira fatia', () => {
   const wagons = [{ id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-21' }];
   const slices = sliceActivity({ externalId: '3', name: 'Alvenaria', location: '2º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-12', progress: 0 }, wagons);

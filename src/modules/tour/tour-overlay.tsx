@@ -7,16 +7,20 @@ const PAD = 8;
 const CARD_WIDTH = 320;
 const GAP = 14;
 
+/** Um elemento sem área visível (ex.: um wrapper cujo conteúdo interno some por causa do
+ * papel do usuário) conta como "não encontrado" — não faz sentido destacar um retângulo vazio. */
+function usableRect(el: HTMLElement | null): DOMRect | null {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 ? r : null;
+}
+
 function useTargetRect(selector: string | undefined, active: boolean) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     if (!active || !selector) { setRect(null); return; }
-    const update = () => {
-      const el = document.querySelector<HTMLElement>(`[data-tour="${selector}"]`);
-      setRect(el ? el.getBoundingClientRect() : null);
-    };
-    const el = document.querySelector<HTMLElement>(`[data-tour="${selector}"]`);
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const update = () => setRect(usableRect(document.querySelector<HTMLElement>(`[data-tour="${selector}"]`)));
+    document.querySelector<HTMLElement>(`[data-tour="${selector}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     update();
     window.addEventListener('scroll', update, true);
     window.addEventListener('resize', update);
@@ -29,6 +33,15 @@ export function TourOverlay() {
   const { active, steps, stepIndex, next, back, stop } = useTour();
   const step = steps[stepIndex];
   const rect = useTargetRect(step?.target, active);
+
+  // Alvo declarado mas ausente/sem área na tela (ex.: botão visível só para um papel
+  // específico) — pula o passo em vez de mostrar um destaque vazio.
+  useEffect(() => {
+    if (!active || !step?.target) return;
+    if (!usableRect(document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`))) next();
+    // `next` fecha sobre o stepIndex atual e só muda quando `step` também muda — não precisa entrar nas deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, step]);
 
   useEffect(() => {
     if (!active) return;

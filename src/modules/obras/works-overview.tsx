@@ -17,7 +17,7 @@ export function WorksOverview() {
     <p className="eyebrow">Planejamento de produção</p>
     <h1 className="page-title">Obras</h1>
     <p className="mt-1 text-sm text-slate-500">Selecione uma obra para acompanhar seus ciclos de produção.</p>
-    <div data-tour="obras-actions"><WorkActions /></div>
+    {actor?.role === 'manager' && <div data-tour="obras-actions"><WorkActions /></div>}
     {works.length === 0
       ? <div className="panel mt-6 p-6"><Empty>Você ainda não tem acesso a nenhuma obra. Peça a um administrador para liberar em Configurações.</Empty></div>
       : <div data-tour="obras-grid" className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{works.map(work => {
