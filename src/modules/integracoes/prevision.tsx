@@ -48,7 +48,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
 
   const sequences = data.sequences.filter(s => s.workId === workId);
   const wagons = data.wagons.filter(w => sequences.some(s => s.id === w.sequenceId)).sort((a, b) => a.plannedStart.localeCompare(b.plannedStart));
-  const canImport = actor.role === 'planner' || actor.role === 'manager';
+  const canImport = actor.role !== 'viewer';
   const projectId = work.previsionProjectId ?? (pickedProjectId || undefined);
 
   // Uma atividade pode ter virado várias fatias (`id#1`, `id#2`...), então basta uma delas existir.
