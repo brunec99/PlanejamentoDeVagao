@@ -65,12 +65,29 @@ test('fatia divide a atividade pelos vagões preservando 100% e o período de ca
   assert.equal(slices[2].row.plannedEnd, '2026-10-20');
 });
 
-test('atividade que começa antes do primeiro vagão não é forçada a caber 100% nele', () => {
+test('atividade que começa antes do primeiro vagão entra inteira nele, recortada no início', () => {
   // Caso real: atividade com progresso >0 iniciada antes do vagão 1 existir — 14 de 21 dias
-  // ficam fora de qualquer vagão. Antes da correção, o arredondamento "completava" para 100%
-  // no vagão 1, fazendo a atividade parecer inteiramente contida nele sem estar.
+  // são anteriores ao início do planejamento e não pertencem a vagão nenhum. O restante (a
+  // partir do início do vagão 1) entra inteiro nele, com o período recortado.
   const wagons = [{ id: 'w1', plannedStart: '2026-09-08', plannedEnd: '2026-09-28' }];
   const slices = sliceActivity({ externalId: '9', name: 'Estrutura de concreto', location: '4º pav', plannedStart: '2026-08-25', plannedEnd: '2026-09-14', progress: 62.5 }, wagons);
+  assert.equal(slices.length, 1);
+  assert.equal(slices[0].wagonId, 'w1');
+  assert.equal(slices[0].percent, 100);
+  assert.equal(slices[0].row.plannedStart, '2026-09-08');
+  assert.equal(slices[0].row.plannedEnd, '2026-09-14');
+  assert.equal(slices[0].row.name, 'Estrutura de concreto');
+});
+
+test('lacuna real entre vagões existentes não é forçada a caber 100% num deles', () => {
+  // Diferente do caso anterior: aqui o buraco está NO MEIO do período, entre dois vagões que
+  // já existem — não é só o trecho anterior ao início do planejamento. Isso continua sem
+  // encaixe forçado.
+  const wagons = [
+    { id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-10' },
+    { id: 'w2', plannedStart: '2026-09-15', plannedEnd: '2026-09-25' },
+  ];
+  const slices = sliceActivity({ externalId: '10', name: 'Alvenaria', location: '3º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-20', progress: 0 }, wagons);
   assert.equal(slices.length, 0);
 });
 
