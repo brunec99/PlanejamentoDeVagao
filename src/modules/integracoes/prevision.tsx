@@ -129,6 +129,9 @@ export function PrevisionImport({ workId }: { workId: string }) {
     <h1 className="page-title">Atividades</h1>
     <p className="mt-1 max-w-3xl text-sm text-slate-500">O cronograma fica salvo aqui; o Prevision só é consultado quando você pedir. Cada atividade só entra num vagão cujo período a contenha inteira.</p>
 
+    {error && <div className="mt-4"><Callout tone="danger" role="alert">{error}</Callout></div>}
+    {message && <div className="mt-4"><Callout tone="success" role="status">{message}</Callout></div>}
+
     <div className="panel mt-6 flex flex-wrap items-end justify-between gap-4 p-5">
       <div>
         <h2 className="text-sm font-bold text-slate-800">Cronograma salvo</h2>
@@ -292,8 +295,5 @@ export function PrevisionImport({ workId }: { workId: string }) {
 
       {importedCount > 0 && <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600"><CheckCircle2 size={13} />{importedCount} atividades já estão distribuídas em vagões.</p>}
     </>}
-
-    {error && <div className="mt-4"><Callout tone="danger" role="alert">{error}</Callout></div>}
-    {message && <div className="mt-4"><Callout tone="success" role="status">{message}</Callout></div>}
   </>;
 }
