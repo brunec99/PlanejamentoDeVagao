@@ -4,7 +4,7 @@ import type { Location } from '@/domain/entities';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
-import { formatDate, wagonLabel } from '@/shared/format';
+import { formatDate } from '@/shared/format';
 
 // Cores de barra com texto branco legível (todas acima de 4.5:1). Repetem quando há mais
 // serviços que tons: a identidade de cada barra vem do rótulo escrito nela, não da cor.
@@ -28,7 +28,7 @@ function byFloor(a: Location, b: Location) {
   if (fb !== undefined) return 1;
   return a.name.localeCompare(b.name, 'pt-BR', { numeric: true });
 }
-interface Bar { id: string; service: string; start: string; end: string; lane: number; progress: number; wagon: string }
+interface Bar { id: string; service: string; start: string; end: string; lane: number; progress: number }
 /** Empacota as barras em sub-linhas: cada uma entra na primeira faixa livre naquele período. */
 function pack(bars: Omit<Bar, 'lane'>[]): Bar[] {
   const lanes: string[] = [];
@@ -41,7 +41,6 @@ function pack(bars: Omit<Bar, 'lane'>[]): Bar[] {
 
 export function LineOfBalance({ workId }: { workId: string }) {
   const context = usePlanning();
-  const [sequenceId, setSequenceId] = useState('');
   const [baselineId, setBaselineId] = useState('');
   const [zoom, setZoom] = useState<keyof typeof ZOOMS>('mes');
   const [asTable, setAsTable] = useState(false);
@@ -51,9 +50,9 @@ export function LineOfBalance({ workId }: { workId: string }) {
     const selected = selectWorkPlanning(context.planning, workId);
     if (!selected) return undefined;
     const { data } = context.planning;
-    const wagons = sequenceId ? selected.wagons.filter(w => w.sequenceId === sequenceId) : selected.wagons;
-    const wagonById = new Map(wagons.map(w => [w.id, w]));
-    const activities = data.activities.filter(a => wagonById.has(a.wagonId));
+    // A leitura de longo prazo é serviço × local × tempo: o vagão não entra aqui.
+    const wagonIds = new Set(selected.wagons.map(w => w.id));
+    const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
     const locations = data.locations.filter(l => activities.some(a => a.locationId === l.id)).sort(byFloor);
     const services = [...new Set(activities.map(a => serviceOf(a.name)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const colorOf = new Map(services.map((s, i) => [s, FILLS[i % FILLS.length]]));
@@ -61,11 +60,10 @@ export function LineOfBalance({ workId }: { workId: string }) {
       location,
       bars: pack(activities.filter(a => a.locationId === location.id).map(a => ({
         id: a.id, service: serviceOf(a.name), start: a.plannedStart, end: a.plannedEnd, progress: a.progress,
-        wagon: wagonLabel(wagonById.get(a.wagonId)!.number),
       }))),
     }));
-    return { work: selected.work, sequences: selected.sequences, activities, locations, services, colorOf, rows };
-  }, [context, workId, sequenceId]);
+    return { work: selected.work, activities, locations, services, colorOf, rows };
+  }, [context, workId]);
 
   if (context.state !== 'ready' || !model) return null;
   const { planning } = context;
@@ -73,12 +71,6 @@ export function LineOfBalance({ workId }: { workId: string }) {
   const baseline = baselines.find(b => b.id === baselineId);
 
   const controls = <div className="flex flex-wrap items-center gap-2">
-    {model.sequences.length > 1 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Sequência
-      <select className="field max-w-48 py-1.5" value={sequenceId} onChange={e => setSequenceId(e.target.value)}>
-        <option value="">Todas</option>
-        {model.sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
-    </label>}
     {baselines.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Linha de base
       <select className="field max-w-44 py-1.5" value={baselineId} onChange={e => setBaselineId(e.target.value)}>
         <option value="">Sem comparação</option>
@@ -136,11 +128,10 @@ export function LineOfBalance({ workId }: { workId: string }) {
     {asTable
       ? <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Linha de Balanço em tabela" tabIndex={0}>
           <table className="data-table min-w-[820px]">
-            <thead><tr>{['Serviço', 'Local', 'Vagão', 'Início previsto', 'Término previsto', 'Executado'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
+            <thead><tr>{['Serviço', 'Local', 'Início previsto', 'Término previsto', 'Executado'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
             <tbody>{model.rows.flatMap(row => row.bars.map(bar => <tr key={bar.id}>
               <th scope="row">{bar.service}</th>
               <td>{row.location.name}</td>
-              <td className="whitespace-nowrap">{bar.wagon}</td>
               <td className="whitespace-nowrap tabular-nums">{formatDate(bar.start)}</td>
               <td className="whitespace-nowrap tabular-nums">{formatDate(bar.end)}</td>
               <td className="tabular-nums">{Math.round(bar.progress)}%</td>
@@ -170,7 +161,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
                     {row.bars.map(bar => {
                       const left = x(bar.start);
                       const barWidth = Math.max(px, days(Date.parse(bar.start), Date.parse(bar.end)) * px);
-                      return <div key={bar.id} title={`${bar.service} · ${row.location.name} · ${bar.wagon} · ${formatDate(bar.start)} a ${formatDate(bar.end)} · ${Math.round(bar.progress)}% executado`}
+                      return <div key={bar.id} title={`${bar.service} · ${row.location.name} · ${formatDate(bar.start)} a ${formatDate(bar.end)} · ${Math.round(bar.progress)}% executado`}
                         style={{ left, width: barWidth, top: bar.lane * (LANE + LANE_GAP) + ROW_PAD / 2, height: LANE, backgroundColor: model.colorOf.get(bar.service) }}
                         className="absolute overflow-hidden whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-[24px] text-white">{bar.service}</div>;
                     })}
