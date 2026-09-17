@@ -28,7 +28,17 @@ export interface WeeklyCommitment extends RecordBase { activityId: Id; weekStart
 export interface BaselineWagon { id: Id; number: number; plannedStart: LocalDate; plannedEnd: LocalDate }
 export interface BaselineActivity { id: Id; wagonId: Id; name: string; locationId: Id; plannedStart: LocalDate; plannedEnd: LocalDate; weight: number }
 export interface Baseline extends RecordBase { workId: Id; name: string; createdBy: Id; wagons: BaselineWagon[]; activities: BaselineActivity[] }
+/** Modelo IFC da obra. O arquivo vive no Storage; cada envio cria uma versão nova e
+ * as anteriores nunca são apagadas. */
+export interface IfcModel extends RecordBase { workId: Id; name: string; discipline: string }
+export interface IfcModelVersion extends RecordBase { modelId: Id; version: number; fileName: string; fileSize: number; storagePath: string; uploadedBy: Id; storeys: string[]; elementCount: number }
+/** Regra de vínculo entre elementos IFC e um serviço (nome de atividade). As regras são
+ * persistidas; o vínculo elemento a elemento é resolvido na visualização, nunca gravado —
+ * seriam dezenas de milhares de linhas num snapshot que trafega inteiro a cada comando. */
+export type LinkRuleProperty = 'pavimento' | 'tipo';
+export interface LinkRuleCriterion { property: LinkRuleProperty; operator: 'igual' | 'contem'; value: string }
+export interface LinkRule extends RecordBase { workId: Id; order: number; serviceName: string; criteria: LinkRuleCriterion[] }
 export interface User extends RecordBase { name: string; role: 'viewer' | 'planner' | 'manager' | 'admin'; workIds: Id[] }
 export interface HistoryEvent { id: Id; entityId: Id; entityType: string; action: string; authorId: Id; occurredAt: string; changes: Record<string, unknown> }
-export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; users: User[]; history: HistoryEvent[] }
+export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; ifcModels: IfcModel[]; ifcVersions: IfcModelVersion[]; linkRules: LinkRule[]; users: User[]; history: HistoryEvent[] }
 export type WagonStatus = 'not_started' | 'in_production' | 'restricted' | 'terminal';

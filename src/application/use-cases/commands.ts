@@ -1,4 +1,4 @@
-import type { Activity, BoardStatus, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import type { Activity, BoardStatus, LinkRuleCriterion, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
 import { isTerminal, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
@@ -29,6 +29,10 @@ export type Command =
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
+  | { type: 'create_ifc_model'; workId: string; name: string; discipline: string }
+  | { type: 'add_ifc_version'; modelId: string; fileName: string; fileSize: number; storagePath: string; storeys: string[]; elementCount: number }
+  | { type: 'create_link_rule'; workId: string; serviceName: string; criteria: LinkRuleCriterion[] }
+  | { type: 'delete_link_rule'; ruleId: string }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
   | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
@@ -312,6 +316,43 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (restriction.status === 'resolved') throw new Error('Restrição resolvida não volta ao quadro.');
       if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa') throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
       restriction.boardStatus = command.boardStatus; touch(restriction); entityId = restriction.id; wagonId = wagon.id; break;
+    }
+    case 'create_ifc_model': {
+      checkWork(command.workId); const name = requireText(command.name, 'Nome do modelo');
+      if (data.ifcModels.some(m => m.workId === command.workId && m.name.toLowerCase() === name.toLowerCase())) throw new Error('Modelo já cadastrado nesta obra.');
+      const model = { ...base(), workId: command.workId, name, discipline: requireText(command.discipline, 'Disciplina') };
+      data.ifcModels.push(model); entityId = model.id; break;
+    }
+    case 'add_ifc_version': {
+      const model = data.ifcModels.find(m => m.id === command.modelId); if (!model) throw new Error('Modelo não encontrado.');
+      checkWork(model.workId);
+      const fileName = requireText(command.fileName, 'Nome do arquivo');
+      if (!/\.ifc$/i.test(fileName)) throw new Error('O repositório armazena apenas modelos IFC.');
+      requireText(command.storagePath, 'Caminho do arquivo');
+      if (data.ifcVersions.some(v => v.storagePath === command.storagePath)) throw new Error('Esta versão já foi registrada.');
+      if (!Number.isFinite(command.fileSize) || command.fileSize <= 0) throw new Error('Arquivo vazio.');
+      // Versões anteriores nunca são substituídas: cada envio empilha uma nova.
+      const version = Math.max(0, ...data.ifcVersions.filter(v => v.modelId === model.id).map(v => v.version)) + 1;
+      const storeys = [...new Set((command.storeys ?? []).filter(s => typeof s === 'string' && s.trim()).map(s => s.trim()))];
+      const record = { ...base(), modelId: model.id, version, fileName, fileSize: command.fileSize, storagePath: command.storagePath, uploadedBy: actorId, storeys, elementCount: Number.isFinite(command.elementCount) ? command.elementCount : 0 };
+      data.ifcVersions.push(record); entityId = record.id; break;
+    }
+    case 'create_link_rule': {
+      checkWork(command.workId); const serviceName = requireText(command.serviceName, 'Serviço');
+      if (!Array.isArray(command.criteria) || !command.criteria.length) throw new Error('Informe ao menos um critério.');
+      for (const criterion of command.criteria) {
+        if (criterion.property !== 'pavimento' && criterion.property !== 'tipo') throw new Error('Propriedade ainda não suportada nas regras.');
+        if (criterion.operator !== 'igual' && criterion.operator !== 'contem') throw new Error('Operador inválido.');
+        requireText(criterion.value, 'Valor do critério');
+      }
+      const order = Math.max(0, ...data.linkRules.filter(r => r.workId === command.workId).map(r => r.order)) + 1;
+      const rule = { ...base(), workId: command.workId, order, serviceName, criteria: command.criteria.map(c => ({ ...c, value: c.value.trim() })) };
+      data.linkRules.push(rule); entityId = rule.id; break;
+    }
+    case 'delete_link_rule': {
+      const rule = data.linkRules.find(r => r.id === command.ruleId); if (!rule) throw new Error('Regra não encontrada.');
+      checkWork(rule.workId);
+      data.linkRules = data.linkRules.filter(r => r.id !== rule.id); entityId = rule.id; break;
     }
     case 'grant_access': case 'revoke_access': {
       if (actor.role !== 'admin') throw new Error('Somente administradores podem gerenciar acessos.');

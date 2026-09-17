@@ -39,6 +39,9 @@ npm run build
 - Reabertura de terminalidade exige gestor e justificativa, preserva liberações e alerta sucessores.
 - Login real via Google Workspace (domínio restrito), com papéis de gestor, planejador, consulta e admin; autorização por obra aplicada no servidor a cada comando.
 - Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/admin`, sem mexer em planejamento.
+- Repositório de modelos IFC por obra, com histórico de versões e pavimentos lidos do próprio arquivo.
+- Vinculação de elementos IFC a serviços por regras de propriedade, com marcação das regras que precisam de revisão.
+- BIM 4D: modelo federado, consulta por data, recorte por pavimento e comparação com a linha de base escolhida.
 - Consulta de obras/atividades e importação revisada do Prevision.
 
 A liberação excepcional cria a autorização e as dívidas na mesma transação. Falhas descartam todo o rascunho. Dívidas herdadas mantêm o prazo original, e uma nova autorização registra seu reconhecimento. Resolver a pendência encerra a dívida sem apagar sua origem. Restrições impeditivas não podem ser contornadas por liberação excepcional. Correções que reduzam progresso exigem justificativa.
@@ -73,10 +76,24 @@ Pontos que ainda não foram confirmados e valem como decisão inicial, sujeita a
 - Capacidade de equipe medida em atividades simultâneas por semana, e não em homem-hora ou em quantidade de serviço.
 - Quadro de restrições com três colunas (identificada, em tratativa, resolvida).
 - A linha de base guarda cópia das datas planejadas de vagões e atividades, não um retrato completo do planejamento.
+- As regras de vínculo leem duas propriedades do elemento IFC: pavimento e tipo. A comparação ignora maiúsculas, acentos e indicador ordinal, porque `1º Pavimento` e `Térreo` vêm assim no arquivo e o valor da regra é digitado à mão.
+- O avanço parcial no 4D aparece como estimativa do serviço, em tom e rótulo. Nenhum elemento individual é apresentado como executado, porque o percentual de um serviço não informa quais peças foram feitas.
+
+## Modelos IFC e BIM 4D
+
+**Modelos IFC** (`/obras/{obraId}/ifc`): repositório de modelos da obra, só arquivos `.ifc`. Cada envio do mesmo modelo cria uma versão nova e nenhuma versão anterior é substituída ou apagada. No momento do envio o navegador lê o próprio arquivo com `web-ifc` e guarda os pavimentos e a contagem de elementos daquela versão.
+
+O arquivo nunca passa pelo servidor do app: `/api/ifc/upload-url` devolve uma URL assinada e o navegador envia direto ao Storage do Supabase, porque um IFC passa de dezenas de MB e estouraria o limite de corpo da função. A leitura funciona igual, por `/api/ifc/download-url`, com URL de dois minutos. O bucket `ifc` é privado e a chave de serviço não sai do servidor.
+
+**Vinculação por regras** (mesma tela): as regras ligam elementos a um serviço por propriedade, em vez de seleção manual elemento por elemento. Entre as regras que casam, vale a de menor ordem. A tela mostra quais regras precisam de revisão — aquelas cujo pavimento não existe em nenhum modelo atual — e tem um teste local de regra, que responde qual serviço seria vinculado a um pavimento e tipo informados, sem gravar nada.
+
+Os vínculos elemento a elemento **não são armazenados**: só as regras são. Cada comando trafega o snapshot inteiro do planejamento, e materializar dezenas de milhares de elementos tornaria toda gravação proporcional ao tamanho do modelo. O vínculo é resolvido na visualização, a partir das regras.
+
+**BIM 4D** (`/obras/{obraId}/quatro-d`): reúne as versões escolhidas num modelo federado, colore os elementos pelo serviço vinculado por regra e responde a uma data. O executado até a data vem do histórico datado (o último lançamento de cada atividade até aquele dia), e uma linha de base pode ser escolhida para comparação. Há recorte por pavimento e uma tabela serviço × vagão com a mesma informação do 3D, para a tela seguir utilizável sem WebGL. O modelo só é carregado por ação explícita.
 
 ### O que ainda não existe
 
-O repositório de arquivos IFC e o BIM 4D previstos para a evolução do produto não têm código nesta etapa. As telas dos três níveis estão na primeira versão: registram e mostram o que está descrito acima, sem curva S e sem comparação automática entre linha de base e realizado (no longo prazo a comparação com a linha de base é visual, sobreposta ao gráfico).
+As telas dos três níveis estão na primeira versão: registram e mostram o que está descrito acima, sem curva S e sem comparação automática entre linha de base e realizado (no longo prazo e no 4D a comparação é visual). As regras cobrem pavimento e tipo de elemento; as demais propriedades IFC e as regras avançadas seguem para uma etapa posterior. A federação é a soma dos modelos numa mesma cena, sem detecção de interferência. O relógio de produção continua fixo em 08/09/2026.
 
 ## Prevision
 
@@ -100,7 +117,7 @@ Consultas têm timeout, mensagens sem credenciais, cache local de um minuto e in
 ## Supabase
 
 1. Crie um projeto em https://supabase.com/dashboard.
-2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` e `0007_teams_progress_baselines.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas — sem ela os comandos dos três níveis de planejamento falham.
+2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` `0007_teams_progress_baselines.sql` e `0008_ifc_repository.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas. A `0008` cria `ifc_models`, `ifc_model_versions` e `link_rules`, o bucket privado `ifc` no Storage, e reescreve `commit_planning` de novo. Cada migração é obrigatória antes de subir o código correspondente: o snapshot lê todas as tabelas em cada requisição, então uma tabela ausente derruba qualquer tela, não só as novas.
 3. Em Project Settings → API, copie a URL e as chaves `anon` e `service_role` para `.env.local` (a partir de `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 4. Configure o login com Google — veja [Login com Google](#login-com-google) abaixo. Não há mais login por senha nem script de seed com usuários fictícios: o primeiro acesso via Google já provisiona o usuário.
 5. `npm run dev` e acesse `/login`.
@@ -129,17 +146,21 @@ Contas fora do domínio configurado são barradas e deslogadas no próprio callb
 - `src/infrastructure/repositories/supabase`: adaptador Postgres real (Supabase) usado pela aplicação em execução — `getSnapshot`/`transaction` sobre a mesma interface `PlanningRepository`.
 - `src/infrastructure/auth`: sessão do Supabase Auth no servidor (usuário autenticado, perfil, papel).
 - `src/infrastructure/integrations/prevision`: cliente HTTP no servidor e normalização testável.
-- `src/modules`: interface por funcionalidade — `planejamento` (vagões, dívidas, formulários e componentes reaproveitados), `longo-prazo`, `medio-prazo`, `curto-prazo`, `layout` (sub-navegação da obra), `integracoes`, `obras`, `configuracoes` e `tour`.
-- `src/app`: App Router, login e rotas intermediárias (`/api/planning`, `/api/planning/commands`, `/api/prevision`).
+- `src/modules`: interface por funcionalidade — `planejamento` (vagões, dívidas, formulários e componentes reaproveitados), `longo-prazo`, `medio-prazo`, `curto-prazo`, `ifc`, `quatro-d`, `layout` (sub-navegação da obra), `integracoes`, `obras`, `configuracoes` e `tour`.
+- `src/app`: App Router, login e rotas intermediárias (`/api/planning`, `/api/planning/commands`, `/api/prevision`, `/api/ifc/upload-url`, `/api/ifc/download-url`).
 
-As entidades novas do domínio são `Team` (capacidade em atividades simultâneas por semana), `ProgressEntry` (percentual executado com data), `WeeklyCommitment` (compromisso semanal, com `weekStart` sempre na segunda-feira e cumprimento indefinido enquanto não apurado) e `Baseline` (cópia imutável das datas planejadas). As regras `ppc` e `teamLoad` ficam em `src/domain/rules.ts`, junto das demais regras puras.
+As entidades novas do domínio são `Team` (capacidade em atividades simultâneas por semana), `ProgressEntry` (percentual executado com data), `WeeklyCommitment` (compromisso semanal, com `weekStart` sempre na segunda-feira e cumprimento indefinido enquanto não apurado), `Baseline` (cópia imutável das datas planejadas), `IfcModel`/`IfcModelVersion` (modelo e histórico de versões, com o arquivo no Storage) e `LinkRule` (regra de vínculo por propriedade). As regras `ppc`, `teamLoad`, `matchesRule`, `serviceForElement` e `rulesNeedingReview` ficam em `src/domain/rules.ts`, junto das demais regras puras.
+
+O snapshot pagina as tabelas com ordenação explícita por `id`. Sem isso a paginação não é determinística: cada comando regrava a tabela inteira e muda a ordem física das linhas, então uma escrita entre duas páginas faria o snapshot repetir ou perder registros — o que passou a importar quando as obras reais cruzaram as mil atividades.
+
+`web-ifc` roda em WASM no navegador. O script `copy-wasm` (ganchos `predev` e `prebuild`) copia `web-ifc.wasm` de `node_modules` para `public/wasm/`, que fica fora do Git para o binário sempre casar com a versão instalada.
 
 Persistência em PostgreSQL/Supabase e autenticação real já estão implementadas: comandos rodam no servidor autenticados pela sessão, e a função `commit_planning` aplica cada transação de forma atômica com controle de concorrência otimista (versão em `planning_meta`). Hospedagem na Vercel e o relógio de produção (hoje fixo em 08/09/2026) permanecem como próximos passos.
 
 ## Rotas e cenários
 
 - `/obras`: obras e cadastro.
-- `/obras/obra-1/longo-prazo`: linhas de base.
+- `/obras/obra-1/longo-prazo`: Linha de Balanço e linhas de base.
 - `/obras/obra-1/medio-prazo`: Look Ahead, equipes e quadro de restrições.
 - `/obras/obra-1/curto-prazo`: compromissos da semana e PPC.
 - `/obras/obra-1/vagoes`: planejamento completo por vagão.
@@ -147,6 +168,8 @@ Persistência em PostgreSQL/Supabase e autenticação real já estão implementa
 - `/obras/obra-1/vagoes/v3`: restrição e dívida herdada.
 - `/obras/obra-1/vagoes/v5`: não iniciado, aguardando liberação.
 - `/obras/obra-1/vagoes/v6`: 100% de progresso aguardando critério.
+- `/obras/obra-1/ifc`: modelos IFC, versões e regras de vínculo.
+- `/obras/obra-1/quatro-d`: modelo federado e comparação na data escolhida.
 - `/obras/obra-1/dividas`: gestão das dívidas.
 - `/obras/obra-1/importar`: Prevision.
 

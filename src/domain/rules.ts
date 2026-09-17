@@ -1,4 +1,4 @@
-import type { Activity, LocalDate, PlanningData, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import type { Activity, LinkRule, LocalDate, PlanningData, Wagon, WagonStatus, WeeklyCommitment } from './entities';
 
 export function validateActivity(activity: Activity): void {
   if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -42,6 +42,38 @@ export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data:
   const team = data.teams.find(t => t.id === teamId);
   const assigned = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
   return { assigned: assigned.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned.length > team.weeklyCapacity };
+}
+/** Propriedades de um elemento IFC que as regras desta versão sabem ler. */
+export interface ElementFacts { pavimento: string; tipo: string }
+// Pavimentos em IFC brasileiro vêm como "1º Pavimento", "Térreo"; o valor da regra é
+// digitado à mão. Sem ignorar acento e indicador ordinal, a regra falharia em silêncio.
+const norm = (value: string) => value
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase()
+  .replace(/(\d)\s*[ºª°]/g, '$1')
+  .replace(/(\d)\s*[oa](?!\p{L})/gu, '$1')
+  .replace(/\s+/g, ' ')
+  .trim();
+export function matchesRule(rule: LinkRule, element: ElementFacts): boolean {
+  return rule.criteria.every(criterion => {
+    const actual = norm(element[criterion.property] ?? '');
+    const expected = norm(criterion.value);
+    return criterion.operator === 'igual' ? actual === expected : actual.includes(expected);
+  });
+}
+/** Serviço vinculado ao elemento: entre as regras que casam, a de menor ordem. Varre sem
+ * ordenar porque é chamada uma vez por elemento do modelo. */
+export function serviceForElement(rules: LinkRule[], element: ElementFacts): string | undefined {
+  let winner: LinkRule | undefined;
+  for (const rule of rules) if ((!winner || rule.order < winner.order) && matchesRule(rule, element)) winner = rule;
+  return winner?.serviceName;
+}
+/** Regras cujo critério de pavimento não encontra nenhum pavimento do modelo atual —
+ * o vínculo precisa de revisão humana, sem presumir correspondência. */
+export function rulesNeedingReview(rules: LinkRule[], storeys: string[]): LinkRule[] {
+  return rules.filter(rule => rule.criteria.some(criterion =>
+    criterion.property === 'pavimento' && !storeys.some(storey =>
+      criterion.operator === 'igual' ? norm(storey) === norm(criterion.value) : norm(storey).includes(norm(criterion.value)))));
 }
 export function validateSequence(wagons: Wagon[]): void {
   const byId = new Map(wagons.map(w => [w.id, w]));

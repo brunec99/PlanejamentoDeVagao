@@ -1,7 +1,8 @@
 import type {
-  Activity, Baseline, BaselineActivity, BaselineWagon, HistoryEvent, Location, PendingItem,
-  PlanningData, ProductionSequence, ProgressEntry, Release, Restriction, Team,
-  TerminalityCriterion, TerminalityDebt, User, Wagon, WeeklyCommitment, Work,
+  Activity, Baseline, BaselineActivity, BaselineWagon, HistoryEvent, IfcModel, IfcModelVersion,
+  LinkRule, LinkRuleCriterion, Location, PendingItem, PlanningData, ProductionSequence,
+  ProgressEntry, Release, Restriction, Team, TerminalityCriterion, TerminalityDebt, User,
+  Wagon, WeeklyCommitment, Work,
 } from '../../../domain/entities';
 
 /** Raw rows as returned by `select('*')` — snake_case, matching the SQL columns in 0001_init.sql. */
@@ -10,7 +11,8 @@ export interface Rows {
   activities: ActivityRow[]; terminality_criteria: CriterionRow[]; pending_items: PendingRow[];
   restrictions: RestrictionRow[]; releases: ReleaseRow[]; terminality_debts: DebtRow[];
   teams: TeamRow[]; progress_entries: ProgressEntryRow[]; baselines: BaselineRow[];
-  weekly_commitments: CommitmentRow[];
+  weekly_commitments: CommitmentRow[]; ifc_models: IfcModelRow[];
+  ifc_model_versions: IfcVersionRow[]; link_rules: LinkRuleRow[];
   history_events: HistoryRow[]; profiles: ProfileRow[];
 }
 
@@ -26,6 +28,9 @@ interface TeamRow { id: string; created_at: string; updated_at: string; work_id:
 interface ProgressEntryRow { id: string; created_at: string; updated_at: string; activity_id: string; recorded_date: string; progress: number; recorded_by: string }
 interface BaselineRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; created_by: string; wagons: BaselineWagon[]; activities: BaselineActivity[] }
 interface CommitmentRow { id: string; created_at: string; updated_at: string; activity_id: string; week_start: string; week_end: string; responsible_id: string; target_progress: number; fulfilled: boolean | null; cause: string | null; recorded_at: string | null; recorded_by: string | null }
+interface IfcModelRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; discipline: string }
+interface IfcVersionRow { id: string; created_at: string; updated_at: string; model_id: string; version: number; file_name: string; file_size: number; storage_path: string; uploaded_by: string; storeys: string[]; element_count: number }
+interface LinkRuleRow { id: string; created_at: string; updated_at: string; work_id: string; order_index: number; service_name: string; criteria: LinkRuleCriterion[] }
 interface ReleaseRow { id: string; created_at: string; updated_at: string; wagon_id: string; predecessor_id: string | null; type: Release['type']; justification: string | null; authorized_by: string; regularization_responsible_id: string | null; due_date: string | null; released_at: string; accepted_pending_ids: string[]; acknowledged_debt_ids: string[] }
 interface DebtRow { id: string; created_at: string; updated_at: string; pending_item_id: string; release_id: string; responsible_id: string; due_date: string }
 interface HistoryRow { id: string; entity_id: string; entity_type: string; action: string; author_id: string; occurred_at: string; changes: Record<string, unknown> }
@@ -47,6 +52,9 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
     progressEntries: rows.progress_entries.map((r): ProgressEntry => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, recordedDate: r.recorded_date, progress: r.progress, recordedBy: r.recorded_by })),
     commitments: rows.weekly_commitments.map((r): WeeklyCommitment => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, weekStart: r.week_start, weekEnd: r.week_end, responsibleId: r.responsible_id, targetProgress: r.target_progress, fulfilled: r.fulfilled ?? undefined, cause: r.cause ?? undefined, recordedAt: r.recorded_at ?? undefined, recordedBy: r.recorded_by ?? undefined })),
     baselines: rows.baselines.map((r): Baseline => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, createdBy: r.created_by, wagons: r.wagons, activities: r.activities })),
+    ifcModels: rows.ifc_models.map((r): IfcModel => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, discipline: r.discipline })),
+    ifcVersions: rows.ifc_model_versions.map((r): IfcModelVersion => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, modelId: r.model_id, version: r.version, fileName: r.file_name, fileSize: r.file_size, storagePath: r.storage_path, uploadedBy: r.uploaded_by, storeys: r.storeys, elementCount: r.element_count })),
+    linkRules: rows.link_rules.map((r): LinkRule => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, order: r.order_index, serviceName: r.service_name, criteria: r.criteria })),
     users: rows.profiles.map((r): User => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, name: r.name, role: r.role, workIds: r.work_ids })),
     history: rows.history_events.map((r): HistoryEvent => ({ id: r.id, entityId: r.entity_id, entityType: r.entity_type, action: r.action, authorId: r.author_id, occurredAt: r.occurred_at, changes: r.changes })),
   };
@@ -71,13 +79,17 @@ export function planningDataToPayload(data: PlanningData) {
     progress_entries: data.progressEntries.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, activity_id: p.activityId, recorded_date: p.recordedDate, progress: p.progress, recorded_by: p.recordedBy })),
     weekly_commitments: data.commitments.map(c => ({ id: c.id, created_at: c.createdAt, updated_at: c.updatedAt, activity_id: c.activityId, week_start: c.weekStart, week_end: c.weekEnd, responsible_id: c.responsibleId, target_progress: c.targetProgress, fulfilled: c.fulfilled ?? null, cause: c.cause ?? null, recorded_at: c.recordedAt ?? null, recorded_by: c.recordedBy ?? null })),
     baselines: data.baselines.map(b => ({ id: b.id, created_at: b.createdAt, updated_at: b.updatedAt, work_id: b.workId, name: b.name, created_by: b.createdBy, wagons: b.wagons, activities: b.activities })),
+    ifc_models: data.ifcModels.map(m => ({ id: m.id, created_at: m.createdAt, updated_at: m.updatedAt, work_id: m.workId, name: m.name, discipline: m.discipline })),
+    ifc_model_versions: data.ifcVersions.map(v => ({ id: v.id, created_at: v.createdAt, updated_at: v.updatedAt, model_id: v.modelId, version: v.version, file_name: v.fileName, file_size: v.fileSize, storage_path: v.storagePath, uploaded_by: v.uploadedBy, storeys: v.storeys, element_count: v.elementCount })),
+    link_rules: data.linkRules.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, work_id: r.workId, order_index: r.order, service_name: r.serviceName, criteria: r.criteria })),
     history_events: data.history.map(h => ({ id: h.id, entity_id: h.entityId, entity_type: h.entityType, action: h.action, author_id: h.authorId, occurred_at: h.occurredAt, changes: h.changes })),
     profiles: data.users.map(u => ({ id: u.id, created_at: u.createdAt, updated_at: u.updatedAt, name: u.name, role: u.role, work_ids: u.workIds })),
   };
 }
 
-/** Ids present in `before` but missing from `after`, per table — what regenerate_sequence
- * (the only command that removes rows) needs `commit_planning` to actually delete. */
+/** Ids present in `before` but missing from `after`, per table — o que `commit_planning`
+ * precisa apagar de fato. Só dois comandos removem linhas: `regenerate_sequence` (a cauda
+ * não liberada da sequência) e `delete_link_rule`. */
 export function diffDeletedIds(before: PlanningData, after: PlanningData) {
   const removed = <T extends { id: string }>(from: T[], to: T[]) => {
     const keep = new Set(to.map(x => x.id));
@@ -89,5 +101,6 @@ export function diffDeletedIds(before: PlanningData, after: PlanningData) {
     terminality_criteria: removed(before.criteria, after.criteria),
     pending_items: removed(before.pendingItems, after.pendingItems),
     restrictions: removed(before.restrictions, after.restrictions),
+    link_rules: removed(before.linkRules, after.linkRules),
   };
 }

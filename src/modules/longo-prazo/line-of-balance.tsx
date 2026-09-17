@@ -9,35 +9,43 @@ import { formatDate, wagonLabel } from '@/shared/format';
 const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
 const OTHER = '#52514e';
 const MAX_SERIES = SERIES.length;
-const LEFT = 168, RIGHT = 132, TOP = 16, ROW = 34, AXIS = 34, WIDTH = 1040;
+// Uma obra real chega a centenas de locais; acima disso o gráfico deixa de ser legível
+// antes de deixar de caber, então a leitura é por sequência e com teto de linhas.
+const MAX_ROWS = 40;
+const LEFT = 168, RIGHT = 132, TOP = 16, ROW = 26, AXIS = 34, WIDTH = 1040;
 
 interface Segment { service: string; locationId: string; start: string; end: string; label: string }
 
-function useChartData(workId: string) {
+function useChartData(workId: string, sequenceId: string) {
   const context = usePlanning();
   return useMemo(() => {
     if (context.state !== 'ready') return undefined;
     const selected = selectWorkPlanning(context.planning, workId);
     if (!selected) return undefined;
     const { data } = context.planning;
-    const wagonIds = new Set(selected.wagons.map(w => w.id));
-    const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
-    if (!activities.length) return { empty: true as const, work: selected.work };
+    const sequences = selected.sequences;
+    const wagons = selected.wagons.filter(w => w.sequenceId === (sequenceId || sequences[0]?.id));
+    const wagonById = new Map(wagons.map(w => [w.id, w]));
+    const activities = data.activities.filter(a => wagonById.has(a.wagonId));
+    if (!activities.length) return { empty: true as const, sequences };
     const byService = new Map<string, number>();
     for (const a of activities) byService.set(a.name, (byService.get(a.name) ?? 0) + 1);
     const ranked = [...byService.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
-    const named = ranked.slice(0, MAX_SERIES);
-    const serviceOf = (name: string) => (named.includes(name) ? name : 'Outros serviços');
-    const services = ranked.length > MAX_SERIES ? [...named, 'Outros serviços'] : named;
-    const locations = data.locations
+    const named = new Set(ranked.slice(0, MAX_SERIES));
+    const serviceOf = (name: string) => (named.has(name) ? name : 'Outros serviços');
+    const services = ranked.length > MAX_SERIES ? [...named, 'Outros serviços'] : [...named];
+    const used = data.locations
       .filter(l => activities.some(a => a.locationId === l.id))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
-    const segments: Segment[] = activities.map(a => ({
+    const locations = used.slice(0, MAX_ROWS);
+    const locationById = new Map(locations.map(l => [l.id, l]));
+    const shown = activities.filter(a => locationById.has(a.locationId));
+    const segments: Segment[] = shown.map(a => ({
       service: serviceOf(a.name), locationId: a.locationId, start: a.plannedStart, end: a.plannedEnd,
-      label: `${a.name} · ${locations.find(l => l.id === a.locationId)?.name ?? ''} · ${wagonLabel(selected.wagons.find(w => w.id === a.wagonId)?.number ?? 0)} · ${formatDate(a.plannedStart)} a ${formatDate(a.plannedEnd)} · ${Math.round(a.progress)}% executado`,
+      label: `${a.name} · ${locationById.get(a.locationId)?.name ?? ''} · ${wagonLabel(wagonById.get(a.wagonId)?.number ?? 0)} · ${formatDate(a.plannedStart)} a ${formatDate(a.plannedEnd)} · ${Math.round(a.progress)}% executado`,
     }));
-    return { empty: false as const, work: selected.work, services, locations, segments, activities, wagons: selected.wagons };
-  }, [context, workId]);
+    return { empty: false as const, sequences, services, locations, allLocations: used, hiddenRows: used.length - locations.length, segments, activities };
+  }, [context, workId, sequenceId]);
 }
 
 function monthTicks(from: number, to: number) {
@@ -52,13 +60,22 @@ function monthTicks(from: number, to: number) {
 }
 
 export function LineOfBalance({ workId }: { workId: string }) {
-  const chart = useChartData(workId);
+  const [sequenceId, setSequenceId] = useState('');
+  const chart = useChartData(workId, sequenceId);
   const context = usePlanning();
   const [baselineId, setBaselineId] = useState('');
   const [asTable, setAsTable] = useState(false);
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | undefined>();
   if (context.state !== 'ready' || !chart) return null;
-  if (chart.empty) return <section className="panel mt-6 p-5"><h2 className="mb-1 text-sm font-bold text-slate-800">Linha de Balanço</h2><Empty>Nenhuma atividade planejada nesta obra ainda.</Empty></section>;
+  const sequencePicker = chart.sequences.length > 1 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Sequência
+    <select className="field max-w-52 py-1.5" value={sequenceId || chart.sequences[0].id} onChange={e => setSequenceId(e.target.value)}>
+      {chart.sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+    </select>
+  </label>;
+  if (chart.empty) return <section data-tour="longo-lob" className="panel mt-6 p-5">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>{sequencePicker}</div>
+    <Empty>Nenhuma atividade planejada nesta sequência.</Empty>
+  </section>;
 
   const { services, locations, segments } = chart;
   const baselines = context.planning.data.baselines.filter(b => b.workId === workId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -84,6 +101,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
       <h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>
       <div className="flex flex-wrap items-center gap-2">
+        {sequencePicker}
         {baselines.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Comparar com
           <select className="field max-w-52 py-1.5" value={baselineId} onChange={e => setBaselineId(e.target.value)}>
             <option value="">Sem linha de base</option>
@@ -100,7 +118,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
             <thead><tr>{['Serviço', 'Local', 'Início previsto', 'Término previsto', 'Executado'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
             <tbody>{chart.activities.slice().sort((a, b) => a.plannedStart.localeCompare(b.plannedStart)).map(a => <tr key={a.id}>
               <th scope="row">{a.name}</th>
-              <td>{locations.find(l => l.id === a.locationId)?.name ?? '—'}</td>
+              <td>{chart.allLocations.find(l => l.id === a.locationId)?.name ?? '—'}</td>
               <td className="whitespace-nowrap tabular-nums">{formatDate(a.plannedStart)}</td>
               <td className="whitespace-nowrap tabular-nums">{formatDate(a.plannedEnd)}</td>
               <td className="tabular-nums">{Math.round(a.progress)}%</td>
@@ -146,6 +164,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
         <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color(service) }} />{service}
       </span>)}
       {baseline && <span className="flex items-center gap-2 text-xs font-medium text-slate-600"><span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-slate-300" />{baseline.name}</span>}
+      {chart.hiddenRows > 0 && <span className="text-xs text-slate-400">+{chart.hiddenRows} {chart.hiddenRows === 1 ? 'local fora do gráfico' : 'locais fora do gráfico'} · a visão de tabela lista todos</span>}
     </div>
   </section>;
 }

@@ -3,17 +3,20 @@ import type { PlanningData } from '../../../domain/entities';
 import { getServiceClient } from './client';
 import { diffDeletedIds, planningDataToPayload, rowsToPlanningData, type Rows } from './mappers';
 
-const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'teams', 'progress_entries', 'weekly_commitments', 'baselines', 'history_events', 'profiles'] as const;
+const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'teams', 'progress_entries', 'weekly_commitments', 'baselines', 'ifc_models', 'ifc_model_versions', 'link_rules', 'history_events', 'profiles'] as const;
 const MAX_ATTEMPTS = 5;
 const PAGE = 1000;
 
 /** O PostgREST devolve no máximo 1000 linhas por requisição; sem paginar, o snapshot
- * viria truncado e o domínio decidiria sobre dados incompletos. */
+ * viria truncado e o domínio decidiria sobre dados incompletos. O `order('id')` é o que
+ * torna a paginação determinística: cada comando regrava a tabela inteira e muda a ordem
+ * física das linhas, então sem ordenação explícita uma escrita entre duas páginas faria
+ * o snapshot repetir ou perder registros. */
 async function fetchAll(table: string): Promise<unknown[]> {
   const client = getServiceClient();
   const all: unknown[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await client.from(table).select('*').range(from, from + PAGE - 1);
+    const { data, error } = await client.from(table).select('*').order('id').range(from, from + PAGE - 1);
     if (error) throw new Error(`Falha ao ler ${table}: ${error.message}`);
     all.push(...data);
     if (data.length < PAGE) return all;

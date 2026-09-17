@@ -5,7 +5,7 @@ export interface TourStep {
   body: string;
 }
 
-export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'planejamento' | 'vagao' | 'prevision' | 'dividas' | 'configuracoes';
+export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'planejamento' | 'vagao' | 'ifc' | 'quatroD' | 'prevision' | 'dividas' | 'configuracoes';
 
 export const tours: Record<TourKey, TourStep[]> = {
   obras: [
@@ -47,6 +47,16 @@ export const tours: Record<TourKey, TourStep[]> = {
     { target: 'vagao-pending', title: 'Pendências', body: 'Itens em aberto que podem bloquear a terminalidade deste vagão até serem resolvidos.' },
     { target: 'vagao-restrictions', title: 'Restrições', body: 'Podem bloquear a execução, a terminalidade, ou ambas — diferente de uma pendência simples.' },
   ],
+  ifc: [
+    { title: 'Modelos IFC', body: 'O repositório guarda apenas modelos IFC, vinculados a esta obra. Cada envio do mesmo modelo cria uma versão nova e preserva as anteriores.' },
+    { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões, com os pavimentos lidos do próprio arquivo no momento do envio.' },
+    { target: 'ifc-rules', title: 'Vinculação por regras', body: 'As regras ligam elementos do modelo a um serviço por propriedade (pavimento e tipo de elemento nesta versão), em vez de seleção manual elemento por elemento. Regras cujo pavimento não existe mais no modelo aparecem marcadas para revisão.' },
+  ],
+  quatroD: [
+    { title: 'BIM 4D', body: 'Mostra a evolução física no modelo federado e compara o planejado com o realizado numa data escolhida.' },
+    { target: 'quatro-d-controls', title: 'Data, linha de base e pavimento', body: 'Escolha a data da consulta, a linha de base usada na comparação e o recorte por pavimento.' },
+    { target: 'quatro-d-viewer', title: 'Modelo federado', body: 'Os elementos são coloridos pelo serviço vinculado por regra. Avanço parcial aparece como estimativa do serviço — nenhum elemento individual é apresentado como verificado sem essa informação.' },
+  ],
   prevision: [
     { title: 'Atividades do Prevision', body: 'Aqui o cronograma do Prevision fica salvo no sistema; ele só é consultado de novo quando você pede. Cada atividade só entra inteira num vagão cujo período a contenha.' },
     { target: 'prevision-responsible', title: 'Responsável local', body: 'Defina quem vai responder pelas atividades antes de importá-las — é obrigatório para adicionar qualquer atividade a um vagão.' },
@@ -75,6 +85,8 @@ export function resolveTourKey(pathname: string): TourKey | null {
   if (/^\/obras\/[^/]+\/curto-prazo$/.test(pathname)) return 'curtoPrazo';
   if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
+  if (/^\/obras\/[^/]+\/ifc$/.test(pathname)) return 'ifc';
+  if (/^\/obras\/[^/]+\/quatro-d$/.test(pathname)) return 'quatroD';
   if (/^\/obras\/[^/]+\/importar$/.test(pathname)) return 'prevision';
   if (/^\/obras\/[^/]+\/dividas$/.test(pathname)) return 'dividas';
   if (pathname === '/configuracoes') return 'configuracoes';

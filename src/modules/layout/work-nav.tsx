@@ -8,6 +8,8 @@ const sections = [
   { section: 'medio-prazo', label: 'Planejamento de médio prazo' },
   { section: 'curto-prazo', label: 'Planejamento de curto prazo' },
   { section: 'vagoes', label: 'Vagões' },
+  { section: 'ifc', label: 'Modelos IFC' },
+  { section: 'quatro-d', label: 'BIM 4D' },
   { section: 'dividas', label: 'Dívidas' },
   { section: 'importar', label: 'Integrações' },
 ];

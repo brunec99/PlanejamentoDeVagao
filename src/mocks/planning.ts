@@ -47,6 +47,9 @@ export function createMockData(): PlanningData {
     progressEntries: [],
     commitments: [],
     baselines: [],
+    ifcModels: [],
+    ifcVersions: [],
+    linkRules: [],
     users: [
       { ...base('user-3'), name: 'Ana Souza', role: 'viewer', workIds: ['obra-1', 'obra-2'] },
       { ...base('user-1'), name: 'Marina Costa', role: 'manager', workIds: ['obra-1', 'obra-2'] },
