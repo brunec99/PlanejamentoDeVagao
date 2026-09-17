@@ -25,9 +25,22 @@ export type BoardStatus = 'identificada' | 'em_tratativa' | 'resolvida';
 export interface Restriction extends RecordBase { wagonId: Id; activityId?: Id; description: string; responsibleId: Id; dueDate: LocalDate; status: 'open' | 'resolved'; blocksExecution: boolean; blocksTerminality: boolean; resolvedAt?: string; resolution?: string; boardStatus: BoardStatus; leadTimeDays?: number }
 export interface Release extends RecordBase { wagonId: Id; predecessorId?: Id; type: 'initial' | 'normal' | 'exceptional'; justification?: string; authorizedBy: Id; regularizationResponsibleId?: Id; dueDate?: LocalDate; releasedAt: string; acceptedPendingIds: Id[]; acknowledgedDebtIds: Id[] }
 export interface TerminalityDebt extends RecordBase { pendingItemId: Id; releaseId: Id; responsibleId: Id; dueDate: LocalDate }
-/** Compromisso semanal do Last Planner. `weekStart` é sempre a segunda-feira da semana,
- * para o PPC agrupar por semanas canônicas. `fulfilled` indefinido = ainda não apurado. */
-export interface WeeklyCommitment extends RecordBase { activityId: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; targetProgress: number; fulfilled?: boolean; cause?: string; recordedAt?: string; recordedBy?: Id }
+/** Causas de não cumprimento usadas na análise do PPC. Lista fechada, como na planilha que
+ * este módulo substitui — "Falha de Equipamento" (quebrou) e "Falta de equipamento" (não
+ * havia) são causas diferentes de propósito. */
+export const NON_FULFILLMENT_CAUSES = [
+  'Atraso de tarefas antecedentes', 'Baixa Produtividade', 'Falha de comunicação',
+  'Falha de definição de projeto', 'Falha de Equipamento', 'Falha de Gestão do Empreiteiro',
+  'Falha de Planejamento', 'Falta de equipamento', 'Falta de Mão de Obra', 'Falta de Material',
+  'Intempéries', 'Mudança de prioridade', 'Problemas não previstos na execução', 'Retrabalho',
+  'Superestimação da produtividade', 'Demanda extra', 'Falta de documentação',
+] as const;
+export type NonFulfillmentCause = (typeof NON_FULFILLMENT_CAUSES)[number];
+/** Compromisso semanal do Last Planner, na forma da planilha de produção: empresa, equipe,
+ * período dentro da semana e os dias marcados. `weekStart` é sempre a segunda-feira, para o
+ * PPC agrupar por semanas canônicas. `fulfilled` indefinido = ainda não apurado.
+ * `weekdays` usa 1 (segunda) a 6 (sábado). */
+export interface WeeklyCommitment extends RecordBase { activityId: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; company: string; crew: string; startDate: LocalDate; endDate: LocalDate; weekdays: number[]; fulfilled?: boolean; cause?: NonFulfillmentCause; justification?: string; recordedAt?: string; recordedBy?: Id }
 /** Cópia imutável das datas planejadas de uma obra num momento. Reprogramar o
  * planejamento atual nunca altera uma linha de base já salva. */
 export interface BaselineWagon { id: Id; number: number; plannedStart: LocalDate; plannedEnd: LocalDate }

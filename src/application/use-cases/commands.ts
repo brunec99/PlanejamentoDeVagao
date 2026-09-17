@@ -1,4 +1,5 @@
-import type { Activity, BoardStatus, LinkRuleCriterion, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import type { Activity, BoardStatus, LinkRuleCriterion, NonFulfillmentCause, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import { NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
@@ -25,8 +26,8 @@ export type Command =
   | { type: 'create_team'; workId: string; name: string; weeklyCapacity: number }
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
-  | { type: 'create_commitment'; activityId: string; weekStart: string; responsibleId: string; targetProgress: number }
-  | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string }
+  | { type: 'create_commitment'; activityId: string; weekStart: string; responsibleId: string; company: string; crew: string; startDate: string; endDate: string; weekdays: number[] }
+  | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
   | { type: 'link_activities'; predecessorId: string; successorId: string }
@@ -295,11 +296,16 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
       const wagon = wagonFor(data, activity.wagonId); const workId = workOf(wagon);
       responsible(command.responsibleId, workId); validateDate(command.weekStart);
-      if (!Number.isFinite(command.targetProgress) || command.targetProgress <= 0 || command.targetProgress > 100) throw new Error('A meta da semana deve ficar entre 1 e 100.');
-      if (command.targetProgress <= activity.progress) throw new Error('A meta da semana deve superar o percentual já executado.');
-      const weekStart = startOfWeek(command.weekStart);
+      const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
+      validatePeriod(command.startDate, command.endDate);
+      if (command.startDate < weekStart || command.endDate > weekEnd) throw new Error('O período do compromisso deve ficar dentro da semana.');
+      const weekdays = [...new Set(command.weekdays ?? [])].sort((a, b) => a - b);
+      if (!weekdays.length) throw new Error('Marque ao menos um dia da semana.');
+      if (weekdays.some(day => !Number.isInteger(day) || day < 1 || day > 6)) throw new Error('Os dias da semana vão de segunda (1) a sábado (6).');
       if (data.commitments.some(c => c.activityId === activity.id && c.weekStart === weekStart)) throw new Error('Esta atividade já tem compromisso nesta semana.');
-      const commitment = { ...base(), activityId: activity.id, weekStart, weekEnd: addDays(weekStart, 6), responsibleId: command.responsibleId, targetProgress: command.targetProgress };
+      const commitment = { ...base(), activityId: activity.id, weekStart, weekEnd, responsibleId: command.responsibleId,
+        company: requireText(command.company, 'Empresa'), crew: requireText(command.crew, 'Equipe'),
+        startDate: command.startDate, endDate: command.endDate, weekdays };
       data.commitments.push(commitment); entityId = commitment.id; wagonId = wagon.id; break;
     }
     case 'record_fulfillment': {
@@ -307,8 +313,12 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const activity = data.activities.find(a => a.id === commitment.activityId)!;
       const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
       if (typeof commitment.fulfilled === 'boolean') throw new Error('Cumprimento deste compromisso já foi registrado.');
-      if (!command.fulfilled) requireText(command.cause ?? '', 'Causa do não cumprimento');
-      Object.assign(commitment, { fulfilled: command.fulfilled, cause: command.fulfilled ? undefined : command.cause!.trim(), recordedAt: now, recordedBy: actorId });
+      let cause: NonFulfillmentCause | undefined;
+      if (!command.fulfilled) {
+        cause = NON_FULFILLMENT_CAUSES.find(option => option === requireText(command.cause ?? '', 'Causa do não cumprimento'));
+        if (!cause) throw new Error('Causa fora da lista de causas de não cumprimento.');
+      }
+      Object.assign(commitment, { fulfilled: command.fulfilled, cause, justification: command.justification?.trim() || undefined, recordedAt: now, recordedBy: actorId });
       touch(commitment); entityId = commitment.id; wagonId = wagon.id; break;
     }
     case 'create_baseline': {

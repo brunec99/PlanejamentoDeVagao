@@ -28,7 +28,7 @@ export const tours: Record<TourKey, TourStep[]> = {
   curtoPrazo: [
     { title: 'Planejamento de curto prazo', body: 'O planejamento semanal do Last Planner: compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },
     { target: 'curto-ppc', title: 'PPC da semana', body: 'O PPC conta compromissos cumpridos sobre compromissos assumidos na semana. Ele não é a média dos percentuais executados dos serviços.' },
-    { target: 'curto-commitments', title: 'Compromissos da semana', body: 'Cada linha é um compromisso com sua meta. Ao encerrar a semana, registre o cumprimento — e a causa, quando não for cumprido.' },
+    { target: 'curto-commitments', title: 'A planilha da semana', body: 'Mesma estrutura da planilha que a equipe já preenche: empresa, equipe, período, atividade e os dias marcados. Ao encerrar a semana, registre Sim ou Não em cada linha — o Não exige uma causa da lista, e é dela que sai a análise do PPC.' },
   ],
   planejamento: [
     { title: 'Planejamento por período', body: 'Aqui os vagões desta obra ficam organizados em sequências de produção. Cada vagão é um período fixo (o "takt") que reúne várias atividades.' },

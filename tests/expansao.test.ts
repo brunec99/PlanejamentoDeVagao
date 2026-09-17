@@ -10,7 +10,7 @@ const context=(actorId='user-1'):CommandContext=>({actorId,today:'2026-09-08',no
 const run=(d:PlanningData,c:Command,actorId='user-1')=>applyCommand(d,c,context(actorId));
 const stamp={createdAt:'2026-08-20T12:00:00Z',updatedAt:'2026-08-20T12:00:00Z'};
 const otherWorkTeam=(d:PlanningData)=>{const t:Team={id:'equipe-obra2',...stamp,workId:'obra-2',name:'Terceirizada',weeklyCapacity:4};d.teams.push(t);return t;};
-const commitment=(id:string,fulfilled?:boolean):WeeklyCommitment=>({id,...stamp,activityId:'a1',weekStart:'2026-09-07',weekEnd:'2026-09-13',responsibleId:'user-1',targetProgress:100,fulfilled});
+const commitment=(id:string,fulfilled?:boolean):WeeklyCommitment=>({id,...stamp,activityId:'a1',weekStart:'2026-09-07',weekEnd:'2026-09-13',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2],fulfilled});
 
 test('consulta e obra sem acesso são bloqueados nos comandos da expansão',()=>{
   const d=createMockData();
@@ -61,32 +61,45 @@ test('apontamento grava um lançamento datado e atualiza progresso e status',()=
 });
 test('compromisso é ancorado na segunda-feira da semana',()=>{
   const d=createMockData();
-  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:80});
+  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
   const saved=d.commitments.find(c=>c.id===commitmentId)!;
   assert.equal(saved.weekStart,'2026-09-07');assert.equal(saved.weekEnd,'2026-09-13');assert.equal(saved.fulfilled,undefined);
 });
-test('meta do compromisso precisa superar o executado e ficar entre 1 e 100',()=>{
+test('compromisso exige empresa, equipe, dia marcado e período dentro da semana',()=>{
   const d=createMockData();
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:0}),/entre 1 e 100/);
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:101}),/entre 1 e 100/);
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:25}),/superar/);
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'inexistente',targetProgress:80}),/Responsável/);
+  const command=(extra:object)=>({type:'create_commitment' as const,activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4],...extra});
+  assert.throws(()=>run(d,command({company:' '})),/Empresa/);
+  assert.throws(()=>run(d,command({crew:''})),/Equipe/);
+  assert.throws(()=>run(d,command({weekdays:[]})),/ao menos um dia/);
+  assert.throws(()=>run(d,command({weekdays:[0]})),/segunda/);
+  assert.throws(()=>run(d,command({weekdays:[7]})),/segunda/);
+  assert.throws(()=>run(d,command({startDate:'2026-09-06'})),/dentro da semana/);
+  assert.throws(()=>run(d,command({endDate:'2026-09-14'})),/dentro da semana/);
+  assert.throws(()=>run(d,command({responsibleId:'inexistente'})),/Responsável/);
   assert.equal(d.commitments.length,0);
+});
+test('o compromisso guarda os dias marcados sem repetir e em ordem',()=>{
+  const d=createMockData();
+  const id=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[4,2,2,3]});
+  const saved=d.commitments.find(c=>c.id===id)!;
+  assert.deepEqual(saved.weekdays,[2,3,4]);
+  assert.equal(saved.company,'ATR ENG');assert.equal(saved.crew,'Ana');
 });
 test('compromisso é único por atividade e semana',()=>{
   const d=createMockData();
-  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-07',responsibleId:'user-1',targetProgress:80});
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-11',responsibleId:'user-1',targetProgress:90}),/já tem compromisso/);
-  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-14',responsibleId:'user-1',targetProgress:90});
+  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-07',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
+  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-11',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]}),/já tem compromisso/);
+  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-14',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-15',endDate:'2026-09-17',weekdays:[2]});
   assert.deepEqual(d.commitments.map(c=>c.weekStart),['2026-09-07','2026-09-14']);
 });
 test('cumprimento exige causa quando não cumprido e é apurado uma só vez',()=>{
   const d=createMockData();
-  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:80});
+  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
   assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:false}),/Causa/);
-  run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Falta de material'});
+  assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Chuva'}),/fora da lista/);
+  run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Falta de Material',justification:'Fornecedor atrasou a entrega'});
   const saved=d.commitments.find(c=>c.id===commitmentId)!;
-  assert.equal(saved.fulfilled,false);assert.equal(saved.cause,'Falta de material');assert.equal(saved.recordedBy,'user-1');
+  assert.equal(saved.fulfilled,false);assert.equal(saved.cause,'Falta de Material');assert.equal(saved.justification,'Fornecedor atrasou a entrega');assert.equal(saved.recordedBy,'user-1');
   assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:true}),/já foi registrado/);
 });
 test('ppc conta compromissos cumpridos sobre planejados, não a média de progresso',()=>{
@@ -131,6 +144,6 @@ test('apontamento recusado não grava lançamento nem histórico no repositório
   const repo=new MockPlanningRepository();const before=await repo.getSnapshot();
   await assert.rejects(repo.transaction(d=>run(d,{type:'record_progress',activityId:'a5',progress:30})),/Libere/);
   assert.deepEqual(await repo.getSnapshot(),before);
-  await assert.rejects(repo.transaction(d=>run(d,{type:'create_commitment',activityId:'a1',weekStart:'2026-09-10',responsibleId:'user-1',targetProgress:100})),/superar/);
+  await assert.rejects(repo.transaction(d=>run(d,{type:'create_commitment',activityId:'a1',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[]})),/ao menos um dia/);
   assert.deepEqual(await repo.getSnapshot(),before);
 });
