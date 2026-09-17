@@ -1,4 +1,4 @@
-import type { Activity, PlanningData, Wagon, WagonStatus } from './entities';
+import type { Activity, LocalDate, PlanningData, Wagon, WagonStatus, WeeklyCommitment } from './entities';
 
 export function validateActivity(activity: Activity): void {
   if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -28,6 +28,20 @@ export function wagonStatus(wagon: Wagon, data: PlanningData): WagonStatus {
 }
 export function isOverdue(wagon: Wagon, data: PlanningData, today: string): boolean {
   return wagon.plannedEnd < today && !isTerminal(wagon.id, data);
+}
+/** PPC: compromissos cumpridos sobre compromissos planejados na semana. Nunca é a média
+ * dos percentuais executados — o denominador é o número de compromissos assumidos. */
+export function ppc(commitments: WeeklyCommitment[]) {
+  const planned = commitments.length;
+  const fulfilled = commitments.filter(c => c.fulfilled === true).length;
+  const pending = commitments.filter(c => c.fulfilled === undefined).length;
+  return { planned, fulfilled, pending, percent: planned === 0 ? 0 : (fulfilled / planned) * 100 };
+}
+/** Atividades da equipe que se sobrepõem à janela, contra a capacidade cadastrada. */
+export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data: PlanningData) {
+  const team = data.teams.find(t => t.id === teamId);
+  const assigned = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
+  return { assigned: assigned.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned.length > team.weeklyCapacity };
 }
 export function validateSequence(wagons: Wagon[]): void {
   const byId = new Map(wagons.map(w => [w.id, w]));

@@ -5,13 +5,29 @@ export interface TourStep {
   body: string;
 }
 
-export type TourKey = 'obras' | 'planejamento' | 'vagao' | 'prevision' | 'dividas' | 'configuracoes';
+export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'planejamento' | 'vagao' | 'prevision' | 'dividas' | 'configuracoes';
 
 export const tours: Record<TourKey, TourStep[]> = {
   obras: [
     { title: 'Bem-vindo ao Planejamento de Vagão', body: 'Este tour explica a tela em que você está. Use "Próximo" para avançar e "Sair" a qualquer momento — ele não altera nada, é só um guia.' },
     { target: 'obras-actions', title: 'Cadastrar obra', body: 'Cria uma nova obra no sistema. Depois disso, use Configurações para liberar o acesso de outros usuários a ela.' },
     { target: 'obras-grid', title: 'Suas obras', body: 'Cada cartão é uma obra que você tem acesso. Os números mostram quantos vagões existem, quantos já são terminais e quantas atividades estão planejadas. Clique num cartão para abrir o planejamento.' },
+  ],
+  longoPrazo: [
+    { title: 'Planejamento de longo prazo', body: 'Visão macro da obra em Linha de Balanço e as linhas de base salvas para comparar com o realizado.' },
+    { target: 'work-nav', title: 'Seções da obra', body: 'Alterna entre os três níveis de planejamento, os vagões, as dívidas e as integrações desta obra.' },
+    { target: 'longo-baselines', title: 'Linhas de base', body: 'Cada acionamento de "Definir linha de base" cria um registro novo e preserva os anteriores. Reprogramar o planejamento atual nunca altera uma linha de base salva.' },
+    { target: 'longo-lob', title: 'Linha de Balanço', body: 'Cada linha é um serviço avançando pelos locais ao longo do tempo. Selecione uma linha de base para ver o traçado pontilhado de referência ao lado do planejamento atual, ou troque para a visão de tabela.' },
+  ],
+  medioPrazo: [
+    { title: 'Planejamento de médio prazo', body: 'O Look Ahead dos próximos três meses: equipes executoras, carga de alocação e o percentual executado lançado a cada semana.' },
+    { target: 'medio-teams', title: 'Equipes e capacidade', body: 'A capacidade é o número de atividades simultâneas que a equipe consegue executar por semana — é o que sinaliza sobrecarga.' },
+    { target: 'medio-board', title: 'Kanban de restrições', body: 'As restrições levantadas aqui andam entre "Identificada" e "Em tratativa". A coluna "Resolvida" só é alcançada registrando a resolução, nunca arrastando o cartão.' },
+  ],
+  curtoPrazo: [
+    { title: 'Planejamento de curto prazo', body: 'O planejamento semanal do Last Planner: compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },
+    { target: 'curto-ppc', title: 'PPC da semana', body: 'O PPC conta compromissos cumpridos sobre compromissos assumidos na semana. Ele não é a média dos percentuais executados dos serviços.' },
+    { target: 'curto-commitments', title: 'Compromissos da semana', body: 'Cada linha é um compromisso com sua meta. Ao encerrar a semana, registre o cumprimento — e a causa, quando não for cumprido.' },
   ],
   planejamento: [
     { title: 'Planejamento por período', body: 'Aqui os vagões desta obra ficam organizados em sequências de produção. Cada vagão é um período fixo (o "takt") que reúne várias atividades.' },
@@ -54,7 +70,10 @@ export const tours: Record<TourKey, TourStep[]> = {
 
 export function resolveTourKey(pathname: string): TourKey | null {
   if (pathname === '/obras') return 'obras';
-  if (/^\/obras\/[^/]+\/planejamento$/.test(pathname)) return 'planejamento';
+  if (/^\/obras\/[^/]+\/longo-prazo$/.test(pathname)) return 'longoPrazo';
+  if (/^\/obras\/[^/]+\/medio-prazo$/.test(pathname)) return 'medioPrazo';
+  if (/^\/obras\/[^/]+\/curto-prazo$/.test(pathname)) return 'curtoPrazo';
+  if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
   if (/^\/obras\/[^/]+\/importar$/.test(pathname)) return 'prevision';
   if (/^\/obras\/[^/]+\/dividas$/.test(pathname)) return 'dividas';

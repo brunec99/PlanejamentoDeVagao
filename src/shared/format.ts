@@ -5,5 +5,7 @@ export const statusLabels = { terminal: 'Terminal', in_production: 'Em produçã
 export const activityLabels = { not_started: 'Não iniciada', in_progress: 'Em andamento', completed: 'Concluída' };
 export const releaseLabels = { initial: 'Inicial', normal: 'Normal', exceptional: 'Excepcional' };
 export const roleLabels = { manager: 'Gestor', planner: 'Planejador', viewer: 'Consulta', admin: 'Admin' };
-export const planningPath = (workId: string) => `/obras/${encodeURIComponent(workId)}/planejamento`;
+export const boardStatusLabels = { identificada: 'Identificada', em_tratativa: 'Em tratativa', resolvida: 'Resolvida' };
+export const workPath = (workId: string, section = 'vagoes') => `/obras/${encodeURIComponent(workId)}/${section}`;
+export const planningPath = (workId: string) => workPath(workId);
 export const wagonPath = (workId: string, wagonId: string) => `/obras/${encodeURIComponent(workId)}/vagoes/${encodeURIComponent(wagonId)}`;

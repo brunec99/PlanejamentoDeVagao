@@ -32,7 +32,7 @@ export function createMockData(): PlanningData {
     ],
     criteria: progresses.map((_, i) => ({ ...base(`c${i + 1}`), activityId: `a${i + 1}`, description: 'Inspeção de qualidade aprovada', mandatory: true, fulfilled: i === 0, confirmedAt: i === 0 ? '2026-08-26T15:00:00Z' : undefined, confirmedBy: i === 0 ? 'user-1' : undefined })),
     pendingItems: [{ ...base('p1'), wagonId: 'v2', description: 'Concluir revestimentos e pontos elétricos do período e aprovar a inspeção', responsibleId: 'user-1', dueDate: '2026-09-07', status: 'open', blocksTerminality: true }],
-    restrictions: [{ ...base('r1'), wagonId: 'v3', activityId: 'a3', description: 'Material de revestimento aguardando entrega', responsibleId: 'user-1', dueDate: '2026-09-09', status: 'open', blocksExecution: true, blocksTerminality: true }],
+    restrictions: [{ ...base('r1'), wagonId: 'v3', activityId: 'a3', description: 'Material de revestimento aguardando entrega', responsibleId: 'user-1', dueDate: '2026-09-09', status: 'open', blocksExecution: true, blocksTerminality: true, boardStatus: 'identificada' }],
     releases: [
       ...['v4', 'v6'].map((wagonId, i) => ({ ...base(`initial-${wagonId}`), wagonId, type: 'initial' as const, authorizedBy: 'user-1', releasedAt: `2026-09-0${i === 0 ? 6 : 1}T10:00:00Z`, acceptedPendingIds: [], acknowledgedDebtIds: [] })),
       { ...base('l1'), wagonId: 'v1', type: 'initial', authorizedBy: 'user-1', releasedAt: '2026-08-22T10:00:00Z', acceptedPendingIds: [], acknowledgedDebtIds: [] },
@@ -40,6 +40,13 @@ export function createMockData(): PlanningData {
       { ...base('l3'), wagonId: 'v3', predecessorId: 'v2', type: 'exceptional', justification: 'Equipe dedicada concluirá as pendências sem interferir nas atividades do próximo período.', authorizedBy: 'user-1', regularizationResponsibleId: 'user-1', dueDate: '2026-09-07', releasedAt: '2026-09-01T10:00:00Z', acceptedPendingIds: ['p1'], acknowledgedDebtIds: [] },
     ],
     debts: [{ ...base('d1'), pendingItemId: 'p1', releaseId: 'l3', responsibleId: 'user-1', dueDate: '2026-09-07' }],
+    teams: [
+      { ...base('equipe-1'), workId: 'obra-1', name: 'Revestimentos', weeklyCapacity: 2 },
+      { ...base('equipe-2'), workId: 'obra-1', name: 'Elétrica', weeklyCapacity: 3 },
+    ],
+    progressEntries: [],
+    commitments: [],
+    baselines: [],
     users: [
       { ...base('user-3'), name: 'Ana Souza', role: 'viewer', workIds: ['obra-1', 'obra-2'] },
       { ...base('user-1'), name: 'Marina Costa', role: 'manager', workIds: ['obra-1', 'obra-2'] },

@@ -1,7 +1,7 @@
-import type { Activity, PlanningData, RecordBase, Wagon } from '../../domain/entities';
+import type { Activity, BoardStatus, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
 import { isTerminal, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
-import { periodDays, requireText, validateDate, validatePeriod } from '../../domain/validation';
+import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
 export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
 export type Command =
   | { type: 'create_work'; name: string; code: string; previsionProjectId?: string }
@@ -22,6 +22,13 @@ export type Command =
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
+  | { type: 'create_team'; workId: string; name: string; weeklyCapacity: number }
+  | { type: 'assign_team'; activityId: string; teamId: string | null }
+  | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
+  | { type: 'create_commitment'; activityId: string; weekStart: string; responsibleId: string; targetProgress: number }
+  | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string }
+  | { type: 'create_baseline'; workId: string; name: string }
+  | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
   | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
@@ -182,7 +189,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon); checkReopen(wagon, command.reason); responsible(command.responsibleId, workId); validateDate(command.dueDate);
       if (command.activityId && !data.activities.some(a => a.id === command.activityId && a.wagonId === wagon.id)) throw new Error('Atividade não pertence ao vagão.');
       const record = { ...base(), wagonId: wagon.id, activityId: command.activityId, description: requireText(command.description, 'Descrição'), responsibleId: command.responsibleId, dueDate: command.dueDate, blocksTerminality: command.blocksTerminality, status: 'open' as const };
-      if (command.type === 'create_pending') data.pendingItems.push(record); else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution });
+      if (command.type === 'create_pending') data.pendingItems.push(record); else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution, boardStatus: 'identificada' });
       entityId = record.id; wagonId = wagon.id; break;
     }
     case 'resolve_pending': case 'resolve_restriction': {
@@ -191,7 +198,9 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const wagon = wagonFor(data, record.wagonId); workOf(wagon);
       if (record.status === 'resolved') throw new Error('Registro já resolvido.');
       requireText(command.resolution, 'Descrição da resolução');
-      record.status = 'resolved'; Object.assign(record, { resolution: command.resolution.trim(), resolvedAt: now }); touch(record); entityId = record.id; wagonId = wagon.id; break;
+      record.status = 'resolved'; Object.assign(record, { resolution: command.resolution.trim(), resolvedAt: now });
+      if (command.type === 'resolve_restriction') (record as Restriction).boardStatus = 'resolvida';
+      touch(record); entityId = record.id; wagonId = wagon.id; break;
     }
     case 'release': {
       const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon);
@@ -238,6 +247,71 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         if (row.progress > 0 && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
       }
       entityId = wagon.id; wagonId = wagon.id; break;
+    }
+    case 'create_team': {
+      checkWork(command.workId); const name = requireText(command.name, 'Nome da equipe');
+      if (!Number.isInteger(command.weeklyCapacity) || command.weeklyCapacity <= 0) throw new Error('Capacidade deve ser um número inteiro positivo de atividades por semana.');
+      if (data.teams.some(t => t.workId === command.workId && t.name.toLowerCase() === name.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra.');
+      const team = { ...base(), workId: command.workId, name, weeklyCapacity: command.weeklyCapacity };
+      data.teams.push(team); entityId = team.id; break;
+    }
+    case 'assign_team': {
+      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId); const workId = workOf(wagon);
+      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId)) throw new Error('Equipe deve pertencer à obra.');
+      activity.teamId = command.teamId ?? undefined; touch(activity); entityId = activity.id; wagonId = wagon.id; break;
+    }
+    case 'record_progress': {
+      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
+      if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+      if (command.progress > activity.progress) ensureExecution(wagon, activity.id);
+      if (command.progress < activity.progress) requireText(command.reason ?? '', 'Justificativa da correção');
+      if (command.progress < 100 && isTerminal(wagon.id, data)) checkReopen(wagon, command.reason);
+      const status = command.progress === 100 ? 'completed' as const : command.progress > 0 ? 'in_progress' as const : 'not_started' as const;
+      Object.assign(activity, { progress: command.progress, status }); validateActivity(activity); touch(activity);
+      // O escalar da atividade é só o valor corrente; a série datada fica em progressEntries.
+      data.progressEntries.push({ ...base(), activityId: activity.id, recordedDate: today, progress: command.progress, recordedBy: actorId });
+      if (activity.status !== 'not_started' && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
+      entityId = activity.id; wagonId = wagon.id; break;
+    }
+    case 'create_commitment': {
+      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId); const workId = workOf(wagon);
+      responsible(command.responsibleId, workId); validateDate(command.weekStart);
+      if (!Number.isFinite(command.targetProgress) || command.targetProgress <= 0 || command.targetProgress > 100) throw new Error('A meta da semana deve ficar entre 1 e 100.');
+      if (command.targetProgress <= activity.progress) throw new Error('A meta da semana deve superar o percentual já executado.');
+      const weekStart = startOfWeek(command.weekStart);
+      if (data.commitments.some(c => c.activityId === activity.id && c.weekStart === weekStart)) throw new Error('Esta atividade já tem compromisso nesta semana.');
+      const commitment = { ...base(), activityId: activity.id, weekStart, weekEnd: addDays(weekStart, 6), responsibleId: command.responsibleId, targetProgress: command.targetProgress };
+      data.commitments.push(commitment); entityId = commitment.id; wagonId = wagon.id; break;
+    }
+    case 'record_fulfillment': {
+      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      const activity = data.activities.find(a => a.id === commitment.activityId)!;
+      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
+      if (typeof commitment.fulfilled === 'boolean') throw new Error('Cumprimento deste compromisso já foi registrado.');
+      if (!command.fulfilled) requireText(command.cause ?? '', 'Causa do não cumprimento');
+      Object.assign(commitment, { fulfilled: command.fulfilled, cause: command.fulfilled ? undefined : command.cause!.trim(), recordedAt: now, recordedBy: actorId });
+      touch(commitment); entityId = commitment.id; wagonId = wagon.id; break;
+    }
+    case 'create_baseline': {
+      checkWork(command.workId); const name = requireText(command.name, 'Nome da linha de base');
+      const sequenceIds = new Set(data.sequences.filter(s => s.workId === command.workId).map(s => s.id));
+      const wagons = data.wagons.filter(w => sequenceIds.has(w.sequenceId));
+      if (!wagons.length) throw new Error('Cadastre ao menos um vagão antes de definir a linha de base.');
+      const wagonIds = new Set(wagons.map(w => w.id));
+      const baseline = { ...base(), workId: command.workId, name, createdBy: actorId,
+        wagons: wagons.map(w => ({ id: w.id, number: w.number, plannedStart: w.plannedStart, plannedEnd: w.plannedEnd })),
+        activities: data.activities.filter(a => wagonIds.has(a.wagonId)).map(a => ({ id: a.id, wagonId: a.wagonId, name: a.name, locationId: a.locationId, plannedStart: a.plannedStart, plannedEnd: a.plannedEnd, weight: a.weight })) };
+      data.baselines.push(baseline); entityId = baseline.id; break;
+    }
+    case 'move_restriction': {
+      const restriction = data.restrictions.find(r => r.id === command.restrictionId); if (!restriction) throw new Error('Restrição não encontrada.');
+      const wagon = wagonFor(data, restriction.wagonId); workOf(wagon);
+      if (restriction.status === 'resolved') throw new Error('Restrição resolvida não volta ao quadro.');
+      if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa') throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
+      restriction.boardStatus = command.boardStatus; touch(restriction); entityId = restriction.id; wagonId = wagon.id; break;
     }
     case 'grant_access': case 'revoke_access': {
       if (actor.role !== 'admin') throw new Error('Somente administradores podem gerenciar acessos.');

@@ -5,7 +5,7 @@ import { CommandForm, Field, Responsible, TextField, number, value } from './for
 import { wagonPath } from '@/shared/format';
 export function WorkActions() {
   const router = useRouter(); const c = usePlanning(); if (c.state !== 'ready' || c.planning.data.users.find(u => u.id === c.actorId)?.role !== 'manager') return null;
-  return <div className="mt-6"><CommandForm title="Cadastrar obra" command={d => ({ type:'create_work', name:value(d,'name'), code:value(d,'code') })} onDone={id => router.push(`/obras/${id}/planejamento`)}><TextField name="name" label="Nome da obra"/><TextField name="code" label="Código"/></CommandForm></div>;
+  return <div className="mt-6"><CommandForm title="Cadastrar obra" command={d => ({ type:'create_work', name:value(d,'name'), code:value(d,'code') })} onDone={id => router.push(`/obras/${id}/vagoes`)}><TextField name="name" label="Nome da obra"/><TextField name="code" label="Código"/></CommandForm></div>;
 }
 export function PlanningActions({ workId }: { workId: string }) {
   const context = usePlanning(); const router = useRouter();

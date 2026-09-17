@@ -9,6 +9,16 @@ export function validatePeriod(start: string, end: string): void {
   validateDate(start); validateDate(end);
   if (end < start) throw new Error('Término deve ser igual ou posterior ao início.');
 }
+export function addDays(date: string, days: number): string {
+  validateDate(date);
+  return new Date(Date.parse(date) + days * 86400000).toISOString().slice(0, 10);
+}
+/** Segunda-feira da semana da data — mantém as semanas do curto prazo canônicas, para o PPC. */
+export function startOfWeek(date: string): string {
+  validateDate(date);
+  const day = new Date(date).getUTCDay();
+  return addDays(date, day === 0 ? -6 : 1 - day);
+}
 export function periodDays(start: string, end: string, business: boolean): number {
   validatePeriod(start, end);
   let count = 0;
