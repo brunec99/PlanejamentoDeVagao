@@ -95,6 +95,8 @@ Pontos que ainda não foram confirmados e valem como decisão inicial, sujeita a
 
 O arquivo nunca passa pelo servidor do app: `/api/ifc/upload-url` devolve uma URL assinada e o navegador envia direto ao Storage do Supabase, porque um IFC passa de dezenas de MB e estouraria o limite de corpo da função. A leitura funciona igual, por `/api/ifc/download-url`, com URL de dois minutos. O bucket `ifc` é privado e a chave de serviço não sai do servidor.
 
+**Visualizador** (mesma tela): abre uma versão guardada em 3D, com `web-ifc` lendo o arquivo no navegador e `three` desenhando. O modelo só carrega por ação explícita, porque o arquivo tem dezenas a centenas de MB e a URL assinada dura dois minutos. Dá para isolar um pavimento e clicar num elemento para ver o que o arquivo diz dele — classe IFC, nome, GlobalId e pavimento —, nada além disso. A tela informa quando o IFC não traz geometria que o leitor consiga montar, em vez de mostrar um canvas vazio como se tivesse funcionado.
+
 **Vinculação por regras** (mesma tela): as regras ligam elementos a um serviço por propriedade, em vez de seleção manual elemento por elemento. Entre as regras que casam, vale a de menor ordem. A tela mostra quais regras precisam de revisão — aquelas cujo pavimento não existe em nenhum modelo atual — e tem um teste local de regra, que responde qual serviço seria vinculado a um pavimento e tipo informados, sem gravar nada.
 
 Os vínculos elemento a elemento **não são armazenados**: só as regras são. Cada comando trafega o snapshot inteiro do planejamento, e materializar dezenas de milhares de elementos tornaria toda gravação proporcional ao tamanho do modelo. O vínculo é resolvido na visualização, a partir das regras.

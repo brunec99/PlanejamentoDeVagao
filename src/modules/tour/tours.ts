@@ -50,6 +50,7 @@ export const tours: Record<TourKey, TourStep[]> = {
   ifc: [
     { title: 'Modelos IFC', body: 'O repositório guarda apenas modelos IFC, vinculados a esta obra. Cada envio do mesmo modelo cria uma versão nova e preserva as anteriores.' },
     { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões, com os pavimentos lidos do próprio arquivo no momento do envio.' },
+    { target: 'ifc-viewer', title: 'Visualizador', body: 'Abre uma versão guardada em 3D. O modelo só carrega quando você pede, porque o arquivo é grande. Dá para isolar um pavimento e clicar num elemento para ver o que o arquivo diz dele: classe IFC, nome, GlobalId e pavimento.' },
     { target: 'ifc-rules', title: 'Vinculação por regras', body: 'As regras ligam elementos do modelo a um serviço por propriedade (pavimento e tipo de elemento nesta versão), em vez de seleção manual elemento por elemento. Regras cujo pavimento não existe mais no modelo aparecem marcadas para revisão.' },
   ],
   quatroD: [
