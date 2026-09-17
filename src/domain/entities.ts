@@ -17,7 +17,9 @@ export interface ProgressEntry extends RecordBase { activityId: Id; recordedDate
 export interface TerminalityCriterion extends RecordBase { activityId: Id; description: string; mandatory: boolean; fulfilled: boolean; confirmedAt?: string; confirmedBy?: Id }
 export interface PendingItem extends RecordBase { wagonId: Id; activityId?: Id; description: string; responsibleId: Id; dueDate: LocalDate; status: 'open' | 'resolved'; blocksTerminality: boolean; resolvedAt?: string; resolution?: string }
 export type BoardStatus = 'identificada' | 'em_tratativa' | 'resolvida';
-export interface Restriction extends RecordBase { wagonId: Id; activityId?: Id; description: string; responsibleId: Id; dueDate: LocalDate; status: 'open' | 'resolved'; blocksExecution: boolean; blocksTerminality: boolean; resolvedAt?: string; resolution?: string; boardStatus: BoardStatus }
+/** `leadTimeDays` é o prazo de obtenção da pendência. Quando informado junto da atividade,
+ * o limite de resolução deixa de ser digitado e passa a sair do início previsto dela. */
+export interface Restriction extends RecordBase { wagonId: Id; activityId?: Id; description: string; responsibleId: Id; dueDate: LocalDate; status: 'open' | 'resolved'; blocksExecution: boolean; blocksTerminality: boolean; resolvedAt?: string; resolution?: string; boardStatus: BoardStatus; leadTimeDays?: number }
 export interface Release extends RecordBase { wagonId: Id; predecessorId?: Id; type: 'initial' | 'normal' | 'exceptional'; justification?: string; authorizedBy: Id; regularizationResponsibleId?: Id; dueDate?: LocalDate; releasedAt: string; acceptedPendingIds: Id[]; acknowledgedDebtIds: Id[] }
 export interface TerminalityDebt extends RecordBase { pendingItemId: Id; releaseId: Id; responsibleId: Id; dueDate: LocalDate }
 /** Compromisso semanal do Last Planner. `weekStart` é sempre a segunda-feira da semana,

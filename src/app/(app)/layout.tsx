@@ -4,6 +4,7 @@ import { Building2, Settings, LogOut } from 'lucide-react';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
+import { WorkNav } from '@/modules/layout/work-nav';
 import { TourProvider } from '@/modules/tour/tour-provider';
 import { TourOverlay } from '@/modules/tour/tour-overlay';
 import { HelpButton } from '@/modules/tour/help-button';
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   const profile = await getRouteProfile();
   return (
     <TourProvider>
+    <PlanningProvider>
     <div className="flex h-screen overflow-hidden bg-slate-100">
       <a className="skip-link" href="#main">Ir para o conteúdo</a>
       <SidebarWrapper>
@@ -34,6 +36,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
               <Building2 size={17} className="shrink-0 text-blue-600" />Obras
             </Link>
           </div>
+          <WorkNav />
           {profile?.role === 'admin' && <>
             <p className="eyebrow mb-1 mt-5 px-3">Configurações</p>
             <div className="space-y-0.5">
@@ -71,11 +74,12 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           </div>
         </header>
         <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 p-5 md:p-8">
-          <PlanningProvider>{children}</PlanningProvider>
+          {children}
         </main>
       </div>
       <TourOverlay />
     </div>
+    </PlanningProvider>
     </TourProvider>
   );
 }

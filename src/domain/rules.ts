@@ -1,4 +1,5 @@
 import type { Activity, LinkRule, LocalDate, PlanningData, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import { addDays } from './validation';
 
 export function validateActivity(activity: Activity): void {
   if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -42,6 +43,11 @@ export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data:
   const team = data.teams.find(t => t.id === teamId);
   const assigned = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
   return { assigned: assigned.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned.length > team.weeklyCapacity };
+}
+/** Limite para resolver a pendência: o lead time precisa caber antes de a frente começar,
+ * então conta-se para trás a partir do início previsto da atividade. */
+export function leadTimeDeadline(plannedStart: LocalDate, leadTimeDays: number): LocalDate {
+  return addDays(plannedStart, -leadTimeDays);
 }
 /** Propriedades de um elemento IFC que as regras desta versão sabem ler. */
 export interface ElementFacts { pavimento: string; tipo: string }

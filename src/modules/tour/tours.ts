@@ -18,11 +18,11 @@ export const tours: Record<TourKey, TourStep[]> = {
     { target: 'work-nav', title: 'Seções da obra', body: 'Alterna entre os três níveis de planejamento, os vagões, as dívidas e as integrações desta obra.' },
     { target: 'longo-baselines', title: 'Linhas de base', body: 'Cada acionamento de "Definir linha de base" cria um registro novo e preserva os anteriores. Reprogramar o planejamento atual nunca altera uma linha de base salva.' },
     { target: 'longo-lob', title: 'Linha de Balanço', body: 'Cada linha é um serviço avançando pelos locais ao longo do tempo. Selecione uma linha de base para ver o traçado pontilhado de referência ao lado do planejamento atual, ou troque para a visão de tabela.' },
+    { target: 'longo-board', title: 'Quadro de pendências', body: 'Cada pendência é ligada a uma atividade e a um lead time. O limite de resolução não é digitado: sai do início previsto da atividade menos esse lead time. Abra o card para ver a descrição completa e de onde veio a data.' },
   ],
   medioPrazo: [
     { title: 'Planejamento de médio prazo', body: 'O Look Ahead dos próximos três meses: equipes executoras, carga de alocação e o percentual executado lançado a cada semana.' },
     { target: 'medio-teams', title: 'Equipes e capacidade', body: 'A capacidade é o número de atividades simultâneas que a equipe consegue executar por semana — é o que sinaliza sobrecarga.' },
-    { target: 'medio-board', title: 'Kanban de restrições', body: 'As restrições levantadas aqui andam entre "Identificada" e "Em tratativa". A coluna "Resolvida" só é alcançada registrando a resolução, nunca arrastando o cartão.' },
   ],
   curtoPrazo: [
     { title: 'Planejamento de curto prazo', body: 'O planejamento semanal do Last Planner: compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },
@@ -32,8 +32,7 @@ export const tours: Record<TourKey, TourStep[]> = {
   planejamento: [
     { title: 'Planejamento por período', body: 'Aqui os vagões desta obra ficam organizados em sequências de produção. Cada vagão é um período fixo (o "takt") que reúne várias atividades.' },
     { target: 'planejamento-stats', title: 'Indicadores gerais', body: 'Resumo rápido: quantos vagões existem, quantos já viraram terminais, quantos estão com o takt vencido e quantas dívidas de terminalidade seguem abertas.' },
-    { target: 'planejamento-debts-link', title: 'Dívidas de terminalidade', body: 'Pendências que foram aceitas numa liberação excepcional e ainda precisam ser resolvidas — mesmo que o vagão de origem já tenha sido liberado.' },
-    { target: 'planejamento-sync-link', title: 'Atualizar tarefas', body: 'Leva à tela de integração com o Prevision: busca o cronograma mais recente e reorganiza os vagões futuros ainda não liberados.' },
+    { target: 'work-nav', title: 'Seções da obra', body: 'Toda a navegação da obra fica aqui na lateral: os três níveis de planejamento, os vagões, os modelos IFC, o BIM 4D, as dívidas e a integração com o Prevision.' },
     { target: 'planejamento-show-past', title: 'Mostrar vagões passados', body: 'Por padrão, vagões cujo período já terminou ficam ocultos para deixar a lista mais limpa. Marque aqui para revê-los.' },
     { target: 'planejamento-wagon-table', title: 'Lista de vagões', body: 'Cada linha é um vagão: período previsto, quantidade de atividades, progresso ponderado, status e o tipo de liberação já concedida. Clique no nome do vagão para abrir o detalhe.' },
   ],

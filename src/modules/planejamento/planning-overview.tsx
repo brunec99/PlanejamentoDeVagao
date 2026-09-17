@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { PlanningActions } from './planning-actions';
 import { usePlanning } from './planning-provider';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
@@ -29,10 +29,6 @@ export function PlanningOverview({ workId }: { workId: string }) {
         <p className="eyebrow">Planejamento por período · {work.code}</p>
         <h1 className="page-title">{work.name}</h1>
         <p className="mt-1 text-sm text-slate-500">Cada vagão reúne as atividades previstas entre seus marcos de início e término.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Link data-tour="planejamento-debts-link" className="button-ghost" href={`/obras/${workId}/dividas`}><Wallet size={15} />Dívidas</Link>
-        <Link data-tour="planejamento-sync-link" className="button" href={`/obras/${workId}/importar`}><RefreshCw size={15} />Atualizar tarefas</Link>
       </div>
     </div>
 

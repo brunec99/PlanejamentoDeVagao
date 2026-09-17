@@ -1,5 +1,5 @@
 import type { Activity, BoardStatus, LinkRuleCriterion, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
-import { isTerminal, validateActivity, validateSequence } from '../../domain/rules';
+import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
 export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
@@ -15,7 +15,7 @@ export type Command =
   | { type: 'set_criterion'; criterionId: string; fulfilled: boolean; reason?: string }
   | { type: 'create_pending'; wagonId: string; activityId?: string; description: string; responsibleId: string; dueDate: string; blocksTerminality: boolean; reason?: string }
   | { type: 'resolve_pending'; pendingId: string; resolution: string }
-  | { type: 'create_restriction'; wagonId: string; activityId?: string; description: string; responsibleId: string; dueDate: string; blocksExecution: boolean; blocksTerminality: boolean; reason?: string }
+  | { type: 'create_restriction'; wagonId: string; activityId?: string; description: string; responsibleId: string; dueDate: string; blocksExecution: boolean; blocksTerminality: boolean; leadTimeDays?: number; reason?: string }
   | { type: 'resolve_restriction'; restrictionId: string; resolution: string }
   | { type: 'release'; wagonId: string; mode: 'initial' | 'normal' | 'exceptional'; justification?: string; responsibleId?: string; dueDate?: string }
   | { type: 'import_activities'; wagonId: string; projectId: string; responsibleId: string; rows: ImportedActivity[]; reason?: string }
@@ -190,10 +190,19 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       criterion.fulfilled = command.fulfilled; criterion.confirmedAt = command.fulfilled ? now : undefined; criterion.confirmedBy = command.fulfilled ? actorId : undefined; touch(criterion); entityId = criterion.id; wagonId = wagon.id; break;
     }
     case 'create_pending': case 'create_restriction': {
-      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon); checkReopen(wagon, command.reason); responsible(command.responsibleId, workId); validateDate(command.dueDate);
-      if (command.activityId && !data.activities.some(a => a.id === command.activityId && a.wagonId === wagon.id)) throw new Error('Atividade não pertence ao vagão.');
-      const record = { ...base(), wagonId: wagon.id, activityId: command.activityId, description: requireText(command.description, 'Descrição'), responsibleId: command.responsibleId, dueDate: command.dueDate, blocksTerminality: command.blocksTerminality, status: 'open' as const };
-      if (command.type === 'create_pending') data.pendingItems.push(record); else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution, boardStatus: 'identificada' });
+      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon); checkReopen(wagon, command.reason); responsible(command.responsibleId, workId);
+      const activity = command.activityId ? data.activities.find(a => a.id === command.activityId && a.wagonId === wagon.id) : undefined;
+      if (command.activityId && !activity) throw new Error('Atividade não pertence ao vagão.');
+      const leadTimeDays = command.type === 'create_restriction' ? command.leadTimeDays : undefined;
+      let dueDate = command.dueDate;
+      if (leadTimeDays !== undefined) {
+        if (!activity) throw new Error('Vincule a pendência a uma atividade para calcular o limite pelo lead time.');
+        if (!Number.isInteger(leadTimeDays) || leadTimeDays < 0) throw new Error('Lead time deve ser um número inteiro de dias, zero ou mais.');
+        dueDate = leadTimeDeadline(activity.plannedStart, leadTimeDays);
+      }
+      validateDate(dueDate);
+      const record = { ...base(), wagonId: wagon.id, activityId: command.activityId, description: requireText(command.description, 'Descrição'), responsibleId: command.responsibleId, dueDate, blocksTerminality: command.blocksTerminality, status: 'open' as const };
+      if (command.type === 'create_pending') data.pendingItems.push(record); else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution, boardStatus: 'identificada', leadTimeDays });
       entityId = record.id; wagonId = wagon.id; break;
     }
     case 'resolve_pending': case 'resolve_restriction': {
