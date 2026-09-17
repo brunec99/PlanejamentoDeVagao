@@ -8,7 +8,10 @@ export interface ProductionSequence extends RecordBase { workId: Id; name: strin
 /** A wagon is a temporal production cycle. Locations belong only to activities. */
 export interface Wagon extends RecordBase { sequenceId: Id; number: number; predecessorId?: Id; plannedStart: LocalDate; plannedEnd: LocalDate; taktDays: number; actualStart?: LocalDate; responsibleIds: Id[] }
 export type ActivityStatus = 'not_started' | 'in_progress' | 'completed';
-export interface Activity extends RecordBase { wagonId: Id; name: string; locationId: Id; responsibleId: Id; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number; status: ActivityStatus; weight: number; mandatory: boolean; origin: 'manual' | 'mock' | 'prevision'; previsionExternalId?: string; teamId?: Id }
+export interface Activity extends RecordBase { wagonId: Id; name: string; locationId: Id; responsibleId: Id; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number; status: ActivityStatus; weight: number; mandatory: boolean; origin: 'manual' | 'mock' | 'prevision'; previsionExternalId?: string; teamId?: Id; notes?: string }
+/** Dependência término-início entre atividades. O produto reprograma manualmente, por decisão
+ * de escopo: a dependência serve para ler a rede e apontar incoerência, nunca para mover datas. */
+export interface ActivityDependency extends RecordBase { predecessorId: Id; successorId: Id }
 /** Equipe executora. Capacidade em atividades simultâneas por semana. */
 export interface Team extends RecordBase { workId: Id; name: string; weeklyCapacity: number }
 /** Lançamento datado de percentual executado. `Activity.progress` guarda só o valor atual;
@@ -42,5 +45,5 @@ export interface LinkRuleCriterion { property: LinkRuleProperty; operator: 'igua
 export interface LinkRule extends RecordBase { workId: Id; order: number; serviceName: string; criteria: LinkRuleCriterion[] }
 export interface User extends RecordBase { name: string; role: 'viewer' | 'planner' | 'manager' | 'admin'; workIds: Id[] }
 export interface HistoryEvent { id: Id; entityId: Id; entityType: string; action: string; authorId: Id; occurredAt: string; changes: Record<string, unknown> }
-export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; ifcModels: IfcModel[]; ifcVersions: IfcModelVersion[]; linkRules: LinkRule[]; users: User[]; history: HistoryEvent[] }
+export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; dependencies: ActivityDependency[]; ifcModels: IfcModel[]; ifcVersions: IfcModelVersion[]; linkRules: LinkRule[]; users: User[]; history: HistoryEvent[] }
 export type WagonStatus = 'not_started' | 'in_production' | 'restricted' | 'terminal';

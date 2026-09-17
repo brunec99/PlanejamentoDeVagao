@@ -29,6 +29,9 @@ export type Command =
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
+  | { type: 'link_activities'; predecessorId: string; successorId: string }
+  | { type: 'unlink_activities'; dependencyId: string }
+  | { type: 'set_activity_note'; activityId: string; note: string }
   | { type: 'create_ifc_model'; workId: string; name: string; discipline: string }
   | { type: 'add_ifc_version'; modelId: string; fileName: string; fileSize: number; storagePath: string; storeys: string[]; elementCount: number }
   | { type: 'create_link_rule'; workId: string; serviceName: string; criteria: LinkRuleCriterion[] }
@@ -325,6 +328,40 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (restriction.status === 'resolved') throw new Error('Restrição resolvida não volta ao quadro.');
       if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa') throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
       restriction.boardStatus = command.boardStatus; touch(restriction); entityId = restriction.id; wagonId = wagon.id; break;
+    }
+    case 'link_activities': {
+      const predecessor = data.activities.find(a => a.id === command.predecessorId);
+      const successor = data.activities.find(a => a.id === command.successorId);
+      if (!predecessor || !successor) throw new Error('Atividade não encontrada.');
+      if (predecessor.id === successor.id) throw new Error('Uma atividade não pode depender de si mesma.');
+      const workOfActivity = (activity: Activity) => workOf(wagonFor(data, activity.wagonId));
+      if (workOfActivity(predecessor) !== workOfActivity(successor)) throw new Error('As atividades ligadas devem ser da mesma obra.');
+      if (data.dependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe.');
+      // Se a predecessora já é alcançável a partir da sucessora, a ligação fecharia um laço.
+      const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
+        if (from === target) return true;
+        if (seen.has(from)) return false;
+        seen.add(from);
+        return data.dependencies.filter(d => d.predecessorId === from).some(d => reaches(d.successorId, target, seen));
+      };
+      if (reaches(successor.id, predecessor.id)) throw new Error('Essa ligação criaria um ciclo entre as atividades.');
+      const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id };
+      data.dependencies.push(dependency); entityId = dependency.id; wagonId = successor.wagonId; break;
+    }
+    case 'unlink_activities': {
+      const dependency = data.dependencies.find(d => d.id === command.dependencyId); if (!dependency) throw new Error('Dependência não encontrada.');
+      const successor = data.activities.find(a => a.id === dependency.successorId);
+      if (successor) { workOf(wagonFor(data, successor.wagonId)); wagonId = successor.wagonId; }
+      data.dependencies = data.dependencies.filter(d => d.id !== dependency.id);
+      entityId = dependency.id; break;
+    }
+    case 'set_activity_note': {
+      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
+      if (typeof command.note !== 'string') throw new Error('Anotação inválida.');
+      if (command.note.length > 2000) throw new Error('Anotação muito longa: use até 2000 caracteres.');
+      activity.notes = command.note.trim() || undefined; touch(activity);
+      entityId = activity.id; wagonId = wagon.id; break;
     }
     case 'create_ifc_model': {
       checkWork(command.workId); const name = requireText(command.name, 'Nome do modelo');

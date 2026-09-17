@@ -47,6 +47,7 @@ export function createMockData(): PlanningData {
     progressEntries: [],
     commitments: [],
     baselines: [],
+    dependencies: [],
     ifcModels: [],
     ifcVersions: [],
     linkRules: [],

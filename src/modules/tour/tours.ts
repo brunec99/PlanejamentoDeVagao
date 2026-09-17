@@ -23,6 +23,7 @@ export const tours: Record<TourKey, TourStep[]> = {
   medioPrazo: [
     { title: 'Planejamento de médio prazo', body: 'O Look Ahead dos próximos três meses: equipes executoras, carga de alocação e o percentual executado lançado a cada semana.' },
     { target: 'medio-teams', title: 'Equipes e capacidade', body: 'A capacidade é o número de atividades simultâneas que a equipe consegue executar por semana — é o que sinaliza sobrecarga.' },
+    { target: 'medio-gantt', title: 'Cronograma', body: 'Uma linha por atividade, com início, término, duração, recurso e anotação. Clique na linha para ligar predecessoras, trocar o recurso, anotar ou lançar o percentual. As setas mostram a rede; em vermelho, a sucessora que começa antes do término da predecessora — as datas não se movem sozinhas, a reprogramação é sua.' },
   ],
   curtoPrazo: [
     { title: 'Planejamento de curto prazo', body: 'O planejamento semanal do Last Planner: compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },

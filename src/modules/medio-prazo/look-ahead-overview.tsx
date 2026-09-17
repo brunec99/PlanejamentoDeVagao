@@ -1,12 +1,12 @@
 'use client';
-import Link from 'next/link';
 import { CommandForm, Field, TextField, number, value } from '@/modules/planejamento/forms';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
-import { Callout, Empty, LoadState, Missing, Panel, Progress, StatCard } from '@/modules/planejamento/ui';
+import { Callout, Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { teamLoad, weightedProgress } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
-import { activityLabels, formatDate, wagonLabel, wagonPath } from '@/shared/format';
+import { Gantt } from '@/modules/medio-prazo/gantt';
+import { formatDate, wagonLabel } from '@/shared/format';
 
 export function LookAheadOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -68,45 +68,7 @@ export function LookAheadOverview({ workId }: { workId: string }) {
           </div>}
     </Panel>
 
-    <section className="panel my-6 overflow-hidden" aria-labelledby="look-ahead-title">
-      <div className="border-b border-slate-100 px-5 py-3.5">
-        <h2 id="look-ahead-title" className="text-sm font-bold text-slate-800">Atividades da janela</h2>
-        <p className="mt-0.5 text-xs text-slate-500">Ordenadas pelo início previsto. Lance o percentual executado da semana de {formatDate(weekStart)} a {formatDate(addDays(weekStart, 6))}.</p>
-      </div>
-      {lookAhead.length === 0
-        ? <div className="p-5"><Empty>Nenhuma atividade prevista nesta janela de três meses.</Empty></div>
-        : <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Atividades do Look Ahead" tabIndex={0}>
-            <table className="data-table min-w-[1180px]">
-              <thead><tr>{['Vagão', 'Atividade', 'Local', 'Previsão', 'Equipe', 'Progresso', 'Lançamentos'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
-              <tbody>{lookAhead.map(activity => {
-                const wagon = wagonOf(activity.wagonId);
-                const team = teams.find(t => t.id === activity.teamId);
-                return <tr key={activity.id}>
-                  <th scope="row">{wagon ? <Link className="text-link whitespace-nowrap" href={wagonPath(workId, wagon.id)}>{wagonLabel(wagon.number)}</Link> : <span className="text-slate-400">Vagão indisponível</span>}</th>
-                  <td className="min-w-56"><p className="font-medium text-slate-800">{activity.name}</p><p className="mt-0.5 text-xs text-slate-400">{activityLabels[activity.status]} · peso {activity.weight}</p></td>
-                  <td>{place(activity.locationId)}</td>
-                  <td className="whitespace-nowrap tabular-nums">{formatDate(activity.plannedStart)}<span className="block text-xs text-slate-400">a {formatDate(activity.plannedEnd)}</span></td>
-                  <td>{team ? team.name : <span className="text-amber-600">Sem equipe</span>}</td>
-                  <td><Progress value={activity.progress} label={`Progresso de ${activity.name}`} /></td>
-                  <td className="min-w-72 space-y-3">
-                    {teams.length > 0 && <CommandForm key={`team-${activity.updatedAt}`} title="Definir equipe executora" submit="Salvar equipe" command={d => ({ type: 'assign_team', activityId: activity.id, teamId: value(d, 'teamId') || null })}>
-                      <Field label="Equipe executora">
-                        <select className="field" name="teamId" defaultValue={activity.teamId ?? ''}>
-                          <option value="">Sem equipe</option>
-                          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                      </Field>
-                    </CommandForm>}
-                    <CommandForm key={`progress-${activity.updatedAt}`} title="Lançar percentual executado" submit="Lançar percentual" command={d => ({ type: 'record_progress', activityId: activity.id, progress: number(d, 'progress'), reason: value(d, 'reason') || undefined })}>
-                      <TextField name="progress" label="Percentual executado (%)" type="number" min={0} max={100} step="any" defaultValue={activity.progress} />
-                      <TextField name="reason" label="Justificativa (obrigatória para reduzir o percentual)" required={false} />
-                    </CommandForm>
-                  </td>
-                </tr>;
-              })}</tbody>
-            </table>
-          </div>}
-    </section>
+    <Gantt workId={workId} />
 
     <section className="panel overflow-hidden" aria-labelledby="entries-title">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">

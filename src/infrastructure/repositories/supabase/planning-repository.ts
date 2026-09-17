@@ -3,7 +3,7 @@ import type { PlanningData } from '../../../domain/entities';
 import { getServiceClient } from './client';
 import { diffDeletedIds, planningDataToPayload, rowsToPlanningData, type Rows } from './mappers';
 
-const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'teams', 'progress_entries', 'weekly_commitments', 'baselines', 'ifc_models', 'ifc_model_versions', 'link_rules', 'history_events', 'profiles'] as const;
+const TABLES = ['works', 'locations', 'production_sequences', 'wagons', 'activities', 'terminality_criteria', 'pending_items', 'restrictions', 'releases', 'terminality_debts', 'teams', 'progress_entries', 'weekly_commitments', 'baselines', 'activity_dependencies', 'ifc_models', 'ifc_model_versions', 'link_rules', 'history_events', 'profiles'] as const;
 const MAX_ATTEMPTS = 5;
 const PAGE = 1000;
 

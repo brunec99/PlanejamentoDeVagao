@@ -44,6 +44,15 @@ export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data:
   const assigned = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
   return { assigned: assigned.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned.length > team.weeklyCapacity };
 }
+/** Dependências cuja sucessora começa antes de a predecessora terminar. A data não é
+ * corrigida sozinha — a reprogramação é manual —, então a incoerência é apontada. */
+export function dependencyConflicts(data: PlanningData) {
+  const byId = new Map(data.activities.map(a => [a.id, a]));
+  return data.dependencies.flatMap(dependency => {
+    const predecessor = byId.get(dependency.predecessorId), successor = byId.get(dependency.successorId);
+    return predecessor && successor && successor.plannedStart <= predecessor.plannedEnd ? [{ dependency, predecessor, successor }] : [];
+  });
+}
 /** Limite para resolver a pendência: o lead time precisa caber antes de a frente começar,
  * então conta-se para trás a partir do início previsto da atividade. */
 export function leadTimeDeadline(plannedStart: LocalDate, leadTimeDays: number): LocalDate {

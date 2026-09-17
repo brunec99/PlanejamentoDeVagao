@@ -1,5 +1,5 @@
 import type {
-  Activity, Baseline, BaselineActivity, BaselineWagon, HistoryEvent, IfcModel, IfcModelVersion,
+  Activity, ActivityDependency, Baseline, BaselineActivity, BaselineWagon, HistoryEvent, IfcModel, IfcModelVersion,
   LinkRule, LinkRuleCriterion, Location, PendingItem, PlanningData, ProductionSequence,
   ProgressEntry, Release, Restriction, Team, TerminalityCriterion, TerminalityDebt, User,
   Wagon, WeeklyCommitment, Work,
@@ -11,7 +11,7 @@ export interface Rows {
   activities: ActivityRow[]; terminality_criteria: CriterionRow[]; pending_items: PendingRow[];
   restrictions: RestrictionRow[]; releases: ReleaseRow[]; terminality_debts: DebtRow[];
   teams: TeamRow[]; progress_entries: ProgressEntryRow[]; baselines: BaselineRow[];
-  weekly_commitments: CommitmentRow[]; ifc_models: IfcModelRow[];
+  weekly_commitments: CommitmentRow[]; activity_dependencies: DependencyRow[]; ifc_models: IfcModelRow[];
   ifc_model_versions: IfcVersionRow[]; link_rules: LinkRuleRow[];
   history_events: HistoryRow[]; profiles: ProfileRow[];
 }
@@ -20,7 +20,7 @@ interface WorkRow { id: string; created_at: string; updated_at: string; name: st
 interface LocationRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; code: string; parent_id: string | null }
 interface SequenceRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; default_takt_days: number; calendar: 'calendar_days' | 'business_days'; start_date: string | null }
 interface WagonRow { id: string; created_at: string; updated_at: string; sequence_id: string; number: number; predecessor_id: string | null; planned_start: string; planned_end: string; takt_days: number; actual_start: string | null; responsible_ids: string[] }
-interface ActivityRow { id: string; created_at: string; updated_at: string; wagon_id: string; name: string; location_id: string; responsible_id: string; planned_start: string; planned_end: string; progress: number; status: Activity['status']; weight: number; mandatory: boolean; origin: Activity['origin']; prevision_external_id: string | null; team_id: string | null }
+interface ActivityRow { id: string; created_at: string; updated_at: string; wagon_id: string; name: string; location_id: string; responsible_id: string; planned_start: string; planned_end: string; progress: number; status: Activity['status']; weight: number; mandatory: boolean; origin: Activity['origin']; prevision_external_id: string | null; team_id: string | null; notes: string | null }
 interface CriterionRow { id: string; created_at: string; updated_at: string; activity_id: string; description: string; mandatory: boolean; fulfilled: boolean; confirmed_at: string | null; confirmed_by: string | null }
 interface PendingRow { id: string; created_at: string; updated_at: string; wagon_id: string; activity_id: string | null; description: string; responsible_id: string; due_date: string; status: PendingItem['status']; blocks_terminality: boolean; resolved_at: string | null; resolution: string | null }
 interface RestrictionRow extends PendingRow { blocks_execution: boolean; board_status: Restriction['boardStatus']; lead_time_days: number | null }
@@ -28,6 +28,7 @@ interface TeamRow { id: string; created_at: string; updated_at: string; work_id:
 interface ProgressEntryRow { id: string; created_at: string; updated_at: string; activity_id: string; recorded_date: string; progress: number; recorded_by: string }
 interface BaselineRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; created_by: string; wagons: BaselineWagon[]; activities: BaselineActivity[] }
 interface CommitmentRow { id: string; created_at: string; updated_at: string; activity_id: string; week_start: string; week_end: string; responsible_id: string; target_progress: number; fulfilled: boolean | null; cause: string | null; recorded_at: string | null; recorded_by: string | null }
+interface DependencyRow { id: string; created_at: string; updated_at: string; predecessor_id: string; successor_id: string }
 interface IfcModelRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; discipline: string }
 interface IfcVersionRow { id: string; created_at: string; updated_at: string; model_id: string; version: number; file_name: string; file_size: number; storage_path: string; uploaded_by: string; storeys: string[]; element_count: number }
 interface LinkRuleRow { id: string; created_at: string; updated_at: string; work_id: string; order_index: number; service_name: string; criteria: LinkRuleCriterion[] }
@@ -42,7 +43,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
     locations: rows.locations.map((r): Location => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, code: r.code, parentId: r.parent_id ?? undefined })),
     sequences: rows.production_sequences.map((r): ProductionSequence => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, defaultTaktDays: r.default_takt_days, calendar: r.calendar, startDate: r.start_date ?? undefined })),
     wagons: rows.wagons.map((r): Wagon => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, sequenceId: r.sequence_id, number: r.number, predecessorId: r.predecessor_id ?? undefined, plannedStart: r.planned_start, plannedEnd: r.planned_end, taktDays: r.takt_days, actualStart: r.actual_start ?? undefined, responsibleIds: r.responsible_ids })),
-    activities: rows.activities.map((r): Activity => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, name: r.name, locationId: r.location_id, responsibleId: r.responsible_id, plannedStart: r.planned_start, plannedEnd: r.planned_end, progress: r.progress, status: r.status, weight: r.weight, mandatory: r.mandatory, origin: r.origin, previsionExternalId: r.prevision_external_id ?? undefined, teamId: r.team_id ?? undefined })),
+    activities: rows.activities.map((r): Activity => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, name: r.name, locationId: r.location_id, responsibleId: r.responsible_id, plannedStart: r.planned_start, plannedEnd: r.planned_end, progress: r.progress, status: r.status, weight: r.weight, mandatory: r.mandatory, origin: r.origin, previsionExternalId: r.prevision_external_id ?? undefined, teamId: r.team_id ?? undefined, notes: r.notes ?? undefined })),
     criteria: rows.terminality_criteria.map((r): TerminalityCriterion => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, description: r.description, mandatory: r.mandatory, fulfilled: r.fulfilled, confirmedAt: r.confirmed_at ?? undefined, confirmedBy: r.confirmed_by ?? undefined })),
     pendingItems: rows.pending_items.map((r): PendingItem => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, activityId: r.activity_id ?? undefined, description: r.description, responsibleId: r.responsible_id, dueDate: r.due_date, status: r.status, blocksTerminality: r.blocks_terminality, resolvedAt: r.resolved_at ?? undefined, resolution: r.resolution ?? undefined })),
     restrictions: rows.restrictions.map((r): Restriction => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, activityId: r.activity_id ?? undefined, description: r.description, responsibleId: r.responsible_id, dueDate: r.due_date, status: r.status, blocksExecution: r.blocks_execution, blocksTerminality: r.blocks_terminality, resolvedAt: r.resolved_at ?? undefined, resolution: r.resolution ?? undefined, boardStatus: r.board_status, leadTimeDays: r.lead_time_days ?? undefined })),
@@ -52,6 +53,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
     progressEntries: rows.progress_entries.map((r): ProgressEntry => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, recordedDate: r.recorded_date, progress: r.progress, recordedBy: r.recorded_by })),
     commitments: rows.weekly_commitments.map((r): WeeklyCommitment => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, weekStart: r.week_start, weekEnd: r.week_end, responsibleId: r.responsible_id, targetProgress: r.target_progress, fulfilled: r.fulfilled ?? undefined, cause: r.cause ?? undefined, recordedAt: r.recorded_at ?? undefined, recordedBy: r.recorded_by ?? undefined })),
     baselines: rows.baselines.map((r): Baseline => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, createdBy: r.created_by, wagons: r.wagons, activities: r.activities })),
+    dependencies: rows.activity_dependencies.map((r): ActivityDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id })),
     ifcModels: rows.ifc_models.map((r): IfcModel => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, discipline: r.discipline })),
     ifcVersions: rows.ifc_model_versions.map((r): IfcModelVersion => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, modelId: r.model_id, version: r.version, fileName: r.file_name, fileSize: r.file_size, storagePath: r.storage_path, uploadedBy: r.uploaded_by, storeys: r.storeys, elementCount: r.element_count })),
     linkRules: rows.link_rules.map((r): LinkRule => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, order: r.order_index, serviceName: r.service_name, criteria: r.criteria })),
@@ -69,7 +71,7 @@ export function planningDataToPayload(data: PlanningData) {
     locations: data.locations.map(l => ({ id: l.id, created_at: l.createdAt, updated_at: l.updatedAt, work_id: l.workId, name: l.name, code: l.code, parent_id: l.parentId ?? null })),
     production_sequences: data.sequences.map(s => ({ id: s.id, created_at: s.createdAt, updated_at: s.updatedAt, work_id: s.workId, name: s.name, default_takt_days: s.defaultTaktDays, calendar: s.calendar, start_date: s.startDate ?? null })),
     wagons: data.wagons.map(w => ({ id: w.id, created_at: w.createdAt, updated_at: w.updatedAt, sequence_id: w.sequenceId, number: w.number, predecessor_id: w.predecessorId ?? null, planned_start: w.plannedStart, planned_end: w.plannedEnd, takt_days: w.taktDays, actual_start: w.actualStart ?? null, responsible_ids: w.responsibleIds })),
-    activities: data.activities.map(a => ({ id: a.id, created_at: a.createdAt, updated_at: a.updatedAt, wagon_id: a.wagonId, name: a.name, location_id: a.locationId, responsible_id: a.responsibleId, planned_start: a.plannedStart, planned_end: a.plannedEnd, progress: a.progress, status: a.status, weight: a.weight, mandatory: a.mandatory, origin: a.origin, prevision_external_id: a.previsionExternalId ?? null, team_id: a.teamId ?? null })),
+    activities: data.activities.map(a => ({ id: a.id, created_at: a.createdAt, updated_at: a.updatedAt, wagon_id: a.wagonId, name: a.name, location_id: a.locationId, responsible_id: a.responsibleId, planned_start: a.plannedStart, planned_end: a.plannedEnd, progress: a.progress, status: a.status, weight: a.weight, mandatory: a.mandatory, origin: a.origin, prevision_external_id: a.previsionExternalId ?? null, team_id: a.teamId ?? null, notes: a.notes ?? null })),
     terminality_criteria: data.criteria.map(c => ({ id: c.id, created_at: c.createdAt, updated_at: c.updatedAt, activity_id: c.activityId, description: c.description, mandatory: c.mandatory, fulfilled: c.fulfilled, confirmed_at: c.confirmedAt ?? null, confirmed_by: c.confirmedBy ?? null })),
     pending_items: data.pendingItems.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, wagon_id: p.wagonId, activity_id: p.activityId ?? null, description: p.description, responsible_id: p.responsibleId, due_date: p.dueDate, status: p.status, blocks_terminality: p.blocksTerminality, resolved_at: p.resolvedAt ?? null, resolution: p.resolution ?? null })),
     restrictions: data.restrictions.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, wagon_id: r.wagonId, activity_id: r.activityId ?? null, description: r.description, responsible_id: r.responsibleId, due_date: r.dueDate, status: r.status, blocks_execution: r.blocksExecution, blocks_terminality: r.blocksTerminality, resolved_at: r.resolvedAt ?? null, resolution: r.resolution ?? null, board_status: r.boardStatus, lead_time_days: r.leadTimeDays ?? null })),
@@ -79,6 +81,7 @@ export function planningDataToPayload(data: PlanningData) {
     progress_entries: data.progressEntries.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, activity_id: p.activityId, recorded_date: p.recordedDate, progress: p.progress, recorded_by: p.recordedBy })),
     weekly_commitments: data.commitments.map(c => ({ id: c.id, created_at: c.createdAt, updated_at: c.updatedAt, activity_id: c.activityId, week_start: c.weekStart, week_end: c.weekEnd, responsible_id: c.responsibleId, target_progress: c.targetProgress, fulfilled: c.fulfilled ?? null, cause: c.cause ?? null, recorded_at: c.recordedAt ?? null, recorded_by: c.recordedBy ?? null })),
     baselines: data.baselines.map(b => ({ id: b.id, created_at: b.createdAt, updated_at: b.updatedAt, work_id: b.workId, name: b.name, created_by: b.createdBy, wagons: b.wagons, activities: b.activities })),
+    activity_dependencies: data.dependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId })),
     ifc_models: data.ifcModels.map(m => ({ id: m.id, created_at: m.createdAt, updated_at: m.updatedAt, work_id: m.workId, name: m.name, discipline: m.discipline })),
     ifc_model_versions: data.ifcVersions.map(v => ({ id: v.id, created_at: v.createdAt, updated_at: v.updatedAt, model_id: v.modelId, version: v.version, file_name: v.fileName, file_size: v.fileSize, storage_path: v.storagePath, uploaded_by: v.uploadedBy, storeys: v.storeys, element_count: v.elementCount })),
     link_rules: data.linkRules.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, work_id: r.workId, order_index: r.order, service_name: r.serviceName, criteria: r.criteria })),
@@ -102,5 +105,6 @@ export function diffDeletedIds(before: PlanningData, after: PlanningData) {
     pending_items: removed(before.pendingItems, after.pendingItems),
     restrictions: removed(before.restrictions, after.restrictions),
     link_rules: removed(before.linkRules, after.linkRules),
+    activity_dependencies: removed(before.dependencies, after.dependencies),
   };
 }
