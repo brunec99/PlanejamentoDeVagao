@@ -24,4 +24,6 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico)$).*)'] };
+// O `wasm` na lista é o binário do web-ifc: sem ele aqui, a sessão expirada devolveria
+// a página de login no lugar do módulo, e o visualizador falharia sem dizer por quê.
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)'] };
