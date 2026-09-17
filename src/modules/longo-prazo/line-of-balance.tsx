@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Location } from '@/domain/entities';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty } from '@/modules/planejamento/ui';
@@ -19,14 +19,25 @@ function serviceOf(name: string) {
   return name.replace(/\s*[—-]\s*parte\s+\d+\s+de\s+\d+/i, '').replace(/\s*·\s*\d+\s*%\s*$/, '').trim() || name;
 }
 const days = (from: number, to: number) => Math.round((to - from) / DAY) + 1;
-/** Ordena locais como o planejamento lê a obra: pavimento mais alto primeiro, nomes sem número depois. */
-function byFloor(a: Location, b: Location) {
-  const floor = (name: string) => (/^\s*(\d+)/.exec(name) ? Number(/^\s*(\d+)/.exec(name)![1]) : undefined);
-  const fa = floor(a.name), fb = floor(b.name);
-  if (fa !== undefined && fb !== undefined) return fb - fa;
-  if (fa !== undefined) return -1;
-  if (fb !== undefined) return 1;
-  return a.name.localeCompare(b.name, 'pt-BR', { numeric: true });
+/** Altura do local na obra, para as linhas seguirem a ordem física e não a alfabética.
+ * Os nomes vêm do Prevision: "Térreo", "5º pavto", "Cobertura", "Barrilete", "Fach - Sul". */
+function height(name: string): number {
+  const text = name.toLowerCase();
+  const floor = /(\d+)\s*º?\s*(pav|pavto|pavimento|andar)/.exec(text) ?? /^\s*(\d+)/.exec(text);
+  // Fachada, hall e equipamento atravessam a obra inteira: não têm altura, ficam no fim.
+  if (/fach|hall|equipamento/.test(text)) return 9999;
+  if (/subsolo|sub-solo/.test(text)) return -100 + (Number(/(\d+)/.exec(text)?.[1] ?? 1) * -1);
+  if (/conten|infra|funda|escava/.test(text)) return -50;
+  if (/t[ée]rreo|embasamento/.test(text)) return 0;
+  if (/mezanino|intermedi/.test(text)) return 0.5;
+  if (floor) return Number(floor[1]);
+  if (/cobertura|[áa]tico/.test(text)) return 900;
+  if (/barrilete|casa de m[áa]q|reservat/.test(text)) return 950;
+  return 9999; // fachadas, halls, equipamentos: sem altura própria, vão para o fim
+}
+function byHeight(a: Location, b: Location) {
+  const diff = height(a.name) - height(b.name);
+  return diff !== 0 ? diff : a.name.localeCompare(b.name, 'pt-BR', { numeric: true });
 }
 interface Bar { id: string; service: string; start: string; end: string; lane: number; progress: number }
 /** Empacota as barras em sub-linhas: cada uma entra na primeira faixa livre naquele período. */
@@ -44,6 +55,8 @@ export function LineOfBalance({ workId }: { workId: string }) {
   const [baselineId, setBaselineId] = useState('');
   const [zoom, setZoom] = useState<keyof typeof ZOOMS>('mes');
   const [asTable, setAsTable] = useState(false);
+  const [descending, setDescending] = useState(false);
+  const [openId, setOpenId] = useState('');
 
   const model = useMemo(() => {
     if (context.state !== 'ready') return undefined;
@@ -53,7 +66,8 @@ export function LineOfBalance({ workId }: { workId: string }) {
     // A leitura de longo prazo é serviço × local × tempo: o vagão não entra aqui.
     const wagonIds = new Set(selected.wagons.map(w => w.id));
     const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
-    const locations = data.locations.filter(l => activities.some(a => a.locationId === l.id)).sort(byFloor);
+    const ordered = data.locations.filter(l => activities.some(a => a.locationId === l.id)).sort(byHeight);
+    const locations = descending ? ordered.reverse() : ordered;
     const services = [...new Set(activities.map(a => serviceOf(a.name)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const colorOf = new Map(services.map((s, i) => [s, FILLS[i % FILLS.length]]));
     const rows = locations.map(location => ({
@@ -62,8 +76,8 @@ export function LineOfBalance({ workId }: { workId: string }) {
         id: a.id, service: serviceOf(a.name), start: a.plannedStart, end: a.plannedEnd, progress: a.progress,
       }))),
     }));
-    return { work: selected.work, activities, locations, services, colorOf, rows };
-  }, [context, workId]);
+    return { work: selected.work, activities, locations, services, colorOf, rows, byId: new Map(activities.map(a => [a.id, a])) };
+  }, [context, workId, descending]);
 
   if (context.state !== 'ready' || !model) return null;
   const { planning } = context;
@@ -77,6 +91,9 @@ export function LineOfBalance({ workId }: { workId: string }) {
         {baselines.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
       </select>
     </label>}
+    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+      <input type="checkbox" className="accent-blue-700" checked={descending} onChange={e => setDescending(e.target.checked)} />Inverter locais
+    </label>
     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Escala
       <select className="field max-w-32 py-1.5" value={zoom} onChange={e => setZoom(e.target.value as keyof typeof ZOOMS)}>
         <option value="mes">Mês</option>
@@ -161,9 +178,10 @@ export function LineOfBalance({ workId }: { workId: string }) {
                     {row.bars.map(bar => {
                       const left = x(bar.start);
                       const barWidth = Math.max(px, days(Date.parse(bar.start), Date.parse(bar.end)) * px);
-                      return <div key={bar.id} title={`${bar.service} · ${row.location.name} · ${formatDate(bar.start)} a ${formatDate(bar.end)} · ${Math.round(bar.progress)}% executado`}
+                      return <button key={bar.id} type="button" aria-haspopup="dialog" onClick={() => setOpenId(bar.id)}
+                        title={`${bar.service} · ${row.location.name} · ${formatDate(bar.start)} a ${formatDate(bar.end)} · ${Math.round(bar.progress)}% executado`}
                         style={{ left, width: barWidth, top: bar.lane * (LANE + LANE_GAP) + ROW_PAD / 2, height: LANE, backgroundColor: model.colorOf.get(bar.service) }}
-                        className="absolute overflow-hidden whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-[24px] text-white">{bar.service}</div>;
+                        className="absolute overflow-hidden whitespace-nowrap rounded px-1.5 text-left text-[11px] font-semibold leading-[24px] text-white hover:brightness-110">{bar.service}</button>;
                     })}
                   </div>
                 </div>;
@@ -172,6 +190,56 @@ export function LineOfBalance({ workId }: { workId: string }) {
           </div>
         </div>}
 
-    <p className="border-t border-slate-100 px-5 py-2.5 text-xs text-slate-400">Cada barra é uma atividade, colorida por serviço e rotulada com o nome dele — a cor agrupa, o rótulo identifica. A linha tracejada âmbar é hoje{baseline && baselineEnd ? '; a pontilhada cinza é o fim da linha de base selecionada' : ''}.</p>
+    <p className="border-t border-slate-100 px-5 py-2.5 text-xs text-slate-400">Cada barra é uma atividade, colorida por serviço e rotulada com o nome dele — a cor agrupa, o rótulo identifica. Clique na barra para ver as datas. A linha tracejada âmbar é hoje{baseline && baselineEnd ? '; a pontilhada cinza é o fim da linha de base selecionada' : ''}.</p>
+
+    {openId && model.byId.has(openId) && <ActivityDates activity={model.byId.get(openId)!}
+      place={model.locations.find(l => l.id === model.byId.get(openId)!.locationId)?.name ?? '—'}
+      service={serviceOf(model.byId.get(openId)!.name)}
+      baseline={baseline && { name: baseline.name, entry: baseline.activities.find(a => a.id === openId) }}
+      hasBaselines={baselines.length > 0} onClose={() => setOpenId('')} />}
   </section>;
+}
+
+function ActivityDates({ activity, place, service, baseline, hasBaselines, onClose }: {
+  activity: { plannedStart: string; plannedEnd: string; progress: number; name: string };
+  place: string; service: string;
+  baseline?: { name: string; entry?: { plannedStart: string; plannedEnd: string } };
+  hasBaselines: boolean; onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { dialog.current?.showModal(); closeButton.current?.focus(); }, []);
+  const duration = days(Date.parse(activity.plannedStart), Date.parse(activity.plannedEnd));
+  const entry = baseline?.entry;
+  const slip = entry ? days(Date.parse(entry.plannedEnd), Date.parse(activity.plannedEnd)) - 1 : undefined;
+  const item = (label: string, content: React.ReactNode) => <div><dt className="eyebrow">{label}</dt><dd className="mt-1 font-semibold tabular-nums text-slate-900">{content}</dd></div>;
+  return <dialog ref={dialog} onClose={onClose} aria-labelledby="atividade-datas" className="m-auto w-[min(34rem,92vw)] rounded-2xl border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-900/55">
+    <div className="p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="eyebrow">{place}</p>
+          <h3 id="atividade-datas" className="mt-1 text-base font-bold text-slate-900">{service}</h3>
+          {activity.name !== service && <p className="mt-0.5 text-xs text-slate-400">{activity.name}</p>}
+        </div>
+        <button ref={closeButton} type="button" className="button-ghost" onClick={() => dialog.current?.close()}>Fechar</button>
+      </div>
+      <dl className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+        {item('Início', formatDate(activity.plannedStart))}
+        {item('Término', formatDate(activity.plannedEnd))}
+        {item('Duração', `${duration} ${duration === 1 ? 'dia' : 'dias'}`)}
+        {item('Executado', `${Math.round(activity.progress)}%`)}
+      </dl>
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        {entry
+          ? <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+              {item('Início da linha de base', formatDate(entry.plannedStart))}
+              {item('Término da linha de base', formatDate(entry.plannedEnd))}
+              {item('Desvio no término', slip === 0 ? 'No prazo da base' : `${slip! > 0 ? '+' : ''}${slip} ${Math.abs(slip!) === 1 ? 'dia' : 'dias'}`)}
+            </dl>
+          : <p className="text-sm text-slate-500">{baseline
+              ? <>Esta atividade não existia quando <strong>{baseline.name}</strong> foi salva, então não há datas de base para comparar.</>
+              : hasBaselines ? 'Selecione uma linha de base acima para ver as datas de base desta atividade.' : 'Nenhuma linha de base salva ainda: defina uma para comparar as datas.'}</p>}
+      </div>
+    </div>
+  </dialog>;
 }
