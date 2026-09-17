@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createMockData, DEMO_DATE } from '../src/mocks/planning';
 import { planSequenceRegeneration } from '../src/application/use-cases/regenerate-sequence';
 import { diffDeletedIds } from '../src/infrastructure/repositories/supabase/mappers';
-import type { ImportedActivity } from '../src/application/use-cases/commands';
+import { applyCommand, type ImportedActivity } from '../src/application/use-cases/commands';
 
 const row = (externalId: string, start: string, end: string, progress = 0): ImportedActivity =>
   ({ externalId, name: `Atividade ${externalId}`, location: 'Térreo', plannedStart: start, plannedEnd: end, progress });
@@ -78,4 +78,26 @@ test('diffDeletedIds encontra só os ids que desapareceram entre dois snapshots'
   assert.deepEqual(diff.wagons, ['v5']);
   assert.ok(diff.activities.includes('a1'));
   assert.ok(!diff.activities.includes('a2'));
+});
+
+test('a regeneração tira do rascunho os filhos da atividade removida', () => {
+  const d = createMockData();
+  // v5 é a cauda não liberada de seq-2; a5/b5 são suas atividades. Filhos delas apontam para
+  // atividades que vão desaparecer: se ficarem no rascunho, o upsert viola a chave estrangeira.
+  const stamp = { createdAt: '2026-09-08T12:00:00Z', updatedAt: '2026-09-08T12:00:00Z' };
+  d.progressEntries.push({ id: 'pe-1', ...stamp, activityId: 'a5', recordedDate: '2026-09-08', progress: 10, recordedBy: 'user-1' });
+  d.commitments.push({ id: 'wc-1', ...stamp, activityId: 'b5', weekStart: '2026-09-07', weekEnd: '2026-09-13', responsibleId: 'user-1', targetProgress: 30 });
+  d.dependencies.push({ id: 'dep-1', ...stamp, predecessorId: 'a4', successorId: 'a5' });
+  d.dependencies.push({ id: 'dep-2', ...stamp, predecessorId: 'a1', successorId: 'a2' });
+
+  const before = structuredClone(d);
+  applyCommand(d, { type: 'regenerate_sequence', sequenceId: 'seq-2', projectId: '99999', rows: [row('a', '2026-09-16', '2026-09-18')], responsibleId: 'user-1' },
+    { actorId: 'user-1', today: DEMO_DATE, now: '2026-09-08T12:00:00Z', newId: (() => { let n = 0; return () => `novo-${++n}`; })() });
+
+  assert.deepEqual(d.progressEntries.map(p => p.id), []);
+  assert.deepEqual(d.commitments.map(c => c.id), []);
+  assert.deepEqual(d.dependencies.map(x => x.id), ['dep-2'], 'dependência fora da cauda continua');
+  const deletes = diffDeletedIds(before, d);
+  assert.deepEqual(deletes.activity_dependencies, ['dep-1']);
+  assert.ok(deletes.activities.includes('a5'));
 });

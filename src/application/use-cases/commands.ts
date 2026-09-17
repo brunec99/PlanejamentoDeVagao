@@ -440,6 +440,12 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       data.criteria = data.criteria.filter(c => !removedCriteria.has(c.id));
       data.pendingItems = data.pendingItems.filter(p => !removedPending.has(p.id));
       data.restrictions = data.restrictions.filter(r => !removedRestrictions.has(r.id));
+      // Filhos da atividade removida precisam sair do rascunho: o payload trafega inteiro e
+      // reinseriria linhas apontando para atividade inexistente, violando a chave estrangeira
+      // e derrubando a transação toda.
+      data.progressEntries = data.progressEntries.filter(p => !removedActivities.has(p.activityId));
+      data.commitments = data.commitments.filter(c => !removedActivities.has(c.activityId));
+      data.dependencies = data.dependencies.filter(d => !removedActivities.has(d.predecessorId) && !removedActivities.has(d.successorId));
       if (!work.previsionProjectId) { work.previsionProjectId = command.projectId; touch(work); }
       let predecessorId = plan.frozenWagonId; let number = plan.startNumber;
       for (const window of plan.windows) {
