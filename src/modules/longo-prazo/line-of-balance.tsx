@@ -1,170 +1,186 @@
 'use client';
 import { useMemo, useState } from 'react';
+import type { Location } from '@/domain/entities';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, wagonLabel } from '@/shared/format';
 
-// Paleta categórica validada para superfície branca (ordem fixa, nunca ciclada).
-const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
-const OTHER = '#52514e';
-const MAX_SERIES = SERIES.length;
-// Uma obra real chega a centenas de locais; acima disso o gráfico deixa de ser legível
-// antes de deixar de caber, então a leitura é por sequência e com teto de linhas.
-const MAX_ROWS = 40;
-const LEFT = 168, RIGHT = 132, TOP = 16, ROW = 26, AXIS = 34, WIDTH = 1040;
+// Cores de barra com texto branco legível (todas acima de 4.5:1). Repetem quando há mais
+// serviços que tons: a identidade de cada barra vem do rótulo escrito nela, não da cor.
+const FILLS = ['#1d4ed8', '#b45309', '#0f766e', '#7e22ce', '#be123c', '#15803d', '#0369a1', '#4d7c0f', '#a21caf', '#9f1239'];
+const LEFT = 184, LANE = 24, LANE_GAP = 3, ROW_PAD = 8;
+const ZOOMS = { semana: 9, mes: 3.2 } as const;
+const DAY = 86400000;
 
-interface Segment { service: string; locationId: string; start: string; end: string; label: string }
+/** O importador anexa " — parte 1 de 2 · 33%" ao fatiar a atividade entre vagões. O serviço
+ * é o nome sem esse sufixo: sem isso, a mesma frente apareceria como vários serviços. */
+function serviceOf(name: string) {
+  return name.replace(/\s*[—-]\s*parte\s+\d+\s+de\s+\d+/i, '').replace(/\s*·\s*\d+\s*%\s*$/, '').trim() || name;
+}
+const days = (from: number, to: number) => Math.round((to - from) / DAY) + 1;
+/** Ordena locais como o planejamento lê a obra: pavimento mais alto primeiro, nomes sem número depois. */
+function byFloor(a: Location, b: Location) {
+  const floor = (name: string) => (/^\s*(\d+)/.exec(name) ? Number(/^\s*(\d+)/.exec(name)![1]) : undefined);
+  const fa = floor(a.name), fb = floor(b.name);
+  if (fa !== undefined && fb !== undefined) return fb - fa;
+  if (fa !== undefined) return -1;
+  if (fb !== undefined) return 1;
+  return a.name.localeCompare(b.name, 'pt-BR', { numeric: true });
+}
+interface Bar { id: string; service: string; start: string; end: string; lane: number; progress: number; wagon: string }
+/** Empacota as barras em sub-linhas: cada uma entra na primeira faixa livre naquele período. */
+function pack(bars: Omit<Bar, 'lane'>[]): Bar[] {
+  const lanes: string[] = [];
+  return bars.slice().sort((x, y) => x.start.localeCompare(y.start) || x.service.localeCompare(y.service)).map(bar => {
+    let lane = lanes.findIndex(end => end < bar.start);
+    if (lane === -1) { lane = lanes.length; lanes.push(bar.end); } else lanes[lane] = bar.end;
+    return { ...bar, lane };
+  });
+}
 
-function useChartData(workId: string, sequenceId: string) {
+export function LineOfBalance({ workId }: { workId: string }) {
   const context = usePlanning();
-  return useMemo(() => {
+  const [sequenceId, setSequenceId] = useState('');
+  const [baselineId, setBaselineId] = useState('');
+  const [zoom, setZoom] = useState<keyof typeof ZOOMS>('mes');
+  const [asTable, setAsTable] = useState(false);
+
+  const model = useMemo(() => {
     if (context.state !== 'ready') return undefined;
     const selected = selectWorkPlanning(context.planning, workId);
     if (!selected) return undefined;
     const { data } = context.planning;
-    const sequences = selected.sequences;
-    const wagons = selected.wagons.filter(w => w.sequenceId === (sequenceId || sequences[0]?.id));
+    const wagons = sequenceId ? selected.wagons.filter(w => w.sequenceId === sequenceId) : selected.wagons;
     const wagonById = new Map(wagons.map(w => [w.id, w]));
     const activities = data.activities.filter(a => wagonById.has(a.wagonId));
-    if (!activities.length) return { empty: true as const, sequences };
-    const byService = new Map<string, number>();
-    for (const a of activities) byService.set(a.name, (byService.get(a.name) ?? 0) + 1);
-    const ranked = [...byService.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
-    const named = new Set(ranked.slice(0, MAX_SERIES));
-    const serviceOf = (name: string) => (named.has(name) ? name : 'Outros serviços');
-    const services = ranked.length > MAX_SERIES ? [...named, 'Outros serviços'] : [...named];
-    const used = data.locations
-      .filter(l => activities.some(a => a.locationId === l.id))
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
-    const locations = used.slice(0, MAX_ROWS);
-    const locationById = new Map(locations.map(l => [l.id, l]));
-    const shown = activities.filter(a => locationById.has(a.locationId));
-    const segments: Segment[] = shown.map(a => ({
-      service: serviceOf(a.name), locationId: a.locationId, start: a.plannedStart, end: a.plannedEnd,
-      label: `${a.name} · ${locationById.get(a.locationId)?.name ?? ''} · ${wagonLabel(wagonById.get(a.wagonId)?.number ?? 0)} · ${formatDate(a.plannedStart)} a ${formatDate(a.plannedEnd)} · ${Math.round(a.progress)}% executado`,
+    const locations = data.locations.filter(l => activities.some(a => a.locationId === l.id)).sort(byFloor);
+    const services = [...new Set(activities.map(a => serviceOf(a.name)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const colorOf = new Map(services.map((s, i) => [s, FILLS[i % FILLS.length]]));
+    const rows = locations.map(location => ({
+      location,
+      bars: pack(activities.filter(a => a.locationId === location.id).map(a => ({
+        id: a.id, service: serviceOf(a.name), start: a.plannedStart, end: a.plannedEnd, progress: a.progress,
+        wagon: wagonLabel(wagonById.get(a.wagonId)!.number),
+      }))),
     }));
-    return { empty: false as const, sequences, services, locations, allLocations: used, hiddenRows: used.length - locations.length, segments, activities };
+    return { work: selected.work, sequences: selected.sequences, activities, locations, services, colorOf, rows };
   }, [context, workId, sequenceId]);
-}
 
-function monthTicks(from: number, to: number) {
-  const ticks: { time: number; label: string }[] = [];
-  const cursor = new Date(from);
-  cursor.setUTCDate(1);
-  while (cursor.getTime() <= to) {
-    if (cursor.getTime() >= from) ticks.push({ time: cursor.getTime(), label: new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(cursor) });
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-  }
-  return ticks;
-}
+  if (context.state !== 'ready' || !model) return null;
+  const { planning } = context;
+  const baselines = planning.data.baselines.filter(b => b.workId === workId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const baseline = baselines.find(b => b.id === baselineId);
 
-export function LineOfBalance({ workId }: { workId: string }) {
-  const [sequenceId, setSequenceId] = useState('');
-  const chart = useChartData(workId, sequenceId);
-  const context = usePlanning();
-  const [baselineId, setBaselineId] = useState('');
-  const [asTable, setAsTable] = useState(false);
-  const [hover, setHover] = useState<{ x: number; y: number; text: string } | undefined>();
-  if (context.state !== 'ready' || !chart) return null;
-  const sequencePicker = chart.sequences.length > 1 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Sequência
-    <select className="field max-w-52 py-1.5" value={sequenceId || chart.sequences[0].id} onChange={e => setSequenceId(e.target.value)}>
-      {chart.sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-    </select>
-  </label>;
-  if (chart.empty) return <section data-tour="longo-lob" className="panel mt-6 p-5">
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>{sequencePicker}</div>
-    <Empty>Nenhuma atividade planejada nesta sequência.</Empty>
+  const controls = <div className="flex flex-wrap items-center gap-2">
+    {model.sequences.length > 1 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Sequência
+      <select className="field max-w-48 py-1.5" value={sequenceId} onChange={e => setSequenceId(e.target.value)}>
+        <option value="">Todas</option>
+        {model.sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+    </label>}
+    {baselines.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Linha de base
+      <select className="field max-w-44 py-1.5" value={baselineId} onChange={e => setBaselineId(e.target.value)}>
+        <option value="">Sem comparação</option>
+        {baselines.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+    </label>}
+    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Escala
+      <select className="field max-w-32 py-1.5" value={zoom} onChange={e => setZoom(e.target.value as keyof typeof ZOOMS)}>
+        <option value="mes">Mês</option>
+        <option value="semana">Semana</option>
+      </select>
+    </label>
+    <button type="button" className="button-ghost" onClick={() => setAsTable(!asTable)}>{asTable ? 'Ver gráfico' : 'Ver tabela'}</button>
+  </div>;
+
+  if (!model.activities.length) return <section data-tour="longo-lob" className="panel mt-6 p-5">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>{controls}</div>
+    <Empty>Nenhuma atividade planejada nesta seleção.</Empty>
   </section>;
 
-  const { services, locations, segments } = chart;
-  const baselines = context.planning.data.baselines.filter(b => b.workId === workId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const baseline = baselines.find(b => b.id === baselineId);
-  const baselineSegments: Segment[] = baseline
-    ? baseline.activities.filter(a => locations.some(l => l.id === a.locationId)).map(a => ({ service: services.includes(a.name) ? a.name : 'Outros serviços', locationId: a.locationId, start: a.plannedStart, end: a.plannedEnd, label: '' }))
-    : [];
-
-  const dates = [...segments, ...baselineSegments].flatMap(s => [Date.parse(s.start), Date.parse(s.end)]);
-  const t0 = Math.min(...dates), t1 = Math.max(...dates) || Math.min(...dates) + 86400000;
-  const plot = WIDTH - LEFT - RIGHT;
-  const height = TOP + locations.length * ROW + AXIS;
-  const x = (date: string) => LEFT + ((Date.parse(date) - t0) / Math.max(1, t1 - t0)) * plot;
-  const y = (locationId: string) => TOP + locations.findIndex(l => l.id === locationId) * ROW + ROW / 2;
-  const color = (service: string) => (service === 'Outros serviços' ? OTHER : SERIES[services.indexOf(service) % SERIES.length]);
-  const pathOf = (list: Segment[], service: string) => {
-    const runs = list.filter(s => s.service === service).sort((a, b) => a.start.localeCompare(b.start) || y(a.locationId) - y(b.locationId));
-    return runs.map((s, i) => `${i === 0 ? 'M' : 'L'}${x(s.start).toFixed(1)} ${y(s.locationId)} L${x(s.end).toFixed(1)} ${y(s.locationId)}`).join(' ');
-  };
-  const today = x(context.planning.today);
+  const px = ZOOMS[zoom];
+  const t0 = Date.parse(model.activities.reduce((min, a) => (a.plannedStart < min ? a.plannedStart : min), model.activities[0].plannedStart));
+  const currentEnd = model.activities.reduce((max, a) => (a.plannedEnd > max ? a.plannedEnd : max), model.activities[0].plannedEnd);
+  const baselineEnd = baseline?.activities.reduce((max, a) => (a.plannedEnd > max ? a.plannedEnd : max), baseline.activities[0]?.plannedEnd ?? '');
+  const t1 = Math.max(Date.parse(currentEnd), baselineEnd ? Date.parse(baselineEnd) : 0);
+  const total = days(t0, t1);
+  const width = LEFT + total * px;
+  const x = (date: string) => (Date.parse(date) - t0) / DAY * px;
+  const months: { label: string; from: number; span: number }[] = [];
+  const weeks: { label: string; from: number; span: number }[] = [];
+  for (let i = 0; i < total; i++) {
+    const day = new Date(t0 + i * DAY);
+    const month = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(day);
+    const last = months.at(-1);
+    if (last?.label === month) last.span++; else months.push({ label: month, from: i, span: 1 });
+    const weekday = day.getUTCDay();
+    const lastWeek = weeks.at(-1);
+    if (lastWeek && weekday !== 1) lastWeek.span++;
+    else weeks.push({ label: String(day.getUTCDate()).padStart(2, '0'), from: i, span: 1 });
+  }
 
   return <section data-tour="longo-lob" className="panel mt-6 overflow-hidden">
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
-      <h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        {sequencePicker}
-        {baselines.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Comparar com
-          <select className="field max-w-52 py-1.5" value={baselineId} onChange={e => setBaselineId(e.target.value)}>
-            <option value="">Sem linha de base</option>
-            {baselines.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        </label>}
-        <button type="button" className="button-ghost" onClick={() => setAsTable(!asTable)}>{asTable ? 'Ver gráfico' : 'Ver tabela'}</button>
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
+      <div>
+        <h2 className="text-sm font-bold text-slate-800">Linha de Balanço</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Fim atual: <strong className="text-slate-700">{formatDate(currentEnd)}</strong>
+          {baseline && baselineEnd && <> · {formatDate(baselineEnd)} — fim de <strong className="text-slate-700">{baseline.name}</strong></>}
+          {' · '}{model.services.length} serviços em {model.locations.length} locais · {model.activities.length} atividades
+        </p>
       </div>
+      {controls}
     </div>
 
     {asTable
       ? <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Linha de Balanço em tabela" tabIndex={0}>
-          <table className="data-table min-w-[720px]">
-            <thead><tr>{['Serviço', 'Local', 'Início previsto', 'Término previsto', 'Executado'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
-            <tbody>{chart.activities.slice().sort((a, b) => a.plannedStart.localeCompare(b.plannedStart)).map(a => <tr key={a.id}>
-              <th scope="row">{a.name}</th>
-              <td>{chart.allLocations.find(l => l.id === a.locationId)?.name ?? '—'}</td>
-              <td className="whitespace-nowrap tabular-nums">{formatDate(a.plannedStart)}</td>
-              <td className="whitespace-nowrap tabular-nums">{formatDate(a.plannedEnd)}</td>
-              <td className="tabular-nums">{Math.round(a.progress)}%</td>
-            </tr>)}</tbody>
+          <table className="data-table min-w-[820px]">
+            <thead><tr>{['Serviço', 'Local', 'Vagão', 'Início previsto', 'Término previsto', 'Executado'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
+            <tbody>{model.rows.flatMap(row => row.bars.map(bar => <tr key={bar.id}>
+              <th scope="row">{bar.service}</th>
+              <td>{row.location.name}</td>
+              <td className="whitespace-nowrap">{bar.wagon}</td>
+              <td className="whitespace-nowrap tabular-nums">{formatDate(bar.start)}</td>
+              <td className="whitespace-nowrap tabular-nums">{formatDate(bar.end)}</td>
+              <td className="tabular-nums">{Math.round(bar.progress)}%</td>
+            </tr>))}</tbody>
           </table>
         </div>
-      : <div className="relative">
-          <div className="overflow-x-auto custom-scrollbar p-5" role="region" aria-label="Linha de Balanço: serviços por local ao longo do tempo" tabIndex={0}>
-            <svg viewBox={`0 0 ${WIDTH} ${height}`} width={WIDTH} height={height} className="max-w-none" role="img" aria-label={`Linha de Balanço com ${services.length} serviços em ${locations.length} locais`}>
-              {monthTicks(t0, t1).map(tick => <g key={tick.time}>
-                <line x1={LEFT + ((tick.time - t0) / Math.max(1, t1 - t0)) * plot} x2={LEFT + ((tick.time - t0) / Math.max(1, t1 - t0)) * plot} y1={TOP} y2={height - AXIS} stroke="#e2e8f0" strokeWidth={1} />
-                <text x={LEFT + ((tick.time - t0) / Math.max(1, t1 - t0)) * plot} y={height - AXIS + 18} fontSize={11} fill="#94a3b8" textAnchor="middle">{tick.label}</text>
-              </g>)}
-              {locations.map((location, i) => <g key={location.id}>
-                <line x1={LEFT} x2={WIDTH - RIGHT} y1={TOP + i * ROW + ROW} y2={TOP + i * ROW + ROW} stroke="#f1f5f9" strokeWidth={1} />
-                <text x={LEFT - 12} y={TOP + i * ROW + ROW / 2 + 4} fontSize={12} fill="#475569" textAnchor="end">{location.name.length > 26 ? `${location.name.slice(0, 25)}…` : location.name}</text>
-              </g>)}
+      : <div className="overflow-auto custom-scrollbar max-h-[75vh]" role="region" aria-label="Linha de Balanço: serviços por local ao longo do tempo" tabIndex={0}>
+          <div style={{ width }} className="relative">
+            <div className="sticky top-0 z-20 flex border-b border-slate-200 bg-white">
+              <div style={{ width: LEFT }} className="sticky left-0 z-30 shrink-0 border-r border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Local</div>
+              <div className="relative shrink-0" style={{ width: total * px, height: 40 }}>
+                {months.map(month => <div key={`${month.label}-${month.from}`} style={{ left: month.from * px, width: month.span * px }}
+                  className="absolute top-0 h-5 overflow-hidden whitespace-nowrap border-r border-slate-200 px-1.5 text-[11px] font-semibold text-slate-600">{month.label}</div>)}
+                {weeks.map(week => <div key={`${week.label}-${week.from}`} style={{ left: week.from * px, width: week.span * px }}
+                  className="absolute top-5 h-5 overflow-hidden whitespace-nowrap border-r border-slate-100 px-1 text-[10px] tabular-nums text-slate-400">{px >= 6 ? week.label : ''}</div>)}
+              </div>
+            </div>
 
-              {baseline && services.map(service => <path key={`b-${service}`} d={pathOf(baselineSegments, service)} fill="none" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" />)}
-
-              {services.map(service => <path key={service} d={pathOf(segments, service)} fill="none" stroke={color(service)} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />)}
-
-              {segments.map((segment, i) => <g key={`${segment.service}-${i}`} onMouseEnter={() => setHover({ x: x(segment.start), y: y(segment.locationId), text: segment.label })} onMouseLeave={() => setHover(undefined)}>
-                <title>{segment.label}</title>
-                <line x1={x(segment.start)} x2={x(segment.end)} y1={y(segment.locationId)} y2={y(segment.locationId)} stroke={color(segment.service)} strokeWidth={9} strokeLinecap="round" opacity={0} />
-                <circle cx={x(segment.start)} cy={y(segment.locationId)} r={4} fill="#ffffff" stroke={color(segment.service)} strokeWidth={2} />
-              </g>)}
-
-              {services.length <= 4 && services.map(service => {
-                const last = segments.filter(s => s.service === service).sort((a, b) => a.end.localeCompare(b.end)).at(-1);
-                return last ? <text key={`l-${service}`} x={Math.min(x(last.end) + 10, WIDTH - RIGHT + 8)} y={y(last.locationId) + 4} fontSize={11} fill="#475569">{service.length > 20 ? `${service.slice(0, 19)}…` : service}</text> : null;
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 z-10" style={{ left: LEFT + x(planning.today), borderLeft: '2px dashed #d97706' }} aria-hidden="true" />
+              {baseline && baselineEnd && <div className="pointer-events-none absolute inset-y-0 z-10" style={{ left: LEFT + x(baselineEnd), borderLeft: '2px dotted #64748b' }} aria-hidden="true" />}
+              {model.rows.map(row => {
+                const lanes = Math.max(1, ...row.bars.map(b => b.lane + 1));
+                return <div key={row.location.id} className="flex border-b border-slate-100">
+                  <div style={{ width: LEFT }} className="sticky left-0 z-20 shrink-0 border-r border-slate-200 bg-white px-3 py-2 text-xs font-semibold leading-snug text-slate-700">{row.location.name}</div>
+                  <div className="relative shrink-0" style={{ width: total * px, height: lanes * (LANE + LANE_GAP) + ROW_PAD }}>
+                    {row.bars.map(bar => {
+                      const left = x(bar.start);
+                      const barWidth = Math.max(px, days(Date.parse(bar.start), Date.parse(bar.end)) * px);
+                      return <div key={bar.id} title={`${bar.service} · ${row.location.name} · ${bar.wagon} · ${formatDate(bar.start)} a ${formatDate(bar.end)} · ${Math.round(bar.progress)}% executado`}
+                        style={{ left, width: barWidth, top: bar.lane * (LANE + LANE_GAP) + ROW_PAD / 2, height: LANE, backgroundColor: model.colorOf.get(bar.service) }}
+                        className="absolute overflow-hidden whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-[24px] text-white">{bar.service}</div>;
+                    })}
+                  </div>
+                </div>;
               })}
-
-              <line x1={today} x2={today} y1={TOP} y2={height - AXIS} stroke="#d97706" strokeWidth={1.5} strokeDasharray="4 3" />
-              <text x={today} y={TOP - 4} fontSize={10} fill="#b45309" textAnchor="middle">hoje</text>
-            </svg>
+            </div>
           </div>
-          {hover && <p className="pointer-events-none absolute left-5 top-2 max-w-[90%] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm">{hover.text}</p>}
         </div>}
 
-    <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 px-5 py-3">
-      {services.map(service => <span key={service} className="flex items-center gap-2 text-xs font-medium text-slate-600">
-        <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color(service) }} />{service}
-      </span>)}
-      {baseline && <span className="flex items-center gap-2 text-xs font-medium text-slate-600"><span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-slate-300" />{baseline.name}</span>}
-      {chart.hiddenRows > 0 && <span className="text-xs text-slate-400">+{chart.hiddenRows} {chart.hiddenRows === 1 ? 'local fora do gráfico' : 'locais fora do gráfico'} · a visão de tabela lista todos</span>}
-    </div>
+    <p className="border-t border-slate-100 px-5 py-2.5 text-xs text-slate-400">Cada barra é uma atividade, colorida por serviço e rotulada com o nome dele — a cor agrupa, o rótulo identifica. A linha tracejada âmbar é hoje{baseline && baselineEnd ? '; a pontilhada cinza é o fim da linha de base selecionada' : ''}.</p>
   </section>;
 }
