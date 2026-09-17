@@ -1,8 +1,6 @@
 node_modules/
 .next/
 out/
-# Copiado de node_modules/web-ifc pelo script copy-wasm; sempre casa com a versão instalada.
-/public/wasm/
 *.tsbuildinfo
 .env*
 !.env.example

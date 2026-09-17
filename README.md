@@ -153,7 +153,7 @@ As entidades novas do domínio são `Team` (capacidade em atividades simultânea
 
 O snapshot pagina as tabelas com ordenação explícita por `id`. Sem isso a paginação não é determinística: cada comando regrava a tabela inteira e muda a ordem física das linhas, então uma escrita entre duas páginas faria o snapshot repetir ou perder registros — o que passou a importar quando as obras reais cruzaram as mil atividades.
 
-`web-ifc` roda em WASM no navegador. O script `copy-wasm` (ganchos `predev` e `prebuild`) copia `web-ifc.wasm` de `node_modules` para `public/wasm/`, que fica fora do Git para o binário sempre casar com a versão instalada.
+`web-ifc` roda em WASM no navegador, a partir de `public/wasm/web-ifc.wasm`. Esse binário é **versionado no repositório** de propósito: depender de um passo de build para copiá-lo já falhou em produção sem aviso — o arquivo não aparecia no deploy e o visualizador abria sem conseguir carregar modelo. O script `copy-wasm` (ganchos `predev` e `prebuild`) continua existindo para re-sincronizar o arquivo depois de atualizar a dependência; rode-o e commite o resultado ao subir a versão do `web-ifc`.
 
 Persistência em PostgreSQL/Supabase e autenticação real já estão implementadas: comandos rodam no servidor autenticados pela sessão, e a função `commit_planning` aplica cada transação de forma atômica com controle de concorrência otimista (versão em `planning_meta`). Hospedagem na Vercel e o relógio de produção (hoje fixo em 08/09/2026) permanecem como próximos passos.
 
