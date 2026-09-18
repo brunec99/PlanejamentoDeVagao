@@ -1,4 +1,4 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run copy-wasm && next build"
+  "buildCommand": "npm run copy-assets && next build"
 }
