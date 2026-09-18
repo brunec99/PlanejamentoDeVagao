@@ -99,7 +99,7 @@ test('a semana é montada do zero: a linha repete e dispensa atividade',()=>{
   assert.throws(()=>run(d,linha({name:'  '})),/Atividade/);
   assert.throws(()=>run(d,linha({activityId:'inexistente'})),/mesma obra/);
 });
-test('cumprimento exige causa quando não cumprido e é apurado uma só vez',()=>{
+test('cumprimento exige causa da lista e o apontamento pode ser corrigido',()=>{
   const d=createMockData();
   const commitmentId=run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
   assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:false}),/Causa/);
@@ -107,7 +107,20 @@ test('cumprimento exige causa quando não cumprido e é apurado uma só vez',()=
   run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Falta de Material',justification:'Fornecedor atrasou a entrega'});
   const saved=d.commitments.find(c=>c.id===commitmentId)!;
   assert.equal(saved.fulfilled,false);assert.equal(saved.cause,'Falta de Material');assert.equal(saved.justification,'Fornecedor atrasou a entrega');assert.equal(saved.recordedBy,'user-1');
-  assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:true}),/já foi registrado/);
+  // A planilha é editável: trocar o Status é corrigir a célula, não excluir a linha.
+  run(d,{type:'record_fulfillment',commitmentId,fulfilled:true});
+  const corrigido=d.commitments.find(c=>c.id===commitmentId)!;
+  assert.equal(corrigido.fulfilled,true);assert.equal(corrigido.cause,undefined);
+});
+test('a linha da semana é editável e o período segue os dias marcados',()=>{
+  const d=createMockData();
+  const commitmentId=run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',weekStart:'2026-09-07',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-09',weekdays:[2,3]});
+  run(d,{type:'update_commitment',commitmentId,name:'Diário de obra e medição',teamId:'equipe-1',startDate:'2026-09-07',endDate:'2026-09-11',weekdays:[1,2,3,4,5]});
+  const saved=d.commitments.find(c=>c.id===commitmentId)!;
+  assert.equal(saved.name,'Diário de obra e medição');assert.equal(saved.teamId,'equipe-1');
+  assert.deepEqual(saved.weekdays,[1,2,3,4,5]);assert.equal(saved.startDate,'2026-09-07');assert.equal(saved.endDate,'2026-09-11');
+  assert.throws(()=>run(d,{type:'update_commitment',commitmentId,name:'x',teamId:'equipe-1',startDate:'2026-09-07',endDate:'2026-09-11',weekdays:[]}),/ao menos um dia/);
+  assert.throws(()=>run(d,{type:'update_commitment',commitmentId,name:'x',teamId:'equipe-1',startDate:'2026-09-06',endDate:'2026-09-11',weekdays:[1]}),/dentro da semana/);
 });
 test('ppc conta compromissos cumpridos sobre planejados, não a média de progresso',()=>{
   const result=ppc([commitment('x1',true),commitment('x2',false),commitment('x3')]);

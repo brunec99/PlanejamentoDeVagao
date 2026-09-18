@@ -28,6 +28,7 @@ export type Command =
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
   | { type: 'create_commitment'; workId: string; name: string; activityId?: string | null; weekStart: string; responsibleId: string; teamId: string; startDate: string; endDate: string; weekdays: number[] }
+  | { type: 'update_commitment'; commitmentId: string; name: string; teamId: string; startDate: string; endDate: string; weekdays: number[] }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
@@ -336,10 +337,23 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         responsibleId: command.responsibleId, teamId: team.id, startDate: command.startDate, endDate: command.endDate, weekdays };
       data.commitments.push(commitment); entityId = commitment.id; break;
     }
+    case 'update_commitment': {
+      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      checkWork(commitment.workId);
+      const team = data.teams.find(t => t.id === command.teamId && t.workId === commitment.workId);
+      if (!team) throw new Error('Selecione uma equipe cadastrada nesta obra.');
+      validatePeriod(command.startDate, command.endDate);
+      if (command.startDate < commitment.weekStart || command.endDate > commitment.weekEnd) throw new Error('O período do compromisso deve ficar dentro da semana.');
+      const weekdays = [...new Set(command.weekdays ?? [])].sort((a, b) => a - b);
+      if (!weekdays.length) throw new Error('Marque ao menos um dia da semana.');
+      if (weekdays.some(day => !Number.isInteger(day) || day < 1 || day > 6)) throw new Error('Os dias da semana vão de segunda (1) a sábado (6).');
+      Object.assign(commitment, { name: requireText(command.name, 'Atividade'), teamId: team.id, startDate: command.startDate, endDate: command.endDate, weekdays });
+      touch(commitment); entityId = commitment.id; break;
+    }
     case 'record_fulfillment': {
       const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
-      if (typeof commitment.fulfilled === 'boolean') throw new Error('Cumprimento deste compromisso já foi registrado.');
+      // A planilha é editável: corrigir o apontamento é trocar a célula, não excluir a linha.
       let cause: NonFulfillmentCause | undefined;
       if (!command.fulfilled) {
         cause = NON_FULFILLMENT_CAUSES.find(option => option === requireText(command.cause ?? '', 'Causa do não cumprimento'));
