@@ -30,6 +30,8 @@
   .page-title { @apply mt-1 text-2xl font-bold tracking-tight text-slate-900; }
   .text-link { @apply font-semibold text-blue-700 hover:text-blue-900 hover:underline underline-offset-4; }
   .field { @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100 focus-visible:outline-none; }
+  /* Célula de planilha: a grade do plano mensal é editada direto, sem formulário em volta. */
+  .cell { @apply w-full min-w-0 border-0 bg-transparent px-1 py-0.5 text-xs text-slate-800 outline-none focus:rounded focus:bg-white focus:ring-2 focus:ring-blue-300 disabled:text-slate-500; }
   .button { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-wait disabled:opacity-50; }
   .button-ghost { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900; }
   .command-box { @apply rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3; }
