@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Ruler } from 'lucide-react';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
+import { groupOf } from './groups';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import type { QuantityKind } from './extract-ifc';
@@ -151,8 +152,8 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
     ...summary.quantidades.map(q => [q.nome, kindLabel(q.kind), q.unidade ?? '', q.total, q.itens]),
   ]);
   const exportElements = () => { if (list) downloadCsv(`elementos-${fileStem}-pagina-${list.pagina + 1}.csv`, [
-    ['Express ID', 'GlobalId', 'Classe IFC', 'Nome', 'Tipo', 'Pavimento'],
-    ...list.elementos.map(e => [e.express_id, e.global_id ?? '', e.ifc_class, e.name ?? '', e.object_type ?? '', e.storey ?? '']),
+    ['Express ID', 'GlobalId', 'Elemento', 'Classe IFC', 'Nome', 'Tipo', 'Pavimento'],
+    ...list.elementos.map(e => [e.express_id, e.global_id ?? '', groupOf(e.ifc_class), e.ifc_class, e.name ?? '', e.object_type ?? '', e.storey ?? '']),
   ]); };
 
   return <>
@@ -184,7 +185,7 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
     </section>
 
     <div className="mt-5 grid gap-5 lg:grid-cols-2">
-      <DistributionPanel title="Elementos por classe IFC" label="Distribuição dos elementos por classe IFC" rows={summary.porClasse} total={summary.elementos} head="Classe IFC" />
+      <DistributionPanel title="Elementos por classe IFC" label="Distribuição dos elementos por classe IFC" rows={summary.porClasse} total={summary.elementos} head="Elemento" translate={groupOf} />
       <DistributionPanel title="Elementos por pavimento" label="Distribuição dos elementos por pavimento" rows={summary.porPavimento} total={summary.elementos} head="Pavimento" />
     </div>
 
@@ -207,7 +208,7 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
         <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Classe IFC</span>
           <select className="field w-full sm:w-56" aria-label="Filtrar elementos por classe IFC" value={ifcClass} onChange={event => { setIfcClass(event.target.value); setPage(0); }}>
             <option value="">Todas as classes</option>
-            {classes.map(nome => <option key={nome} value={nome}>{nome}</option>)}
+            {classes.map(nome => <option key={nome} value={nome}>{groupOf(nome)} · {nome}</option>)}
           </select>
         </label>
         {(storey || ifcClass) && <button type="button" className="button-ghost" onClick={() => { setStorey(''); setIfcClass(''); setPage(0); }}>Limpar filtros</button>}
@@ -227,7 +228,8 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
                       <tbody>{list.elementos.map(e => <tr key={e.express_id}>
                         <th scope="row" className="tabular-nums">{e.express_id}</th>
                         <td className="font-mono text-xs break-all">{dash(e.global_id)}</td>
-                        <td className="whitespace-nowrap">{e.ifc_class}</td>
+                        <td className="whitespace-nowrap">{groupOf(e.ifc_class)}
+                          <span className="mt-0.5 block text-[11px] text-slate-400">{e.ifc_class}</span></td>
                         <td>{dash(e.name)}</td>
                         <td>{dash(e.object_type)}</td>
                         <td className="whitespace-nowrap">{dash(e.storey)}</td>
@@ -246,7 +248,7 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
   </>;
 }
 
-function DistributionPanel({ title, label, rows, total, head }: { title: string; label: string; rows: Distribution[]; total: number; head: string }) {
+function DistributionPanel({ title, label, rows, total, head, translate }: { title: string; label: string; rows: Distribution[]; total: number; head: string; translate?: (nome: string) => string }) {
   return <section className="panel overflow-hidden" aria-label={title}>
     <h3 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">{title}</h3>
     {rows.length === 0
@@ -255,7 +257,8 @@ function DistributionPanel({ title, label, rows, total, head }: { title: string;
           <table className="data-table">
             <thead><tr>{[head, 'Elementos', 'Participação'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
             <tbody>{rows.map(row => <tr key={row.nome}>
-              <th scope="row">{row.nome}</th>
+              <th scope="row">{translate ? translate(row.nome) : row.nome}
+                {translate && <span className="mt-0.5 block text-[11px] font-normal text-slate-400">{row.nome}</span>}</th>
               <td className="tabular-nums">{count(row.total)}</td>
               <td className="tabular-nums">{share(row.total, total)}</td>
             </tr>)}</tbody>

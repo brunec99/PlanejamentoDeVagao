@@ -16,9 +16,10 @@ function formatSize(bytes: number) {
 }
 const count = (total: number) => total.toLocaleString('pt-BR');
 
-/** O que a versão já tem transcrito no banco. Não vem do snapshot do planejamento de propósito:
- * são centenas de milhares de linhas por modelo, e o snapshot trafega inteiro a cada comando. */
-interface Transcription { extractedAt: string | null; elementRows: number; hasGeometry: boolean }
+/** O que a versão já tem no banco: a transcrição dos dados e o ponteiro para a geometria
+ * convertida. Não vem do snapshot do planejamento de propósito: são centenas de milhares de
+ * linhas por modelo, e o snapshot trafega inteiro a cada comando. */
+interface Transcription { extractedAt: string | null; elementRows: number; hasGeometry: boolean; geometryBytes: number }
 
 /** Se a rota de estado não responder, a tela continua de pé sem a coluna — saber quantas linhas
  * foram gravadas é informação extra, não pré-requisito para listar modelos e versões. */
@@ -31,9 +32,9 @@ function useTranscriptions(workId: string) {
       try {
         const res = await fetch(`/api/ifc/status?workId=${encodeURIComponent(workId)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('sem estado de transcrição');
-        const body = (await res.json()) as { versoes?: { versionId?: string; extractedAt?: string | null; elementRows?: number; hasGeometry?: boolean }[] };
+        const body = (await res.json()) as { versoes?: { versionId?: string; extractedAt?: string | null; elementRows?: number; hasGeometry?: boolean; geometryBytes?: number }[] };
         const map: Record<string, Transcription> = {};
-        for (const row of body.versoes ?? []) if (row.versionId) map[row.versionId] = { extractedAt: row.extractedAt ?? null, elementRows: row.elementRows ?? 0, hasGeometry: row.hasGeometry === true };
+        for (const row of body.versoes ?? []) if (row.versionId) map[row.versionId] = { extractedAt: row.extractedAt ?? null, elementRows: row.elementRows ?? 0, hasGeometry: row.hasGeometry === true, geometryBytes: row.geometryBytes ?? 0 };
         if (active) setRows(map);
       } catch { if (active) setRows(undefined); }
     })();
@@ -80,21 +81,23 @@ export function ModelsOverview({ workId }: { workId: string }) {
   const storeys = new Set(latest.flatMap(v => v.storeys));
   const currentElements = latest.reduce((sum, v) => sum + v.elementCount, 0);
   const stored = versions.filter(v => v.storagePath).length;
+  const withGeometry = transcriptions ? versions.filter(v => transcriptions[v.id]?.hasGeometry).length : 0;
   const person = (id: string) => data.users.find(u => u.id === id)?.name ?? id;
   const canUpload = actor.role !== 'viewer';
-  const columns = ['Versão', 'Arquivo', 'Arquivo original', 'Pavimentos lidos', 'Elementos', ...(transcriptions ? ['Transcrição'] : []), 'Enviado por', 'Quando'];
+  const columns = ['Versão', 'Arquivo', 'Arquivo original', 'Pavimentos lidos', 'Elementos', ...(transcriptions ? ['Transcrição e 3D'] : []), 'Enviado por', 'Quando'];
 
   return <>
     <p className="eyebrow">{selected.work.code}</p>
     <h1 className="page-title">Modelos IFC</h1>
-    <p className="mt-1 max-w-3xl text-sm text-slate-500">O IFC é uma base de dados: no envio, o modelo é transcrito em tabelas — elementos, propriedades, quantidades e caixas envolventes — e é essa transcrição que o repositório guarda. Guardar o arquivo .ifc original é opcional. Todas as versões são preservadas: cada envio empilha uma versão nova, sem substituir as anteriores.</p>
+    <p className="mt-1 max-w-3xl text-sm text-slate-500">O IFC entra aqui e sai em duas metades. Os dados são transcritos em tabelas — elementos, propriedades e quantidades — e a geometria é convertida para Fragments, um binário compacto que o visualizador 3D abre direto no navegador. As duas metades se reencontram pelo GlobalId, e é esse par que o repositório guarda. Guardar o arquivo .ifc original é opcional: nem o planejamento nem o 3D dependem dele. Todas as versões são preservadas: cada envio empilha uma versão nova, sem substituir as anteriores.</p>
 
-    <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard label="Modelos cadastrados" value={models.length} />
-      <StatCard label="Versões transcritas" value={versions.length} />
+      <StatCard label="Versões enviadas" value={versions.length} />
       <StatCard label="Pavimentos distintos" value={storeys.size} />
       <StatCard label="Elementos na versão atual" value={count(currentElements)} />
-      <StatCard label="Com arquivo guardado" value={`${stored} de ${versions.length}`} />
+      {transcriptions && <StatCard label="Com geometria 3D" value={`${withGeometry} de ${versions.length}`} tone={withGeometry < versions.length ? 'warning' : 'default'} />}
+      <StatCard label="Com .ifc original guardado" value={`${stored} de ${versions.length}`} />
     </div>
 
     <div className="mb-6">
@@ -107,7 +110,7 @@ export function ModelsOverview({ workId }: { workId: string }) {
     <section data-tour="ifc-models" className="panel overflow-hidden">
       <h2 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">Modelos e versões</h2>
       {models.length === 0
-        ? <div className="p-5"><Empty>Nenhum modelo cadastrado nesta obra. Cadastre o modelo acima e depois envie o arquivo IFC para transcrição.</Empty></div>
+        ? <div className="p-5"><Empty>Nenhum modelo cadastrado nesta obra. Cadastre o modelo acima e depois envie o arquivo IFC para transcrever os dados e converter a geometria.</Empty></div>
         : <div className="divide-y divide-slate-100">{models.map(model => {
             const list = versionsOf(model.id);
             const current = list[0];
@@ -151,7 +154,7 @@ export function ModelsOverview({ workId }: { workId: string }) {
           })}</div>}
     </section>
 
-    <div className="mt-5"><Callout tone="info">Uma versão nova nunca substitui as anteriores: o histórico completo fica disponível para comparação. Os pavimentos, os elementos e as quantidades vêm da transcrição feita no momento do envio — o planejamento lê as tabelas, não o arquivo.</Callout></div>
+    <div className="mt-5"><Callout tone="info">Uma versão nova nunca substitui as anteriores: o histórico completo fica disponível para comparação. Os pavimentos, os elementos e as quantidades vêm da transcrição feita no momento do envio, e o visualizador abre a geometria convertida no mesmo envio — nenhuma das telas relê o arquivo.</Callout></div>
   </>;
 }
 
@@ -159,7 +162,8 @@ function TranscriptionCell({ row }: { row?: Transcription }) {
   if (!row?.extractedAt) return <td className="whitespace-nowrap text-slate-400">não transcrita</td>;
   return <td className="whitespace-nowrap">
     <span className="font-semibold tabular-nums text-slate-700">{count(row.elementRows)} linhas</span>
-    <span className={`mt-0.5 block text-[11px] ${row.hasGeometry ? 'text-emerald-600' : 'text-amber-600'}`}>{row.hasGeometry ? 'com geometria' : 'sem geometria'}</span>
+    {/* Dados e geometria são independentes: a versão pode ter a transcrição inteira e nenhum 3D. */}
+    <span className={`mt-0.5 block text-[11px] ${row.hasGeometry ? 'text-emerald-600' : 'text-amber-600'}`}>{row.hasGeometry ? `geometria 3D · ${formatSize(row.geometryBytes)}` : 'sem geometria 3D'}</span>
   </td>;
 }
 
@@ -169,6 +173,25 @@ function TranscriptionCell({ row }: { row?: Transcription }) {
 const ELEMENT_BATCH = 1000;
 const ROW_BATCH = 4000;
 type Batch = Partial<Pick<Extraction, 'elements' | 'properties' | 'quantities'>>;
+
+/** Converte a geometria para Fragments, o binário que o visualizador abre: um IFC de 217 MB medido
+ * virou 15 MB de .frag, que cabe no limite por arquivo do Storage e monta rápido no navegador.
+ * Sai de propósito tudo o que não é malha — ambientes, classes abstratas, relações e atributos:
+ * o nome e o pavimento das telas vêm da nossa transcrição, não do .frag. */
+async function convertGeometry(file: File) {
+  const { IfcImporter } = await import('@thatopen/fragments');
+  const WebIFC = await import('web-ifc');
+  const importer = new IfcImporter();
+  importer.wasm = { path: '/wasm/', absolute: true };
+  importer.webIfcSettings = { COORDINATE_TO_ORIGIN: false, CIRCLE_SEGMENTS: 8 };
+  const space = (WebIFC as unknown as Record<string, unknown>).IFCSPACE;
+  if (typeof space === 'number') importer.classes.elements.delete(space);
+  importer.classes.abstract.clear();
+  importer.relations.clear();
+  importer.includeUniqueAttributes = false;
+  importer.includeRelationNames = false;
+  return importer.process({ bytes: new Uint8Array(await file.arrayBuffer()) });
+}
 
 function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelName: string; onDone: () => void }) {
   const context = usePlanning();
@@ -183,56 +206,63 @@ function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelN
   const busy = step !== '';
   const clear = () => { setError(''); setWarning(''); setMessage(''); };
 
-  /** Guarda o arquivo no Storage e devolve o caminho, ou lança explicando a recusa. */
-  const storeFile = async (ifc: File) => {
-    setStep('Preparando o envio do arquivo…');
-    const res = await fetch('/api/ifc/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, fileName: ifc.name }) });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error ?? 'Falha ao preparar o envio.');
-    setStep(`Enviando ${formatSize(ifc.size)} ao Storage… pode levar alguns minutos, mantenha esta aba aberta.`);
-    // O arquivo vai direto para o Storage: um IFC é bem maior que o limite de corpo da nossa própria API.
-    const sent = await fetch(body.signedUrl, { method: 'PUT', body: ifc, headers: { 'content-type': 'application/octet-stream' } });
+  /** Sobe um binário ao Storage pela URL assinada e devolve o caminho, ou lança explicando a
+   * recusa. Passam por aqui a geometria convertida, que o visualizador lê, e o .ifc original. */
+  const upload = async (subject: string, fileName: string, body: BodyInit, size: number) => {
+    setStep(`${subject}: preparando o envio…`);
+    const res = await fetch('/api/ifc/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, fileName }) });
+    const ticket = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(ticket.error ?? 'Falha ao preparar o envio.');
+    setStep(`${subject}: enviando ${formatSize(size)} ao Storage… pode levar alguns minutos, mantenha esta aba aberta.`);
+    // O binário vai direto para o Storage: um IFC é bem maior que o limite de corpo da nossa própria API.
+    const sent = await fetch(ticket.signedUrl, { method: 'PUT', body, headers: { 'content-type': 'application/octet-stream' } });
     if (!sent.ok) {
       // O Storage explica a recusa no corpo; engolir isso num "tente novamente" esconde
-      // justamente o caso comum, que é o arquivo passar do limite por arquivo do projeto.
+      // justamente o caso comum, que é o envio passar do limite por arquivo do projeto.
       const detail = await sent.text().catch(() => '');
       throw new Error(sent.status === 413 || /exceeded the maximum allowed size/i.test(detail)
-        ? `O arquivo tem ${formatSize(ifc.size)} e passa do limite por arquivo do Storage. Aumente o limite em Storage → Settings no painel do Supabase (o plano gratuito trava em 50 MB) e tente de novo.`
+        ? `${subject} tem ${formatSize(size)} e passa do limite por arquivo do Storage. Aumente o limite em Storage → Settings no painel do Supabase (o plano gratuito trava em 50 MB) e tente de novo.`
         : `O Storage recusou o envio (HTTP ${sent.status}).${detail ? ` ${detail.slice(0, 200)}` : ''}`);
     }
-    return String(body.path);
+    return String(ticket.path);
   };
 
   const send = async () => {
     if (!file || busy) return;
     clear();
+    // A geometria e o arquivo original falham cada um por sua conta, e nenhum dos dois invalida
+    // os dados já transcritos: os avisos se acumulam e aparecem juntos no fim.
+    const notes: string[] = [];
+    const note = (text: string) => { notes.push(text); setWarning(notes.join(' ')); };
     try {
       if (!/\.ifc$/i.test(file.name)) throw new Error('O repositório transcreve apenas modelos IFC.');
       if (file.size === 0) throw new Error('Arquivo vazio.');
 
       setStep('Lendo o modelo neste navegador… pode levar alguns minutos em modelos grandes.');
-      const { elements, properties, quantities } = await extractIfc(file);
-      const storeys = [...new Set(elements.map(e => e.storey).filter((s): s is string => Boolean(s)))];
+      let extraction: Extraction | undefined = await extractIfc(file);
+      const storeys = [...new Set(extraction.elements.map(e => e.storey).filter((s): s is string => Boolean(s)))];
+      const elementCount = extraction.elements.length;
+      const total = extraction.elements.length + extraction.properties.length + extraction.quantities.length;
+
+      const batches: Batch[] = [];
+      for (let i = 0; i < extraction.elements.length; i += ELEMENT_BATCH) batches.push({ elements: extraction.elements.slice(i, i + ELEMENT_BATCH) });
+      for (let i = 0; i < extraction.properties.length; i += ROW_BATCH) batches.push({ properties: extraction.properties.slice(i, i + ROW_BATCH) });
+      for (let i = 0; i < extraction.quantities.length; i += ROW_BATCH) batches.push({ quantities: extraction.quantities.slice(i, i + ROW_BATCH) });
+      // Modelo sem nada ainda precisa de uma requisição: é ela que marca a versão como transcrita.
+      if (!batches.length) batches.push({});
+      extraction = undefined;
 
       // Guardar o arquivo é conveniência, não requisito: se o Storage recusar, a versão ainda
       // vale pelas tabelas, e o usuário fica sabendo depois que só o anexo ficou de fora.
       let storagePath: string | undefined;
       if (keepFile) {
-        try { storagePath = await storeFile(file); }
-        catch (cause) { setWarning(`Os dados do modelo foram transcritos, mas o arquivo original não coube no Storage e a versão ficou sem anexo. ${cause instanceof Error ? cause.message : 'O Storage recusou o envio.'}`); }
+        try { storagePath = await upload('O arquivo original', file.name, file, file.size); }
+        catch (cause) { note(`Os dados do modelo foram transcritos, mas o arquivo original não coube no Storage e a versão ficou sem anexo. ${cause instanceof Error ? cause.message : 'O Storage recusou o envio.'}`); }
       }
 
       setStep('Registrando versão…');
-      const versionId = await context.execute({ type: 'add_ifc_version', modelId, fileName: file.name, fileSize: file.size, storagePath, storeys, elementCount: elements.length });
+      const versionId = await context.execute({ type: 'add_ifc_version', modelId, fileName: file.name, fileSize: file.size, storagePath, storeys, elementCount });
 
-      const batches: Batch[] = [];
-      for (let i = 0; i < elements.length; i += ELEMENT_BATCH) batches.push({ elements: elements.slice(i, i + ELEMENT_BATCH) });
-      for (let i = 0; i < properties.length; i += ROW_BATCH) batches.push({ properties: properties.slice(i, i + ROW_BATCH) });
-      for (let i = 0; i < quantities.length; i += ROW_BATCH) batches.push({ quantities: quantities.slice(i, i + ROW_BATCH) });
-      // Modelo sem nada ainda precisa de uma requisição: é ela que marca a versão como transcrita.
-      if (!batches.length) batches.push({});
-
-      const total = elements.length + properties.length + quantities.length;
       let written = 0;
       for (const [index, batch] of batches.entries()) {
         const done = written + (batch.elements?.length ?? 0) + (batch.properties?.length ?? 0) + (batch.quantities?.length ?? 0);
@@ -244,8 +274,33 @@ function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelN
         if (!res.ok) throw new Error(`${body.error ?? 'Falha ao gravar a transcrição do modelo.'} A versão foi registrada, mas a transcrição parou em ${count(written)} de ${count(total)} linhas.`);
         written = done;
       }
+      // As linhas já estão no banco: soltá-las daqui devolve o heap para a conversão, que precisa
+      // do seu próprio. Manter transcrição e conversão vivas ao mesmo tempo é o que derruba a aba
+      // em modelo grande, e é também por isso que a conversão vem depois de extractIfc fechar o
+      // modelo do web-ifc.
+      batches.length = 0;
 
-      setMessage(`Versão registrada · ${storeys.length} ${storeys.length === 1 ? 'pavimento' : 'pavimentos'}, ${count(elements.length)} elementos e ${count(total)} linhas transcritas${storagePath ? ' · arquivo original guardado no Storage' : ''}.`);
+      // A geometria é a última etapa de propósito: converter antes custaria minutos que uma falha
+      // de gravação jogaria fora, e subiria um .frag de megabytes para ficar órfão no bucket.
+      // Falhar aqui não pode custar os dados já gravados — vira aviso, não erro.
+      let geometryBytes = 0;
+      let geometryDone = false;
+      let geometryProblem = '';
+      try {
+        setStep('Convertendo a geometria… pode levar alguns minutos em modelos grandes.');
+        const fragments = await convertGeometry(file);
+        geometryBytes = fragments.byteLength;
+        // `slice()` reembala o binário numa view sobre ArrayBuffer, que é o que o corpo do PUT aceita.
+        const geometryPath = await upload('A geometria convertida', file.name.replace(/\.ifc$/i, '.frag'), fragments.slice(), geometryBytes);
+        setStep('Registrando a geometria convertida…');
+        const res = await fetch('/api/ifc/fragments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ versionId, storagePath: geometryPath, byteSize: geometryBytes }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? 'Não foi possível registrar a geometria convertida.');
+        geometryDone = true;
+      } catch (cause) { geometryProblem = cause instanceof Error ? cause.message : 'A conversão da geometria falhou neste navegador.'; }
+      if (geometryProblem) note(`Os dados do modelo foram transcritos, mas a versão ficou sem geometria 3D: reenvie esta versão para gerar a geometria e liberar o visualizador. ${geometryProblem}`);
+
+      setMessage(`Versão registrada · ${storeys.length} ${storeys.length === 1 ? 'pavimento' : 'pavimentos'}, ${count(elementCount)} elementos e ${count(total)} linhas transcritas${geometryDone ? ` · geometria 3D convertida em ${formatSize(geometryBytes)}` : ''}${storagePath ? ' · arquivo original guardado no Storage' : ''}.`);
       setFile(null);
       if (input.current) input.current.value = '';
       onDone();
@@ -258,7 +313,7 @@ function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelN
       <input ref={input} className="field w-auto max-w-full text-xs" type="file" accept=".ifc" disabled={busy}
         aria-label={`Arquivo IFC para ${modelName}`}
         onChange={e => { setFile(e.target.files?.[0] ?? null); clear(); }} />
-      <button className="button" type="button" disabled={busy || !file} onClick={send}><Upload size={15} />{busy ? 'Transcrevendo…' : 'Enviar nova versão'}</button>
+      <button className="button" type="button" disabled={busy || !file} onClick={send}><Upload size={15} />{busy ? 'Enviando…' : 'Enviar nova versão'}</button>
     </div>
     <label className="mt-3 flex items-start gap-2 text-xs">
       <input type="checkbox" className="mt-0.5 accent-blue-700" checked={keepFile} disabled={busy}
@@ -266,7 +321,7 @@ function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelN
         onChange={e => { setKeepFile(e.target.checked); clear(); }} />
       <span>
         <span className="font-semibold text-slate-700">Guardar também o arquivo original no Storage</span>
-        <span className="block text-slate-500">O planejamento usa as tabelas transcritas; o arquivo serve apenas para baixar de volta — e é ele que pode não caber no limite do Storage.</span>
+        <span className="block text-slate-500">O planejamento usa as tabelas transcritas e o visualizador usa a geometria convertida; o arquivo original serve apenas para baixar de volta — e é ele que pode não caber no limite do Storage.</span>
       </span>
     </label>
     {busy && <p role="status" className="mt-2 text-xs font-semibold text-blue-700">{step}</p>}

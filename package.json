@@ -1,1 +1,37 @@
-{"name":"sistema-planejamento-vagao","version":"0.1.0","private":true,"scripts":{"copy-wasm":"node -e \"const fs=require('fs');fs.mkdirSync('public/wasm',{recursive:true});fs.copyFileSync('node_modules/web-ifc/web-ifc.wasm','public/wasm/web-ifc.wasm')\"","predev":"npm run copy-wasm","prebuild":"npm run copy-wasm","dev":"next dev","build":"next build","start":"next start","typecheck":"tsc --noEmit","test":"tsx --test tests/*.test.ts","seed":"tsx --env-file=.env.local scripts/seed-supabase.ts"},"dependencies":{"@supabase/ssr":"^0.12.7","@supabase/supabase-js":"^2.116.0","lucide-react":"^1.43.0","next":"^16.0.0","react":"^19.2.0","react-dom":"^19.2.0","three":"^0.186.0","web-ifc":"^0.0.77"},"devDependencies":{"@tailwindcss/postcss":"^4.1.0","@types/node":"^24.0.0","@types/react":"^19.2.0","@types/react-dom":"^19.2.0","@types/three":"^0.186.0","tailwindcss":"^4.1.0","tsx":"^4.20.0","typescript":"^5.9.0"}}
+{
+  "name": "sistema-planejamento-vagao",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "npm run copy-assets",
+    "prebuild": "npm run copy-assets",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "seed": "tsx --env-file=.env.local scripts/seed-supabase.ts",
+    "copy-assets": "node scripts/copy-assets.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
+    "@thatopen/fragments": "^3.4.7",
+    "lucide-react": "^1.43.0",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.186.0",
+    "web-ifc": "^0.0.77"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.186.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

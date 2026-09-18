@@ -119,7 +119,7 @@ export function FourDOverview({ workId }: { workId: string }) {
     {header}
     <div className="panel mt-6 p-6">
       <h2 className="mb-1 text-sm font-bold text-slate-800">Nenhuma versão de modelo IFC nesta obra</h2>
-      <Empty>O 4D lê a geometria transcrita das versões do modelo, não o arquivo. Envie o modelo em <Link className="text-link" href={workPath(workId, 'ifc')}>Modelos IFC</Link> — o envio transcreve o IFC em tabelas e cada versão nova preserva as anteriores. Depois volte aqui para montar o conjunto federado.</Empty>
+      <Empty>O 4D desenha a geometria convertida no envio e lê o serviço de cada elemento dos dados transcritos, nunca o arquivo IFC. Envie o modelo em <Link className="text-link" href={workPath(workId, 'ifc')}>Modelos IFC</Link> — o envio guarda as duas metades, a malha e as tabelas, e cada versão nova preserva as anteriores. Depois volte aqui para montar o conjunto federado.</Empty>
     </div>
   </>;
 
@@ -153,7 +153,7 @@ export function FourDOverview({ workId }: { workId: string }) {
 
       <fieldset className="mt-5 border-t border-slate-100 pt-4">
         <legend className="flex items-center gap-2 text-xs font-bold text-slate-700"><Layers size={14} className="text-blue-600" />Conjunto federado</legend>
-        <p className="mt-1 text-xs text-slate-500">Vários modelos entram na mesma cena. O padrão é a versão mais recente de cada modelo da obra; a geometria transcrita é lida do banco quando você aciona o carregamento.</p>
+        <p className="mt-1 text-xs text-slate-500">Vários modelos entram na mesma cena. O padrão é a versão mais recente de cada modelo da obra; a geometria convertida de cada versão é baixada quando você aciona o carregamento.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {models.map(model => {
             const versions = versionsOf(model.id);

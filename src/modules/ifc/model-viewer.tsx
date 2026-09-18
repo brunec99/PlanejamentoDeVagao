@@ -3,19 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Boxes, Eraser, MousePointerClick, Play } from 'lucide-react';
 import type * as ThreeNS from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import type { FragmentsModel, MaterialDefinition } from '@thatopen/fragments';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, StatCard } from '@/modules/planejamento/ui';
 import { formatTimestamp } from '@/shared/format';
-import { readBoxes, type BoxRow } from './box-source';
+import { readElementMap, type MapRow } from './element-map';
+import { MissingGeometry, frame, loadFragments, type Federation, type FragmentsApi } from './fragments-stage';
 
 type Three = typeof ThreeNS;
 type Paint = 'pavimento' | 'classe';
 
 const HIGHLIGHT = '#f59e0b';
-// Caixa de espessura zero (elemento plano na transcrição) desapareceria com escala 0.
-const MIN_SIZE = 1e-4;
-const pause = () => new Promise<void>(resolve => { setTimeout(resolve, 0); });
 const count = (value: number) => value.toLocaleString('pt-BR');
 const byText = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
 
@@ -27,18 +26,36 @@ function hueOf(name: string) {
   return (hash >>> 0) % 360;
 }
 const cssColor = (name: string) => `hsl(${hueOf(name)} 58% 52%)`;
+const groupColor = (three: Three, name: string) => new three.Color().setHSL(hueOf(name) / 360, 0.58, 0.52, three.SRGBColorSpace);
+/** Na geometria convertida não existe cor por instância para mexer: o que se pinta é um conjunto
+ * de ids recebendo um material. `TWO` desenha as duas faces, senão a parede vista de dentro
+ * desaparece no recorte por pavimento. */
+const material = (api: FragmentsApi, color: ThreeNS.Color): MaterialDefinition => ({ color, opacity: 1, transparent: false, renderedFaces: api.RenderedFaces.TWO });
 
-interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls; root: ThreeNS.Group; zUp: ThreeNS.Group; geometry: ThreeNS.BoxGeometry; material: ThreeNS.MeshLambertMaterial }
-interface Bucket { storey: string; mesh: ThreeNS.InstancedMesh; rows: BoxRow[] }
+interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls }
+/** A federação carregada mais o mapa que liga a malha aos dados: `byLocal` responde ao clique,
+ * os agrupamentos respondem à cor e ao recorte. */
+interface Loaded extends Federation { model: FragmentsModel; byLocal: Map<number, MapRow>; byStorey: Map<string, number[]>; byClass: Map<string, number[]> }
 interface Job { versionId: string; label: string; version: number; fileName: string; createdAt: string }
 interface Tally { name: string; total: number }
-interface Report { elements: number; declared: number; storeys: Tally[]; classes: Tally[] }
-interface Picked { storey: string; index: number; row: BoxRow }
+interface Report { elements: number; declared: number; orphans: number; storeys: Tally[]; classes: Tally[] }
+interface Picked { localId: number; row?: MapRow }
+/** `geometry` diz de qual metade veio a falha: só a da malha permite oferecer a reconversão. */
+/** `pending` é a versão que nunca foi convertida — dado em tabela sem malha. Isso não é falha,
+ * é uma metade que falta, e só nesse caso reenviar o modelo resolve; erro de rede na mesma metade
+ * não pede reenvio nenhum. Quem distingue os dois é o tipo do erro, não o texto da mensagem. */
+interface Failure { message: string; pending: boolean }
 
-function tally(names: string[]) {
-  const totals = new Map<string, number>();
-  for (const name of names) totals.set(name, (totals.get(name) ?? 0) + 1);
-  return [...totals.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total || byText(a.name, b.name));
+const tally = (groups: Map<string, number[]>) => [...groups.entries()]
+  .map(([name, ids]) => ({ name, total: ids.length }))
+  .sort((a, b) => b.total - a.total || byText(a.name, b.name));
+
+/** Sai da cena antes de morrer: o dispose é assíncrono e o modelo velho não pode ficar aparecendo
+ * junto do novo nem deixar o worker pendurado. */
+function discard(federation?: Federation) {
+  if (!federation) return;
+  for (const { model } of federation.models) model.object.removeFromParent();
+  federation.fragments.dispose().catch(() => undefined);
 }
 
 export function ModelViewer({ workId }: { workId: string }) {
@@ -50,13 +67,14 @@ export function ModelViewer({ workId }: { workId: string }) {
   const [versionId, setVersionId] = useState('');
   const [job, setJob] = useState<Job>();
   const [step, setStep] = useState('');
-  const [failure, setFailure] = useState('');
+  const [failure, setFailure] = useState<Failure>();
   const [report, setReport] = useState<Report>();
   const [storey, setStorey] = useState('');
   const [paint, setPaint] = useState<Paint>('pavimento');
   const [picked, setPicked] = useState<Picked>();
   const stageRef = useRef<Stage | undefined>(undefined);
-  const bucketsRef = useRef<Bucket[]>([]);
+  const loadRef = useRef<Loaded | undefined>(undefined);
+  const pickedRef = useRef<Picked | undefined>(undefined);
   const busy = step !== '';
 
   useEffect(() => {
@@ -85,24 +103,23 @@ export function ModelViewer({ workId }: { workId: string }) {
       const fill = new three.DirectionalLight('#ffffff', 0.6);
       fill.position.set(-1.5, 0.8, -1);
       scene.add(fill);
-      const root = new three.Group();
-      root.matrixAutoUpdate = false;
-      // IFC é Z para cima; three é Y para cima.
-      const zUp = new three.Group();
-      zUp.rotation.x = -Math.PI / 2;
-      zUp.matrixAutoUpdate = false;
-      zUp.updateMatrix();
-      root.add(zUp);
-      scene.add(root);
       const orbit = new controls.OrbitControls(camera, renderer.domElement);
       orbit.enableDamping = true;
       orbit.dampingFactor = 0.08;
-      // Uma caixa unitária e um material branco servem a cena inteira: a cor de cada elemento é
-      // cor de instância, que multiplica a do material.
-      const geometry = new three.BoxGeometry(1, 1, 1);
-      const material = new three.MeshLambertMaterial({ color: '#ffffff' });
-      stageRef.current = { three, renderer, scene, camera, controls: orbit, root, zUp, geometry, material };
+      stageRef.current = { three, renderer, scene, camera, controls: orbit };
       renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
+
+      // A malha convertida é servida em tiles: o que está na cena depende de onde a câmera está, e
+      // quem troca os tiles é o `update`. Uma chamada por vez, porque o damping dispara `change` a
+      // cada frame e a fila do worker não precisa engordar.
+      let refreshing = false;
+      const refresh = () => {
+        const load = loadRef.current;
+        if (!load || refreshing) return;
+        refreshing = true;
+        load.fragments.update().catch(() => undefined).finally(() => { refreshing = false; });
+      };
+      orbit.addEventListener('change', refresh);
 
       const observer = new ResizeObserver(() => {
         camera.aspect = width() / height();
@@ -111,22 +128,18 @@ export function ModelViewer({ workId }: { workId: string }) {
       });
       observer.observe(box);
 
-      const raycaster = new three.Raycaster();
-      const pointer = new three.Vector2();
       let downX = 0, downY = 0;
       const onDown = (event: PointerEvent) => { downX = event.clientX; downY = event.clientY; };
-      const onUp = (event: PointerEvent) => {
+      const onUp = async (event: PointerEvent) => {
         if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return; // arrastar orbita, não seleciona
-        const rect = canvas.getBoundingClientRect();
-        pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-        raycaster.setFromCamera(pointer, camera);
-        // O Raycaster não olha `visible`, então o recorte por pavimento entra na lista de candidatos.
-        const visible = bucketsRef.current.filter(bucket => bucket.mesh.visible);
-        const hit = raycaster.intersectObjects(visible.map(bucket => bucket.mesh), false)[0];
-        const bucket = hit ? visible.find(item => item.mesh === hit.object) : undefined;
-        const index = hit?.instanceId;
-        const row = bucket && index !== undefined ? bucket.rows[index] : undefined;
-        setPicked(bucket && index !== undefined && row ? { storey: bucket.storey, index, row } : undefined);
+        const load = loadRef.current;
+        if (!load) return;
+        // O raycast do Fragments quer a posição do ponteiro na tela, não em NDC: é ele quem projeta,
+        // usando o retângulo do canvas que recebe em `dom`.
+        const mouse = new three.Vector2(event.clientX, event.clientY);
+        const hit = await load.model.raycast({ camera, mouse, dom: canvas }).catch(() => null);
+        if (dropped || loadRef.current !== load) return;
+        setPicked(hit ? { localId: hit.localId, row: load.byLocal.get(hit.localId) } : undefined);
       };
       canvas.addEventListener('pointerdown', onDown);
       canvas.addEventListener('pointerup', onUp);
@@ -135,11 +148,10 @@ export function ModelViewer({ workId }: { workId: string }) {
       teardown = () => {
         canvas.removeEventListener('pointerdown', onDown);
         canvas.removeEventListener('pointerup', onUp);
+        orbit.removeEventListener('change', refresh);
         observer.disconnect();
         renderer.setAnimationLoop(null);
         orbit.dispose();
-        geometry.dispose();
-        material.dispose();
         scene.clear();
         renderer.dispose();
         renderer.forceContextLoss();
@@ -155,112 +167,129 @@ export function ModelViewer({ workId }: { workId: string }) {
     if (!job || !ready) return;
     const stage = stageRef.current;
     if (!stage) return;
-    const three = stage.three;
     const controller = new AbortController();
     let cancelled = false;
-    const clear = () => {
-      for (const bucket of bucketsRef.current) { stage.zUp.remove(bucket.mesh); bucket.mesh.dispose(); }
-      bucketsRef.current = [];
-    };
 
     const run = async () => {
-      setFailure(''); setReport(undefined); setPicked(undefined); setStorey('');
-      clear();
-      stage.root.position.set(0, 0, 0);
-      stage.root.updateMatrix();
+      setFailure(undefined); setReport(undefined); setPicked(undefined); setStorey('');
+      let federation: Federation | undefined;
+      let failed: Failure | undefined;
+      const fail = (cause: unknown, geometry: boolean): never => {
+        const fallback = geometry ? 'Não foi possível abrir a geometria convertida desta versão.' : 'Não foi possível ler os elementos transcritos desta versão.';
+        failed ??= { message: cause instanceof Error && cause.message ? cause.message : fallback, pending: cause instanceof MissingGeometry };
+        throw cause;
+      };
       try {
-        setStep('Lendo a geometria transcrita…');
-        const { rows, declared } = await readBoxes([job.versionId], controller.signal, (read, total) => {
-          setStep(total > 0 ? `Lendo ${count(read)} de ${count(total)} elementos…` : 'Lendo a geometria transcrita…');
-        });
-        if (cancelled) return;
-        setStep(`Montando ${count(rows.length)} caixas…`);
-        await pause();
-        if (cancelled) return;
+        let geometry = 'Abrindo a geometria convertida…';
+        let table = 'lendo os elementos transcritos…';
+        const show = () => { if (!cancelled) setStep(`${geometry} · ${table}`); };
+        show();
+        // As duas metades da versão vêm juntas: a malha do Storage e a tabela do banco. Nenhuma
+        // depende da outra até a hora de casar os GlobalIds, então esperar em série era só espera.
+        const [loaded, map] = await Promise.all([
+          loadFragments({
+            scene: stage.scene, camera: stage.camera, signal: controller.signal,
+            versions: [{ id: job.versionId, label: job.label }],
+            onProgress: message => { geometry = message; show(); },
+          }).then(result => { federation = result; geometry = 'Geometria convertida aberta'; show(); return result; }, cause => fail(cause, true)),
+          readElementMap([job.versionId], controller.signal, (read, declared) => {
+            table = declared > 0 ? `lendo ${count(read)} de ${count(declared)} elementos transcritos…` : 'lendo os elementos transcritos…';
+            show();
+          }).then(result => { table = 'elementos transcritos lidos'; show(); return result; }, cause => fail(cause, false)),
+        ]);
+        if (cancelled) { discard(loaded); return; }
+        const model = loaded.models[0]?.model;
+        if (!model) throw new Error('A geometria convertida desta versão voltou vazia.');
 
-        const groups = new Map<string, BoxRow[]>();
-        for (const row of rows) {
-          const list = groups.get(row.storey);
-          if (list) list.push(row); else groups.set(row.storey, [row]);
+        setStep(`Casando ${count(map.rows.length)} elementos transcritos com a geometria…`);
+        const locals = await model.getLocalIdsByGuids(map.rows.map(row => row.globalId));
+        if (cancelled) { discard(loaded); return; }
+        const byLocal = new Map<number, MapRow>();
+        const byStorey = new Map<string, number[]>();
+        const byClass = new Map<string, number[]>();
+        const push = (index: Map<string, number[]>, key: string, localId: number) => {
+          const list = index.get(key);
+          if (list) list.push(localId); else index.set(key, [localId]);
+        };
+        for (const [index, localId] of locals.entries()) {
+          const row = map.rows[index];
+          // GlobalId sem par na malha: elemento transcrito que a conversão não desenha (espaço,
+          // anotação, agrupamento). É contagem de tela, não falha.
+          if (localId === null || !row) continue;
+          byLocal.set(localId, row);
+          push(byStorey, row.storey, localId);
+          push(byClass, row.ifcClass, localId);
         }
-        // Modelo georreferenciado guarda coordenadas na ordem dos milhões e a matriz de instância é
-        // float32: sem trazer o conjunto para a origem, as caixas tremeriam e brigariam no depth.
-        const origin = [0, 1, 2].map(axis => {
-          let low = Infinity, high = -Infinity;
-          for (const row of rows) { low = Math.min(low, row.min[axis]); high = Math.max(high, row.max[axis]); }
-          return Number.isFinite(low) ? (low + high) / 2 : 0;
-        });
-        const matrix = new three.Matrix4();
-        const buckets: Bucket[] = [];
-        for (const name of [...groups.keys()].sort(byText)) {
-          const list = groups.get(name)!;
-          // Uma InstancedMesh por pavimento: o recorte vira um `.visible`, sem remontar a cena.
-          const mesh = new three.InstancedMesh(stage.geometry, stage.material, list.length);
-          for (const [index, row] of list.entries()) {
-            matrix.makeScale(
-              Math.max(row.max[0] - row.min[0], MIN_SIZE),
-              Math.max(row.max[1] - row.min[1], MIN_SIZE),
-              Math.max(row.max[2] - row.min[2], MIN_SIZE),
-            );
-            matrix.setPosition(
-              (row.min[0] + row.max[0]) / 2 - origin[0],
-              (row.min[1] + row.max[1]) / 2 - origin[1],
-              (row.min[2] + row.max[2]) / 2 - origin[2],
-            );
-            mesh.setMatrixAt(index, matrix);
-          }
-          mesh.instanceMatrix.needsUpdate = true;
-          mesh.matrixAutoUpdate = false;
-          mesh.updateMatrix();
-          stage.zUp.add(mesh);
-          buckets.push({ storey: name, mesh, rows: list });
-        }
-        bucketsRef.current = buckets;
-
-        stage.root.updateMatrixWorld(true);
-        const bounds = new three.Box3().setFromObject(stage.zUp);
-        if (!bounds.isEmpty()) {
-          const center = bounds.getCenter(new three.Vector3());
-          const radius = Math.max(bounds.getSize(new three.Vector3()).length() / 2, 1);
-          const distance = radius / Math.sin((stage.camera.fov * Math.PI) / 360);
-          stage.root.position.copy(center).negate();
-          stage.root.updateMatrix();
-          stage.camera.position.set(distance * 0.65, distance * 0.55, distance * 0.65);
-          stage.camera.near = Math.max(distance / 1000, 0.01);
-          stage.camera.far = distance * 12;
-          stage.camera.updateProjectionMatrix();
-          stage.controls.target.set(0, 0, 0);
-          stage.controls.update();
-        }
-        setReport({ elements: rows.length, declared, storeys: tally(rows.map(row => row.storey)), classes: tally(rows.map(row => row.ifcClass)) });
+        loadRef.current = { ...loaded, model, byLocal, byStorey, byClass };
+        frame(stage.three, stage.camera, stage.controls, loaded.models);
+        setReport({ elements: byLocal.size, declared: map.declared, orphans: map.rows.length - byLocal.size, storeys: tally(byStorey), classes: tally(byClass) });
         setStep('');
-      } catch (error) {
+      } catch (cause) {
+        discard(federation);
         if (cancelled || controller.signal.aborted) return;
-        // Nada de meia cena em pé junto de uma mensagem de erro.
-        clear();
-        setFailure(error instanceof Error && error.message ? error.message : 'Não foi possível desenhar a geometria desta versão.');
+        controller.abort(); // a outra metade ainda pode estar em voo
+        setFailure(failed ?? { message: cause instanceof Error && cause.message ? cause.message : 'Não foi possível desenhar esta versão.', pending: cause instanceof MissingGeometry });
         setStep('');
       }
     };
     run();
 
-    return () => { cancelled = true; controller.abort(); clear(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      discard(loadRef.current);
+      loadRef.current = undefined;
+    };
   }, [job, ready]);
 
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage) return;
-    const color = new stage.three.Color();
-    for (const bucket of bucketsRef.current) {
-      bucket.mesh.visible = !storey || bucket.storey === storey;
-      for (const [index, row] of bucket.rows.entries()) {
-        if (picked?.storey === bucket.storey && picked.index === index) color.set(HIGHLIGHT);
-        else color.setHSL(hueOf(paint === 'classe' ? row.ifcClass : row.storey) / 360, 0.58, 0.52, stage.three.SRGBColorSpace);
-        bucket.mesh.setColorAt(index, color);
+    const load = loadRef.current;
+    if (!stage || !load || !report) return;
+    let stale = false;
+    const apply = async () => {
+      const groups = paint === 'classe' ? load.byClass : load.byStorey;
+      // Um resetHighlight antes: sem ele, a pintura do critério anterior fica nos ids que o novo
+      // critério não alcança.
+      await load.model.resetHighlight();
+      for (const [name, ids] of groups) {
+        if (stale) return;
+        await load.model.highlight(ids, material(load.api, groupColor(stage.three, name)));
       }
-      if (bucket.mesh.instanceColor) bucket.mesh.instanceColor.needsUpdate = true;
-    }
-  }, [report, storey, paint, picked]);
+      const chosen = pickedRef.current;
+      if (chosen) await load.model.highlight([chosen.localId], material(load.api, new stage.three.Color(HIGHLIGHT)));
+      if (storey) {
+        // Esconder tudo e mostrar o pavimento cobre também o que a malha tem sem linha transcrita:
+        // esse item não está em nenhum grupo e ficaria de pé no recorte.
+        await load.model.setVisible(undefined, false);
+        await load.model.setVisible(load.byStorey.get(storey) ?? [], true);
+      } else await load.model.resetVisible();
+      if (stale) return;
+      await load.fragments.update(true);
+    };
+    apply().catch(() => undefined);
+    return () => { stale = true; };
+  }, [report, paint, storey]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    const load = loadRef.current;
+    const previous = pickedRef.current;
+    pickedRef.current = picked;
+    if (!stage || !load || previous?.localId === picked?.localId) return;
+    const apply = async () => {
+      // O anterior volta à cor do grupo, não ao material de origem: um resetHighlight nele levaria
+      // embora a pintura por pavimento ou classe.
+      if (previous) {
+        const row = load.byLocal.get(previous.localId);
+        if (row) await load.model.highlight([previous.localId], material(load.api, groupColor(stage.three, paint === 'classe' ? row.ifcClass : row.storey)));
+        else await load.model.resetHighlight([previous.localId]);
+      }
+      if (picked) await load.model.highlight([picked.localId], material(load.api, new stage.three.Color(HIGHLIGHT)));
+      await load.fragments.update(true);
+    };
+    apply().catch(() => undefined);
+  }, [picked, paint]);
 
   if (context.state !== 'ready') return null;
   const { planning } = context;
@@ -278,13 +307,13 @@ export function ModelViewer({ workId }: { workId: string }) {
   const activeStorey = storeys.includes(storey) ? storey : '';
   const legend = paint === 'classe' ? report?.classes ?? [] : report?.storeys ?? [];
   const label = job && report
-    ? `Caixas envolventes de ${count(report.elements)} elementos do modelo ${job.label}, coloridas por ${paint === 'classe' ? 'classe IFC' : 'pavimento'}. Os números, a legenda e a seleção abaixo trazem a mesma informação em texto.`
+    ? `Geometria convertida do modelo ${job.label} com ${count(report.elements)} elementos, colorida por ${paint === 'classe' ? 'classe IFC' : 'pavimento'}. Os números, a legenda e a seleção abaixo trazem a mesma informação em texto.`
     : 'Nenhuma geometria carregada. Escolha uma versão e use o botão Carregar geometria.';
 
   return <section data-tour="ifc-viewer" className="panel mt-8 overflow-hidden">
     <div className="border-b border-slate-100 px-5 py-3.5">
       <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Boxes size={15} className="text-blue-600" />Visualizador</h2>
-      <p className="mt-0.5 text-xs text-slate-500">Monta o 3D a partir das tabelas transcritas da versão: cada elemento entra como a caixa envolvente gravada no banco. O arquivo IFC não é baixado.</p>
+      <p className="mt-0.5 text-xs text-slate-500">Desenha a geometria convertida da versão, guardada no Storage e apontada pelo banco no envio; a classe, o nome e o pavimento de cada elemento vêm das tabelas transcritas e reencontram a malha pelo GlobalId. O arquivo IFC não é baixado nem lido no navegador.</p>
     </div>
 
     {options.length === 0
@@ -308,10 +337,12 @@ export function ModelViewer({ workId }: { workId: string }) {
                 <option value="classe">Por classe IFC</option>
               </select>
             </label>
-            <button type="button" className="button" disabled={busy || !webgl || !chosen}
+            {/* Sem cena montada não há para onde carregar: clicar antes do `three` chegar deixaria o
+                progresso ligado esperando um estágio que pode nem existir, se o WebGL faltar. */}
+            <button type="button" className="button" disabled={busy || !webgl || !ready || !chosen}
               onClick={() => {
                 if (!chosen) return;
-                setStep('Lendo a geometria transcrita…'); setFailure('');
+                setStep('Abrindo a geometria convertida…'); setFailure(undefined);
                 setJob({ versionId: chosen.id, label: chosen.label, version: chosen.version.version, fileName: chosen.version.fileName, createdAt: chosen.version.createdAt });
               }}>
               <Play size={15} />{job ? 'Recarregar geometria' : 'Carregar geometria'}
@@ -319,9 +350,15 @@ export function ModelViewer({ workId }: { workId: string }) {
           </div>
 
           {busy && <p role="status" className="mt-3 text-xs font-semibold text-blue-700">{step}</p>}
-          {failure && <div className="mt-3"><Callout tone="danger" role="alert">{failure}</Callout></div>}
+          {failure && <div className="mt-3 space-y-2">
+            <Callout tone="danger" role="alert">{failure.message}</Callout>
+            {failure.pending && <Callout tone="info">Os dados transcritos desta versão continuam valendo para as propriedades e o quantitativo; o que falta aqui é a geometria 3D — reenviar o modelo em Modelos IFC gera a conversão.</Callout>}
+          </div>}
           {report?.declared === 0 && <div className="mt-3"><Callout tone="info" role="status">
-            Esta versão tem dados transcritos, mas nenhum elemento com caixa envolvente gravada — sem representação geométrica não há o que desenhar. Isso é válido, não é falha: uma versão só de dados continua servindo às propriedades e ao quantitativo. Se a transcrição desta versão ainda não foi feita, transcreva o IFC na tela de modelos e volte aqui.
+            A geometria desta versão abriu, mas ela não tem nenhum elemento transcrito: sem a tabela não há classe, nome nem pavimento para colorir, recortar ou mostrar no clique. Transcreva o IFC na tela de modelos e volte aqui.
+          </Callout></div>}
+          {report && report.declared > 0 && report.elements === 0 && <div className="mt-3"><Callout tone="warning" role="status">
+            Nenhum dos {count(report.declared)} elementos transcritos foi encontrado na geometria convertida — os dois lados não compartilham GlobalId, sinal de que a transcrição e a conversão saíram de arquivos diferentes. Reenvie o modelo em Modelos IFC para refazer as duas metades a partir do mesmo IFC.
           </Callout></div>}
 
           {job && report && <>
@@ -333,8 +370,8 @@ export function ModelViewer({ workId }: { workId: string }) {
                 <span className="mt-0.5 block text-xs font-normal text-slate-500">{job.fileName} · enviada em {formatTimestamp(job.createdAt)}</span></span>} />
             </div>
             <p className="mb-4 text-xs text-slate-500">
-              Cada caixa é a envolvente do elemento na transcrição, não a sua malha: o contorno é aproximado de propósito, e é isso que permite abrir um modelo inteiro sem baixar o arquivo.
-              {report.declared > report.elements && ` ${count(report.declared - report.elements)} ${report.declared - report.elements === 1 ? 'elemento ficou de fora porque a caixa gravada não é numérica' : 'elementos ficaram de fora porque a caixa gravada não é numérica'}.`}
+              O contorno é a malha do elemento como a conversão a gravou, não uma caixa envolvente: é o mesmo modelo do roteiro 4D, e é por isso que os dois concordam.
+              {report.orphans > 0 && ` ${count(report.orphans)} ${report.orphans === 1 ? 'elemento transcrito não tem par na geometria convertida e ficou fora da cena' : 'elementos transcritos não têm par na geometria convertida e ficaram fora da cena'} — espaços, anotações e agrupamentos existem na tabela sem nada para desenhar.`}
             </p>
           </>}
 
@@ -344,9 +381,9 @@ export function ModelViewer({ workId }: { workId: string }) {
               Este navegador não tem WebGL disponível, então o modelo 3D não pode ser desenhado. Os pavimentos e a contagem de elementos de cada versão continuam na tabela de modelos acima.
             </p>}
             {webgl && busy && <p role="status" className="absolute inset-x-0 top-0 border-b border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-900">{step}</p>}
-            {webgl && !busy && failure && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">{failure}</p>}
+            {webgl && !busy && failure && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">{failure.message}</p>}
             {webgl && !busy && !failure && !job && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-500">
-              Nenhuma geometria carregada. Escolha uma versão e use &quot;Carregar geometria&quot; — são milhares de linhas do banco, lidas só quando você pede.
+              Nenhuma geometria carregada. Escolha uma versão e use &quot;Carregar geometria&quot; — são megabytes de malha convertida, baixados só quando você pede.
             </p>}
           </div>
 
@@ -366,23 +403,27 @@ export function ModelViewer({ workId }: { workId: string }) {
               ? <div className="rounded-xl border border-slate-200 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="eyebrow">Elemento selecionado · express id #{picked.row.expressId}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">{picked.row.ifcClass}</p>
+                      <p className="eyebrow">Elemento selecionado</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">{picked.row?.ifcClass ?? 'Item sem linha transcrita'}</p>
                     </div>
                     <button type="button" className="button-ghost" aria-label="Limpar a seleção do elemento" onClick={() => setPicked(undefined)}><Eraser size={15} />Limpar seleção</button>
                   </div>
-                  <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                    {[['Name', picked.row.name, 'sem Name na transcrição'], ['GlobalId', picked.row.globalId, 'sem GlobalId na transcrição'], ['Pavimento', picked.row.storey, '']].map(([field, value, missing]) =>
-                      <div key={field}>
-                        <dt className="text-xs font-medium text-slate-500">{field}</dt>
-                        <dd className={`text-sm break-all ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{value || missing}</dd>
-                      </div>)}
-                  </dl>
-                  <p className="mt-3 text-xs text-slate-500">Só o que a transcrição guarda deste elemento: a classe IFC, o Name, o GlobalId, o pavimento e o express id. A caixa destacada em laranja é a envolvente dele, não a sua forma.</p>
+                  {picked.row
+                    ? <>
+                        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                          {[['Name', picked.row.name, 'sem Name na transcrição'], ['GlobalId', picked.row.globalId, ''], ['Pavimento', picked.row.storey, '']].map(([field, value, missing]) =>
+                            <div key={field}>
+                              <dt className="text-xs font-medium text-slate-500">{field}</dt>
+                              <dd className={`text-sm break-all ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{value || missing}</dd>
+                            </div>)}
+                        </dl>
+                        <p className="mt-3 text-xs text-slate-500">A malha em destaque é a forma convertida deste elemento; a classe IFC, o Name e o pavimento vêm da linha transcrita que o GlobalId alcança.</p>
+                      </>
+                    : <p className="mt-3 text-xs text-slate-500">Esta peça está na geometria convertida mas não tem linha na transcrição desta versão (id local #{picked.localId}), então não há classe IFC, Name nem pavimento para mostrar.</p>}
                 </div>
               : <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
                   <MousePointerClick size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                  Arraste para orbitar, use a roda para aproximar e clique numa caixa para ver a classe IFC, o Name, o GlobalId e o pavimento que a transcrição guarda.
+                  Arraste para orbitar, use a roda para aproximar e clique num elemento para ver a classe IFC, o Name, o GlobalId e o pavimento que a transcrição guarda.
                 </p>}
           </div>
         </div>}

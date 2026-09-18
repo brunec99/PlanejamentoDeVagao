@@ -183,3 +183,14 @@ test('versão recusada não deixa rastro do modelo criado no mesmo comando',asyn
   await assert.rejects(repo.transaction(d=>run(d,{type:'create_link_rule',workId:'obra-1',serviceName:'Alvenaria',criteria:[]})),/ao menos um critério/);
   assert.deepEqual(await repo.getSnapshot(),before);
 });
+
+test('a classe IFC vira rótulo de obra, e o desconhecido continua legível',async()=>{
+  const {groupOf}=await import('../src/modules/ifc/groups');
+  assert.equal(groupOf('IfcWallStandardCase'),'Parede');
+  assert.equal(groupOf('IFCSLAB'),'Laje');
+  assert.equal(groupOf('IfcColumn'),'Pilar');
+  assert.equal(groupOf('IfcBuildingElementProxy'),'Genérico');
+  // Classe fora do mapa não vira "Outros": o modelo tem o que tem, e a tela mostra.
+  assert.equal(groupOf('IfcBuildingElementPart'),'Building Element Part');
+  assert.equal(groupOf('IFCFOOTING'),'Fundação');
+});

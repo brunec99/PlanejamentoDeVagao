@@ -48,16 +48,16 @@ export const tours: Record<TourKey, TourStep[]> = {
     { target: 'vagao-restrictions', title: 'Restrições', body: 'Podem bloquear a execução, a terminalidade, ou ambas — diferente de uma pendência simples.' },
   ],
   ifc: [
-    { title: 'Modelos IFC', body: 'O IFC é uma base de dados, não um desenho. Cada envio transcreve o arquivo em tabelas — elemento, propriedade, quantidade e caixa envolvente — e é a transcrição que o planejamento consulta. Guardar o arquivo original é opcional: o limite de tamanho do armazenamento não decide o que a obra pode planejar.' },
-    { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões e o que foi transcrito de cada uma. Uma versão nova nunca substitui as anteriores, e uma versão sem o arquivo guardado continua completa como dado.' },
+    { title: 'Modelos IFC', body: 'O IFC é uma base de dados, não um desenho. O envio parte o arquivo em duas metades: os dados viram tabelas (elemento, propriedade, quantidade) e a geometria é convertida para um formato compacto que abre rápido no navegador. As duas se reencontram pelo GlobalId. Guardar o .ifc original é opcional — o limite de tamanho do armazenamento não decide o que a obra pode planejar.' },
+    { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões, quantas linhas foram transcritas e se a geometria 3D já foi convertida. Uma versão nova nunca substitui as anteriores, e a versão sem o arquivo original continua completa como dado.' },
     { target: 'ifc-quantitativo', title: 'Quantitativo', body: 'As quantidades declaradas no modelo, somadas por tipo, com a distribuição por classe IFC e por pavimento e a consulta elemento a elemento. A soma é feita no banco, sobre o modelo inteiro — e sai em CSV para quem ainda precisa da planilha.' },
-    { target: 'ifc-viewer', title: 'Visualizador', body: 'O 3D é montado a partir da tabela: cada elemento aparece como a sua caixa envolvente. É o que faz o modelo abrir em qualquer tamanho de arquivo. Dá para isolar um pavimento e clicar num elemento para ver classe IFC, nome, GlobalId e pavimento.' },
+    { target: 'ifc-viewer', title: 'Visualizador', body: 'Desenha a geometria convertida guardada no envio, não o arquivo relido — é o que faz o modelo abrir em qualquer tamanho. Dá para colorir por pavimento ou por classe, isolar um pavimento e clicar num elemento para ver classe IFC, nome, GlobalId e pavimento.' },
     { target: 'ifc-rules', title: 'Vinculação por regras', body: 'As regras ligam elementos do modelo a um serviço por propriedade (pavimento e tipo de elemento nesta versão), em vez de seleção manual elemento por elemento. Regras cujo pavimento não existe mais no modelo aparecem marcadas para revisão.' },
   ],
   quatroD: [
     { title: 'BIM 4D', body: 'Mostra a evolução física no modelo federado e compara o planejado com o realizado numa data escolhida.' },
     { target: 'quatro-d-controls', title: 'Data, linha de base e pavimento', body: 'Escolha a data da consulta, a linha de base usada na comparação e o recorte por pavimento.' },
-    { target: 'quatro-d-viewer', title: 'Modelo federado', body: 'Os elementos são coloridos pelo serviço vinculado por regra. Avanço parcial aparece como estimativa do serviço — nenhum elemento individual é apresentado como verificado sem essa informação.' },
+    { target: 'quatro-d-viewer', title: 'Modelo federado', body: 'As versões escolhidas entram na mesma cena, com a geometria convertida no envio. Os elementos são coloridos pelo serviço vinculado por regra. Avanço parcial aparece como estimativa do serviço — nenhum elemento individual é apresentado como verificado sem essa informação.' },
   ],
   prevision: [
     { title: 'Atividades do Prevision', body: 'Aqui o cronograma do Prevision fica salvo no sistema; ele só é consultado de novo quando você pede. Cada atividade só entra inteira num vagão cujo período a contenha.' },

@@ -21,10 +21,17 @@ export async function GET(request: NextRequest) {
     const ids = models.map(model => model.id);
     if (!ids.length) return NextResponse.json({ versoes: [] }, { headers: { 'Cache-Control': 'no-store' } });
 
-    const { data, error } = await client.from('ifc_model_versions').select('id, extracted_at, element_rows, has_geometry').in('model_id', ids);
+    const { data, error } = await client.from('ifc_model_versions').select('id, extracted_at, element_rows').in('model_id', ids);
     if (error) throw new Error(error.message);
+    // A geometria convertida vive em tabela própria: a versão pode ter dados sem ter 3D.
+    const { data: fragments, error: fragmentsError } = await client.from('ifc_fragments').select('version_id, byte_size').in('version_id', data.map(version => version.id));
+    if (fragmentsError) throw new Error(fragmentsError.message);
+    const sizeOf = new Map(fragments.map(row => [row.version_id, Number(row.byte_size)]));
     return NextResponse.json({
-      versoes: data.map(version => ({ versionId: version.id, extractedAt: version.extracted_at ?? null, elementRows: version.element_rows ?? 0, hasGeometry: version.has_geometry === true })),
+      versoes: data.map(version => ({
+        versionId: version.id, extractedAt: version.extracted_at ?? null, elementRows: version.element_rows ?? 0,
+        hasGeometry: sizeOf.has(version.id), geometryBytes: sizeOf.get(version.id) ?? 0,
+      })),
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (cause) {
     return NextResponse.json({ error: `Falha ao consultar a transcrição dos modelos: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` }, { status: 502 });

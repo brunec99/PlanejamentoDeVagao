@@ -21,7 +21,9 @@ export async function POST(request: Request) {
   const modelId = typeof body?.modelId === 'string' ? body.modelId.trim() : '';
   const fileName = typeof body?.fileName === 'string' ? body.fileName.trim() : '';
   if (!modelId) return NextResponse.json({ error: 'Modelo não informado.' }, { status: 400 });
-  if (!fileName || !fileName.toLowerCase().endsWith('.ifc')) return NextResponse.json({ error: 'O repositório aceita apenas arquivos .ifc.' }, { status: 400 });
+  // Dois tipos sobem por aqui: o .ifc original, que é opcional, e o .frag com a geometria
+  // convertida, que é o que as telas 3D leem. Nada além disso entra no bucket.
+  if (!fileName || !/\.(ifc|frag)$/i.test(fileName)) return NextResponse.json({ error: 'O repositório aceita apenas arquivos .ifc e a geometria convertida .frag.' }, { status: 400 });
 
   let model;
   try { model = (await new SupabasePlanningRepository().getSnapshot()).ifcModels.find(m => m.id === modelId); }

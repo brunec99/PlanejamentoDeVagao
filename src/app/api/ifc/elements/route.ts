@@ -6,9 +6,9 @@ import { SupabasePlanningRepository } from '@/infrastructure/repositories/supaba
 export const runtime = 'nodejs';
 
 const PAGE = 500;
-// A consulta de geometria devolve nove números por elemento e alimenta o 3D inteiro: paginar de
-// 500 em 500 faria centenas de idas ao servidor para um modelo de obra. Linhas magras, página larga.
-const GEOMETRY_PAGE = 5000;
+// O mapa alimenta o 3D inteiro de uma vez: paginar de 500 em 500 faria centenas de idas ao
+// servidor para um modelo de obra, e cada ida relê o snapshot que autoriza a consulta.
+const MAP_PAGE = 5000;
 // Teto de linhas por resposta da API REST do Supabase, do qual nenhum range escapa.
 const CHUNK = 1000;
 
@@ -50,9 +50,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const elements = rows<{ expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; attributes?: Record<string, unknown>; box?: { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number } }>(body.elements)
-      .map(e => ({ id: `${versionId}:${e.expressId}`, created_at: now, version_id: versionId, express_id: e.expressId, global_id: e.globalId ?? null, ifc_class: e.ifcClass, name: e.name ?? null, object_type: e.objectType ?? null, storey: e.storey ?? null, attributes: e.attributes ?? {},
-        min_x: e.box?.minX ?? null, min_y: e.box?.minY ?? null, min_z: e.box?.minZ ?? null, max_x: e.box?.maxX ?? null, max_y: e.box?.maxY ?? null, max_z: e.box?.maxZ ?? null }));
+    const elements = rows<{ expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; attributes?: Record<string, unknown> }>(body.elements)
+      .map(e => ({ id: `${versionId}:${e.expressId}`, created_at: now, version_id: versionId, express_id: e.expressId, global_id: e.globalId ?? null, ifc_class: e.ifcClass, name: e.name ?? null, object_type: e.objectType ?? null, storey: e.storey ?? null, attributes: e.attributes ?? {} }));
     const properties = rows<{ expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }>(body.properties)
       .map(p => ({ id: crypto.randomUUID(), created_at: now, version_id: versionId, express_id: p.expressId, pset: p.pset, name: p.name, value_text: p.valueText ?? null, value_number: p.valueNumber ?? null, unit: p.unit ?? null }));
     const quantities = rows<{ expressId: number; qset: string; name: string; kind: string; value: number; unit?: string }>(body.quantities)
@@ -65,8 +64,9 @@ export async function POST(request: NextRequest) {
     if (body.finish === true) {
       const { count, error: countError } = await client.from('ifc_elements').select('id', { count: 'exact', head: true }).eq('version_id', versionId);
       if (countError) throw new Error(countError.message);
-      const { count: withBox } = await client.from('ifc_elements').select('id', { count: 'exact', head: true }).eq('version_id', versionId).not('min_x', 'is', null);
-      const { error } = await client.from('ifc_model_versions').update({ extracted_at: now, element_rows: count ?? 0, has_geometry: (withBox ?? 0) > 0 }).eq('id', versionId);
+      // A geometria não é contada aqui: ela é um objeto convertido à parte, registrado por
+      // /api/ifc/fragments. Esta contagem é da transcrição de dados.
+      const { error } = await client.from('ifc_model_versions').update({ extracted_at: now, element_rows: count ?? 0 }).eq('id', versionId);
       if (error) throw new Error(error.message);
       return NextResponse.json({ gravados: { elements: elements.length, properties: properties.length, quantities: quantities.length }, total: count ?? 0 }, { headers: { 'Cache-Control': 'no-store' } });
     }
@@ -99,9 +99,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const geometria = request.nextUrl.searchParams.get('geometria') === '1';
-    const colunas = geometria ? 'express_id, global_id, ifc_class, name, storey, min_x, min_y, min_z, max_x, max_y, max_z' : 'express_id, global_id, ifc_class, name, object_type, storey';
-    const size = geometria ? GEOMETRY_PAGE : PAGE;
+    // O mapa é a identidade do elemento para as telas 3D: GUID, classe e pavimento. O GUID é o
+    // que encontra o item dentro da geometria convertida, e classe e pavimento é o que a regra de
+    // vínculo usa para decidir o serviço. Sem GUID o elemento não tem como ser achado lá.
+    const mapa = request.nextUrl.searchParams.get('mapa') === '1';
+    const colunas = mapa ? 'global_id, ifc_class, name, storey' : 'express_id, global_id, ifc_class, name, object_type, storey';
+    const size = mapa ? MAP_PAGE : PAGE;
     // A página é montada em blocos porque a API REST nunca devolve mais de mil linhas por
     // requisição, qualquer que seja o range pedido. Quem paginasse de mil em mil pelo navegador
     // releria o snapshot do planejamento (que autoriza a consulta) a cada bloco.
@@ -111,7 +114,7 @@ export async function GET(request: NextRequest) {
       const wanted = Math.min(CHUNK, size - taken);
       const from = page * size + taken;
       let query = client.from('ifc_elements').select(colunas, { count: taken === 0 ? 'exact' : undefined }).eq('version_id', versionId);
-      if (geometria) query = query.not('min_x', 'is', null);
+      if (mapa) query = query.not('global_id', 'is', null);
       if (storey) query = query.eq('storey', storey);
       if (ifcClass) query = query.eq('ifc_class', ifcClass);
       const { data, count, error } = await query.order('express_id').range(from, from + wanted - 1);

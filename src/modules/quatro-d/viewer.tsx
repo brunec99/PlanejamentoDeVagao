@@ -2,42 +2,53 @@
 import { useEffect, useRef, useState } from 'react';
 import type * as ThreeNS from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import type { FragmentsModel, FragmentsModels, MaterialDefinition, RenderedFaces } from '@thatopen/fragments';
 import type { LinkRule } from '@/domain/entities';
 import { serviceForElement, type ElementFacts } from '@/domain/rules';
-import { readBoxes, NO_CLASS, NO_STOREY, type BoxRow } from '@/modules/ifc/box-source';
+import { NO_CLASS, NO_STOREY, readElementMap, type MapRow } from '@/modules/ifc/element-map';
+import { frame, loadFragments, MissingGeometry, type Federation } from '@/modules/ifc/fragments-stage';
 
 type Three = typeof ThreeNS;
 export interface ViewerService { name: string; color: string; percent: number | undefined }
 export interface ViewerJob { token: number; versions: { id: string; label: string }[] }
 
 const NEUTRAL = '#94a3b8';
-// Caixa de espessura zero (elemento plano na transcrição) desapareceria com escala 0.
-const MIN_SIZE = 1e-4;
 const NO_SERVICE = '';
 const count = (value: number) => value.toLocaleString('pt-BR');
-const pause = () => new Promise<void>(resolve => { setTimeout(resolve, 0); });
 
-interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls; root: ThreeNS.Group; zUp: ThreeNS.Group; geometry: ThreeNS.BoxGeometry }
-/** Um lote por par pavimento + serviço: o recorte por pavimento vira `.visible` e a cor do serviço
- * vira a troca de um material só, sem remontar a cena quando a data da consulta muda. */
-interface Bucket { storey: string; service: string; mesh: ThreeNS.InstancedMesh }
+interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls }
+/** Um elemento em cena: a linha transcrita já casada com o localId dela no modelo da sua versão. */
+interface Item { model: FragmentsModel; localId: number; storey: string; ifcClass: string }
+interface Loaded { fragments: FragmentsModels; models: FragmentsModel[]; faces: RenderedFaces; items: Item[]; declared: number; unconverted: number }
+/** localId só vale dentro do seu modelo, então toda cor e todo recorte vão por modelo. */
+interface Slice { model: FragmentsModel; localIds: number[] }
+interface Grouping { load: Loaded; byService: { service: string; slices: Slice[] }[]; byStorey: Map<string, Slice[]> }
 
 /** A regra casa com o que o arquivo diz do elemento. A transcrição dá nome à ausência para poder
  * filtrar por ela na tela; aqui a ausência volta a ser vazia, que é o que a regra entende. */
-const factsOf = (row: BoxRow): ElementFacts => ({
+const factsOf = (row: { storey: string; ifcClass: string }): ElementFacts => ({
   pavimento: row.storey === NO_STOREY ? '' : row.storey,
   tipo: row.ifcClass === NO_CLASS ? '' : row.ifcClass,
 });
 
 /** Avanço parcial vira tom e opacidade do serviço inteiro. Nunca "feito/não feito" por elemento:
  * o percentual é do serviço e não diz quais elementos foram executados. */
-function materialFor(three: Three, service: ViewerService | undefined) {
-  if (!service) return new three.MeshLambertMaterial({ color: NEUTRAL, transparent: true, opacity: 0.22, depthWrite: false });
+function materialFor(three: Three, faces: RenderedFaces, service: ViewerService | undefined): MaterialDefinition {
+  if (!service) return { color: new three.Color(NEUTRAL), opacity: 0.22, transparent: true, depthWrite: false, renderedFaces: faces };
   const full = new three.Color(service.color);
   const pale = full.clone().lerp(new three.Color('#ffffff'), 0.78);
   const ratio = Math.min(1, Math.max(0, (service.percent ?? 0) / 100));
   const opacity = 0.32 + 0.68 * ratio;
-  return new three.MeshLambertMaterial({ color: new three.Color().lerpColors(pale, full, ratio), transparent: opacity < 1, opacity, depthWrite: opacity > 0.85 });
+  return { color: new three.Color().lerpColors(pale, full, ratio), opacity, transparent: opacity < 1, depthWrite: opacity > 0.85, renderedFaces: faces };
+}
+
+/** Junta os localIds por chave e por modelo, para mandar um comando por grupo em vez de um por
+ * elemento: a conversa com o worker é assíncrona e um modelo tem centenas de milhares de itens. */
+function push(index: Map<string, Slice[]>, key: string, item: Item) {
+  let slices = index.get(key);
+  if (!slices) { slices = []; index.set(key, slices); }
+  const slice = slices.find(candidate => candidate.model === item.model);
+  if (slice) slice.localIds.push(item.localId); else slices.push({ model: item.model, localIds: [item.localId] });
 }
 
 export function FourDViewer({ job, rules, services, storey, onReport, onError }: {
@@ -52,14 +63,14 @@ export function FourDViewer({ job, rules, services, storey, onReport, onError }:
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [ready, setReady] = useState(false);
   const [webgl, setWebgl] = useState(true);
-  const [rows, setRows] = useState<BoxRow[]>();
-  const [flat, setFlat] = useState(false);
-  const [built, setBuilt] = useState(0);
+  const [loaded, setLoaded] = useState<Loaded>();
+  const [grouping, setGrouping] = useState<Grouping>();
   const [message, setMessage] = useState('');
-  const [failure, setFailure] = useState('');
+  /** `pending` separa a versão que ainda não foi convertida de uma falha de leitura: a primeira
+   * não é erro, é uma metade que falta, e a tela explica as duas de formas diferentes. */
+  const [failure, setFailure] = useState<{ text: string; pending: boolean }>();
   const stageRef = useRef<Stage | undefined>(undefined);
-  const bucketsRef = useRef<Bucket[]>([]);
-  const materialsRef = useRef<ThreeNS.MeshLambertMaterial[]>([]);
+  const fragmentsRef = useRef<FragmentsModels | undefined>(undefined);
   const busy = message !== '';
 
   useEffect(() => {
@@ -88,20 +99,14 @@ export function FourDViewer({ job, rules, services, storey, onReport, onError }:
       const fill = new three.DirectionalLight('#ffffff', 0.6);
       fill.position.set(-1.5, 0.8, -1);
       scene.add(fill);
-      const root = new three.Group();
-      root.matrixAutoUpdate = false;
-      // A tabela guarda a caixa no eixo do arquivo, com Z na vertical; o three usa Y.
-      const zUp = new three.Group();
-      zUp.rotation.x = -Math.PI / 2;
-      zUp.matrixAutoUpdate = false;
-      zUp.updateMatrix();
-      root.add(zUp);
-      scene.add(root);
       const orbit = new controls.OrbitControls(camera, renderer.domElement);
       orbit.enableDamping = true;
       orbit.dampingFactor = 0.08;
-      const geometry = new three.BoxGeometry(1, 1, 1);
-      stageRef.current = { three, renderer, scene, camera, controls: orbit, root, zUp, geometry };
+      // A malha convertida é entregue por pedaços, conforme o que a câmera alcança. Sem avisar o
+      // Fragments a cada movimento, a cena congela no detalhe do enquadramento anterior.
+      const follow = () => { void fragmentsRef.current?.update(); };
+      orbit.addEventListener('change', follow);
+      stageRef.current = { three, renderer, scene, camera, controls: orbit };
       renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
       const observer = new ResizeObserver(() => {
         camera.aspect = width() / height();
@@ -114,12 +119,8 @@ export function FourDViewer({ job, rules, services, storey, onReport, onError }:
       teardown = () => {
         observer.disconnect();
         renderer.setAnimationLoop(null);
+        orbit.removeEventListener('change', follow);
         orbit.dispose();
-        for (const bucket of bucketsRef.current) bucket.mesh.dispose();
-        bucketsRef.current = [];
-        for (const material of materialsRef.current) material.dispose();
-        materialsRef.current = [];
-        geometry.dispose();
         scene.clear();
         renderer.dispose();
         renderer.forceContextLoss();
@@ -131,140 +132,168 @@ export function FourDViewer({ job, rules, services, storey, onReport, onError }:
     return () => { dropped = true; setReady(false); teardown?.(); };
   }, [box, canvas]);
 
-  // Leitura: a geometria do conjunto federado vem da transcrição das versões escolhidas.
+  // Carga: as duas metades do modelo, que o envio separou. A malha vem do .frag de cada versão e
+  // a classe e o pavimento vêm das tabelas; o GlobalId é o que existe nos dois lados.
   useEffect(() => {
-    if (!job || !ready) return;
+    const stage = stageRef.current;
+    if (!job || !ready || !stage) return;
     const controller = new AbortController();
     let cancelled = false;
+    let opened: Federation | undefined;
 
     const run = async () => {
-      setFailure(''); onError(''); setRows(undefined); setFlat(false);
-      setMessage('Lendo a geometria transcrita…');
+      setFailure(undefined); onError(''); setLoaded(undefined); setGrouping(undefined);
+      setMessage('Abrindo a geometria convertida…');
       try {
-        const { rows: read, declared } = await readBoxes(job.versions.map(version => version.id), controller.signal, (done, total) => {
-          setMessage(total > 0 ? `Lendo ${count(done)} de ${count(total)} elementos…` : 'Lendo a geometria transcrita…');
+        const federation = await loadFragments({ scene: stage.scene, camera: stage.camera, versions: job.versions, signal: controller.signal, onProgress: setMessage });
+        opened = federation;
+        if (cancelled) return;
+        fragmentsRef.current = federation.fragments;
+        const { rows, declared } = await readElementMap(job.versions.map(version => version.id), controller.signal, (read, total) => {
+          setMessage(total > 0 ? `Lendo ${count(read)} de ${count(total)} elementos transcritos…` : 'Lendo os dados transcritos…');
         });
         if (cancelled) return;
-        setFlat(declared === 0);
-        setRows(read);
+        setMessage('Casando os elementos com a geometria…');
+        const byVersion = new Map<string, MapRow[]>();
+        for (const row of rows) {
+          const list = byVersion.get(row.versionId);
+          if (list) list.push(row); else byVersion.set(row.versionId, [row]);
+        }
+        const faces = federation.api.RenderedFaces.TWO;
+        const items: Item[] = [];
+        let unconverted = 0;
+        for (const { versionId, model } of federation.models) {
+          // Toda a malha começa neutra, inclusive o que existe convertido sem linha transcrita:
+          // nenhum elemento pode aparecer com a cor original do IFC, que se leria como vínculo.
+          await model.highlight(undefined, materialFor(stage.three, faces, undefined));
+          const mine = byVersion.get(versionId) ?? [];
+          if (!mine.length) continue;
+          // localId é por modelo: o GlobalId de uma versão só se resolve no .frag dela.
+          const localIds = await model.getLocalIdsByGuids(mine.map(row => row.globalId));
+          if (cancelled) return;
+          for (const [index, localId] of localIds.entries()) {
+            // Sem localId, o elemento foi transcrito sem representação geométrica — existe como
+            // dado e não como malha, o que é válido num IFC.
+            if (typeof localId !== 'number') { unconverted++; continue; }
+            items.push({ model, localId, storey: mine[index].storey, ifcClass: mine[index].ifcClass });
+          }
+        }
+        frame(stage.three, stage.camera, stage.controls, federation.models);
+        await federation.fragments.update(true);
+        if (cancelled) return;
+        setLoaded({ fragments: federation.fragments, models: federation.models.map(entry => entry.model), faces, items, declared, unconverted });
       } catch (cause) {
         if (cancelled || controller.signal.aborted) return;
         const text = cause instanceof Error && cause.message ? cause.message : 'Não foi possível carregar o modelo federado.';
-        setFailure(text); onError(text);
+        setFailure({ text, pending: cause instanceof MissingGeometry }); onError(text);
       } finally {
         if (!cancelled) setMessage('');
       }
     };
     run();
 
-    return () => { cancelled = true; controller.abort(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      setLoaded(undefined); setGrouping(undefined);
+      if (!opened) return;
+      // Recarregar sem descartar deixaria um worker e uma malha inteira por carga vivos na aba.
+      for (const { model } of opened.models) model.object.removeFromParent();
+      if (fragmentsRef.current === opened.fragments) fragmentsRef.current = undefined;
+      void opened.fragments.dispose().catch(() => undefined);
+    };
   }, [job, ready, onError]);
 
-  // Montagem: o serviço de cada elemento sai das regras, então a cena é remontada quando as
-  // regras mudam — nunca quando só a data muda, que é troca de material.
+  // Agrupamento: o serviço de cada elemento sai das regras, então os grupos são refeitos quando
+  // as regras mudam — nunca quando só a data muda, que é repintura.
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || !rows) return;
-    const { three } = stage;
-    for (const bucket of bucketsRef.current) { stage.zUp.remove(bucket.mesh); bucket.mesh.dispose(); }
-    bucketsRef.current = [];
-    stage.root.position.set(0, 0, 0);
-    stage.root.updateMatrix();
-    if (!rows.length) { onReport({ elements: 0, linked: 0 }); setBuilt(token => token + 1); return; }
-
-    const groups = new Map<string, { storey: string; service: string; rows: BoxRow[] }>();
+    if (!loaded) return;
+    const byService = new Map<string, Slice[]>();
+    const byStorey = new Map<string, Slice[]>();
     let linked = 0;
-    for (const row of rows) {
-      const service = serviceForElement(rules, factsOf(row)) ?? NO_SERVICE;
+    for (const item of loaded.items) {
+      const service = serviceForElement(rules, factsOf(item)) ?? NO_SERVICE;
       if (service !== NO_SERVICE) linked++;
-      const key = `${row.storey} ${service}`;
-      const group = groups.get(key);
-      if (group) group.rows.push(row); else groups.set(key, { storey: row.storey, service, rows: [row] });
+      push(byService, service, item);
+      push(byStorey, item.storey, item);
     }
-    // Modelo georreferenciado guarda coordenadas na ordem dos milhões e a matriz de instância é
-    // float32: sem trazer o conjunto para a origem, as caixas tremeriam e brigariam no depth.
-    const origin = [0, 1, 2].map(axis => {
-      let low = Infinity, high = -Infinity;
-      for (const row of rows) { low = Math.min(low, row.min[axis]); high = Math.max(high, row.max[axis]); }
-      return Number.isFinite(low) ? (low + high) / 2 : 0;
-    });
-    const matrix = new three.Matrix4();
-    const placeholder = materialFor(three, undefined);
-    for (const group of groups.values()) {
-      const mesh = new three.InstancedMesh(stage.geometry, placeholder, group.rows.length);
-      for (const [index, row] of group.rows.entries()) {
-        matrix.makeScale(
-          Math.max(row.max[0] - row.min[0], MIN_SIZE),
-          Math.max(row.max[1] - row.min[1], MIN_SIZE),
-          Math.max(row.max[2] - row.min[2], MIN_SIZE),
-        );
-        matrix.setPosition(
-          (row.min[0] + row.max[0]) / 2 - origin[0],
-          (row.min[1] + row.max[1]) / 2 - origin[1],
-          (row.min[2] + row.max[2]) / 2 - origin[2],
-        );
-        mesh.setMatrixAt(index, matrix);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.matrixAutoUpdate = false;
-      mesh.updateMatrix();
-      stage.zUp.add(mesh);
-      bucketsRef.current.push({ storey: group.storey, service: group.service, mesh });
-    }
-    materialsRef.current = [placeholder];
+    onReport({ elements: loaded.items.length, linked });
+    setGrouping({ load: loaded, byService: [...byService].map(([service, slices]) => ({ service, slices })), byStorey });
+  }, [loaded, rules, onReport]);
 
-    stage.root.updateMatrixWorld(true);
-    const bounds = new three.Box3().setFromObject(stage.zUp);
-    if (!bounds.isEmpty()) {
-      const center = bounds.getCenter(new three.Vector3());
-      const radius = Math.max(bounds.getSize(new three.Vector3()).length() / 2, 1);
-      const distance = radius / Math.sin((stage.camera.fov * Math.PI) / 360);
-      stage.root.position.copy(center).negate();
-      stage.root.updateMatrix();
-      stage.camera.position.set(distance * 0.65, distance * 0.55, distance * 0.65);
-      stage.camera.near = Math.max(distance / 1000, 0.01);
-      stage.camera.far = distance * 12;
-      stage.camera.updateProjectionMatrix();
-      stage.controls.target.set(0, 0, 0);
-      stage.controls.update();
-    }
-    onReport({ elements: rows.length, linked });
-    setBuilt(token => token + 1);
-  }, [rows, rules, onReport]);
-
-  // Pintura: trocar a data da consulta muda o percentual de cada serviço, e com ele o tom.
+  // Pintura: trocar a data da consulta muda o percentual de cada serviço, e com ele o tom. Só o
+  // material de cada grupo é reaplicado — a geometria convertida continua carregada.
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage || !built) return;
-    const byName = new Map(services.map(service => [service.name, service]));
-    const cache = new Map<string, ThreeNS.MeshLambertMaterial>();
-    for (const bucket of bucketsRef.current) {
-      bucket.mesh.visible = !storey || bucket.storey === storey;
-      const service = bucket.service === NO_SERVICE ? undefined : byName.get(bucket.service);
-      const key = service ? `${service.color}:${service.percent ?? 'x'}` : 'neutro';
-      let material = cache.get(key);
-      if (!material) { material = materialFor(stage.three, service); cache.set(key, material); }
-      bucket.mesh.material = material;
-    }
-    for (const old of materialsRef.current) old.dispose();
-    materialsRef.current = [...cache.values()];
-  }, [built, services, storey]);
+    if (!stage || !grouping) return;
+    let cancelled = false;
 
-  const empty = rows && rows.length === 0;
+    const paint = async () => {
+      const byName = new Map(services.map(service => [service.name, service]));
+      try {
+        for (const group of grouping.byService) {
+          const definition = materialFor(stage.three, grouping.load.faces, group.service === NO_SERVICE ? undefined : byName.get(group.service));
+          for (const slice of group.slices) {
+            if (cancelled) return;
+            await slice.model.highlight(slice.localIds, definition);
+          }
+        }
+        if (cancelled) return;
+        await grouping.load.fragments.update(true);
+      } catch { /* federação descartada no meio: a carga seguinte repinta tudo. */ }
+    };
+    paint();
+
+    return () => { cancelled = true; };
+  }, [grouping, services]);
+
+  // Recorte por pavimento: esconde e mostra, sem tocar na cor nem recarregar nada.
+  useEffect(() => {
+    if (!grouping) return;
+    let cancelled = false;
+
+    const cut = async () => {
+      try {
+        for (const model of grouping.load.models) {
+          if (cancelled) return;
+          if (storey) await model.setVisible(undefined, false); else await model.resetVisible();
+        }
+        for (const slice of storey ? grouping.byStorey.get(storey) ?? [] : []) {
+          if (cancelled) return;
+          await slice.model.setVisible(slice.localIds, true);
+        }
+        if (cancelled) return;
+        await grouping.load.fragments.update(true);
+      } catch { /* federação descartada no meio: a carga seguinte reaplica o recorte. */ }
+    };
+    cut();
+
+    return () => { cancelled = true; };
+  }, [grouping, storey]);
+
+  const empty = loaded !== undefined && loaded.items.length === 0;
+  const scene = webgl && !busy && !failure && loaded !== undefined && loaded.items.length > 0;
   return <div ref={setBox} className="relative h-[520px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-    <canvas ref={setCanvas} className="block h-full w-full" aria-label="Modelo federado colorido por serviço vinculado por regra" role="img" />
+    <canvas ref={setCanvas} className="block h-full w-full" aria-label="Modelo federado em geometria convertida, colorido pelo serviço vinculado por regra" role="img" />
     {!webgl && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
       Este navegador não tem WebGL disponível, então o modelo 3D não pode ser desenhado. A tabela de serviços por vagão abaixo traz a mesma informação de avanço por data.
     </p>}
     {webgl && busy && <p role="status" className="absolute inset-x-0 top-0 border-b border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-900">{message}</p>}
-    {webgl && !busy && failure && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">{failure}</p>}
+    {webgl && !busy && failure && <p role="alert" className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
+      {failure.pending
+        ? `${failure.text} A versão tem os dados transcritos em tabela, mas não tem a malha 3D, e isso não é falha: a conversão da geometria é feita no envio do modelo, então reenviar em Modelos IFC gera a metade que falta. Até lá, a tabela de serviços por vagão abaixo traz o mesmo avanço em texto.`
+        : failure.text}
+    </p>}
     {webgl && !busy && !failure && empty && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
-      {flat
-        ? 'As versões escolhidas têm dados transcritos, mas nenhuma representação geométrica — o que é válido num IFC e não é falha. A tabela de serviços por vagão abaixo traz o avanço por data; para ter a cena 3D, envie uma versão do modelo que inclua geometria.'
-        : 'Nenhuma caixa envolvente utilizável nas versões escolhidas. Reenvie o modelo em Modelos IFC para transcrever a geometria de novo.'}
+      {loaded.declared === 0
+        ? 'As versões escolhidas não têm elementos transcritos, então nada na cena pode ser ligado a um serviço. Reenvie o modelo em Modelos IFC para transcrever o IFC de novo.'
+        : `Nenhum dos ${count(loaded.declared)} elementos transcritos foi encontrado na geometria convertida pelo GlobalId, que é o que liga as duas metades do modelo. Reenvie o modelo em Modelos IFC para gerar as duas na mesma conversão.`}
     </p>}
     {webgl && !busy && !failure && !job && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-500">
-      Nenhum modelo carregado. Escolha as versões do conjunto federado e use &quot;Carregar modelo&quot; — a geometria transcrita é lida do banco quando você pede.
+      Nenhum modelo carregado. Escolha as versões do conjunto federado e use &quot;Carregar modelo&quot; — a geometria convertida no envio é baixada quando você pede.
+    </p>}
+    {scene && loaded.unconverted > 0 && <p role="status" className="absolute inset-x-0 bottom-0 border-t border-slate-200 bg-white/90 px-4 py-2 text-xs leading-5 text-slate-600">
+      {count(loaded.unconverted)} {loaded.unconverted === 1 ? 'elemento transcrito não tem geometria convertida e não aparece' : 'elementos transcritos não têm geometria convertida e não aparecem'} na cena — o avanço do serviço deles continua na tabela de serviços por vagão.
     </p>}
   </div>;
 }
