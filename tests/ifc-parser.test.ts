@@ -76,3 +76,28 @@ test('as regras casam com os pavimentos como eles saem do arquivo', async () => 
   assert.deepEqual(rulesNeedingReview([rule('r3', 'Cobertura')], storeys).map(r => r.id), ['r3']);
   assert.deepEqual(rulesNeedingReview([rule('r4', 'Térreo')], storeys), []);
 });
+
+test('a transcrição do IFC entrega elementos, propriedades e quantidades', async () => {
+  const { WebIFC, api, modelID } = await openFixture();
+  const { extractFromModel } = await import('../src/modules/ifc/extract-ifc');
+  const { elements, properties, quantities } = extractFromModel(api, modelID, WebIFC as unknown as Record<string, number>);
+  api.CloseModel(modelID);
+
+  assert.deepEqual(elements.map(e => [e.ifcClass, e.name, e.storey]), [
+    ['IfcWall', 'Parede do terreo', 'Terreo'],
+    ['IfcWall', 'Parede do primeiro', '1o Pavimento'],
+  ]);
+  assert.ok(elements[0].globalId, 'o GlobalId identifica o elemento entre versões');
+
+  const wall = elements[0].expressId;
+  assert.deepEqual(properties.filter(p => p.expressId === wall).map(p => [p.pset, p.name, p.valueText ?? p.valueNumber]), [
+    ['Pset_Alvenaria', 'Material', 'Bloco ceramico 14'],
+    ['Pset_Alvenaria', 'Espessura', 0.14],
+  ]);
+  assert.deepEqual(quantities.filter(q => q.expressId === wall).map(q => [q.name, q.kind, q.value]), [
+    ['NetSideArea', 'area', 12.5],
+    ['NetVolume', 'volume', 1.75],
+  ]);
+  // A segunda parede não tem conjunto de propriedades: a transcrição não inventa linhas.
+  assert.deepEqual(properties.filter(p => p.expressId === elements[1].expressId), []);
+});
