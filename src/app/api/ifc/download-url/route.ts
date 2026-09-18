@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const model = snapshot.ifcModels.find(m => m.id === version.modelId);
   if (!model) return NextResponse.json({ error: 'Modelo não encontrado.' }, { status: 400 });
   if (!profile.workIds.includes(model.workId)) return NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 });
+  if (!version.storagePath) return NextResponse.json({ error: 'Esta versão foi registrada só como tabelas: o arquivo não está guardado e o modelo não abre em 3D.' }, { status: 400 });
 
   const { data, error } = await getServiceClient().storage.from('ifc').createSignedUrl(version.storagePath, EXPIRES_IN);
   if (error || !data) return NextResponse.json({ error: 'Não foi possível abrir o arquivo do modelo. Tente novamente.' }, { status: 502 });

@@ -45,7 +45,7 @@ export type Command =
   | { type: 'unlink_activities'; dependencyId: string }
   | { type: 'set_activity_note'; activityId: string; note: string }
   | { type: 'create_ifc_model'; workId: string; name: string; discipline: string }
-  | { type: 'add_ifc_version'; modelId: string; fileName: string; fileSize: number; storagePath: string; storeys: string[]; elementCount: number }
+  | { type: 'add_ifc_version'; modelId: string; fileName: string; fileSize: number; storagePath?: string | null; storeys: string[]; elementCount: number }
   | { type: 'create_link_rule'; workId: string; serviceName: string; criteria: LinkRuleCriterion[] }
   | { type: 'delete_link_rule'; ruleId: string }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
@@ -504,13 +504,14 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       checkWork(model.workId);
       const fileName = requireText(command.fileName, 'Nome do arquivo');
       if (!/\.ifc$/i.test(fileName)) throw new Error('O repositório armazena apenas modelos IFC.');
-      requireText(command.storagePath, 'Caminho do arquivo');
-      if (data.ifcVersions.some(v => v.storagePath === command.storagePath)) throw new Error('Esta versão já foi registrada.');
+      // Sem arquivo guardado a versão vale pelas tabelas transcritas; com arquivo, o caminho é único.
+      const storagePath = command.storagePath?.trim() || undefined;
+      if (storagePath && data.ifcVersions.some(v => v.storagePath === storagePath)) throw new Error('Esta versão já foi registrada.');
       if (!Number.isFinite(command.fileSize) || command.fileSize <= 0) throw new Error('Arquivo vazio.');
       // Versões anteriores nunca são substituídas: cada envio empilha uma nova.
       const version = Math.max(0, ...data.ifcVersions.filter(v => v.modelId === model.id).map(v => v.version)) + 1;
       const storeys = [...new Set((command.storeys ?? []).filter(s => typeof s === 'string' && s.trim()).map(s => s.trim()))];
-      const record = { ...base(), modelId: model.id, version, fileName, fileSize: command.fileSize, storagePath: command.storagePath, uploadedBy: actorId, storeys, elementCount: Number.isFinite(command.elementCount) ? command.elementCount : 0 };
+      const record = { ...base(), modelId: model.id, version, fileName, fileSize: command.fileSize, storagePath, uploadedBy: actorId, storeys, elementCount: Number.isFinite(command.elementCount) ? command.elementCount : 0 };
       data.ifcVersions.push(record); entityId = record.id; break;
     }
     case 'create_link_rule': {

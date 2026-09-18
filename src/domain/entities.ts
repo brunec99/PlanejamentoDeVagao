@@ -64,7 +64,11 @@ export interface Baseline extends RecordBase { workId: Id; name: string; created
 /** Modelo IFC da obra. O arquivo vive no Storage; cada envio cria uma versão nova e
  * as anteriores nunca são apagadas. */
 export interface IfcModel extends RecordBase { workId: Id; name: string; discipline: string }
-export interface IfcModelVersion extends RecordBase { modelId: Id; version: number; fileName: string; fileSize: number; storagePath: string; uploadedBy: Id; storeys: string[]; elementCount: number }
+/** `storagePath` é opcional de propósito: o IFC é uma base de dados, e o que o planejamento
+ * consome são as tabelas transcritas dele. Guardar o arquivo é o que permite abrir o modelo em
+ * 3D, mas esbarra no limite por arquivo do Storage — sem ele a versão continua válida, só não
+ * abre no visualizador. */
+export interface IfcModelVersion extends RecordBase { modelId: Id; version: number; fileName: string; fileSize: number; storagePath?: string; uploadedBy: Id; storeys: string[]; elementCount: number }
 /** Regra de vínculo entre elementos IFC e um serviço (nome de atividade). As regras são
  * persistidas; o vínculo elemento a elemento é resolvido na visualização, nunca gravado —
  * seriam dezenas de milhares de linhas num snapshot que trafega inteiro a cada comando. */

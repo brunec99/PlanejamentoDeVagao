@@ -61,9 +61,17 @@ test('versão recusa caminho já registrado, arquivo vazio e modelo inexistente'
   assert.throws(()=>upload(d,modelId,'obra-1/estrutura/v1.ifc'),/já foi registrada/);
   assert.throws(()=>run(d,{type:'add_ifc_version',modelId,fileName:'torre.ifc',fileSize:0,storagePath:'obra-1/estrutura/v2.ifc',storeys:[],elementCount:0}),/Arquivo vazio/);
   assert.throws(()=>run(d,{type:'add_ifc_version',modelId,fileName:'torre.ifc',fileSize:-1,storagePath:'obra-1/estrutura/v3.ifc',storeys:[],elementCount:0}),/Arquivo vazio/);
-  assert.throws(()=>run(d,{type:'add_ifc_version',modelId,fileName:'torre.ifc',fileSize:10,storagePath:'  ',storeys:[],elementCount:0}),/Caminho do arquivo/);
   assert.throws(()=>upload(d,'inexistente','obra-1/estrutura/v4.ifc'),/Modelo não encontrado/);
   assert.equal(d.ifcVersions.length,1);
+});
+test('a versão vale sem arquivo guardado: o que sustenta ela são as tabelas transcritas',()=>{
+  const d=createMockData();const modelId=newModel(d);
+  // Um IFC grande não cabe no Storage, mas a transcrição cabe no banco: a versão existe assim mesmo.
+  const semArquivo=run(d,{type:'add_ifc_version',modelId,fileName:'torre.ifc',fileSize:200000000,storeys:['Terreo'],elementCount:1200});
+  assert.equal(d.ifcVersions.find(v=>v.id===semArquivo)?.storagePath,undefined);
+  const emBranco=run(d,{type:'add_ifc_version',modelId,fileName:'torre.ifc',fileSize:10,storagePath:'   ',storeys:[],elementCount:0});
+  assert.equal(d.ifcVersions.find(v=>v.id===emBranco)?.storagePath,undefined);
+  assert.equal(d.ifcVersions.filter(v=>v.modelId===modelId).length,2);
 });
 test('a numeração de versões sobe por modelo e é independente entre modelos',()=>{
   const d=createMockData();

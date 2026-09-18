@@ -1,10 +1,14 @@
 import type { IfcAPI } from 'web-ifc';
 
 /** Transcrição do IFC para o formato tabular. O arquivo é um grafo de instâncias tipadas e
- * relações objetivadas; aqui ele vira elemento, propriedade e quantidade — as três camadas
- * que o planejamento usa. O express id só é único dentro do arquivo, então quem identifica
- * o elemento entre versões é o GlobalId. */
-export interface ExtractedElement { expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; attributes: Record<string, string | number | boolean> }
+ * relações objetivadas; aqui ele vira elemento, propriedade, quantidade e caixa envolvente —
+ * as camadas que o planejamento usa. O express id só é único dentro do arquivo, então quem
+ * identifica o elemento entre versões é o GlobalId. */
+
+/** Caixa envolvente em coordenadas do modelo. É a geometria que vai para a tabela: seis números
+ * por elemento bastam para a leitura de planejamento e cabem em qualquer tamanho de modelo. */
+export interface BoundingBox { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number }
+export interface ExtractedElement { expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; box?: BoundingBox; attributes: Record<string, string | number | boolean> }
 export interface ExtractedProperty { expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }
 export type QuantityKind = 'area' | 'volume' | 'length' | 'count' | 'weight' | 'time';
 export interface ExtractedQuantity { expressId: number; qset: string; name: string; kind: QuantityKind; value: number; unit?: string }
@@ -32,13 +36,43 @@ const QUANTITIES: { type: string; kind: QuantityKind; field: string }[] = [
 ];
 
 type Api = Pick<IfcAPI, 'GetLine' | 'GetLineType' | 'GetNameFromTypeCode' | 'GetLineIDsWithType'>;
+type GeometryApi = Api & Pick<IfcAPI, 'StreamAllMeshes' | 'GetGeometry' | 'GetVertexArray' | 'GetIndexArray'>;
+
+/** Percorre as malhas e reduz cada elemento à sua caixa envolvente, aplicando a transformação
+ * de cada geometria posicionada. Um IFC sem representação geométrica simplesmente não produz
+ * caixa nenhuma — o que é válido, e diferente de falha. */
+export function extractBoxes(api: GeometryApi, modelID: number): Map<number, BoundingBox> {
+  const boxes = new Map<number, BoundingBox>();
+  api.StreamAllMeshes(modelID, mesh => {
+    let box = boxes.get(mesh.expressID);
+    for (let i = 0; i < mesh.geometries.size(); i++) {
+      const placed = mesh.geometries.get(i);
+      const geometry = api.GetGeometry(modelID, placed.geometryExpressID);
+      const vertices = api.GetVertexArray(geometry.GetVertexData(), geometry.GetVertexDataSize());
+      const m = placed.flatTransformation;
+      // O vértice ocupa seis floats: posição e normal. A normal não entra na caixa.
+      for (let v = 0; v < vertices.length; v += 6) {
+        const x = vertices[v], y = vertices[v + 1], z = vertices[v + 2];
+        const tx = m[0] * x + m[4] * y + m[8] * z + m[12];
+        const ty = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const tz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        box = box
+          ? { minX: Math.min(box.minX, tx), minY: Math.min(box.minY, ty), minZ: Math.min(box.minZ, tz), maxX: Math.max(box.maxX, tx), maxY: Math.max(box.maxY, ty), maxZ: Math.max(box.maxZ, tz) }
+          : { minX: tx, minY: ty, minZ: tz, maxX: tx, maxY: ty, maxZ: tz };
+      }
+      geometry.delete();
+    }
+    if (box) boxes.set(mesh.expressID, box);
+  });
+  return boxes;
+}
 const ids = (api: Api, modelID: number, type: number, inherited = false) => {
   const vector = api.GetLineIDsWithType(modelID, type, inherited);
   return Array.from({ length: vector.size() }, (_, i) => vector.get(i));
 };
 
 /** Roda sobre um modelo já aberto, para o navegador e os testes usarem o mesmo caminho. */
-export function extractFromModel(api: Api, modelID: number, schema: Record<string, number>): Extraction {
+export function extractFromModel(api: Api, modelID: number, schema: Record<string, number>, boxes = new Map<number, BoundingBox>()): Extraction {
   const className = (expressId: number) => api.GetNameFromTypeCode(api.GetLineType(modelID, expressId));
 
   // Pavimento: o elemento é contido numa estrutura espacial, que pode ser o próprio pavimento
@@ -84,7 +118,7 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
     }
     return {
       expressId, globalId: text(line.GlobalId), ifcClass: className(expressId),
-      name: text(line.Name), objectType: text(line.ObjectType), storey: storeyOf.get(expressId), attributes,
+      name: text(line.Name), objectType: text(line.ObjectType), storey: storeyOf.get(expressId), box: boxes.get(expressId), attributes,
     };
   });
 
@@ -138,7 +172,8 @@ export async function extractIfc(file: File): Promise<Extraction> {
   let modelID: number | undefined;
   try {
     modelID = api.OpenModel(new Uint8Array(await file.arrayBuffer()));
-    return extractFromModel(api, modelID, WebIFC as unknown as Record<string, number>);
+    const boxes = extractBoxes(api, modelID);
+    return extractFromModel(api, modelID, WebIFC as unknown as Record<string, number>, boxes);
   } catch (cause) {
     throw new Error(`Não foi possível ler o IFC: ${cause instanceof Error ? cause.message : 'arquivo inválido.'}`);
   } finally {
