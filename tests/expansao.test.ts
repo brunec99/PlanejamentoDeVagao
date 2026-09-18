@@ -9,24 +9,24 @@ let id=0;
 const context=(actorId='user-1'):CommandContext=>({actorId,today:'2026-09-08',now:'2026-09-08T12:00:00Z',newId:()=>`test-${++id}`});
 const run=(d:PlanningData,c:Command,actorId='user-1')=>applyCommand(d,c,context(actorId));
 const stamp={createdAt:'2026-08-20T12:00:00Z',updatedAt:'2026-08-20T12:00:00Z'};
-const otherWorkTeam=(d:PlanningData)=>{const t:Team={id:'equipe-obra2',...stamp,workId:'obra-2',name:'Terceirizada',weeklyCapacity:4};d.teams.push(t);return t;};
-const commitment=(id:string,fulfilled?:boolean):WeeklyCommitment=>({id,...stamp,activityId:'a1',weekStart:'2026-09-07',weekEnd:'2026-09-13',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2],fulfilled});
+const otherWorkTeam=(d:PlanningData)=>{const t:Team={id:'equipe-obra2',...stamp,workId:'obra-2',company:'Terceira',name:'Terceirizada',weeklyCapacity:4};d.teams.push(t);return t;};
+const commitment=(id:string,fulfilled?:boolean):WeeklyCommitment=>({id,...stamp,workId:'obra-1',name:'Alvenaria do 3º pavimento',activityId:'a1',weekStart:'2026-09-07',weekEnd:'2026-09-13',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2],fulfilled});
 
 test('consulta e obra sem acesso são bloqueados nos comandos da expansão',()=>{
   const d=createMockData();
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',name:'Pintura',weeklyCapacity:2},'user-3'),/apenas consulta/);
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',company:'SM MARTINS',name:'Pintura',weeklyCapacity:2},'user-3'),/apenas consulta/);
   assert.throws(()=>run(d,{type:'record_progress',activityId:'b3',progress:60},'user-3'),/apenas consulta/);
   assert.throws(()=>run(d,{type:'move_restriction',restrictionId:'r1',boardStatus:'em_tratativa'},'user-3'),/apenas consulta/);
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-2',name:'Pintura',weeklyCapacity:2},'user-2'),/acesso/);
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-2',company:'SM MARTINS',name:'Pintura',weeklyCapacity:2},'user-2'),/acesso/);
   assert.throws(()=>run(d,{type:'create_baseline',workId:'obra-2',name:'LB inicial'},'user-2'),/acesso/);
 });
 test('equipe exige capacidade inteira positiva e nome único na obra',()=>{
   const d=createMockData();
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',name:'Pintura',weeklyCapacity:0}),/inteiro positivo/);
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',name:'Pintura',weeklyCapacity:2.5}),/inteiro positivo/);
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',name:'  ',weeklyCapacity:2}),/Nome da equipe/);
-  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',name:'revestimentos',weeklyCapacity:2}),/já cadastrada/);
-  const teamId=run(d,{type:'create_team',workId:'obra-1',name:'Pintura',weeklyCapacity:4});
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',company:'SM MARTINS',name:'Pintura',weeklyCapacity:0}),/inteiro positivo/);
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',company:'SM MARTINS',name:'Pintura',weeklyCapacity:2.5}),/inteiro positivo/);
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',company:'SM MARTINS',name:'  ',weeklyCapacity:2}),/Nome da equipe/);
+  assert.throws(()=>run(d,{type:'create_team',workId:'obra-1',company:'sm martins',name:'revestimentos',weeklyCapacity:2}),/já cadastrada/);
+  const teamId=run(d,{type:'create_team',workId:'obra-1',company:'SM MARTINS',name:'Pintura',weeklyCapacity:4});
   assert.equal(d.teams.find(t=>t.id===teamId)?.weeklyCapacity,4);
 });
 test('atribuição de equipe respeita a obra e aceita limpar',()=>{
@@ -61,15 +61,16 @@ test('apontamento grava um lançamento datado e atualiza progresso e status',()=
 });
 test('compromisso é ancorado na segunda-feira da semana',()=>{
   const d=createMockData();
-  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
+  const commitmentId=run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
   const saved=d.commitments.find(c=>c.id===commitmentId)!;
   assert.equal(saved.weekStart,'2026-09-07');assert.equal(saved.weekEnd,'2026-09-13');assert.equal(saved.fulfilled,undefined);
 });
-test('compromisso exige empresa, equipe, dia marcado e período dentro da semana',()=>{
+test('compromisso exige equipe cadastrada, dia marcado e período dentro da semana',()=>{
   const d=createMockData();
-  const command=(extra:object)=>({type:'create_commitment' as const,activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4],...extra});
-  assert.throws(()=>run(d,command({company:' '})),/Empresa/);
-  assert.throws(()=>run(d,command({crew:''})),/Equipe/);
+  otherWorkTeam(d);
+  const command=(extra:object)=>({type:'create_commitment' as const,workId:'obra-1',name:'Diário de obra',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4],...extra});
+  assert.throws(()=>run(d,command({teamId:'inexistente'})),/equipe cadastrada/);
+  assert.throws(()=>run(d,command({teamId:'equipe-obra2'})),/equipe cadastrada/);
   assert.throws(()=>run(d,command({weekdays:[]})),/ao menos um dia/);
   assert.throws(()=>run(d,command({weekdays:[0]})),/segunda/);
   assert.throws(()=>run(d,command({weekdays:[7]})),/segunda/);
@@ -80,21 +81,27 @@ test('compromisso exige empresa, equipe, dia marcado e período dentro da semana
 });
 test('o compromisso guarda os dias marcados sem repetir e em ordem',()=>{
   const d=createMockData();
-  const id=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[4,2,2,3]});
+  const id=run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[4,2,2,3]});
   const saved=d.commitments.find(c=>c.id===id)!;
   assert.deepEqual(saved.weekdays,[2,3,4]);
-  assert.equal(saved.company,'ATR ENG');assert.equal(saved.crew,'Ana');
+  assert.equal(saved.teamId,'equipe-2');
 });
-test('compromisso é único por atividade e semana',()=>{
+test('a semana é montada do zero: a linha repete e dispensa atividade',()=>{
   const d=createMockData();
-  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-07',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
-  assert.throws(()=>run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-11',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]}),/já tem compromisso/);
-  run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-14',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-15',endDate:'2026-09-17',weekdays:[2]});
-  assert.deepEqual(d.commitments.map(c=>c.weekStart),['2026-09-07','2026-09-14']);
+  const linha=(extra:object)=>({type:'create_commitment' as const,workId:'obra-1',name:'Diário de obra',weekStart:'2026-09-07',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4],...extra});
+  // A planilha real repete linhas na mesma semana e traz tarefas fora do cronograma.
+  run(d,linha({activityId:'a4'}));
+  run(d,linha({activityId:'a4'}));
+  const semVinculo=run(d,linha({name:'GFIP'}));
+  assert.equal(d.commitments.length,3);
+  assert.equal(d.commitments.find(c=>c.id===semVinculo)?.activityId,undefined);
+  assert.equal(d.commitments.find(c=>c.id===semVinculo)?.name,'GFIP');
+  assert.throws(()=>run(d,linha({name:'  '})),/Atividade/);
+  assert.throws(()=>run(d,linha({activityId:'inexistente'})),/mesma obra/);
 });
 test('cumprimento exige causa quando não cumprido e é apurado uma só vez',()=>{
   const d=createMockData();
-  const commitmentId=run(d,{type:'create_commitment',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
+  const commitmentId=run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',activityId:'a4',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[2,3,4]});
   assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:false}),/Causa/);
   assert.throws(()=>run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Chuva'}),/fora da lista/);
   run(d,{type:'record_fulfillment',commitmentId,fulfilled:false,cause:'Falta de Material',justification:'Fornecedor atrasou a entrega'});
@@ -144,6 +151,6 @@ test('apontamento recusado não grava lançamento nem histórico no repositório
   const repo=new MockPlanningRepository();const before=await repo.getSnapshot();
   await assert.rejects(repo.transaction(d=>run(d,{type:'record_progress',activityId:'a5',progress:30})),/Libere/);
   assert.deepEqual(await repo.getSnapshot(),before);
-  await assert.rejects(repo.transaction(d=>run(d,{type:'create_commitment',activityId:'a1',weekStart:'2026-09-10',responsibleId:'user-1',company:'ATR ENG',crew:'Ana',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[]})),/ao menos um dia/);
+  await assert.rejects(repo.transaction(d=>run(d,{type:'create_commitment',workId:'obra-1',name:'Diário de obra',activityId:'a1',weekStart:'2026-09-10',responsibleId:'user-1',teamId:'equipe-2',startDate:'2026-09-08',endDate:'2026-09-10',weekdays:[]})),/ao menos um dia/);
   assert.deepEqual(await repo.getSnapshot(),before);
 });

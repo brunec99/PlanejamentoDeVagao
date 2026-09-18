@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import type { Activity, BoardStatus, Restriction, Wagon } from '@/domain/entities';
+import type { Activity, BoardStatus, Location, Restriction, Wagon } from '@/domain/entities';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { leadTimeDeadline } from '@/domain/rules';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
@@ -53,7 +53,7 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
           blocksExecution: checked(d, 'blocksExecution'), blocksTerminality: checked(d, 'blocksTerminality'), leadTimeDays: lead,
         };
       }}>
-        <RestrictionFields workId={workId} activities={activities} wagons={selected.wagons} />
+        <RestrictionFields workId={workId} activities={activities} locations={data.locations} />
       </CommandForm>
     </div>
 
@@ -85,26 +85,28 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
   </section>;
 }
 
-function RestrictionFields({ workId, activities, wagons }: { workId: string; activities: Activity[]; wagons: Wagon[] }) {
-  const [wagonId, setWagonId] = useState('');
+function RestrictionFields({ workId, activities, locations }: { workId: string; activities: Activity[]; locations: Location[] }) {
+  const [locationId, setLocationId] = useState('');
   const [activityId, setActivityId] = useState('');
   const [lead, setLead] = useState('');
-  // Uma obra real tem milhares de atividades: escolher o vagão primeiro deixa a lista utilizável.
-  const options = activities.filter(a => a.wagonId === wagonId).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  // Uma obra real tem milhares de atividades. O recorte é por local, não por vagão: o longo
+  // prazo lê a obra por serviço e local, e o vagão sai da atividade escolhida.
+  const options = activities.filter(a => a.locationId === locationId).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   const activity = options.find(a => a.id === activityId);
   const days = isInteger(lead) ? Number(lead) : undefined;
+  const used = locations.filter(l => activities.some(a => a.locationId === l.id));
   return <>
     <TextField name="description" label="Descrição da pendência" />
-    <Field label="Vagão">
-      <select className="field" required value={wagonId} onChange={e => { setWagonId(e.target.value); setActivityId(''); }}>
+    <Field label="Local">
+      <select className="field" required value={locationId} onChange={e => { setLocationId(e.target.value); setActivityId(''); }}>
         <option value="">Selecione</option>
-        {wagons.map(w => <option key={w.id} value={w.id}>{wagonLabel(w.number)} · {formatDate(w.plannedStart)} a {formatDate(w.plannedEnd)}</option>)}
+        {used.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
       </select>
     </Field>
     <Field label="Atividade vinculada">
-      <select className="field" name="activityId" required disabled={!wagonId} value={activityId} onChange={e => setActivityId(e.target.value)}>
-        <option value="">{wagonId ? 'Selecione' : 'Escolha o vagão primeiro'}</option>
-        {options.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+      <select className="field" name="activityId" required disabled={!locationId} value={activityId} onChange={e => setActivityId(e.target.value)}>
+        <option value="">{locationId ? 'Selecione' : 'Escolha o local primeiro'}</option>
+        {options.map(a => <option key={a.id} value={a.id}>{a.name} · {formatDate(a.plannedStart)}</option>)}
       </select>
     </Field>
     <Responsible workId={workId} />

@@ -56,38 +56,23 @@ A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`),
 
 Também é aqui que fica o **quadro de pendências**, em três colunas. Cada pendência é ligada a uma atividade e a um lead time em dias, e o limite de resolução não é digitado: o servidor calcula a partir do **início previsto da atividade menos o lead time**, porque o prazo de obtenção precisa caber antes de a frente começar. O card abre em detalhe com a descrição completa, a atividade vinculada, o lead time e a origem da data. Se a atividade for reprogramada depois, o card mostra o limite recalculado e sinaliza a divergência em relação à data gravada. Quem preferir continuar digitando a data pode deixar o lead time em branco.
 
-**Médio prazo** (`/obras/{obraId}/medio-prazo`): Look Ahead de três meses, com janela deslizante de hoje até 90 dias à frente — a janela anda com o dia atual, não é uma revisão trimestral. Nessa tela ficam o cadastro de equipes e sua capacidade, a alocação de atividades a equipes, a carga por equipe na janela, o lançamento de progresso e o histórico datado desses lançamentos. O quadro de pendências ficava aqui e passou para o longo prazo.
+**Médio prazo** (`/obras/{obraId}/medio-prazo`): o **plano do mês**, escrito do zero. A tela nasce em branco — nada vem importado — e o planejador cria um plano por mês e escreve as linhas: nome, início, término, duração, recurso, predecessora e anotação. A leitura é a do MS Project: numeração de linha, sumário recolhível, predecessoras pelo número da linha, setas da rede e a barra na régua de tempo.
 
-O centro da tela é o **cronograma**: uma linha por atividade, com início, término, duração, recurso e anotação, e a barra na régua de tempo ao lado. Clicando na linha abre o detalhe, onde se liga uma **predecessora** (término-início), se lê a lista de **sucessoras**, se troca o recurso, se escreve a **anotação da linha** e se lança o percentual executado. As setas desenham a rede; ficam vermelhas quando a sucessora começa antes do término da predecessora.
+Cada linha pode apontar para uma atividade do longo prazo, sem obrigar — é o rastro entre o mês detalhado e o serviço macro, e a mesma frouxidão existe na planilha semanal.
 
-O produto não reprograma sozinho, por decisão de escopo: a rede aponta a incoerência e a reprogramação é manual. Ligações que fechariam um ciclo são recusadas, e uma atividade só se liga a outra da mesma obra.
+**A linha de base é o próprio plano congelado**: "Definir linha de base" duplica o plano com `frozenAt` marcado, e o congelado não aceita edição. Por ser um plano como outro qualquer, ele abre no mesmo cronograma e serve de comparação — as linhas são pareadas **pelo nome**, já que a cópia tem ids próprios.
+
+Nesta tela também fica o cadastro de equipes, que carrega empresa e equipe e abastece tanto o recurso do cronograma quanto as colunas Empresa e Equipe da planilha semanal. Excluir equipe é recusado enquanto ela estiver em uso.
+
+As datas não se movem sozinhas, por decisão de escopo: a rede aponta a incoerência (sucessora que começa antes do término da predecessora) e a reprogramação é manual. Ligações que fechariam um ciclo são recusadas.
 
 **Curto prazo** (`/obras/{obraId}/curto-prazo`): a planilha de produção que a equipe preenche toda semana, com a mesma estrutura do Sheets que ela substitui — empresa, semana, início, término, atividade, equipe, os dias marcados de segunda a sábado, e no fechamento o Status (Sim/Não), a causa e a justificativa.
 
-A semana é sempre normalizada para a segunda-feira, e o período do compromisso tem de cair dentro dela. O número da semana é cumulativo, contado a partir da primeira semana planejada da obra — a planilha de origem pode ter outra origem de contagem, então esse é um ponto a conferir. As causas de não cumprimento são uma lista fechada de 17 itens, em `NON_FULFILLMENT_CAUSES` (`src/domain/entities.ts`), vinda da planilha; "Falha de Equipamento" e "Falta de equipamento" são causas distintas de propósito.
+A semana é montada do zero, como o plano do mês. A coluna Atividade é **texto livre**, porque a planilha real mistura frentes de obra com tarefas que não existem no cronograma ("Diário de obra", "GFIP", "Visita", "NF - ..."); o vínculo com uma atividade é opcional e serve de rastro. A mesma linha pode repetir na semana. "Copiar a semana anterior" traz as linhas da semana passada com as datas deslocadas em sete dias e sem apontamento, para o que é recorrente não ser redigitado.
 
-O PPC da semana conta compromissos cumpridos sobre compromissos assumidos — nunca é a média dos percentuais executados. O compromisso não tem meta de percentual: a planilha não tem essa coluna, e o que se apura é se a atividade da semana aconteceu ou não.
+A semana é sempre normalizada para a segunda-feira, e o período da linha tem de cair dentro dela. O número da semana é cumulativo, contado a partir da primeira semana planejada da obra — a planilha de origem pode ter outra origem de contagem, e a tela diz isso. As causas de não cumprimento são uma lista fechada de 17 itens, em `NON_FULFILLMENT_CAUSES` (`src/domain/entities.ts`), vinda da planilha; "Falha de Equipamento" e "Falta de equipamento" são causas distintas de propósito.
 
-**Vagões** (`/obras/{obraId}/vagoes`): a visão de vagões que antes respondia em `/obras/{obraId}/planejamento`. O detalhe de cada vagão segue em `/obras/{obraId}/vagoes/{vagaoId}`.
-
-Regras dos comandos novos, aplicadas no servidor como as demais:
-
-- `record_progress` exige vagão liberado para aumentar o percentual e é bloqueado por restrição aberta que impeça a execução. Reduzir o percentual exige justificativa. Sair de 100% num vagão terminal exige gestor e justificativa de reabertura. Cada lançamento grava uma entrada datada, e o campo da atividade guarda só o valor corrente.
-- `create_team` recusa capacidade não inteira ou não positiva e nome repetido na mesma obra. `assign_team` só aceita equipe da própria obra e admite desalocar.
-- `create_commitment` exige meta acima do percentual já executado e recusa um segundo compromisso para a mesma atividade na mesma semana.
-- `record_fulfillment` não reapura um compromisso já apurado e exige causa quando o compromisso não foi cumprido.
-- `create_baseline` exige ao menos um vagão cadastrado e nunca sobrescreve uma linha de base anterior.
-- `move_restriction` move a restrição entre "identificada" e "em tratativa" e recusa a coluna "Resolvida": ela só é alcançada por `resolve_restriction`, que exige o registro de como a restrição foi resolvida. Restrição resolvida não volta ao quadro.
-
-### Decisões iniciais
-
-Pontos que ainda não foram confirmados e valem como decisão inicial, sujeita a revisão:
-
-- Capacidade de equipe medida em atividades simultâneas por semana, e não em homem-hora ou em quantidade de serviço.
-- Quadro de restrições com três colunas (identificada, em tratativa, resolvida).
-- A linha de base guarda cópia das datas planejadas de vagões e atividades, não um retrato completo do planejamento.
-- As regras de vínculo leem duas propriedades do elemento IFC: pavimento e tipo. A comparação ignora maiúsculas, acentos e indicador ordinal, porque `1º Pavimento` e `Térreo` vêm assim no arquivo e o valor da regra é digitado à mão.
-- O avanço parcial no 4D aparece como estimativa do serviço, em tom e rótulo. Nenhum elemento individual é apresentado como executado, porque o percentual de um serviço não informa quais peças foram feitas.
+O PPC da semana conta compromissos cumpridos sobre compromissos assumidos — nunca é a média dos percentuais executados. Um Status registrado não é editável: a linha errada se corrige excluindo e lançando de novo.
 
 ## Modelos IFC e BIM 4D
 
@@ -129,7 +114,7 @@ Consultas têm timeout, mensagens sem credenciais, cache local de um minuto e in
 ## Supabase
 
 1. Crie um projeto em https://supabase.com/dashboard.
-2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` `0007_teams_progress_baselines.sql`, `0008_ifc_repository.sql`, `0009_restriction_lead_time.sql` e `0010_activity_network.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas. A `0008` cria `ifc_models`, `ifc_model_versions` e `link_rules`, o bucket privado `ifc` no Storage, e reescreve `commit_planning` de novo. A `0009` adiciona `restrictions.lead_time_days`. A `0010` cria `activity_dependencies` e `activities.notes`. A `0011` reformata `weekly_commitments` para a planilha de produção (tira `target_progress`, entra empresa, equipe, período, dias e justificativa). Cada migração é obrigatória antes de subir o código correspondente: o snapshot lê todas as tabelas em cada requisição, então uma tabela ausente derruba qualquer tela, não só as novas.
+2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` `0007_teams_progress_baselines.sql`, `0008_ifc_repository.sql`, `0009_restriction_lead_time.sql` e `0010_activity_network.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas. A `0008` cria `ifc_models`, `ifc_model_versions` e `link_rules`, o bucket privado `ifc` no Storage, e reescreve `commit_planning` de novo. A `0009` adiciona `restrictions.lead_time_days`. A `0010` cria `activity_dependencies` e `activities.notes`. A `0011` reformata `weekly_commitments` para a planilha de produção. A `0012` leva a empresa para o cadastro de equipes, liga o compromisso à equipe e libera exclusão de equipe e de linha. A `0013` cria `medium_term_plans`, `plan_tasks` e `plan_dependencies` para o plano do mês. A `0014` deixa a linha da planilha ser escrita do zero (`work_id`, `name`, atividade opcional). Cada migração é obrigatória antes de subir o código correspondente: o snapshot lê todas as tabelas em cada requisição, então uma tabela ausente derruba qualquer tela, não só as novas.
 3. Em Project Settings → API, copie a URL e as chaves `anon` e `service_role` para `.env.local` (a partir de `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 4. Configure o login com Google — veja [Login com Google](#login-com-google) abaixo. Não há mais login por senha nem script de seed com usuários fictícios: o primeiro acesso via Google já provisiona o usuário.
 5. `npm run dev` e acesse `/login`.

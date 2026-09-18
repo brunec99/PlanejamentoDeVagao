@@ -1,5 +1,5 @@
 import type {
-  Activity, ActivityDependency, Baseline, BaselineActivity, BaselineWagon, HistoryEvent, IfcModel, IfcModelVersion,
+  Activity, ActivityDependency, Baseline, MediumTermPlan, PlanDependency, PlanTask, BaselineActivity, BaselineWagon, HistoryEvent, IfcModel, IfcModelVersion,
   LinkRule, LinkRuleCriterion, Location, PendingItem, PlanningData, ProductionSequence,
   ProgressEntry, Release, Restriction, Team, TerminalityCriterion, TerminalityDebt, User,
   Wagon, WeeklyCommitment, Work,
@@ -12,6 +12,7 @@ export interface Rows {
   restrictions: RestrictionRow[]; releases: ReleaseRow[]; terminality_debts: DebtRow[];
   teams: TeamRow[]; progress_entries: ProgressEntryRow[]; baselines: BaselineRow[];
   weekly_commitments: CommitmentRow[]; activity_dependencies: DependencyRow[]; ifc_models: IfcModelRow[];
+  medium_term_plans: PlanRow[]; plan_tasks: PlanTaskRow[]; plan_dependencies: DependencyRow[];
   ifc_model_versions: IfcVersionRow[]; link_rules: LinkRuleRow[];
   history_events: HistoryRow[]; profiles: ProfileRow[];
 }
@@ -24,11 +25,13 @@ interface ActivityRow { id: string; created_at: string; updated_at: string; wago
 interface CriterionRow { id: string; created_at: string; updated_at: string; activity_id: string; description: string; mandatory: boolean; fulfilled: boolean; confirmed_at: string | null; confirmed_by: string | null }
 interface PendingRow { id: string; created_at: string; updated_at: string; wagon_id: string; activity_id: string | null; description: string; responsible_id: string; due_date: string; status: PendingItem['status']; blocks_terminality: boolean; resolved_at: string | null; resolution: string | null }
 interface RestrictionRow extends PendingRow { blocks_execution: boolean; board_status: Restriction['boardStatus']; lead_time_days: number | null }
-interface TeamRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; weekly_capacity: number }
+interface TeamRow { id: string; created_at: string; updated_at: string; work_id: string; company: string; name: string; weekly_capacity: number }
 interface ProgressEntryRow { id: string; created_at: string; updated_at: string; activity_id: string; recorded_date: string; progress: number; recorded_by: string }
 interface BaselineRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; created_by: string; wagons: BaselineWagon[]; activities: BaselineActivity[] }
-interface CommitmentRow { id: string; created_at: string; updated_at: string; activity_id: string; week_start: string; week_end: string; responsible_id: string; company: string; crew: string; start_date: string; end_date: string; weekdays: number[]; fulfilled: boolean | null; cause: WeeklyCommitment['cause'] | null; justification: string | null; recorded_at: string | null; recorded_by: string | null }
+interface CommitmentRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; activity_id: string | null; week_start: string; week_end: string; responsible_id: string; team_id: string; start_date: string; end_date: string; weekdays: number[]; fulfilled: boolean | null; cause: WeeklyCommitment['cause'] | null; justification: string | null; recorded_at: string | null; recorded_by: string | null }
 interface DependencyRow { id: string; created_at: string; updated_at: string; predecessor_id: string; successor_id: string }
+interface PlanRow { id: string; created_at: string; updated_at: string; work_id: string; month: string; name: string; baseline_of: string | null; frozen_at: string | null; created_by: string }
+interface PlanTaskRow { id: string; created_at: string; updated_at: string; plan_id: string; name: string; planned_start: string; planned_end: string; team_id: string | null; activity_id: string | null; notes: string | null; progress: number; order_index: number }
 interface IfcModelRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; discipline: string }
 interface IfcVersionRow { id: string; created_at: string; updated_at: string; model_id: string; version: number; file_name: string; file_size: number; storage_path: string; uploaded_by: string; storeys: string[]; element_count: number }
 interface LinkRuleRow { id: string; created_at: string; updated_at: string; work_id: string; order_index: number; service_name: string; criteria: LinkRuleCriterion[] }
@@ -49,11 +52,14 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
     restrictions: rows.restrictions.map((r): Restriction => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, activityId: r.activity_id ?? undefined, description: r.description, responsibleId: r.responsible_id, dueDate: r.due_date, status: r.status, blocksExecution: r.blocks_execution, blocksTerminality: r.blocks_terminality, resolvedAt: r.resolved_at ?? undefined, resolution: r.resolution ?? undefined, boardStatus: r.board_status, leadTimeDays: r.lead_time_days ?? undefined })),
     releases: rows.releases.map((r): Release => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, wagonId: r.wagon_id, predecessorId: r.predecessor_id ?? undefined, type: r.type, justification: r.justification ?? undefined, authorizedBy: r.authorized_by, regularizationResponsibleId: r.regularization_responsible_id ?? undefined, dueDate: r.due_date ?? undefined, releasedAt: r.released_at, acceptedPendingIds: r.accepted_pending_ids, acknowledgedDebtIds: r.acknowledged_debt_ids })),
     debts: rows.terminality_debts.map((r): TerminalityDebt => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, pendingItemId: r.pending_item_id, releaseId: r.release_id, responsibleId: r.responsible_id, dueDate: r.due_date })),
-    teams: rows.teams.map((r): Team => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, weeklyCapacity: r.weekly_capacity })),
+    teams: rows.teams.map((r): Team => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, company: r.company, name: r.name, weeklyCapacity: r.weekly_capacity })),
     progressEntries: rows.progress_entries.map((r): ProgressEntry => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, recordedDate: r.recorded_date, progress: r.progress, recordedBy: r.recorded_by })),
-    commitments: rows.weekly_commitments.map((r): WeeklyCommitment => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, activityId: r.activity_id, weekStart: r.week_start, weekEnd: r.week_end, responsibleId: r.responsible_id, company: r.company, crew: r.crew, startDate: r.start_date, endDate: r.end_date, weekdays: r.weekdays, fulfilled: r.fulfilled ?? undefined, cause: r.cause ?? undefined, justification: r.justification ?? undefined, recordedAt: r.recorded_at ?? undefined, recordedBy: r.recorded_by ?? undefined })),
+    commitments: rows.weekly_commitments.map((r): WeeklyCommitment => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, activityId: r.activity_id ?? undefined, weekStart: r.week_start, weekEnd: r.week_end, responsibleId: r.responsible_id, teamId: r.team_id, startDate: r.start_date, endDate: r.end_date, weekdays: r.weekdays, fulfilled: r.fulfilled ?? undefined, cause: r.cause ?? undefined, justification: r.justification ?? undefined, recordedAt: r.recorded_at ?? undefined, recordedBy: r.recorded_by ?? undefined })),
     baselines: rows.baselines.map((r): Baseline => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, createdBy: r.created_by, wagons: r.wagons, activities: r.activities })),
     dependencies: rows.activity_dependencies.map((r): ActivityDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id })),
+    plans: rows.medium_term_plans.map((r): MediumTermPlan => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, month: r.month, name: r.name, baselineOf: r.baseline_of ?? undefined, frozenAt: r.frozen_at ?? undefined, createdBy: r.created_by })),
+    planTasks: rows.plan_tasks.map((r): PlanTask => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, planId: r.plan_id, name: r.name, plannedStart: r.planned_start, plannedEnd: r.planned_end, teamId: r.team_id ?? undefined, activityId: r.activity_id ?? undefined, notes: r.notes ?? undefined, progress: r.progress, order: r.order_index })),
+    planDependencies: rows.plan_dependencies.map((r): PlanDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id })),
     ifcModels: rows.ifc_models.map((r): IfcModel => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, discipline: r.discipline })),
     ifcVersions: rows.ifc_model_versions.map((r): IfcModelVersion => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, modelId: r.model_id, version: r.version, fileName: r.file_name, fileSize: r.file_size, storagePath: r.storage_path, uploadedBy: r.uploaded_by, storeys: r.storeys, elementCount: r.element_count })),
     linkRules: rows.link_rules.map((r): LinkRule => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, order: r.order_index, serviceName: r.service_name, criteria: r.criteria })),
@@ -77,11 +83,14 @@ export function planningDataToPayload(data: PlanningData) {
     restrictions: data.restrictions.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, wagon_id: r.wagonId, activity_id: r.activityId ?? null, description: r.description, responsible_id: r.responsibleId, due_date: r.dueDate, status: r.status, blocks_execution: r.blocksExecution, blocks_terminality: r.blocksTerminality, resolved_at: r.resolvedAt ?? null, resolution: r.resolution ?? null, board_status: r.boardStatus, lead_time_days: r.leadTimeDays ?? null })),
     releases: data.releases.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, wagon_id: r.wagonId, predecessor_id: r.predecessorId ?? null, type: r.type, justification: r.justification ?? null, authorized_by: r.authorizedBy, regularization_responsible_id: r.regularizationResponsibleId ?? null, due_date: r.dueDate ?? null, released_at: r.releasedAt, accepted_pending_ids: r.acceptedPendingIds, acknowledged_debt_ids: r.acknowledgedDebtIds })),
     terminality_debts: data.debts.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, pending_item_id: d.pendingItemId, release_id: d.releaseId, responsible_id: d.responsibleId, due_date: d.dueDate })),
-    teams: data.teams.map(t => ({ id: t.id, created_at: t.createdAt, updated_at: t.updatedAt, work_id: t.workId, name: t.name, weekly_capacity: t.weeklyCapacity })),
+    teams: data.teams.map(t => ({ id: t.id, created_at: t.createdAt, updated_at: t.updatedAt, work_id: t.workId, company: t.company, name: t.name, weekly_capacity: t.weeklyCapacity })),
     progress_entries: data.progressEntries.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, activity_id: p.activityId, recorded_date: p.recordedDate, progress: p.progress, recorded_by: p.recordedBy })),
-    weekly_commitments: data.commitments.map(c => ({ id: c.id, created_at: c.createdAt, updated_at: c.updatedAt, activity_id: c.activityId, week_start: c.weekStart, week_end: c.weekEnd, responsible_id: c.responsibleId, company: c.company, crew: c.crew, start_date: c.startDate, end_date: c.endDate, weekdays: c.weekdays, fulfilled: c.fulfilled ?? null, cause: c.cause ?? null, justification: c.justification ?? null, recorded_at: c.recordedAt ?? null, recorded_by: c.recordedBy ?? null })),
+    weekly_commitments: data.commitments.map(c => ({ id: c.id, created_at: c.createdAt, updated_at: c.updatedAt, work_id: c.workId, name: c.name, activity_id: c.activityId ?? null, week_start: c.weekStart, week_end: c.weekEnd, responsible_id: c.responsibleId, team_id: c.teamId, start_date: c.startDate, end_date: c.endDate, weekdays: c.weekdays, fulfilled: c.fulfilled ?? null, cause: c.cause ?? null, justification: c.justification ?? null, recorded_at: c.recordedAt ?? null, recorded_by: c.recordedBy ?? null })),
     baselines: data.baselines.map(b => ({ id: b.id, created_at: b.createdAt, updated_at: b.updatedAt, work_id: b.workId, name: b.name, created_by: b.createdBy, wagons: b.wagons, activities: b.activities })),
     activity_dependencies: data.dependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId })),
+    medium_term_plans: data.plans.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, work_id: p.workId, month: p.month, name: p.name, baseline_of: p.baselineOf ?? null, frozen_at: p.frozenAt ?? null, created_by: p.createdBy })),
+    plan_tasks: data.planTasks.map(t => ({ id: t.id, created_at: t.createdAt, updated_at: t.updatedAt, plan_id: t.planId, name: t.name, planned_start: t.plannedStart, planned_end: t.plannedEnd, team_id: t.teamId ?? null, activity_id: t.activityId ?? null, notes: t.notes ?? null, progress: t.progress, order_index: t.order })),
+    plan_dependencies: data.planDependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId })),
     ifc_models: data.ifcModels.map(m => ({ id: m.id, created_at: m.createdAt, updated_at: m.updatedAt, work_id: m.workId, name: m.name, discipline: m.discipline })),
     ifc_model_versions: data.ifcVersions.map(v => ({ id: v.id, created_at: v.createdAt, updated_at: v.updatedAt, model_id: v.modelId, version: v.version, file_name: v.fileName, file_size: v.fileSize, storage_path: v.storagePath, uploaded_by: v.uploadedBy, storeys: v.storeys, element_count: v.elementCount })),
     link_rules: data.linkRules.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, work_id: r.workId, order_index: r.order, service_name: r.serviceName, criteria: r.criteria })),
@@ -106,5 +115,10 @@ export function diffDeletedIds(before: PlanningData, after: PlanningData) {
     restrictions: removed(before.restrictions, after.restrictions),
     link_rules: removed(before.linkRules, after.linkRules),
     activity_dependencies: removed(before.dependencies, after.dependencies),
+    weekly_commitments: removed(before.commitments, after.commitments),
+    teams: removed(before.teams, after.teams),
+    plan_dependencies: removed(before.planDependencies, after.planDependencies),
+    plan_tasks: removed(before.planTasks, after.planTasks),
+    medium_term_plans: removed(before.plans, after.plans),
   };
 }

@@ -23,13 +23,24 @@ export type Command =
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
-  | { type: 'create_team'; workId: string; name: string; weeklyCapacity: number }
+  | { type: 'create_team'; workId: string; company: string; name: string; weeklyCapacity: number }
+  | { type: 'delete_team'; teamId: string }
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
-  | { type: 'create_commitment'; activityId: string; weekStart: string; responsibleId: string; company: string; crew: string; startDate: string; endDate: string; weekdays: number[] }
+  | { type: 'create_commitment'; workId: string; name: string; activityId?: string | null; weekStart: string; responsibleId: string; teamId: string; startDate: string; endDate: string; weekdays: number[] }
+  | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
+  | { type: 'create_plan'; workId: string; month: string; name?: string }
+  | { type: 'delete_plan'; planId: string }
+  | { type: 'freeze_plan_baseline'; planId: string; name: string }
+  | { type: 'create_plan_task'; planId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null }
+  | { type: 'update_plan_task'; taskId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; progress: number }
+  | { type: 'delete_plan_task'; taskId: string }
+  | { type: 'set_plan_task_note'; taskId: string; note: string }
+  | { type: 'link_plan_tasks'; predecessorId: string; successorId: string }
+  | { type: 'unlink_plan_tasks'; dependencyId: string }
   | { type: 'link_activities'; predecessorId: string; successorId: string }
   | { type: 'unlink_activities'; dependencyId: string }
   | { type: 'set_activity_note'; activityId: string; note: string }
@@ -102,6 +113,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
   };
   const checkReopen = (wagon: Wagon, reason?: string) => { if (isTerminal(wagon.id, data)) { if (actor.role !== 'manager') throw new Error('Somente gestor pode reabrir um vagão terminal.'); requireText(reason ?? '', 'Justificativa de reabertura'); } };
   const touch = (record: RecordBase) => { record.updatedAt = now; };
+  const planFor = (id: string) => { const plan = data.plans.find(p => p.id === id); if (!plan) throw new Error('Plano não encontrado.'); return plan; };
+  const taskFor = (id: string) => { const task = data.planTasks.find(t => t.id === id); if (!task) throw new Error('Linha do plano não encontrada.'); return task; };
   let entityId = ''; let wagonId: string | undefined;
   const beforeTerminal = new Set(data.wagons.filter(w => isTerminal(w.id, data)).map(w => w.id));
   switch (command.type) {
@@ -267,10 +280,19 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     }
     case 'create_team': {
       checkWork(command.workId); const name = requireText(command.name, 'Nome da equipe');
+      const company = requireText(command.company, 'Empresa');
       if (!Number.isInteger(command.weeklyCapacity) || command.weeklyCapacity <= 0) throw new Error('Capacidade deve ser um número inteiro positivo de atividades por semana.');
-      if (data.teams.some(t => t.workId === command.workId && t.name.toLowerCase() === name.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra.');
-      const team = { ...base(), workId: command.workId, name, weeklyCapacity: command.weeklyCapacity };
+      if (data.teams.some(t => t.workId === command.workId && t.name.toLowerCase() === name.toLowerCase() && t.company.toLowerCase() === company.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra para esta empresa.');
+      const team = { ...base(), workId: command.workId, company, name, weeklyCapacity: command.weeklyCapacity };
       data.teams.push(team); entityId = team.id; break;
+    }
+    case 'delete_team': {
+      const team = data.teams.find(t => t.id === command.teamId); if (!team) throw new Error('Equipe não encontrada.');
+      checkWork(team.workId);
+      // Apagar a equipe deixaria atividade e compromisso apontando para o vazio.
+      if (data.activities.some(a => a.teamId === team.id)) throw new Error('Esta equipe está atribuída a atividades. Troque o recurso delas antes de excluir.');
+      if (data.commitments.some(c => c.teamId === team.id)) throw new Error('Esta equipe tem compromissos na planilha semanal. Exclua as linhas antes de excluir a equipe.');
+      data.teams = data.teams.filter(t => t.id !== team.id); entityId = team.id; break;
     }
     case 'assign_team': {
       const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
@@ -293,8 +315,14 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       entityId = activity.id; wagonId = wagon.id; break;
     }
     case 'create_commitment': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); const workId = workOf(wagon);
+      // A semana é montada do zero: o nome é escrito à mão e a atividade é vínculo opcional,
+      // porque a planilha real mistura frentes de obra com tarefas que não estão no cronograma.
+      const workId = command.workId; checkWork(workId);
+      const name = requireText(command.name, 'Atividade');
+      if (command.activityId) {
+        const linked = data.activities.find(a => a.id === command.activityId);
+        if (!linked || workOf(wagonFor(data, linked.wagonId)) !== workId) throw new Error('A atividade vinculada deve ser da mesma obra.');
+      }
       responsible(command.responsibleId, workId); validateDate(command.weekStart);
       const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
       validatePeriod(command.startDate, command.endDate);
@@ -302,16 +330,15 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const weekdays = [...new Set(command.weekdays ?? [])].sort((a, b) => a - b);
       if (!weekdays.length) throw new Error('Marque ao menos um dia da semana.');
       if (weekdays.some(day => !Number.isInteger(day) || day < 1 || day > 6)) throw new Error('Os dias da semana vão de segunda (1) a sábado (6).');
-      if (data.commitments.some(c => c.activityId === activity.id && c.weekStart === weekStart)) throw new Error('Esta atividade já tem compromisso nesta semana.');
-      const commitment = { ...base(), activityId: activity.id, weekStart, weekEnd, responsibleId: command.responsibleId,
-        company: requireText(command.company, 'Empresa'), crew: requireText(command.crew, 'Equipe'),
-        startDate: command.startDate, endDate: command.endDate, weekdays };
-      data.commitments.push(commitment); entityId = commitment.id; wagonId = wagon.id; break;
+      const team = data.teams.find(t => t.id === command.teamId && t.workId === workId);
+      if (!team) throw new Error('Selecione uma equipe cadastrada nesta obra.');
+      const commitment = { ...base(), workId, name, activityId: command.activityId ?? undefined, weekStart, weekEnd,
+        responsibleId: command.responsibleId, teamId: team.id, startDate: command.startDate, endDate: command.endDate, weekdays };
+      data.commitments.push(commitment); entityId = commitment.id; break;
     }
     case 'record_fulfillment': {
       const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
-      const activity = data.activities.find(a => a.id === commitment.activityId)!;
-      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
+      checkWork(commitment.workId);
       if (typeof commitment.fulfilled === 'boolean') throw new Error('Cumprimento deste compromisso já foi registrado.');
       let cause: NonFulfillmentCause | undefined;
       if (!command.fulfilled) {
@@ -319,7 +346,13 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         if (!cause) throw new Error('Causa fora da lista de causas de não cumprimento.');
       }
       Object.assign(commitment, { fulfilled: command.fulfilled, cause, justification: command.justification?.trim() || undefined, recordedAt: now, recordedBy: actorId });
-      touch(commitment); entityId = commitment.id; wagonId = wagon.id; break;
+      touch(commitment); entityId = commitment.id; break;
+    }
+    case 'delete_commitment': {
+      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      checkWork(commitment.workId);
+      // A planilha permite apagar a linha, inclusive já apurada: é como se corrige um apontamento.
+      data.commitments = data.commitments.filter(c => c.id !== commitment.id); entityId = commitment.id; break;
     }
     case 'create_baseline': {
       checkWork(command.workId); const name = requireText(command.name, 'Nome da linha de base');
@@ -338,6 +371,93 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (restriction.status === 'resolved') throw new Error('Restrição resolvida não volta ao quadro.');
       if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa') throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
       restriction.boardStatus = command.boardStatus; touch(restriction); entityId = restriction.id; wagonId = wagon.id; break;
+    }
+    case 'create_plan': {
+      checkWork(command.workId);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(command.month)) throw new Error('Informe o mês no formato AAAA-MM.');
+      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf)) throw new Error('Esta obra já tem um plano para este mês.');
+      const plan = { ...base(), workId: command.workId, month: command.month, name: command.name?.trim() || `Plano de ${command.month}`, createdBy: actorId };
+      data.plans.push(plan); entityId = plan.id; break;
+    }
+    case 'delete_plan': {
+      const plan = planFor(command.planId); checkWork(plan.workId);
+      if (data.plans.some(p => p.baselineOf === plan.id)) throw new Error('Este plano tem linhas de base salvas. Exclua-as antes de excluir o plano.');
+      const taskIds = new Set(data.planTasks.filter(t => t.planId === plan.id).map(t => t.id));
+      data.planDependencies = data.planDependencies.filter(d => !taskIds.has(d.predecessorId) && !taskIds.has(d.successorId));
+      data.planTasks = data.planTasks.filter(t => !taskIds.has(t.id));
+      data.plans = data.plans.filter(p => p.id !== plan.id);
+      entityId = plan.id; break;
+    }
+    case 'freeze_plan_baseline': {
+      const plan = planFor(command.planId); checkWork(plan.workId);
+      if (plan.baselineOf) throw new Error('Esta já é uma linha de base.');
+      const tasks = data.planTasks.filter(t => t.planId === plan.id);
+      if (!tasks.length) throw new Error('Preencha o plano antes de definir a linha de base.');
+      // A linha de base é o próprio plano congelado: mesma estrutura, aberta no mesmo cronograma.
+      const frozen = { ...base(), workId: plan.workId, month: plan.month, name: requireText(command.name, 'Nome da linha de base'), baselineOf: plan.id, frozenAt: now, createdBy: actorId };
+      data.plans.push(frozen);
+      for (const task of tasks) data.planTasks.push({ ...base(), planId: frozen.id, name: task.name, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, teamId: task.teamId, activityId: task.activityId, notes: task.notes, progress: task.progress, order: task.order });
+      entityId = frozen.id; break;
+    }
+    case 'create_plan_task': case 'update_plan_task': {
+      const plan = command.type === 'create_plan_task' ? planFor(command.planId) : planFor(taskFor(command.taskId).planId);
+      const workId = plan.workId; checkWork(workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      const name = requireText(command.name, 'Nome da linha');
+      validatePeriod(command.plannedStart, command.plannedEnd);
+      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId)) throw new Error('Equipe deve pertencer à obra.');
+      if (command.activityId) {
+        const linked = data.activities.find(a => a.id === command.activityId);
+        if (!linked || workOf(wagonFor(data, linked.wagonId)) !== workId) throw new Error('A atividade vinculada deve ser da mesma obra.');
+      }
+      const fields = { name, plannedStart: command.plannedStart, plannedEnd: command.plannedEnd, teamId: command.teamId ?? undefined, activityId: command.activityId ?? undefined };
+      if (command.type === 'create_plan_task') {
+        const order = Math.max(0, ...data.planTasks.filter(t => t.planId === plan.id).map(t => t.order)) + 1;
+        const task = { ...base(), planId: plan.id, ...fields, progress: 0, order };
+        data.planTasks.push(task); entityId = task.id;
+      } else {
+        if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+        const task = taskFor(command.taskId);
+        Object.assign(task, fields, { progress: command.progress }); touch(task); entityId = task.id;
+      }
+      break;
+    }
+    case 'delete_plan_task': {
+      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      data.planDependencies = data.planDependencies.filter(d => d.predecessorId !== task.id && d.successorId !== task.id);
+      data.planTasks = data.planTasks.filter(t => t.id !== task.id);
+      entityId = task.id; break;
+    }
+    case 'set_plan_task_note': {
+      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      if (command.note.length > 2000) throw new Error('Anotação muito longa: use até 2000 caracteres.');
+      task.notes = command.note.trim() || undefined; touch(task); entityId = task.id; break;
+    }
+    case 'link_plan_tasks': {
+      const predecessor = taskFor(command.predecessorId), successor = taskFor(command.successorId);
+      if (predecessor.id === successor.id) throw new Error('Uma linha não pode depender de si mesma.');
+      if (predecessor.planId !== successor.planId) throw new Error('As linhas ligadas devem ser do mesmo plano.');
+      const plan = planFor(successor.planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      if (data.planDependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe.');
+      const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
+        if (from === target) return true;
+        if (seen.has(from)) return false;
+        seen.add(from);
+        return data.planDependencies.filter(d => d.predecessorId === from).some(d => reaches(d.successorId, target, seen));
+      };
+      if (reaches(successor.id, predecessor.id)) throw new Error('Essa ligação criaria um ciclo entre as linhas.');
+      const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id };
+      data.planDependencies.push(dependency); entityId = dependency.id; break;
+    }
+    case 'unlink_plan_tasks': {
+      const dependency = data.planDependencies.find(d => d.id === command.dependencyId); if (!dependency) throw new Error('Dependência não encontrada.');
+      const plan = planFor(taskFor(dependency.successorId).planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      data.planDependencies = data.planDependencies.filter(d => d.id !== dependency.id);
+      entityId = dependency.id; break;
     }
     case 'link_activities': {
       const predecessor = data.activities.find(a => a.id === command.predecessorId);
@@ -454,7 +574,10 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       // reinseriria linhas apontando para atividade inexistente, violando a chave estrangeira
       // e derrubando a transação toda.
       data.progressEntries = data.progressEntries.filter(p => !removedActivities.has(p.activityId));
-      data.commitments = data.commitments.filter(c => !removedActivities.has(c.activityId));
+      // A linha da planilha é do planejador, não do cronograma: ressincronizar o Prevision
+      // desfaz o vínculo com a atividade removida, mas não apaga o registro da semana.
+      for (const commitment of data.commitments) if (commitment.activityId && removedActivities.has(commitment.activityId)) { commitment.activityId = undefined; touch(commitment); }
+      for (const task of data.planTasks) if (task.activityId && removedActivities.has(task.activityId)) { task.activityId = undefined; touch(task); }
       data.dependencies = data.dependencies.filter(d => !removedActivities.has(d.predecessorId) && !removedActivities.has(d.successorId));
       if (!work.previsionProjectId) { work.previsionProjectId = command.projectId; touch(work); }
       let predecessorId = plan.frozenWagonId; let number = plan.startNumber;

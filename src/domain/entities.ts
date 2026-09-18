@@ -12,8 +12,20 @@ export interface Activity extends RecordBase { wagonId: Id; name: string; locati
 /** Dependência término-início entre atividades. O produto reprograma manualmente, por decisão
  * de escopo: a dependência serve para ler a rede e apontar incoerência, nunca para mover datas. */
 export interface ActivityDependency extends RecordBase { predecessorId: Id; successorId: Id }
-/** Equipe executora. Capacidade em atividades simultâneas por semana. */
-export interface Team extends RecordBase { workId: Id; name: string; weeklyCapacity: number }
+
+/** Plano mensal de médio prazo: a folha que o planejador preenche para o mês, que nasce vazia.
+ * Um plano por mês por obra. A linha de base é o próprio plano congelado — `baselineOf` aponta
+ * para o plano de origem e `frozenAt` marca o congelamento; plano congelado não aceita edição,
+ * e por isso pode ser aberto no mesmo cronograma para comparar com o vivo. */
+export interface MediumTermPlan extends RecordBase { workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id }
+/** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
+ * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
+export interface PlanTask extends RecordBase { planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number }
+/** Dependência término-início entre linhas do plano mensal. */
+export interface PlanDependency extends RecordBase { predecessorId: Id; successorId: Id }
+/** Equipe executora, o cadastro que o cronograma usa como recurso e a planilha semanal usa
+ * nas colunas Empresa e Equipe. Capacidade em atividades simultâneas por semana. */
+export interface Team extends RecordBase { workId: Id; company: string; name: string; weeklyCapacity: number }
 /** Lançamento datado de percentual executado. `Activity.progress` guarda só o valor atual;
  * a série histórica vive aqui, para comparar planejado e realizado ao longo do tempo. */
 export interface ProgressEntry extends RecordBase { activityId: Id; recordedDate: LocalDate; progress: number; recordedBy: Id }
@@ -36,11 +48,14 @@ export const NON_FULFILLMENT_CAUSES = [
   'Superestimação da produtividade', 'Demanda extra', 'Falta de documentação',
 ] as const;
 export type NonFulfillmentCause = (typeof NON_FULFILLMENT_CAUSES)[number];
-/** Compromisso semanal do Last Planner, na forma da planilha de produção: empresa, equipe,
- * período dentro da semana e os dias marcados. `weekStart` é sempre a segunda-feira, para o
- * PPC agrupar por semanas canônicas. `fulfilled` indefinido = ainda não apurado.
+/** Compromisso semanal do Last Planner, na forma da planilha de produção: empresa e equipe (do
+ * cadastro), período dentro da semana e os dias marcados. A semana é montada do zero: `name` é
+ * escrito à mão, porque a planilha real mistura frentes de obra com tarefas de engenharia
+ * ("Diário de obra", "GFIP", "Visita"), que não existem no cronograma. `activityId` liga a uma
+ * atividade quando faz sentido, sem obrigar. `weekStart` é sempre a segunda-feira, para o PPC
+ * agrupar por semanas canônicas, e `fulfilled` indefinido = ainda não apurado.
  * `weekdays` usa 1 (segunda) a 6 (sábado). */
-export interface WeeklyCommitment extends RecordBase { activityId: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; company: string; crew: string; startDate: LocalDate; endDate: LocalDate; weekdays: number[]; fulfilled?: boolean; cause?: NonFulfillmentCause; justification?: string; recordedAt?: string; recordedBy?: Id }
+export interface WeeklyCommitment extends RecordBase { workId: Id; name: string; activityId?: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; teamId: Id; startDate: LocalDate; endDate: LocalDate; weekdays: number[]; fulfilled?: boolean; cause?: NonFulfillmentCause; justification?: string; recordedAt?: string; recordedBy?: Id }
 /** Cópia imutável das datas planejadas de uma obra num momento. Reprogramar o
  * planejamento atual nunca altera uma linha de base já salva. */
 export interface BaselineWagon { id: Id; number: number; plannedStart: LocalDate; plannedEnd: LocalDate }
@@ -58,5 +73,5 @@ export interface LinkRuleCriterion { property: LinkRuleProperty; operator: 'igua
 export interface LinkRule extends RecordBase { workId: Id; order: number; serviceName: string; criteria: LinkRuleCriterion[] }
 export interface User extends RecordBase { name: string; role: 'viewer' | 'planner' | 'manager' | 'admin'; workIds: Id[] }
 export interface HistoryEvent { id: Id; entityId: Id; entityType: string; action: string; authorId: Id; occurredAt: string; changes: Record<string, unknown> }
-export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; dependencies: ActivityDependency[]; ifcModels: IfcModel[]; ifcVersions: IfcModelVersion[]; linkRules: LinkRule[]; users: User[]; history: HistoryEvent[] }
+export interface PlanningData { works: Work[]; locations: Location[]; sequences: ProductionSequence[]; wagons: Wagon[]; activities: Activity[]; criteria: TerminalityCriterion[]; pendingItems: PendingItem[]; restrictions: Restriction[]; releases: Release[]; debts: TerminalityDebt[]; teams: Team[]; progressEntries: ProgressEntry[]; commitments: WeeklyCommitment[]; baselines: Baseline[]; dependencies: ActivityDependency[]; plans: MediumTermPlan[]; planTasks: PlanTask[]; planDependencies: PlanDependency[]; ifcModels: IfcModel[]; ifcVersions: IfcModelVersion[]; linkRules: LinkRule[]; users: User[]; history: HistoryEvent[] }
 export type WagonStatus = 'not_started' | 'in_production' | 'restricted' | 'terminal';

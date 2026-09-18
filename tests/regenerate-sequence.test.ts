@@ -86,7 +86,7 @@ test('a regeneração tira do rascunho os filhos da atividade removida', () => {
   // atividades que vão desaparecer: se ficarem no rascunho, o upsert viola a chave estrangeira.
   const stamp = { createdAt: '2026-09-08T12:00:00Z', updatedAt: '2026-09-08T12:00:00Z' };
   d.progressEntries.push({ id: 'pe-1', ...stamp, activityId: 'a5', recordedDate: '2026-09-08', progress: 10, recordedBy: 'user-1' });
-  d.commitments.push({ id: 'wc-1', ...stamp, activityId: 'b5', weekStart: '2026-09-07', weekEnd: '2026-09-13', responsibleId: 'user-1', company: 'ATR ENG', crew: 'Ana', startDate: '2026-09-08', endDate: '2026-09-10', weekdays: [2, 3] });
+  d.commitments.push({ id: 'wc-1', ...stamp, workId: 'obra-1', name: 'Semana da cauda', activityId: 'b5', weekStart: '2026-09-07', weekEnd: '2026-09-13', responsibleId: 'user-1', teamId: 'equipe-2', startDate: '2026-09-08', endDate: '2026-09-10', weekdays: [2, 3] });
   d.dependencies.push({ id: 'dep-1', ...stamp, predecessorId: 'a4', successorId: 'a5' });
   d.dependencies.push({ id: 'dep-2', ...stamp, predecessorId: 'a1', successorId: 'a2' });
 
@@ -95,7 +95,9 @@ test('a regeneração tira do rascunho os filhos da atividade removida', () => {
     { actorId: 'user-1', today: DEMO_DATE, now: '2026-09-08T12:00:00Z', newId: (() => { let n = 0; return () => `novo-${++n}`; })() });
 
   assert.deepEqual(d.progressEntries.map(p => p.id), []);
-  assert.deepEqual(d.commitments.map(c => c.id), []);
+  // A linha da planilha é do planejador: perde o vínculo com a atividade removida e permanece.
+  assert.deepEqual(d.commitments.map(c => c.id), ['wc-1']);
+  assert.equal(d.commitments[0].activityId, undefined);
   assert.deepEqual(d.dependencies.map(x => x.id), ['dep-2'], 'dependência fora da cauda continua');
   const deletes = diffDeletedIds(before, d);
   assert.deepEqual(deletes.activity_dependencies, ['dep-1']);

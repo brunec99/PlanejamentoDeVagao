@@ -119,7 +119,14 @@ function UploadVersion({ modelId, modelName }: { modelId: string; modelName: str
       setStep(`Enviando ${formatSize(file.size)}… pode levar alguns minutos, mantenha esta aba aberta.`);
       // O arquivo vai direto para o Storage: um IFC é bem maior que o limite de corpo da nossa própria API.
       const sent = await fetch(body.signedUrl, { method: 'PUT', body: file, headers: { 'content-type': 'application/octet-stream' } });
-      if (!sent.ok) throw new Error('Falha ao enviar o arquivo para o armazenamento. Tente novamente.');
+      if (!sent.ok) {
+        // O Storage explica a recusa no corpo; engolir isso num "tente novamente" esconde
+        // justamente o caso comum, que é o arquivo passar do limite por arquivo do projeto.
+        const detail = await sent.text().catch(() => '');
+        throw new Error(sent.status === 413 || /exceeded the maximum allowed size/i.test(detail)
+          ? `O arquivo tem ${formatSize(file.size)} e passa do limite por arquivo do Storage. Aumente o limite em Storage → Settings no painel do Supabase (o plano gratuito trava em 50 MB) e tente de novo.`
+          : `O Storage recusou o envio (HTTP ${sent.status}).${detail ? ` ${detail.slice(0, 200)}` : ''}`);
+      }
       setStep('Registrando versão…');
       await context.execute({ type: 'add_ifc_version', modelId, fileName: file.name, fileSize: file.size, storagePath: body.path, storeys: summary.storeys, elementCount: summary.elementCount });
       setMessage(`Versão registrada · ${summary.storeys.length} ${summary.storeys.length === 1 ? 'pavimento' : 'pavimentos'} e ${summary.elementCount.toLocaleString('pt-BR')} elementos lidos do arquivo.`);

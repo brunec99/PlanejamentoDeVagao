@@ -1,8 +1,10 @@
 'use client';
+import { useState } from 'react';
 import { CommandForm, Field, TextField, number, value } from '@/modules/planejamento/forms';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
+import type { Team } from '@/domain/entities';
 import { teamLoad, weightedProgress } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
 import { Gantt } from '@/modules/medio-prazo/gantt';
@@ -13,7 +15,8 @@ export function LookAheadOverview({ workId }: { workId: string }) {
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
-  if (!selected || !planning.data.users.find(u => u.id === context.actorId)?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
+  const actor = planning.data.users.find(u => u.id === context.actorId);
+  if (!selected || !actor?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
   const { data, today } = planning;
   const { work, wagons } = selected;
   const windowEnd = addDays(today, 90);
@@ -25,7 +28,7 @@ export function LookAheadOverview({ workId }: { workId: string }) {
 
   const workActivities = data.activities.filter(a => wagons.some(w => w.id === a.wagonId));
   const lookAhead = workActivities.filter(a => a.plannedStart <= windowEnd && a.plannedEnd >= today).sort((a, b) => a.plannedStart.localeCompare(b.plannedStart) || a.name.localeCompare(b.name));
-  const teams = data.teams.filter(t => t.workId === workId).sort((a, b) => a.name.localeCompare(b.name));
+  const teams = data.teams.filter(t => t.workId === workId).sort((a, b) => a.company.localeCompare(b.company) || a.name.localeCompare(b.name));
   const loads = teams.map(team => ({ team, ...teamLoad(team.id, today, windowEnd, data) }));
   const withoutTeam = lookAhead.filter(a => !a.teamId).length;
   const overloaded = loads.filter(l => l.overloaded).length;
@@ -46,9 +49,10 @@ export function LookAheadOverview({ workId }: { workId: string }) {
     </div>
 
     <Panel title="Equipes" tourId="medio-teams">
-      <p className="text-sm leading-6 text-slate-600">A capacidade semanal é o número de atividades simultâneas que a equipe consegue executar. A carga considera todas as atividades da equipe dentro da janela de três meses.</p>
+      <p className="text-sm leading-6 text-slate-600">A capacidade semanal é o número de atividades simultâneas que a equipe consegue executar. A carga considera todas as atividades da equipe dentro da janela de três meses. Empresa e equipe cadastradas aqui são as que a planilha de curto prazo oferece.</p>
       <div className="my-4">
-        <CommandForm title="Cadastrar equipe" submit="Cadastrar equipe" command={d => ({ type: 'create_team', workId, name: value(d, 'name'), weeklyCapacity: number(d, 'weeklyCapacity') })}>
+        <CommandForm title="Cadastrar equipe" submit="Cadastrar equipe" command={d => ({ type: 'create_team', workId, company: value(d, 'company'), name: value(d, 'name'), weeklyCapacity: number(d, 'weeklyCapacity') })}>
+          <TextField name="company" label="Empresa" />
           <TextField name="name" label="Nome da equipe" />
           <TextField name="weeklyCapacity" label="Capacidade semanal (atividades simultâneas)" type="number" min={1} step="1" defaultValue={1} />
         </CommandForm>
@@ -56,13 +60,15 @@ export function LookAheadOverview({ workId }: { workId: string }) {
       {teams.length === 0
         ? <Empty>Nenhuma equipe cadastrada nesta obra. Sem equipes não é possível identificar quem executa cada atividade nem apurar sobrecarga.</Empty>
         : <div className="-mx-1 overflow-x-auto custom-scrollbar" role="region" aria-label="Equipes da obra" tabIndex={0}>
-            <table className="data-table min-w-[620px]">
-              <thead><tr>{['Equipe', 'Capacidade semanal', 'Atribuídas na janela', 'Situação'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
+            <table className="data-table min-w-[820px]">
+              <thead><tr>{['Equipe', 'Empresa', 'Capacidade semanal', 'Atribuídas na janela', 'Situação', 'Ações'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
               <tbody>{loads.map(load => <tr key={load.team.id}>
                 <th scope="row">{load.team.name}</th>
+                <td className="whitespace-nowrap">{load.team.company}</td>
                 <td className="tabular-nums">{load.capacity} {load.capacity === 1 ? 'atividade' : 'atividades'}</td>
                 <td className="tabular-nums">{load.assigned}</td>
                 <td className={load.overloaded ? 'font-semibold text-amber-600' : ''}>{load.overloaded ? `Sobrecarga · ${load.assigned - load.capacity} além da capacidade` : 'Dentro da capacidade'}</td>
+                <td>{actor.role !== 'viewer' && <DeleteTeam team={load.team} />}</td>
               </tr>)}</tbody>
             </table>
           </div>}
@@ -97,4 +103,19 @@ export function LookAheadOverview({ workId }: { workId: string }) {
 
     <div className="my-6"><Callout tone="info">Cada lançamento fica registrado com a sua data: o percentual da atividade é sempre o valor corrente, e é a série datada que permite comparar uma semana com a anterior.</Callout></div>
   </>;
+}
+
+function DeleteTeam({ team }: { team: Team }) {
+  const context = usePlanning();
+  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  if (context.state !== 'ready') return null;
+  return <div className="space-y-2">
+    <button type="button" className="button-ghost" disabled={busy} aria-label={`Excluir a equipe ${team.name} da empresa ${team.company}`} onClick={async () => {
+      if (busy) return; setBusy(true); setError('');
+      try { await context.execute({ type: 'delete_team', teamId: team.id }); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível excluir a equipe.'); }
+      finally { setBusy(false); }
+    }}>{busy ? 'Excluindo…' : 'Excluir'}</button>
+    {error && <Callout tone="danger" role="alert">{error}</Callout>}
+  </div>;
 }
