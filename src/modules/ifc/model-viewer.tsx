@@ -3,85 +3,77 @@ import { useEffect, useRef, useState } from 'react';
 import { Boxes, Eraser, MousePointerClick, Play } from 'lucide-react';
 import type * as ThreeNS from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { FlatMesh, IfcAPI } from 'web-ifc';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, StatCard } from '@/modules/planejamento/ui';
 import { formatTimestamp } from '@/shared/format';
 
 type Three = typeof ThreeNS;
-const CHUNK = 250;
+type Raw = Record<string, unknown>;
+type Paint = 'pavimento' | 'classe';
+
+const NO_STOREY = 'Sem pavimento';
+const NO_CLASS = 'Sem classe IFC';
+const HIGHLIGHT = '#f59e0b';
+// Caixa de espessura zero (elemento plano na transcrição) desapareceria com escala 0.
+const MIN_SIZE = 1e-4;
 const pause = () => new Promise<void>(resolve => { setTimeout(resolve, 0); });
-const megabytes = (bytes: number) => `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
 const count = (value: number) => value.toLocaleString('pt-BR');
 const byText = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
+// Coluna `numeric` do Postgres chega como string no JSON: todo número da resposta passa por Number().
+const num = (value: unknown) => Number(value);
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls; root: ThreeNS.Group; zUp: ThreeNS.Group; highlight: ThreeNS.MeshLambertMaterial }
-interface Loaded { mesh: ThreeNS.Mesh; expressID: number; storey: string; base: ThreeNS.MeshLambertMaterial }
-interface Job { versionId: string; label: string; version: number; fileName: string; fileSize: number; createdAt: string }
-interface Report { meshes: number; elements: number; declared: number; storeys: string[]; withoutStorey: number }
-interface Picked { expressID: number; ifcClass: string; name: string; globalId: string; storey: string }
-
-function idsOfType(api: IfcAPI, modelID: number, type: number, inherited = false) {
-  const found: number[] = [];
-  try {
-    const vector = api.GetLineIDsWithType(modelID, type, inherited);
-    for (let i = 0; i < vector.size(); i++) found.push(vector.get(i));
-  } catch { /* tipo inexistente no schema do arquivo */ }
-  return found;
+/** A cor sai de um hash do próprio nome: o mesmo pavimento (ou a mesma classe) mantém a cor
+ * entre versões, recargas e sessões, sem nenhuma tabela de cores para manter. */
+function hueOf(name: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < name.length; i++) { hash ^= name.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return (hash >>> 0) % 360;
 }
-const asList = (value: unknown) => (Array.isArray(value) ? value : value ? [value] : []) as { value?: number }[];
-const line = (api: IfcAPI, modelID: number, id: number) => { try { return api.GetLine(modelID, id); } catch { return undefined; } };
-const typeNameOf = (api: IfcAPI, modelID: number, expressID: number) => {
-  try { return String(api.GetNameFromTypeCode(api.GetLineType(modelID, expressID)) ?? ''); } catch { return ''; }
-};
+const cssColor = (name: string) => `hsl(${hueOf(name)} 58% 52%)`;
 
-/** O pavimento sai da estrutura espacial: IFCRELCONTAINEDINSPATIALSTRUCTURE liga o elemento a um
- * espaço/pavimento, e IFCRELAGGREGATES permite subir de um espaço até o pavimento que o contém. */
-function readStoreys(ifc: typeof import('web-ifc'), api: IfcAPI, modelID: number) {
-  const names = new Map<number, string>();
-  for (const id of idsOfType(api, modelID, ifc.IFCBUILDINGSTOREY)) {
-    const storey = line(api, modelID, id);
-    const name = String(storey?.Name?.value ?? storey?.LongName?.value ?? '').trim();
-    if (name) names.set(id, name);
-  }
-  const parentOf = new Map<number, number>();
-  for (const id of idsOfType(api, modelID, ifc.IFCRELAGGREGATES)) {
-    const rel = line(api, modelID, id);
-    const parent = rel?.RelatingObject?.value;
-    if (!parent) continue;
-    for (const child of asList(rel?.RelatedObjects)) if (child?.value) parentOf.set(child.value, parent);
-  }
-  const climb = (spatialId: number | undefined) => {
-    let cursor = spatialId;
-    for (let hop = 0; cursor !== undefined && hop < 24; hop++) {
-      const name = names.get(cursor);
-      if (name) return name;
-      cursor = parentOf.get(cursor);
+interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls; root: ThreeNS.Group; zUp: ThreeNS.Group; geometry: ThreeNS.BoxGeometry; material: ThreeNS.MeshLambertMaterial }
+interface Row { expressId: number; globalId: string; ifcClass: string; name: string; storey: string; min: [number, number, number]; max: [number, number, number] }
+interface Bucket { storey: string; mesh: ThreeNS.InstancedMesh; rows: Row[] }
+interface Job { versionId: string; label: string; version: number; fileName: string; createdAt: string }
+interface Tally { name: string; total: number }
+interface Report { elements: number; declared: number; storeys: Tally[]; classes: Tally[] }
+interface Picked { storey: string; index: number; row: Row }
+
+/** A geometria vem da transcrição, não do arquivo: cada elemento é a caixa envolvente gravada na
+ * tabela. O IFC inteiro esbarraria no limite por arquivo do Storage e travaria o navegador; seis
+ * números por elemento cabem numa consulta paginada. */
+async function readBoxes(versionId: string, signal: AbortSignal, onProgress: (read: number, total: number) => void) {
+  const rows: Row[] = [];
+  let read = 0;
+  for (let page = 0; ; page++) {
+    const res = await fetch(`/api/ifc/elements?versionId=${encodeURIComponent(versionId)}&geometria=1&pagina=${page}`, { cache: 'no-store', signal });
+    const body: Raw = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(text(body.error) || 'Não foi possível ler a geometria transcrita desta versão.');
+    const batch = Array.isArray(body.elementos) ? body.elementos as Raw[] : [];
+    const total = num(body.total) || 0;
+    const size = num(body.porPagina) || batch.length;
+    read += batch.length;
+    for (const item of batch) {
+      const min: [number, number, number] = [num(item.min_x), num(item.min_y), num(item.min_z)];
+      const max: [number, number, number] = [num(item.max_x), num(item.max_y), num(item.max_z)];
+      if (![...min, ...max].every(Number.isFinite)) continue;
+      rows.push({
+        expressId: num(item.express_id), globalId: text(item.global_id),
+        ifcClass: text(item.ifc_class) || NO_CLASS, name: text(item.name),
+        storey: text(item.storey) || NO_STOREY, min, max,
+      });
     }
-    return '';
-  };
-  const resolved = new Map<number, string>();
-  for (const id of idsOfType(api, modelID, ifc.IFCRELCONTAINEDINSPATIALSTRUCTURE)) {
-    const rel = line(api, modelID, id);
-    const name = climb(rel?.RelatingStructure?.value);
-    if (!name) continue;
-    for (const element of asList(rel?.RelatedElements)) if (element?.value) resolved.set(element.value, name);
+    onProgress(read, total);
+    if (!batch.length || !size || (page + 1) * size >= total) return { rows, declared: total };
   }
-  return resolved;
 }
 
-/** Só o que o próprio arquivo diz do elemento clicado: classe, Name, GlobalId e pavimento. */
-function describe(api: IfcAPI | undefined, modelID: number, item: Loaded): Picked {
-  const open = api && modelID >= 0 ? api : undefined;
-  const data = open ? line(open, modelID, item.expressID) : undefined;
-  return {
-    expressID: item.expressID,
-    ifcClass: open ? typeNameOf(open, modelID, item.expressID) : '',
-    name: String(data?.Name?.value ?? '').trim(),
-    globalId: String(data?.GlobalId?.value ?? '').trim(),
-    storey: item.storey,
-  };
+function tally(names: string[]) {
+  const totals = new Map<string, number>();
+  for (const name of names) totals.set(name, (totals.get(name) ?? 0) + 1);
+  return [...totals.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total || byText(a.name, b.name));
 }
 
 export function ModelViewer({ workId }: { workId: string }) {
@@ -96,12 +88,10 @@ export function ModelViewer({ workId }: { workId: string }) {
   const [failure, setFailure] = useState('');
   const [report, setReport] = useState<Report>();
   const [storey, setStorey] = useState('');
+  const [paint, setPaint] = useState<Paint>('pavimento');
   const [picked, setPicked] = useState<Picked>();
   const stageRef = useRef<Stage | undefined>(undefined);
-  const loadedRef = useRef<Loaded[]>([]);
-  const materialsRef = useRef<ThreeNS.MeshLambertMaterial[]>([]);
-  const apiRef = useRef<IfcAPI | undefined>(undefined);
-  const modelRef = useRef(-1);
+  const bucketsRef = useRef<Bucket[]>([]);
   const busy = step !== '';
 
   useEffect(() => {
@@ -127,6 +117,9 @@ export function ModelViewer({ workId }: { workId: string }) {
       const sun = new three.DirectionalLight('#ffffff', 1.5);
       sun.position.set(1, 2, 1.5);
       scene.add(sun);
+      const fill = new three.DirectionalLight('#ffffff', 0.6);
+      fill.position.set(-1.5, 0.8, -1);
+      scene.add(fill);
       const root = new three.Group();
       root.matrixAutoUpdate = false;
       // IFC é Z para cima; three é Y para cima.
@@ -139,8 +132,11 @@ export function ModelViewer({ workId }: { workId: string }) {
       const orbit = new controls.OrbitControls(camera, renderer.domElement);
       orbit.enableDamping = true;
       orbit.dampingFactor = 0.08;
-      const highlight = new three.MeshLambertMaterial({ color: '#f59e0b', emissive: new three.Color('#92400e'), side: three.DoubleSide });
-      stageRef.current = { three, renderer, scene, camera, controls: orbit, root, zUp, highlight };
+      // Uma caixa unitária e um material branco servem a cena inteira: a cor de cada elemento é
+      // cor de instância, que multiplica a do material.
+      const geometry = new three.BoxGeometry(1, 1, 1);
+      const material = new three.MeshLambertMaterial({ color: '#ffffff' });
+      stageRef.current = { three, renderer, scene, camera, controls: orbit, root, zUp, geometry, material };
       renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
 
       const observer = new ResizeObserver(() => {
@@ -160,10 +156,12 @@ export function ModelViewer({ workId }: { workId: string }) {
         pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
         raycaster.setFromCamera(pointer, camera);
         // O Raycaster não olha `visible`, então o recorte por pavimento entra na lista de candidatos.
-        const visible = loadedRef.current.filter(item => item.mesh.visible);
-        const hit = raycaster.intersectObjects(visible.map(item => item.mesh), false)[0];
-        const found = hit ? visible.find(item => item.mesh === hit.object) : undefined;
-        setPicked(found ? describe(apiRef.current, modelRef.current, found) : undefined);
+        const visible = bucketsRef.current.filter(bucket => bucket.mesh.visible);
+        const hit = raycaster.intersectObjects(visible.map(bucket => bucket.mesh), false)[0];
+        const bucket = hit ? visible.find(item => item.mesh === hit.object) : undefined;
+        const index = hit?.instanceId;
+        const row = bucket && index !== undefined ? bucket.rows[index] : undefined;
+        setPicked(bucket && index !== undefined && row ? { storey: bucket.storey, index, row } : undefined);
       };
       canvas.addEventListener('pointerdown', onDown);
       canvas.addEventListener('pointerup', onUp);
@@ -175,7 +173,8 @@ export function ModelViewer({ workId }: { workId: string }) {
         observer.disconnect();
         renderer.setAnimationLoop(null);
         orbit.dispose();
-        highlight.dispose();
+        geometry.dispose();
+        material.dispose();
         scene.clear();
         renderer.dispose();
         renderer.forceContextLoss();
@@ -192,107 +191,66 @@ export function ModelViewer({ workId }: { workId: string }) {
     const stage = stageRef.current;
     if (!stage) return;
     const three = stage.three;
+    const controller = new AbortController();
     let cancelled = false;
-    let api: IfcAPI | undefined;
-    let modelID = -1;
     const clear = () => {
-      for (const item of loadedRef.current) { stage.zUp.remove(item.mesh); item.mesh.geometry.dispose(); }
-      loadedRef.current = [];
-      for (const material of materialsRef.current) material.dispose();
-      materialsRef.current = [];
-      apiRef.current = undefined;
-      modelRef.current = -1;
+      for (const bucket of bucketsRef.current) { stage.zUp.remove(bucket.mesh); bucket.mesh.dispose(); }
+      bucketsRef.current = [];
     };
 
     const run = async () => {
       setFailure(''); setReport(undefined); setPicked(undefined); setStorey('');
+      clear();
       stage.root.position.set(0, 0, 0);
       stage.root.updateMatrix();
       try {
-        const ifc = await import('web-ifc');
+        setStep('Lendo a geometria transcrita…');
+        const { rows, declared } = await readBoxes(job.versionId, controller.signal, (read, total) => {
+          setStep(total > 0 ? `Lendo ${count(read)} de ${count(total)} elementos…` : 'Lendo a geometria transcrita…');
+        });
         if (cancelled) return;
-        setStep('Buscando o arquivo…');
-        const signed = await fetch(`/api/ifc/download-url?versionId=${encodeURIComponent(job.versionId)}`, { cache: 'no-store' });
-        const body = await signed.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!signed.ok || !body?.url) throw new Error(body?.error ?? 'Não foi possível liberar o arquivo desta versão para download.');
-        const file = await fetch(String(body.url));
-        if (cancelled) return;
-        if (!file.ok) throw new Error('Não foi possível baixar o arquivo do armazenamento. Tente carregar de novo.');
-        const buffer = await file.arrayBuffer();
-        if (cancelled) return;
-
-        setStep('Lendo o modelo…');
-        api = new ifc.IfcAPI();
-        // Só web-ifc.wasm é publicado em /wasm/: caminho absoluto e thread única para não buscar a variante multithread.
-        api.SetWasmPath('/wasm/', true);
-        try { await api.Init(undefined, true); }
-        catch { throw new Error('Não foi possível iniciar o leitor de IFC neste navegador.'); }
-        if (cancelled) return;
+        setStep(`Montando ${count(rows.length)} caixas…`);
         await pause();
-        modelID = api.OpenModel(new Uint8Array(buffer));
-        if (modelID < 0 || !api.IsModelOpen(modelID)) throw new Error('O arquivo não pôde ser lido como IFC. Confirme que é um modelo IFC válido e não corrompido.');
-        // O modelo fica aberto enquanto está em cena: a inspeção lê as linhas do arquivo a cada clique.
-        apiRef.current = api;
-        modelRef.current = modelID;
-        const storeyOf = readStoreys(ifc, api, modelID);
-        const ids = idsOfType(api, modelID, ifc.IFCELEMENT, true);
         if (cancelled) return;
 
-        const materials = new Map<string, ThreeNS.MeshLambertMaterial>();
-        const withGeometry = new Set<number>();
-        const addFlat = (flat: FlatMesh) => {
-          if (cancelled) return;
-          const storeyName = storeyOf.get(flat.expressID) ?? '';
-          for (let part = 0; part < flat.geometries.size(); part++) {
-            const placed = flat.geometries.get(part);
-            const source = api!.GetGeometry(modelID, placed.geometryExpressID);
-            const vertices = api!.GetVertexArray(source.GetVertexData(), source.GetVertexDataSize());
-            const indices = api!.GetIndexArray(source.GetIndexData(), source.GetIndexDataSize());
-            source.delete();
-            if (!vertices.length || !indices.length) continue;
-            const geometry = new three.BufferGeometry();
-            const interleaved = new three.InterleavedBuffer(vertices, 6); // posição (3) + normal (3) por vértice
-            geometry.setAttribute('position', new three.InterleavedBufferAttribute(interleaved, 3, 0));
-            geometry.setAttribute('normal', new three.InterleavedBufferAttribute(interleaved, 3, 3));
-            geometry.setIndex(new three.BufferAttribute(indices, 1));
-            // Alfa 0 declarado no arquivo deixaria o elemento invisível e a cena pareceria vazia.
-            const alpha = Math.max(placed.color.w, 0.15);
-            const key = `${placed.color.x.toFixed(3)}:${placed.color.y.toFixed(3)}:${placed.color.z.toFixed(3)}:${alpha.toFixed(2)}`;
-            let base = materials.get(key);
-            if (!base) {
-              base = new three.MeshLambertMaterial({
-                color: new three.Color().setRGB(placed.color.x, placed.color.y, placed.color.z, three.SRGBColorSpace),
-                transparent: alpha < 1, opacity: alpha, depthWrite: alpha > 0.9, side: three.DoubleSide,
-              });
-              materials.set(key, base);
-              materialsRef.current.push(base);
-            }
-            const mesh = new three.Mesh(geometry, base);
-            mesh.applyMatrix4(new three.Matrix4().fromArray(placed.flatTransformation));
-            mesh.matrixAutoUpdate = false;
-            mesh.matrixWorldNeedsUpdate = true;
-            stage.zUp.add(mesh);
-            loadedRef.current.push({ mesh, expressID: flat.expressID, storey: storeyName, base });
-            withGeometry.add(flat.expressID);
+        const groups = new Map<string, Row[]>();
+        for (const row of rows) {
+          const list = groups.get(row.storey);
+          if (list) list.push(row); else groups.set(row.storey, [row]);
+        }
+        // Modelo georreferenciado guarda coordenadas na ordem dos milhões e a matriz de instância é
+        // float32: sem trazer o conjunto para a origem, as caixas tremeriam e brigariam no depth.
+        const origin = [0, 1, 2].map(axis => {
+          let low = Infinity, high = -Infinity;
+          for (const row of rows) { low = Math.min(low, row.min[axis]); high = Math.max(high, row.max[axis]); }
+          return Number.isFinite(low) ? (low + high) / 2 : 0;
+        });
+        const matrix = new three.Matrix4();
+        const buckets: Bucket[] = [];
+        for (const name of [...groups.keys()].sort(byText)) {
+          const list = groups.get(name)!;
+          // Uma InstancedMesh por pavimento: o recorte vira um `.visible`, sem remontar a cena.
+          const mesh = new three.InstancedMesh(stage.geometry, stage.material, list.length);
+          for (const [index, row] of list.entries()) {
+            matrix.makeScale(
+              Math.max(row.max[0] - row.min[0], MIN_SIZE),
+              Math.max(row.max[1] - row.min[1], MIN_SIZE),
+              Math.max(row.max[2] - row.min[2], MIN_SIZE),
+            );
+            matrix.setPosition(
+              (row.min[0] + row.max[0]) / 2 - origin[0],
+              (row.min[1] + row.max[1]) / 2 - origin[1],
+              (row.min[2] + row.max[2]) / 2 - origin[2],
+            );
+            mesh.setMatrixAt(index, matrix);
           }
-        };
-
-        // Em lotes para dar progresso e devolver a thread ao navegador; sem lista de elementos
-        // (schema inesperado) o fallback pede todas as malhas de uma vez.
-        setStep('Montando a geometria…');
-        for (let at = 0; at < ids.length; at += CHUNK) {
-          if (cancelled) return;
-          api.StreamMeshes(modelID, ids.slice(at, at + CHUNK), addFlat);
-          setStep(`Montando a geometria… ${count(Math.min(at + CHUNK, ids.length))} de ${count(ids.length)} elementos`);
-          await pause();
+          mesh.instanceMatrix.needsUpdate = true;
+          mesh.matrixAutoUpdate = false;
+          mesh.updateMatrix();
+          stage.zUp.add(mesh);
+          buckets.push({ storey: name, mesh, rows: list });
         }
-        if (!ids.length) {
-          await pause();
-          if (cancelled) return;
-          api.StreamAllMeshes(modelID, addFlat);
-        }
-        if (cancelled) return;
+        bucketsRef.current = buckets;
 
         stage.root.updateMatrixWorld(true);
         const bounds = new three.Box3().setFromObject(stage.zUp);
@@ -309,42 +267,35 @@ export function ModelViewer({ workId }: { workId: string }) {
           stage.controls.target.set(0, 0, 0);
           stage.controls.update();
         }
-        const storeys = [...new Set(loadedRef.current.map(item => item.storey).filter(Boolean))].sort(byText);
-        setReport({
-          meshes: loadedRef.current.length,
-          elements: withGeometry.size,
-          declared: ids.length,
-          storeys,
-          withoutStorey: [...withGeometry].filter(id => !storeyOf.get(id)).length,
-        });
+        setReport({ elements: rows.length, declared, storeys: tally(rows.map(row => row.storey)), classes: tally(rows.map(row => row.ifcClass)) });
         setStep('');
       } catch (error) {
-        if (cancelled) return;
-        // Nada de meia geometria em cena junto de uma mensagem de erro.
+        if (cancelled || controller.signal.aborted) return;
+        // Nada de meia cena em pé junto de uma mensagem de erro.
         clear();
-        if (api && modelID >= 0) { try { api.CloseModel(modelID); } catch { /* modelo já liberado */ } }
-        api = undefined; modelID = -1;
-        setFailure(error instanceof Error && error.message ? error.message : 'Não foi possível carregar este modelo.');
+        setFailure(error instanceof Error && error.message ? error.message : 'Não foi possível desenhar a geometria desta versão.');
         setStep('');
       }
     };
     run();
 
-    return () => {
-      cancelled = true;
-      clear();
-      if (api && modelID >= 0) { try { api.CloseModel(modelID); } catch { /* modelo já liberado */ } }
-    };
+    return () => { cancelled = true; controller.abort(); clear(); };
   }, [job, ready]);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    for (const item of loadedRef.current) {
-      item.mesh.visible = !storey || item.storey === storey;
-      item.mesh.material = picked?.expressID === item.expressID ? stage.highlight : item.base;
+    const color = new stage.three.Color();
+    for (const bucket of bucketsRef.current) {
+      bucket.mesh.visible = !storey || bucket.storey === storey;
+      for (const [index, row] of bucket.rows.entries()) {
+        if (picked?.storey === bucket.storey && picked.index === index) color.set(HIGHLIGHT);
+        else color.setHSL(hueOf(paint === 'classe' ? row.ifcClass : row.storey) / 360, 0.58, 0.52, stage.three.SRGBColorSpace);
+        bucket.mesh.setColorAt(index, color);
+      }
+      if (bucket.mesh.instanceColor) bucket.mesh.instanceColor.needsUpdate = true;
     }
-  }, [report, storey, picked]);
+  }, [report, storey, paint, picked]);
 
   if (context.state !== 'ready') return null;
   const { planning } = context;
@@ -357,17 +308,18 @@ export function ModelViewer({ workId }: { workId: string }) {
   const options = models.flatMap(model => data.ifcVersions.filter(v => v.modelId === model.id).slice().sort((a, b) => b.version - a.version)
     .map(version => ({ id: version.id, label: `${model.name} · v${version.version} · ${version.fileName}`, version })));
   const chosen = options.find(option => option.id === versionId) ?? options[0];
-  const storeys = report?.storeys ?? [];
+  const storeys = (report?.storeys ?? []).map(item => item.name).sort(byText);
   // Trocar de versão pode tirar de cena o pavimento escolhido; aí o recorte volta a "todos".
   const activeStorey = storeys.includes(storey) ? storey : '';
+  const legend = paint === 'classe' ? report?.classes ?? [] : report?.storeys ?? [];
   const label = job && report
-    ? `Modelo ${job.label} em 3D com ${count(report.elements)} elementos. Os números e a seleção abaixo trazem a mesma informação em texto.`
-    : 'Nenhum modelo carregado. Escolha uma versão e use o botão Carregar modelo.';
+    ? `Caixas envolventes de ${count(report.elements)} elementos do modelo ${job.label}, coloridas por ${paint === 'classe' ? 'classe IFC' : 'pavimento'}. Os números, a legenda e a seleção abaixo trazem a mesma informação em texto.`
+    : 'Nenhuma geometria carregada. Escolha uma versão e use o botão Carregar geometria.';
 
   return <section data-tour="ifc-viewer" className="panel mt-8 overflow-hidden">
     <div className="border-b border-slate-100 px-5 py-3.5">
       <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Boxes size={15} className="text-blue-600" />Visualizador</h2>
-      <p className="mt-0.5 text-xs text-slate-500">Abre em 3D uma versão já armazenada no repositório, para navegar pelo modelo e inspecionar os elementos.</p>
+      <p className="mt-0.5 text-xs text-slate-500">Monta o 3D a partir das tabelas transcritas da versão: cada elemento entra como a caixa envolvente gravada no banco. O arquivo IFC não é baixado.</p>
     </div>
 
     {options.length === 0
@@ -375,42 +327,50 @@ export function ModelViewer({ workId }: { workId: string }) {
       : <div className="p-5">
           <div className="flex flex-wrap items-end gap-4">
             <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Versão do modelo</span>
-              <select className="field w-full sm:w-96" value={chosen?.id ?? ''} disabled={busy} onChange={event => setVersionId(event.target.value)}>
+              <select className="field w-full sm:w-96" aria-label="Versão do modelo a desenhar" value={chosen?.id ?? ''} disabled={busy} onChange={event => setVersionId(event.target.value)}>
                 {options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </label>
             <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Recorte por pavimento</span>
-              <select className="field w-52" value={activeStorey} disabled={busy || storeys.length === 0} onChange={event => setStorey(event.target.value)}>
+              <select className="field w-52" aria-label="Recorte por pavimento" value={activeStorey} disabled={busy || storeys.length === 0} onChange={event => setStorey(event.target.value)}>
                 <option value="">Todos os pavimentos</option>
                 {storeys.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Cor dos elementos</span>
+              <select className="field w-44" aria-label="Critério de cor dos elementos" value={paint} disabled={busy} onChange={event => setPaint(event.target.value === 'classe' ? 'classe' : 'pavimento')}>
+                <option value="pavimento">Por pavimento</option>
+                <option value="classe">Por classe IFC</option>
               </select>
             </label>
             <button type="button" className="button" disabled={busy || !webgl || !chosen}
               onClick={() => {
                 if (!chosen) return;
-                setStep('Buscando o arquivo…'); setFailure('');
-                setJob({ versionId: chosen.id, label: chosen.label, version: chosen.version.version, fileName: chosen.version.fileName, fileSize: chosen.version.fileSize, createdAt: chosen.version.createdAt });
+                setStep('Lendo a geometria transcrita…'); setFailure('');
+                setJob({ versionId: chosen.id, label: chosen.label, version: chosen.version.version, fileName: chosen.version.fileName, createdAt: chosen.version.createdAt });
               }}>
-              <Play size={15} />{job ? 'Recarregar modelo' : 'Carregar modelo'}
+              <Play size={15} />{job ? 'Recarregar geometria' : 'Carregar geometria'}
             </button>
           </div>
 
           {busy && <p role="status" className="mt-3 text-xs font-semibold text-blue-700">{step}</p>}
           {failure && <div className="mt-3"><Callout tone="danger" role="alert">{failure}</Callout></div>}
-          {report?.meshes === 0 && <div className="mt-3"><Callout tone="warning" role="status">O arquivo abriu, mas o leitor não gerou geometria para {report.declared > 0 ? `nenhum dos ${count(report.declared)} elementos declarados nele` : 'nenhum elemento'}. Não há nada para desenhar nesta versão — a cena continua vazia de propósito.</Callout></div>}
+          {report?.declared === 0 && <div className="mt-3"><Callout tone="info" role="status">
+            Esta versão tem dados transcritos, mas nenhum elemento com caixa envolvente gravada — sem representação geométrica não há o que desenhar. Isso é válido, não é falha: uma versão só de dados continua servindo às propriedades e ao quantitativo. Se a transcrição desta versão ainda não foi feita, transcreva o IFC na tela de modelos e volte aqui.
+          </Callout></div>}
 
           {job && report && <>
-            <div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <StatCard label="Elementos carregados" value={count(report.elements)} tone={report.elements === 0 ? 'warning' : 'default'} />
-              <StatCard label="Pavimentos encontrados" value={report.storeys.length} />
-              <StatCard label="Arquivo" value={<span className="block text-sm leading-5 break-all">{job.fileName}
-                <span className="mt-0.5 block text-xs font-normal text-slate-500">{megabytes(job.fileSize)} · v{job.version} enviada em {formatTimestamp(job.createdAt)}</span></span>} />
+            <div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Elementos desenhados" value={count(report.elements)} tone={report.elements === 0 ? 'warning' : 'default'} />
+              <StatCard label="Pavimentos" value={report.storeys.length} />
+              <StatCard label="Classes IFC distintas" value={report.classes.length} />
+              <StatCard label="Versão" value={<span className="block text-sm leading-5 break-all">v{job.version}
+                <span className="mt-0.5 block text-xs font-normal text-slate-500">{job.fileName} · enviada em {formatTimestamp(job.createdAt)}</span></span>} />
             </div>
-            {report.meshes > 0 && <p className="mb-4 text-xs text-slate-500">
-              {count(report.meshes)} {report.meshes === 1 ? 'malha desenhada' : 'malhas desenhadas'}
-              {report.declared > 0 ? ` para ${count(report.elements)} de ${count(report.declared)} elementos declarados no arquivo.` : ` para ${count(report.elements)} ${report.elements === 1 ? 'elemento' : 'elementos'} com geometria.`}
-              {report.withoutStorey > 0 && ` ${count(report.withoutStorey)} ${report.withoutStorey === 1 ? 'elemento não tem pavimento' : 'elementos não têm pavimento'} na estrutura espacial e ${report.withoutStorey === 1 ? 'fica' : 'ficam'} fora de qualquer recorte por pavimento.`}
-            </p>}
+            <p className="mb-4 text-xs text-slate-500">
+              Cada caixa é a envolvente do elemento na transcrição, não a sua malha: o contorno é aproximado de propósito, e é isso que permite abrir um modelo inteiro sem baixar o arquivo.
+              {report.declared > report.elements && ` ${count(report.declared - report.elements)} ${report.declared - report.elements === 1 ? 'elemento ficou de fora porque a caixa gravada não é numérica' : 'elementos ficaram de fora porque a caixa gravada não é numérica'}.`}
+            </p>
           </>}
 
           <div ref={setBox} className="relative h-[600px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
@@ -418,35 +378,46 @@ export function ModelViewer({ workId }: { workId: string }) {
             {!webgl && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
               Este navegador não tem WebGL disponível, então o modelo 3D não pode ser desenhado. Os pavimentos e a contagem de elementos de cada versão continuam na tabela de modelos acima.
             </p>}
-            {webgl && busy && <p className="absolute inset-x-0 top-0 border-b border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-900">{step}</p>}
+            {webgl && busy && <p role="status" className="absolute inset-x-0 top-0 border-b border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-900">{step}</p>}
             {webgl && !busy && failure && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">{failure}</p>}
             {webgl && !busy && !failure && !job && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-500">
-              Nenhum modelo carregado. Escolha uma versão e use &quot;Carregar modelo&quot; — os arquivos IFC são grandes e só são baixados quando você pede.
+              Nenhuma geometria carregada. Escolha uma versão e use &quot;Carregar geometria&quot; — são milhares de linhas do banco, lidas só quando você pede.
             </p>}
           </div>
+
+          {legend.length > 0 && <div className="mt-4">
+            <p className="eyebrow">Legenda · {paint === 'classe' ? 'classe IFC' : 'pavimento'}</p>
+            <ul className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto custom-scrollbar">
+              {legend.map(item => <li key={item.name} className="badge-muted">
+                <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cssColor(item.name) }} />
+                {item.name}
+                <span className="font-normal tabular-nums text-slate-500">{count(item.total)}</span>
+              </li>)}
+            </ul>
+          </div>}
 
           <div className="mt-4">
             {picked
               ? <div className="rounded-xl border border-slate-200 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="eyebrow">Elemento selecionado · linha #{picked.expressID}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">{picked.ifcClass || 'Classe IFC não identificada no arquivo'}</p>
+                      <p className="eyebrow">Elemento selecionado · express id #{picked.row.expressId}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">{picked.row.ifcClass}</p>
                     </div>
-                    <button type="button" className="button-ghost" onClick={() => setPicked(undefined)}><Eraser size={15} />Limpar seleção</button>
+                    <button type="button" className="button-ghost" aria-label="Limpar a seleção do elemento" onClick={() => setPicked(undefined)}><Eraser size={15} />Limpar seleção</button>
                   </div>
                   <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                    {[['Name', picked.name, 'sem Name no arquivo'], ['GlobalId', picked.globalId, 'sem GlobalId no arquivo'], ['Pavimento', picked.storey, 'sem pavimento na estrutura espacial']].map(([field, value, missing]) =>
+                    {[['Name', picked.row.name, 'sem Name na transcrição'], ['GlobalId', picked.row.globalId, 'sem GlobalId na transcrição'], ['Pavimento', picked.row.storey, '']].map(([field, value, missing]) =>
                       <div key={field}>
                         <dt className="text-xs font-medium text-slate-500">{field}</dt>
                         <dd className={`text-sm break-all ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{value || missing}</dd>
                       </div>)}
                   </dl>
-                  <p className="mt-3 text-xs text-slate-500">Só o que o arquivo informa sobre este elemento: a classe IFC, o Name, o GlobalId e o pavimento resolvido pela estrutura espacial. Nenhuma outra propriedade é lida nem inferida.</p>
+                  <p className="mt-3 text-xs text-slate-500">Só o que a transcrição guarda deste elemento: a classe IFC, o Name, o GlobalId, o pavimento e o express id. A caixa destacada em laranja é a envolvente dele, não a sua forma.</p>
                 </div>
               : <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
                   <MousePointerClick size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                  Arraste para orbitar, use a roda para aproximar e clique num elemento para ver a classe IFC, o Name, o GlobalId e o pavimento que o arquivo declara.
+                  Arraste para orbitar, use a roda para aproximar e clique numa caixa para ver a classe IFC, o Name, o GlobalId e o pavimento que a transcrição guarda.
                 </p>}
           </div>
         </div>}

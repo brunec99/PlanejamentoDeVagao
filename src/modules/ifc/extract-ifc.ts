@@ -5,8 +5,9 @@ import type { IfcAPI } from 'web-ifc';
  * as camadas que o planejamento usa. O express id só é único dentro do arquivo, então quem
  * identifica o elemento entre versões é o GlobalId. */
 
-/** Caixa envolvente em coordenadas do modelo. É a geometria que vai para a tabela: seis números
- * por elemento bastam para a leitura de planejamento e cabem em qualquer tamanho de modelo. */
+/** Caixa envolvente em coordenadas do modelo, com Z na vertical — o mesmo eixo da elevação que o
+ * IFC declara no pavimento. É a geometria que vai para a tabela: seis números por elemento bastam
+ * para a leitura de planejamento e cabem em qualquer tamanho de modelo. */
 export interface BoundingBox { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number }
 export interface ExtractedElement { expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; box?: BoundingBox; attributes: Record<string, string | number | boolean> }
 export interface ExtractedProperty { expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }
@@ -40,7 +41,12 @@ type GeometryApi = Api & Pick<IfcAPI, 'StreamAllMeshes' | 'GetGeometry' | 'GetVe
 
 /** Percorre as malhas e reduz cada elemento à sua caixa envolvente, aplicando a transformação
  * de cada geometria posicionada. Um IFC sem representação geométrica simplesmente não produz
- * caixa nenhuma — o que é válido, e diferente de falha. */
+ * caixa nenhuma — o que é válido, e diferente de falha.
+ *
+ * O web-ifc entrega a malha já girada para Y na vertical, a convenção do three.js: a matriz que
+ * ele devolve leva (x, y, z) do IFC para (x, z, -y). A tabela desfaz esse giro e guarda o eixo do
+ * arquivo, porque ali a caixa é dado, não cena — é o que permite comparar min_z com a elevação do
+ * pavimento. Girar para a tela é trabalho de quem desenha, e o visualizador faz isso. */
 export function extractBoxes(api: GeometryApi, modelID: number): Map<number, BoundingBox> {
   const boxes = new Map<number, BoundingBox>();
   api.StreamAllMeshes(modelID, mesh => {
@@ -53,12 +59,14 @@ export function extractBoxes(api: GeometryApi, modelID: number): Map<number, Bou
       // O vértice ocupa seis floats: posição e normal. A normal não entra na caixa.
       for (let v = 0; v < vertices.length; v += 6) {
         const x = vertices[v], y = vertices[v + 1], z = vertices[v + 2];
-        const tx = m[0] * x + m[4] * y + m[8] * z + m[12];
-        const ty = m[1] * x + m[5] * y + m[9] * z + m[13];
-        const tz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        const px = m[0] * x + m[4] * y + m[8] * z + m[12];
+        const py = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const pz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        // De volta ao eixo do arquivo: a altura é Z e Y é o que o web-ifc tinha negado.
+        const ix = px, iy = -pz, iz = py;
         box = box
-          ? { minX: Math.min(box.minX, tx), minY: Math.min(box.minY, ty), minZ: Math.min(box.minZ, tz), maxX: Math.max(box.maxX, tx), maxY: Math.max(box.maxY, ty), maxZ: Math.max(box.maxZ, tz) }
-          : { minX: tx, minY: ty, minZ: tz, maxX: tx, maxY: ty, maxZ: tz };
+          ? { minX: Math.min(box.minX, ix), minY: Math.min(box.minY, iy), minZ: Math.min(box.minZ, iz), maxX: Math.max(box.maxX, ix), maxY: Math.max(box.maxY, iy), maxZ: Math.max(box.maxZ, iz) }
+          : { minX: ix, minY: iy, minZ: iz, maxX: ix, maxY: iy, maxZ: iz };
       }
       geometry.delete();
     }

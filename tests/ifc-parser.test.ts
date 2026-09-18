@@ -13,12 +13,12 @@ const require = createRequire(import.meta.url);
 // O pacote não exporta package.json, então o diretório vem pelo wasm, que é exportado.
 const packageDir = require.resolve('web-ifc/web-ifc-node.wasm').replace(/web-ifc-node\.wasm$/, '');
 
-async function openFixture() {
+async function openFixture(name = 'minimo.ifc') {
   const WebIFC = await import('web-ifc');
   const api = new WebIFC.IfcAPI();
   api.SetWasmPath(packageDir, true);
   await api.Init(undefined, true);
-  const modelID = api.OpenModel(new Uint8Array(readFileSync(new URL('fixtures/minimo.ifc', import.meta.url))));
+  const modelID = api.OpenModel(new Uint8Array(readFileSync(new URL(`fixtures/${name}`, import.meta.url))));
   return { WebIFC, api, modelID };
 }
 const names = (api: { GetLine: (m: number, id: number) => { Name?: { value: string } } }, modelID: number, ids: { size(): number; get(i: number): number }) =>
@@ -100,4 +100,37 @@ test('a transcrição do IFC entrega elementos, propriedades e quantidades', asy
   ]);
   // A segunda parede não tem conjunto de propriedades: a transcrição não inventa linhas.
   assert.deepEqual(properties.filter(p => p.expressId === elements[1].expressId), []);
+});
+
+test('a caixa envolvente sai da malha com o posicionamento aplicado', async () => {
+  // O 3D é montado a partir da tabela, e o que vai para a tabela é esta caixa. O fixture tem
+  // dimensões e deslocamentos escolhidos a mão para o teste conferir três coisas que só a lib
+  // responde: o passo de seis floats por vértice, o formato da matriz de posicionamento e o
+  // eixo vertical do IFC ser o Z. Errar qualquer uma delas ainda desenha um prédio — torto.
+  const { WebIFC, api, modelID } = await openFixture('geometria.ifc');
+  const { extractBoxes, extractFromModel } = await import('../src/modules/ifc/extract-ifc');
+  const boxes = extractBoxes(api, modelID);
+  const { elements } = extractFromModel(api, modelID, WebIFC as unknown as Record<string, number>, boxes);
+  api.CloseModel(modelID);
+
+  const near = (value: number | undefined, expected: number, label: string) =>
+    assert.ok(value !== undefined && Math.abs(value - expected) < 0.01, `${label}: ${value} deveria ser ${expected}`);
+  const boxOf = (ifcClass: string) => {
+    const element = elements.find(e => e.ifcClass === ifcClass);
+    assert.ok(element?.box, `${ifcClass} deveria ter caixa envolvente`);
+    return element.box;
+  };
+
+  // Parede de 4,00 x 0,20 extrudada 3,00 m, posicionada em (10, 5, 0).
+  const wall = boxOf('IfcWall');
+  near(wall?.minX, 8, 'parede minX'); near(wall?.maxX, 12, 'parede maxX');
+  near(wall?.minY, 4.9, 'parede minY'); near(wall?.maxY, 5.1, 'parede maxY');
+  near(wall?.minZ, 0, 'parede minZ'); near(wall?.maxZ, 3, 'parede maxZ');
+
+  // Laje de 6,00 x 6,00 com 0,20 m de espessura, no nível 3,00 — a altura é Z, não Y.
+  const slab = boxOf('IfcSlab');
+  near(slab?.minX, -3, 'laje minX'); near(slab?.maxX, 3, 'laje maxX');
+  near(slab?.minZ, 3, 'laje minZ'); near(slab?.maxZ, 3.2, 'laje maxZ');
+
+  assert.deepEqual(elements.map(e => [e.ifcClass, e.storey]), [['IfcWall', 'Terreo'], ['IfcSlab', '1o Pavimento']]);
 });

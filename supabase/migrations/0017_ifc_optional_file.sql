@@ -1,0 +1,11 @@
+-- O arquivo IFC deixa de ser obrigatório: o que vale é a transcrição.
+--
+-- Desde a 0015 o modelo vive em tabela (elemento, propriedade, quantidade) e desde a 0016 a
+-- geometria de leitura também. O .ifc original virou anexo conveniente — e é justamente ele que
+-- não cabe: o limite por arquivo do Storage trava em 50 MB no plano gratuito, enquanto um modelo
+-- de obra passa disso com folga. Prender a versão ao arquivo faria o limite do Storage decidir o
+-- que a obra pode planejar.
+--
+-- A unicidade continua: no Postgres, valores nulos não conflitam num índice único, então várias
+-- versões sem arquivo convivem e dois registros nunca apontam para o mesmo objeto do Storage.
+alter table ifc_model_versions alter column storage_path drop not null;

@@ -6,6 +6,11 @@ import { SupabasePlanningRepository } from '@/infrastructure/repositories/supaba
 export const runtime = 'nodejs';
 
 const PAGE = 500;
+// A consulta de geometria devolve nove números por elemento e alimenta o 3D inteiro: paginar de
+// 500 em 500 faria centenas de idas ao servidor para um modelo de obra. Linhas magras, página larga.
+const GEOMETRY_PAGE = 5000;
+// Teto de linhas por resposta da API REST do Supabase, do qual nenhum range escapa.
+const CHUNK = 1000;
 
 /** As tabelas transcritas do IFC não entram no snapshot do planejamento: um modelo real tem
  * centenas de milhares de linhas, e o snapshot trafega inteiro a cada comando. Elas são
@@ -84,42 +89,38 @@ export async function GET(request: NextRequest) {
 
   try {
     if (request.nextUrl.searchParams.get('resumo') === '1') {
-      // O resumo é o quantitativo: a soma por nome de quantidade vem do banco, não do navegador.
-      const [elements, quantities] = await Promise.all([
-        client.from('ifc_elements').select('ifc_class, storey').eq('version_id', versionId),
-        client.from('ifc_quantities').select('name, kind, unit, value').eq('version_id', versionId),
-      ]);
-      if (elements.error) throw new Error(elements.error.message);
-      if (quantities.error) throw new Error(quantities.error.message);
-      const count = <T extends string>(list: (T | null)[]) => {
-        const totals = new Map<string, number>();
-        for (const item of list) { const key = item ?? 'Sem informação'; totals.set(key, (totals.get(key) ?? 0) + 1); }
-        return [...totals.entries()].map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total);
-      };
-      const sums = new Map<string, { nome: string; kind: string; unidade: string | null; total: number; itens: number }>();
-      for (const row of quantities.data) {
-        const key = `${row.name}|${row.kind}`;
-        const current = sums.get(key) ?? { nome: row.name, kind: row.kind, unidade: row.unit, total: 0, itens: 0 };
-        current.total += Number(row.value); current.itens++;
-        sums.set(key, current);
-      }
-      return NextResponse.json({
-        elementos: elements.data.length,
-        porClasse: count(elements.data.map(r => r.ifc_class)),
-        porPavimento: count(elements.data.map(r => r.storey)),
-        quantidades: [...sums.values()].sort((a, b) => b.total - a.total),
-      }, { headers: { 'Cache-Control': 'no-store' } });
+      // O quantitativo é somado no banco: contar no navegador significaria baixar o modelo inteiro
+      // e, pior, receber só as primeiras mil linhas que a API REST devolve — uma amostra com cara
+      // de total. A função ifc_version_summary (migração 0018) agrupa e devolve o resumo inteiro.
+      const { data, error } = await client.rpc('ifc_version_summary', { p_version_id: versionId });
+      if (error) throw new Error(/does not exist/i.test(error.message)
+        ? 'A função de resumo não existe no banco: rode a migração 0018_ifc_summary.sql no Supabase.'
+        : error.message);
+      return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     const geometria = request.nextUrl.searchParams.get('geometria') === '1';
-    const colunas = geometria ? 'express_id, ifc_class, storey, min_x, min_y, min_z, max_x, max_y, max_z' : 'express_id, global_id, ifc_class, name, object_type, storey';
-    let query = client.from('ifc_elements').select(colunas, { count: 'exact' }).eq('version_id', versionId);
-    if (geometria) query = query.not('min_x', 'is', null);
-    if (storey) query = query.eq('storey', storey);
-    if (ifcClass) query = query.eq('ifc_class', ifcClass);
-    const { data, count, error } = await query.order('express_id').range(page * PAGE, page * PAGE + PAGE - 1);
-    if (error) throw new Error(error.message);
-    return NextResponse.json({ pagina: page, porPagina: PAGE, total: count ?? 0, elementos: data }, { headers: { 'Cache-Control': 'no-store' } });
+    const colunas = geometria ? 'express_id, global_id, ifc_class, name, storey, min_x, min_y, min_z, max_x, max_y, max_z' : 'express_id, global_id, ifc_class, name, object_type, storey';
+    const size = geometria ? GEOMETRY_PAGE : PAGE;
+    // A página é montada em blocos porque a API REST nunca devolve mais de mil linhas por
+    // requisição, qualquer que seja o range pedido. Quem paginasse de mil em mil pelo navegador
+    // releria o snapshot do planejamento (que autoriza a consulta) a cada bloco.
+    const elementos: unknown[] = [];
+    let total = 0;
+    for (let taken = 0; taken < size; taken += CHUNK) {
+      const wanted = Math.min(CHUNK, size - taken);
+      const from = page * size + taken;
+      let query = client.from('ifc_elements').select(colunas, { count: taken === 0 ? 'exact' : undefined }).eq('version_id', versionId);
+      if (geometria) query = query.not('min_x', 'is', null);
+      if (storey) query = query.eq('storey', storey);
+      if (ifcClass) query = query.eq('ifc_class', ifcClass);
+      const { data, count, error } = await query.order('express_id').range(from, from + wanted - 1);
+      if (error) throw new Error(error.message);
+      if (taken === 0) total = count ?? 0;
+      elementos.push(...data);
+      if (data.length < wanted) break;
+    }
+    return NextResponse.json({ pagina: page, porPagina: size, total, elementos }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (cause) {
     return NextResponse.json({ error: `Falha ao ler a transcrição do modelo: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` }, { status: 502 });
   }

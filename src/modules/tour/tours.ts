@@ -48,9 +48,10 @@ export const tours: Record<TourKey, TourStep[]> = {
     { target: 'vagao-restrictions', title: 'Restrições', body: 'Podem bloquear a execução, a terminalidade, ou ambas — diferente de uma pendência simples.' },
   ],
   ifc: [
-    { title: 'Modelos IFC', body: 'O repositório guarda apenas modelos IFC, vinculados a esta obra. Cada envio do mesmo modelo cria uma versão nova e preserva as anteriores.' },
-    { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões, com os pavimentos lidos do próprio arquivo no momento do envio.' },
-    { target: 'ifc-viewer', title: 'Visualizador', body: 'Abre uma versão guardada em 3D. O modelo só carrega quando você pede, porque o arquivo é grande. Dá para isolar um pavimento e clicar num elemento para ver o que o arquivo diz dele: classe IFC, nome, GlobalId e pavimento.' },
+    { title: 'Modelos IFC', body: 'O IFC é uma base de dados, não um desenho. Cada envio transcreve o arquivo em tabelas — elemento, propriedade, quantidade e caixa envolvente — e é a transcrição que o planejamento consulta. Guardar o arquivo original é opcional: o limite de tamanho do armazenamento não decide o que a obra pode planejar.' },
+    { target: 'ifc-models', title: 'Modelos e versões', body: 'Cada modelo lista suas versões e o que foi transcrito de cada uma. Uma versão nova nunca substitui as anteriores, e uma versão sem o arquivo guardado continua completa como dado.' },
+    { target: 'ifc-quantitativo', title: 'Quantitativo', body: 'As quantidades declaradas no modelo, somadas por tipo, com a distribuição por classe IFC e por pavimento e a consulta elemento a elemento. A soma é feita no banco, sobre o modelo inteiro — e sai em CSV para quem ainda precisa da planilha.' },
+    { target: 'ifc-viewer', title: 'Visualizador', body: 'O 3D é montado a partir da tabela: cada elemento aparece como a sua caixa envolvente. É o que faz o modelo abrir em qualquer tamanho de arquivo. Dá para isolar um pavimento e clicar num elemento para ver classe IFC, nome, GlobalId e pavimento.' },
     { target: 'ifc-rules', title: 'Vinculação por regras', body: 'As regras ligam elementos do modelo a um serviço por propriedade (pavimento e tipo de elemento nesta versão), em vez de seleção manual elemento por elemento. Regras cujo pavimento não existe mais no modelo aparecem marcadas para revisão.' },
   ],
   quatroD: [
