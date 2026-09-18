@@ -2,9 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Location } from '@/domain/entities';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
-import { Empty } from '@/modules/planejamento/ui';
+import { Callout, Empty } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate } from '@/shared/format';
+import { leadTimeDeadline } from '@/domain/rules';
+import { CommandForm, Field, TextField, value } from '@/modules/planejamento/forms';
 
 // Cores de barra com texto branco legível (todas acima de 4.5:1). Repetem quando há mais
 // serviços que tons: a identidade de cada barra vem do rótulo escrito nela, não da cor.
@@ -196,13 +198,13 @@ export function LineOfBalance({ workId }: { workId: string }) {
       place={model.locations.find(l => l.id === model.byId.get(openId)!.locationId)?.name ?? '—'}
       service={serviceOf(model.byId.get(openId)!.name)}
       baseline={baseline && { name: baseline.name, entry: baseline.activities.find(a => a.id === openId) }}
-      hasBaselines={baselines.length > 0} onClose={() => setOpenId('')} />}
+      workId={workId} hasBaselines={baselines.length > 0} onClose={() => setOpenId('')} />}
   </section>;
 }
 
-function ActivityDates({ activity, place, service, baseline, hasBaselines, onClose }: {
-  activity: { plannedStart: string; plannedEnd: string; progress: number; name: string };
-  place: string; service: string;
+function ActivityDates({ activity, place, service, workId, baseline, hasBaselines, onClose }: {
+  activity: { id: string; wagonId: string; plannedStart: string; plannedEnd: string; progress: number; name: string };
+  place: string; service: string; workId: string;
   baseline?: { name: string; entry?: { plannedStart: string; plannedEnd: string } };
   hasBaselines: boolean; onClose: () => void;
 }) {
@@ -240,6 +242,37 @@ function ActivityDates({ activity, place, service, baseline, hasBaselines, onClo
               ? <>Esta atividade não existia quando <strong>{baseline.name}</strong> foi salva, então não há datas de base para comparar.</>
               : hasBaselines ? 'Selecione uma linha de base acima para ver as datas de base desta atividade.' : 'Nenhuma linha de base salva ainda: defina uma para comparar as datas.'}</p>}
       </div>
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <NewPendency activity={activity} workId={workId} />
+      </div>
     </div>
   </dialog>;
+}
+
+/** A pendência nasce da tarefa: o limite sai do início previsto dela menos o lead time, que é
+ * o prazo de obtenção. Responsável assume quem está criando, e a pendência entra bloqueando —
+ * é o caso usual; o quadro no fim da tela permite ajustar depois. */
+function NewPendency({ activity, workId }: { activity: { id: string; wagonId: string; plannedStart: string; name: string }; workId: string }) {
+  const context = usePlanning();
+  const [lead, setLead] = useState('');
+  if (context.state !== 'ready') return null;
+  const leadDays = /^\d+$/.test(lead) ? Number(lead) : undefined;
+  return <CommandForm title="Criar pendência para esta tarefa" submit="Criar pendência"
+    command={d => ({
+      type: 'create_restriction', wagonId: activity.wagonId, activityId: activity.id,
+      description: value(d, 'description'), responsibleId: context.actorId,
+      leadTimeDays: Number(value(d, 'leadTimeDays')),
+      dueDate: leadTimeDeadline(activity.plannedStart, Number(value(d, 'leadTimeDays'))),
+      blocksExecution: true, blocksTerminality: true,
+    })}>
+    <TextField name="description" label="Descrição da pendência" />
+    <Field label="Lead time (dias para obter, contados a partir do início da tarefa)">
+      <input className="field" name="leadTimeDays" type="number" min={0} step={1} required inputMode="numeric"
+        value={lead} onChange={e => setLead(e.target.value)} />
+    </Field>
+    {leadDays !== undefined
+      ? <Callout tone="info" role="status">Data limite para resolução: <strong>{formatDate(leadTimeDeadline(activity.plannedStart, leadDays))}</strong> — início previsto {formatDate(activity.plannedStart)} menos {leadDays} dias.</Callout>
+      : <Callout tone="info">O limite é calculado a partir do início previsto da tarefa ({formatDate(activity.plannedStart)}) menos o lead time.</Callout>}
+    <p className="text-xs text-slate-500">A pendência entra bloqueando execução e terminalidade, com você como responsável. O quadro de pendências, no fim desta tela, permite ajustar e acompanhar.</p>
+  </CommandForm>;
 }
