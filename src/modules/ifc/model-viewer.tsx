@@ -7,22 +7,17 @@ import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, StatCard } from '@/modules/planejamento/ui';
 import { formatTimestamp } from '@/shared/format';
+import { readBoxes, type BoxRow } from './box-source';
 
 type Three = typeof ThreeNS;
-type Raw = Record<string, unknown>;
 type Paint = 'pavimento' | 'classe';
 
-const NO_STOREY = 'Sem pavimento';
-const NO_CLASS = 'Sem classe IFC';
 const HIGHLIGHT = '#f59e0b';
 // Caixa de espessura zero (elemento plano na transcrição) desapareceria com escala 0.
 const MIN_SIZE = 1e-4;
 const pause = () => new Promise<void>(resolve => { setTimeout(resolve, 0); });
 const count = (value: number) => value.toLocaleString('pt-BR');
 const byText = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
-// Coluna `numeric` do Postgres chega como string no JSON: todo número da resposta passa por Number().
-const num = (value: unknown) => Number(value);
-const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
 /** A cor sai de um hash do próprio nome: o mesmo pavimento (ou a mesma classe) mantém a cor
  * entre versões, recargas e sessões, sem nenhuma tabela de cores para manter. */
@@ -34,41 +29,11 @@ function hueOf(name: string) {
 const cssColor = (name: string) => `hsl(${hueOf(name)} 58% 52%)`;
 
 interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls; root: ThreeNS.Group; zUp: ThreeNS.Group; geometry: ThreeNS.BoxGeometry; material: ThreeNS.MeshLambertMaterial }
-interface Row { expressId: number; globalId: string; ifcClass: string; name: string; storey: string; min: [number, number, number]; max: [number, number, number] }
-interface Bucket { storey: string; mesh: ThreeNS.InstancedMesh; rows: Row[] }
+interface Bucket { storey: string; mesh: ThreeNS.InstancedMesh; rows: BoxRow[] }
 interface Job { versionId: string; label: string; version: number; fileName: string; createdAt: string }
 interface Tally { name: string; total: number }
 interface Report { elements: number; declared: number; storeys: Tally[]; classes: Tally[] }
-interface Picked { storey: string; index: number; row: Row }
-
-/** A geometria vem da transcrição, não do arquivo: cada elemento é a caixa envolvente gravada na
- * tabela. O IFC inteiro esbarraria no limite por arquivo do Storage e travaria o navegador; seis
- * números por elemento cabem numa consulta paginada. */
-async function readBoxes(versionId: string, signal: AbortSignal, onProgress: (read: number, total: number) => void) {
-  const rows: Row[] = [];
-  let read = 0;
-  for (let page = 0; ; page++) {
-    const res = await fetch(`/api/ifc/elements?versionId=${encodeURIComponent(versionId)}&geometria=1&pagina=${page}`, { cache: 'no-store', signal });
-    const body: Raw = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(text(body.error) || 'Não foi possível ler a geometria transcrita desta versão.');
-    const batch = Array.isArray(body.elementos) ? body.elementos as Raw[] : [];
-    const total = num(body.total) || 0;
-    const size = num(body.porPagina) || batch.length;
-    read += batch.length;
-    for (const item of batch) {
-      const min: [number, number, number] = [num(item.min_x), num(item.min_y), num(item.min_z)];
-      const max: [number, number, number] = [num(item.max_x), num(item.max_y), num(item.max_z)];
-      if (![...min, ...max].every(Number.isFinite)) continue;
-      rows.push({
-        expressId: num(item.express_id), globalId: text(item.global_id),
-        ifcClass: text(item.ifc_class) || NO_CLASS, name: text(item.name),
-        storey: text(item.storey) || NO_STOREY, min, max,
-      });
-    }
-    onProgress(read, total);
-    if (!batch.length || !size || (page + 1) * size >= total) return { rows, declared: total };
-  }
-}
+interface Picked { storey: string; index: number; row: BoxRow }
 
 function tally(names: string[]) {
   const totals = new Map<string, number>();
@@ -205,7 +170,7 @@ export function ModelViewer({ workId }: { workId: string }) {
       stage.root.updateMatrix();
       try {
         setStep('Lendo a geometria transcrita…');
-        const { rows, declared } = await readBoxes(job.versionId, controller.signal, (read, total) => {
+        const { rows, declared } = await readBoxes([job.versionId], controller.signal, (read, total) => {
           setStep(total > 0 ? `Lendo ${count(read)} de ${count(total)} elementos…` : 'Lendo a geometria transcrita…');
         });
         if (cancelled) return;
@@ -213,7 +178,7 @@ export function ModelViewer({ workId }: { workId: string }) {
         await pause();
         if (cancelled) return;
 
-        const groups = new Map<string, Row[]>();
+        const groups = new Map<string, BoxRow[]>();
         for (const row of rows) {
           const list = groups.get(row.storey);
           if (list) list.push(row); else groups.set(row.storey, [row]);

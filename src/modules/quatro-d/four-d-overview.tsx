@@ -15,7 +15,6 @@ const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'
 const OTHER = '#52514e';
 const MS = 86400000;
 const spanDays = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / MS) + 1;
-const megabytes = (bytes: number) => `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
 const percentLabel = (value: number | undefined) => (value === undefined ? 'sem medição' : `${Math.round(value)}%`);
 
 /** Executado até a data: por atividade vale o último lançamento com `recordedDate <= data`, e 0
@@ -120,7 +119,7 @@ export function FourDOverview({ workId }: { workId: string }) {
     {header}
     <div className="panel mt-6 p-6">
       <h2 className="mb-1 text-sm font-bold text-slate-800">Nenhuma versão de modelo IFC nesta obra</h2>
-      <Empty>O 4D lê a geometria de um arquivo IFC enviado para a obra. Envie o modelo em <Link className="text-link" href={workPath(workId, 'ifc')}>Modelos IFC</Link> — cada envio cria uma versão nova e preserva as anteriores. Depois volte aqui para montar o conjunto federado.</Empty>
+      <Empty>O 4D lê a geometria transcrita das versões do modelo, não o arquivo. Envie o modelo em <Link className="text-link" href={workPath(workId, 'ifc')}>Modelos IFC</Link> — o envio transcreve o IFC em tabelas e cada versão nova preserva as anteriores. Depois volte aqui para montar o conjunto federado.</Empty>
     </div>
   </>;
 
@@ -154,7 +153,7 @@ export function FourDOverview({ workId }: { workId: string }) {
 
       <fieldset className="mt-5 border-t border-slate-100 pt-4">
         <legend className="flex items-center gap-2 text-xs font-bold text-slate-700"><Layers size={14} className="text-blue-600" />Conjunto federado</legend>
-        <p className="mt-1 text-xs text-slate-500">Vários modelos entram na mesma cena. O padrão é a versão mais recente de cada modelo da obra; os arquivos só são baixados quando você aciona o carregamento.</p>
+        <p className="mt-1 text-xs text-slate-500">Vários modelos entram na mesma cena. O padrão é a versão mais recente de cada modelo da obra; a geometria transcrita é lida do banco quando você aciona o carregamento.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {models.map(model => {
             const versions = versionsOf(model.id);
@@ -163,7 +162,7 @@ export function FourDOverview({ workId }: { workId: string }) {
               <span className="mb-1.5 block text-[11px] font-normal text-slate-400">{model.discipline}</span>
               <select className="field py-1.5" value={chosenId(model.id)} onChange={event => setPicked(current => ({ ...current, [model.id]: event.target.value }))}>
                 <option value="">Fora do conjunto</option>
-                {versions.map(version => <option key={version.id} value={version.id}>v{version.version} · {version.fileName} · {megabytes(version.fileSize)}</option>)}
+                {versions.map(version => <option key={version.id} value={version.id}>v{version.version} · {version.fileName} · {version.elementCount.toLocaleString('pt-BR')} elementos</option>)}
               </select>
               {versions.length === 0 && <span className="mt-1.5 block text-[11px] font-normal text-amber-600">Nenhuma versão enviada.</span>}
             </label>;
@@ -172,7 +171,7 @@ export function FourDOverview({ workId }: { workId: string }) {
         <p className="mt-3 text-xs text-slate-500">
           {federated.length === 0
             ? 'Nenhuma versão no conjunto — escolha ao menos uma para carregar.'
-            : `${federated.length} ${federated.length === 1 ? 'versão' : 'versões'} · ${megabytes(federated.reduce((sum, entry) => sum + entry.version.fileSize, 0))} · ${federated.reduce((sum, entry) => sum + entry.version.elementCount, 0).toLocaleString('pt-BR')} elementos declarados no envio`}
+            : `${federated.length} ${federated.length === 1 ? 'versão' : 'versões'} · ${federated.reduce((sum, entry) => sum + entry.version.elementCount, 0).toLocaleString('pt-BR')} elementos transcritos no envio`}
         </p>
       </fieldset>
     </section>

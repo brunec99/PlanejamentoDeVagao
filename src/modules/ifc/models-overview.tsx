@@ -42,6 +42,28 @@ function useTranscriptions(workId: string) {
   return { rows, reload: () => setAttempt(n => n + 1) };
 }
 
+/** Guardar o arquivo só tem sentido se der para trazer de volta. O endereço é assinado na hora:
+ * o bucket é privado, então não existe URL permanente para publicar na tabela. */
+function DownloadFile({ versionId, fileName }: { versionId: string; fileName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const open = async () => {
+    setBusy(true); setError('');
+    try {
+      const res = await fetch(`/api/ifc/download-url?versionId=${encodeURIComponent(versionId)}`, { cache: 'no-store' });
+      const body = (await res.json().catch(() => ({}))) as { url?: unknown; error?: unknown };
+      if (!res.ok || typeof body.url !== 'string') throw new Error(typeof body.error === 'string' ? body.error : 'Não foi possível abrir o arquivo guardado.');
+      window.location.assign(body.url);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível abrir o arquivo guardado.'); }
+    finally { setBusy(false); }
+  };
+  return <>
+    <button type="button" className="mt-0.5 block text-[11px] font-semibold text-blue-700 hover:underline disabled:cursor-wait disabled:opacity-50"
+      disabled={busy} onClick={open} aria-label={`Baixar o arquivo ${fileName}`}>{busy ? 'abrindo…' : 'baixar arquivo'}</button>
+    {error && <span role="alert" className="mt-0.5 block whitespace-normal text-[11px] font-semibold text-rose-600">{error}</span>}
+  </>;
+}
+
 export function ModelsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
   const { rows: transcriptions, reload } = useTranscriptions(workId);
@@ -109,7 +131,9 @@ export function ModelsOverview({ workId }: { workId: string }) {
                         <td className="break-all">{v.fileName}</td>
                         <td className="whitespace-nowrap">
                           <span className="tabular-nums">{formatSize(v.fileSize)}</span>
-                          <span className={`mt-0.5 block text-[11px] ${v.storagePath ? 'text-slate-400' : 'font-semibold text-amber-600'}`}>{v.storagePath ? 'guardado no Storage' : 'arquivo não guardado'}</span>
+                          {v.storagePath
+                            ? <DownloadFile versionId={v.id} fileName={v.fileName} />
+                            : <span className="mt-0.5 block text-[11px] font-semibold text-amber-600">arquivo não guardado</span>}
                         </td>
                         <td>{v.storeys.length === 0
                           ? <span className="text-slate-300">—</span>
