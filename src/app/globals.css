@@ -75,3 +75,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+/* Federação: os estados desabilitados e os alvos de interação se limitam à área BIM. */
+.federation-page button:disabled { cursor: not-allowed; opacity: .45; }
+.federation-page select:disabled, .federation-page input:disabled { cursor: not-allowed; background-color: #f8fafc; color: #64748b; }
+.federation-page summary::marker { color: #64748b; }

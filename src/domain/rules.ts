@@ -1,5 +1,5 @@
-import type { Activity, LinkRule, LocalDate, PlanningData, Wagon, WagonStatus, WeeklyCommitment } from './entities';
-import { addDays } from './validation';
+import type { Activity, Id, LinkRule, LocalDate, PlanningData, PlanTask, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import { addDays, periodDays } from './validation';
 
 export function validateActivity(activity: Activity): void {
   if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -113,4 +113,48 @@ export function validateSequence(wagons: Wagon[]): void {
       cursor = cursor.predecessorId ? byId.get(cursor.predecessorId) : undefined;
     }
   }
+}
+
+/** O plano do mês lido como estrutura, e não como lista: número do item (1, 1.1, 1.1.1), se ele
+ * tem subitens e, quando tem, o que a linha de fato mostra.
+ *
+ * Um item de resumo não tem datas próprias — ele é o envelope dos subitens, como a barra de
+ * resumo do MS Project. Guardar essas datas seria manter duas verdades sobre a mesma coisa: quem
+ * edita o subitem esperaria o item acompanhar, e ele não acompanharia. Então o item é calculado
+ * aqui, na leitura, a partir de quem está debaixo dele. */
+export interface PlanRollUp { number: string; summary: boolean; leaves: number; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number }
+
+export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp> {
+  // A ordem é que define a estrutura: o pai de uma linha é a anterior mais próxima com nível menor.
+  const rows = tasks.slice().sort((a, b) => a.order - b.order);
+  const hasChildren = (at: number) => rows[at + 1] !== undefined && rows[at + 1].level > rows[at].level;
+  // Duração em dias para ponderar o avanço: um subitem de dez dias pesa dez vezes um de um dia,
+  // que é como o MS Project resume o percentual de um item.
+  const weight = (task: PlanTask) => Math.max(1, periodDays(task.plannedStart, task.plannedEnd, false));
+  const counters: number[] = [];
+  const result = new Map<Id, PlanRollUp>();
+
+  for (let at = 0; at < rows.length; at++) {
+    const task = rows[at];
+    // Nível que pula um degrau (dado antigo, ou importação) não deve quebrar a numeração.
+    const depth = Math.min(Math.max(0, task.level), counters.length);
+    counters.length = depth + 1;
+    counters[depth] = (counters[depth] ?? 0) + 1;
+    const number = counters.slice(0, depth + 1).join('.');
+
+    const leaves: PlanTask[] = [];
+    for (let below = at + 1; below < rows.length && rows[below].level > task.level; below++) if (!hasChildren(below)) leaves.push(rows[below]);
+    if (!leaves.length) {
+      result.set(task.id, { number, summary: false, leaves: 0, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, progress: task.progress });
+      continue;
+    }
+    const total = leaves.reduce((sum, leaf) => sum + weight(leaf), 0);
+    result.set(task.id, {
+      number, summary: true, leaves: leaves.length,
+      plannedStart: leaves.reduce((min, leaf) => (leaf.plannedStart < min ? leaf.plannedStart : min), leaves[0].plannedStart),
+      plannedEnd: leaves.reduce((max, leaf) => (leaf.plannedEnd > max ? leaf.plannedEnd : max), leaves[0].plannedEnd),
+      progress: leaves.reduce((sum, leaf) => sum + leaf.progress * weight(leaf), 0) / total,
+    });
+  }
+  return result;
 }

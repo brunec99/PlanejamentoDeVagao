@@ -1,4 +1,4 @@
-import type { Activity, BoardStatus, LinkRuleCriterion, NonFulfillmentCause, PlanningData, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import type { Activity, BoardStatus, LinkRuleCriterion, NonFulfillmentCause, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
 import { NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
@@ -27,8 +27,8 @@ export type Command =
   | { type: 'delete_team'; teamId: string }
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
-  | { type: 'create_commitment'; workId: string; name: string; activityId?: string | null; weekStart: string; responsibleId: string; teamId: string; startDate: string; endDate: string; weekdays: number[] }
-  | { type: 'update_commitment'; commitmentId: string; name: string; teamId: string; startDate: string; endDate: string; weekdays: number[] }
+  | { type: 'create_commitment'; workId: string; name: string; weekStart: string; responsibleId: string; supplier?: string; teamId?: string | null; activityId?: string | null; startDate?: string; endDate?: string }
+  | { type: 'update_commitment'; commitmentId: string; name: string; supplier: string; teamId?: string | null; weekStart: string; startDate: string; endDate: string }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
@@ -36,7 +36,9 @@ export type Command =
   | { type: 'create_plan'; workId: string; month: string; name?: string }
   | { type: 'delete_plan'; planId: string }
   | { type: 'freeze_plan_baseline'; planId: string; name: string }
-  | { type: 'create_plan_task'; planId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null }
+  | { type: 'create_plan_task'; planId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; level?: number }
+  | { type: 'indent_plan_task'; taskId: string }
+  | { type: 'outdent_plan_task'; taskId: string }
   | { type: 'update_plan_task'; taskId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; progress: number }
   | { type: 'delete_plan_task'; taskId: string }
   | { type: 'set_plan_task_note'; taskId: string; note: string }
@@ -54,6 +56,27 @@ export type Command =
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
 export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
+
+/** O período da linha da semana, conferido contra a semana dela. É o intervalo digitado que
+ * manda: o calendário de segunda a sábado é desenhado a partir dele, não guardado. */
+function period(startDate: string, endDate: string, weekStart: string, weekEnd: string) {
+  validatePeriod(startDate, endDate);
+  if (startDate < weekStart || endDate > weekEnd) throw new Error('O período da linha deve ficar dentro da semana escolhida.');
+  return { startDate, endDate };
+}
+
+/** As linhas do plano na ordem em que aparecem na tela — é a ordem que define a estrutura:
+ * o pai de uma linha é a anterior mais próxima com nível menor. */
+function ordered(data: PlanningData, planId: string) {
+  return data.planTasks.filter(t => t.planId === planId).sort((a, b) => a.order - b.order);
+}
+/** A linha e tudo que está debaixo dela: as seguintes com nível maior, até voltar ao nível dela. */
+function subtree(rows: PlanTask[], at: number) {
+  if (at < 0) return [];
+  const family = [rows[at]];
+  for (let i = at + 1; i < rows.length && rows[i].level > rows[at].level; i++) family.push(rows[i]);
+  return family;
+}
 
 function wagonFor(data: PlanningData, id: string): Wagon {
   const wagon = data.wagons.find(w => w.id === id);
@@ -116,6 +139,13 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
   const touch = (record: RecordBase) => { record.updatedAt = now; };
   const planFor = (id: string) => { const plan = data.plans.find(p => p.id === id); if (!plan) throw new Error('Plano não encontrado.'); return plan; };
   const taskFor = (id: string) => { const task = data.planTasks.find(t => t.id === id); if (!task) throw new Error('Linha do plano não encontrada.'); return task; };
+  /** A equipe da linha da semana é opcional; quando vem, tem que ser da obra. */
+  const teamOf = (teamId: string | null | undefined, workId: string) => {
+    if (!teamId) return undefined;
+    const team = data.teams.find(t => t.id === teamId && t.workId === workId);
+    if (!team) throw new Error('Equipe deve pertencer à obra.');
+    return team.id;
+  };
   let entityId = ''; let wagonId: string | undefined;
   const beforeTerminal = new Set(data.wagons.filter(w => isTerminal(w.id, data)).map(w => w.id));
   switch (command.type) {
@@ -316,8 +346,9 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       entityId = activity.id; wagonId = wagon.id; break;
     }
     case 'create_commitment': {
-      // A semana é montada do zero: o nome é escrito à mão e a atividade é vínculo opcional,
-      // porque a planilha real mistura frentes de obra com tarefas que não estão no cronograma.
+      // A planilha da semana não depende de cadastro nenhum: o nome e o fornecedor são escritos na
+      // própria linha, a equipe é opcional e a atividade do cronograma é vínculo opcional — a
+      // planilha real mistura frentes de obra com tarefas que não estão em cronograma algum.
       const workId = command.workId; checkWork(workId);
       const name = requireText(command.name, 'Atividade');
       if (command.activityId) {
@@ -326,28 +357,25 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       }
       responsible(command.responsibleId, workId); validateDate(command.weekStart);
       const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
-      validatePeriod(command.startDate, command.endDate);
-      if (command.startDate < weekStart || command.endDate > weekEnd) throw new Error('O período do compromisso deve ficar dentro da semana.');
-      const weekdays = [...new Set(command.weekdays ?? [])].sort((a, b) => a - b);
-      if (!weekdays.length) throw new Error('Marque ao menos um dia da semana.');
-      if (weekdays.some(day => !Number.isInteger(day) || day < 1 || day > 6)) throw new Error('Os dias da semana vão de segunda (1) a sábado (6).');
-      const team = data.teams.find(t => t.id === command.teamId && t.workId === workId);
-      if (!team) throw new Error('Selecione uma equipe cadastrada nesta obra.');
-      const commitment = { ...base(), workId, name, activityId: command.activityId ?? undefined, weekStart, weekEnd,
-        responsibleId: command.responsibleId, teamId: team.id, startDate: command.startDate, endDate: command.endDate, weekdays };
+      // Linha nova nasce no primeiro dia da semana: a data é editável, e o calendário vem dela.
+      const startDate = command.startDate ?? weekStart, endDate = command.endDate ?? startDate;
+      const commitment = { ...base(), workId, name, supplier: command.supplier?.trim() ?? '', weekStart, weekEnd,
+        responsibleId: command.responsibleId, activityId: command.activityId ?? undefined,
+        teamId: teamOf(command.teamId, workId), ...period(startDate, endDate, weekStart, weekEnd) };
       data.commitments.push(commitment); entityId = commitment.id; break;
     }
     case 'update_commitment': {
       const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
-      const team = data.teams.find(t => t.id === command.teamId && t.workId === commitment.workId);
-      if (!team) throw new Error('Selecione uma equipe cadastrada nesta obra.');
-      validatePeriod(command.startDate, command.endDate);
-      if (command.startDate < commitment.weekStart || command.endDate > commitment.weekEnd) throw new Error('O período do compromisso deve ficar dentro da semana.');
-      const weekdays = [...new Set(command.weekdays ?? [])].sort((a, b) => a - b);
-      if (!weekdays.length) throw new Error('Marque ao menos um dia da semana.');
-      if (weekdays.some(day => !Number.isInteger(day) || day < 1 || day > 6)) throw new Error('Os dias da semana vão de segunda (1) a sábado (6).');
-      Object.assign(commitment, { name: requireText(command.name, 'Atividade'), teamId: team.id, startDate: command.startDate, endDate: command.endDate, weekdays });
+      // Tudo na linha é editável, inclusive a semana: mover uma linha de semana é corrigir a
+      // célula, e a nova semana é que passa a conter o período.
+      validateDate(command.weekStart);
+      const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
+      Object.assign(commitment, {
+        name: requireText(command.name, 'Atividade'), supplier: command.supplier?.trim() ?? '',
+        teamId: teamOf(command.teamId, commitment.workId), weekStart, weekEnd,
+        ...period(command.startDate, command.endDate, weekStart, weekEnd),
+      });
       touch(commitment); entityId = commitment.id; break;
     }
     case 'record_fulfillment': {
@@ -410,7 +438,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       // A linha de base é o próprio plano congelado: mesma estrutura, aberta no mesmo cronograma.
       const frozen = { ...base(), workId: plan.workId, month: plan.month, name: requireText(command.name, 'Nome da linha de base'), baselineOf: plan.id, frozenAt: now, createdBy: actorId };
       data.plans.push(frozen);
-      for (const task of tasks) data.planTasks.push({ ...base(), planId: frozen.id, name: task.name, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, teamId: task.teamId, activityId: task.activityId, notes: task.notes, progress: task.progress, order: task.order });
+      for (const task of tasks) data.planTasks.push({ ...base(), planId: frozen.id, name: task.name, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, teamId: task.teamId, activityId: task.activityId, notes: task.notes, progress: task.progress, order: task.order, level: task.level });
       entityId = frozen.id; break;
     }
     case 'create_plan_task': case 'update_plan_task': {
@@ -426,8 +454,13 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       }
       const fields = { name, plannedStart: command.plannedStart, plannedEnd: command.plannedEnd, teamId: command.teamId ?? undefined, activityId: command.activityId ?? undefined };
       if (command.type === 'create_plan_task') {
-        const order = Math.max(0, ...data.planTasks.filter(t => t.planId === plan.id).map(t => t.order)) + 1;
-        const task = { ...base(), planId: plan.id, ...fields, progress: 0, order };
+        const siblings = data.planTasks.filter(t => t.planId === plan.id);
+        const order = Math.max(0, ...siblings.map(t => t.order)) + 1;
+        // A linha nova continua no recuo da última: quem está detalhando um item segue detalhando.
+        const last = siblings.slice().sort((a, b) => a.order - b.order).at(-1);
+        const asked = Number.isFinite(command.level) ? Math.max(0, Math.trunc(command.level as number)) : last?.level ?? 0;
+        const level = Math.min(asked, (last?.level ?? -1) + 1);
+        const task = { ...base(), planId: plan.id, ...fields, progress: 0, order, level };
         data.planTasks.push(task); entityId = task.id;
       } else {
         if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -436,11 +469,31 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       }
       break;
     }
+    case 'indent_plan_task': case 'outdent_plan_task': {
+      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      const rows = ordered(data, plan.id);
+      const at = rows.findIndex(t => t.id === task.id);
+      const family = subtree(rows, at);
+      if (command.type === 'indent_plan_task') {
+        const previous = rows[at - 1];
+        // Virar subitem é virar filho da linha de cima: sem linha de cima, não há de quem ser filho.
+        if (!previous) throw new Error('A primeira linha do plano não pode ser subitem.');
+        if (task.level > previous.level) throw new Error('Esta linha já é subitem da linha acima.');
+      } else if (task.level === 0) throw new Error('Esta linha já está no nível mais alto.');
+      // O recuo move a linha e tudo que está debaixo dela: subitem de subitem acompanha o pai.
+      const shift = command.type === 'indent_plan_task' ? 1 : -1;
+      for (const member of family) { member.level += shift; touch(member); }
+      entityId = task.id; break;
+    }
     case 'delete_plan_task': {
       const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
-      data.planDependencies = data.planDependencies.filter(d => d.predecessorId !== task.id && d.successorId !== task.id);
-      data.planTasks = data.planTasks.filter(t => t.id !== task.id);
+      // Apagar um item apaga os subitens dele: deixá-los órfãos reescreveria a estrutura por conta.
+      const rows = ordered(data, plan.id);
+      const removed = new Set(subtree(rows, rows.findIndex(t => t.id === task.id)).map(t => t.id));
+      data.planDependencies = data.planDependencies.filter(d => !removed.has(d.predecessorId) && !removed.has(d.successorId));
+      data.planTasks = data.planTasks.filter(t => !removed.has(t.id));
       entityId = task.id; break;
     }
     case 'set_plan_task_note': {

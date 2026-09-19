@@ -221,7 +221,7 @@ function UploadVersion({ modelId, modelName, onDone }: { modelId: string; modelN
       // justamente o caso comum, que é o envio passar do limite por arquivo do projeto.
       const detail = await sent.text().catch(() => '');
       throw new Error(sent.status === 413 || /exceeded the maximum allowed size/i.test(detail)
-        ? `${subject} tem ${formatSize(size)} e passa do limite por arquivo do Storage. Aumente o limite em Storage → Settings no painel do Supabase (o plano gratuito trava em 50 MB) e tente de novo.`
+        ? `${subject} tem ${formatSize(size)} e passa do limite por arquivo do Storage, que no plano gratuito é de 50 MB e não pode ser aumentado — subir dele exige plano pago. Nada do planejamento depende do .ifc original: deixe a caixa desmarcada e a versão segue completa pelas tabelas e pela geometria convertida.`
         : `O Storage recusou o envio (HTTP ${sent.status}).${detail ? ` ${detail.slice(0, 200)}` : ''}`);
     }
     return String(ticket.path);

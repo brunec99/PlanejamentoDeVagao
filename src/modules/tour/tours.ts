@@ -5,7 +5,7 @@ export interface TourStep {
   body: string;
 }
 
-export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'planejamento' | 'vagao' | 'ifc' | 'quatroD' | 'prevision' | 'dividas' | 'configuracoes';
+export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'planejamento' | 'vagao' | 'ifc' | 'federacao' | 'quatroD' | 'prevision' | 'dividas' | 'configuracoes';
 
 export const tours: Record<TourKey, TourStep[]> = {
   obras: [
@@ -22,13 +22,14 @@ export const tours: Record<TourKey, TourStep[]> = {
   ],
   medioPrazo: [
     { title: 'Planejamento de médio prazo', body: 'O plano do mês, escrito do zero: um plano novo a cada mês, com o cadastro de equipes que também abastece a planilha semanal.' },
-    { target: 'medio-teams', title: 'Equipes e capacidade', body: 'Empresa e equipe ficam aqui, e são as mesmas que aparecem na planilha do curto prazo. A capacidade é o número de atividades simultâneas por semana — é o que sinaliza sobrecarga.' },
+    { target: 'medio-teams', title: 'Equipes e capacidade', body: 'Empresa e equipe ficam aqui e abastecem o recurso do cronograma; na planilha do curto prazo a equipe é apenas uma opção, porque lá a linha se escreve sozinha. A capacidade é o número de atividades simultâneas por semana — é o que sinaliza sobrecarga.' },
     { target: 'medio-gantt', title: 'Plano do mês', body: 'A tela começa em branco: crie o plano do mês e escreva as linhas, com início, término, duração, recurso, predecessora e anotação. "Definir linha de base" congela o plano como está — a linha de base é o próprio plano congelado, então ela abre aqui mesmo e serve de comparação. As datas não se movem sozinhas: a rede aponta a incoerência, a reprogramação é sua.' },
+    { target: 'medio-gantt', title: 'Item e subitem', body: 'Recue uma linha (com o botão ou com Tab, como no MS Project) para ela virar subitem da linha de cima. O recuo leva os subitens dela junto. Um item com subitens passa a ser resumo: início, término e avanço dele são os dos subitens, e por isso essas células ficam travadas. Excluir um item exclui os subitens.' },
   ],
   curtoPrazo: [
-    { title: 'Planejamento de curto prazo', body: 'O planejamento semanal do Last Planner: compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },
+    { title: 'Planejamento de curto prazo', body: 'A planilha da semana, que se sustenta sozinha: nada aqui depende do plano do mês nem de cadastro feito em outra tela. Compromissos da semana, cumprimento, PPC e causas de não cumprimento.' },
     { target: 'curto-ppc', title: 'PPC da semana', body: 'O PPC conta compromissos cumpridos sobre compromissos assumidos na semana. Ele não é a média dos percentuais executados dos serviços.' },
-    { target: 'curto-commitments', title: 'A planilha da semana', body: 'Mesma estrutura da planilha que a equipe já preenche: empresa, equipe, período, atividade e os dias marcados. Ao encerrar a semana, registre Sim ou Não em cada linha — o Não exige uma causa da lista, e é dela que sai a análise do PPC.' },
+    { target: 'curto-commitments', title: 'A planilha da semana', body: 'Mesma estrutura da planilha que a equipe já preenche: fornecedor, semana, início, término, atividade e equipe, todos editáveis na célula — a equipe é opcional. O calendário de segunda a sábado é a única coisa que se preenche sozinha, a partir do início e do término. Ao encerrar a semana, registre Sim ou Não em cada linha: o Não exige uma causa da lista, e é dela que sai a análise do PPC.' },
   ],
   planejamento: [
     { title: 'Planejamento por período', body: 'Aqui os vagões desta obra ficam organizados em sequências de produção. Cada vagão é um período fixo (o "takt") que reúne várias atividades.' },
@@ -53,6 +54,12 @@ export const tours: Record<TourKey, TourStep[]> = {
     { target: 'ifc-quantitativo', title: 'Quantitativo', body: 'As quantidades declaradas no modelo, somadas por tipo, com a distribuição por classe IFC e por pavimento e a consulta elemento a elemento. A soma é feita no banco, sobre o modelo inteiro — e sai em CSV para quem ainda precisa da planilha.' },
     { target: 'ifc-viewer', title: 'Visualizador', body: 'Desenha a geometria convertida guardada no envio, não o arquivo relido — é o que faz o modelo abrir em qualquer tamanho. Dá para colorir por pavimento ou por classe, isolar um pavimento e clicar num elemento para ver classe IFC, nome, GlobalId e pavimento.' },
     { target: 'ifc-rules', title: 'Vinculação por regras', body: 'As regras ligam elementos do modelo a um serviço por propriedade (pavimento e tipo de elemento nesta versão), em vez de seleção manual elemento por elemento. Regras cujo pavimento não existe mais no modelo aparecem marcadas para revisão.' },
+  ],
+  federacao: [
+    { title: 'Modelo federado', body: 'Reúna versões dos modelos da obra e explore o conjunto sem depender do planejamento 4D.' },
+    { target: 'federation-composition', title: 'Composição do conjunto', body: 'Busque modelos e disciplinas, marque os modelos que entram no conjunto e escolha suas versões. Selecionar disponíveis usa a versão mais recente pronta de cada modelo. Carregar aplica a seleção ao 3D.' },
+    { target: 'federation-saved', title: 'Composições salvas', body: 'Abra esta área para restaurar uma composição ou salvar uma nova cópia. Cada composição mantém as versões escolhidas, mesmo após novos envios de IFC.' },
+    { target: 'federation-viewer', title: 'Explorar o conjunto', body: 'Oculte ou isole modelos, recorte por pavimento e escolha as cores. Clique no 3D ou use Buscar elementos para selecionar pelo nome, classe ou GlobalId; o painel de detalhes mostra a origem e os dados.' },
   ],
   quatroD: [
     { title: 'BIM 4D', body: 'Mostra a evolução física no modelo federado e compara o planejado com o realizado numa data escolhida.' },
@@ -88,6 +95,7 @@ export function resolveTourKey(pathname: string): TourKey | null {
   if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
   if (/^\/obras\/[^/]+\/ifc$/.test(pathname)) return 'ifc';
+  if (/^\/obras\/[^/]+\/federacao$/.test(pathname)) return 'federacao';
   if (/^\/obras\/[^/]+\/quatro-d$/.test(pathname)) return 'quatroD';
   if (/^\/obras\/[^/]+\/importar$/.test(pathname)) return 'prevision';
   if (/^\/obras\/[^/]+\/dividas$/.test(pathname)) return 'dividas';

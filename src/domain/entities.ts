@@ -20,7 +20,10 @@ export interface ActivityDependency extends RecordBase { predecessorId: Id; succ
 export interface MediumTermPlan extends RecordBase { workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id }
 /** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
  * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
-export interface PlanTask extends RecordBase { planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number }
+/** Tarefa do plano do mês. `level` é o recuo, como no MS Project: o pai de uma linha é a linha
+ * anterior mais próxima com nível menor. Linha com filhos é resumo — início, término e avanço
+ * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui. */
+export interface PlanTask extends RecordBase { planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
 /** Dependência término-início entre linhas do plano mensal. */
 export interface PlanDependency extends RecordBase { predecessorId: Id; successorId: Id }
 /** Equipe executora, o cadastro que o cronograma usa como recurso e a planilha semanal usa
@@ -55,7 +58,11 @@ export type NonFulfillmentCause = (typeof NON_FULFILLMENT_CAUSES)[number];
  * atividade quando faz sentido, sem obrigar. `weekStart` é sempre a segunda-feira, para o PPC
  * agrupar por semanas canônicas, e `fulfilled` indefinido = ainda não apurado.
  * `weekdays` usa 1 (segunda) a 6 (sábado). */
-export interface WeeklyCommitment extends RecordBase { workId: Id; name: string; activityId?: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; teamId: Id; startDate: LocalDate; endDate: LocalDate; weekdays: number[]; fulfilled?: boolean; cause?: NonFulfillmentCause; justification?: string; recordedAt?: string; recordedBy?: Id }
+/** Linha da planilha da semana. Ela se sustenta sozinha: o fornecedor é texto escrito na própria
+ * linha e a equipe é opcional, porque na obra a semana é preenchida direto, sem depender de
+ * cadastro feito em outra tela. O calendário de segunda a sábado não é guardado — ele se preenche
+ * a partir de `startDate` e `endDate`, que é o que o engenheiro digita. */
+export interface WeeklyCommitment extends RecordBase { workId: Id; name: string; supplier: string; activityId?: Id; weekStart: LocalDate; weekEnd: LocalDate; responsibleId: Id; teamId?: Id; startDate: LocalDate; endDate: LocalDate; fulfilled?: boolean; cause?: NonFulfillmentCause; justification?: string; recordedAt?: string; recordedBy?: Id }
 /** Cópia imutável das datas planejadas de uma obra num momento. Reprogramar o
  * planejamento atual nunca altera uma linha de base já salva. */
 export interface BaselineWagon { id: Id; number: number; plannedStart: LocalDate; plannedEnd: LocalDate }

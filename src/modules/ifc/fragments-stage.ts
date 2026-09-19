@@ -33,6 +33,7 @@ export async function loadFragments({ scene, camera, versions, signal, onProgres
   const models: LoadedModel[] = [];
   try {
     for (const [index, version] of versions.entries()) {
+      signal.throwIfAborted();
       const of = versions.length > 1 ? ` (${index + 1}/${versions.length})` : '';
       onProgress(`Abrindo a geometria de ${version.label}${of}…`);
       const signed = await fetch(`/api/ifc/fragments?versionId=${encodeURIComponent(version.id)}`, { cache: 'no-store', signal });
@@ -47,13 +48,16 @@ export async function loadFragments({ scene, camera, versions, signal, onProgres
       onProgress(`Montando ${version.label}${of}…`);
       // O modelId precisa ser estável e único na cena: a versão é exatamente isso.
       const model = await fragments.load(bytes, { modelId: version.id, camera });
+      signal.throwIfAborted();
       scene.add(model.object);
       models.push({ versionId: version.id, label: version.label, model });
     }
     await fragments.update(true);
+    signal.throwIfAborted();
     return { api, fragments, models };
   } catch (cause) {
     // Falha no meio da federação não pode deixar worker e modelos pendurados.
+    for (const { model } of models) model.object.removeFromParent();
     await fragments.dispose().catch(() => undefined);
     throw cause;
   }

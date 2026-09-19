@@ -11,6 +11,7 @@ const sections = [
   { section: 'curto-prazo', label: 'Planejamento de curto prazo', Icon: ClipboardCheck },
   { section: 'vagoes', label: 'Vagões', Icon: TrainFront },
   { section: 'ifc', label: 'Modelos IFC', Icon: Boxes },
+  { section: 'federacao', label: 'Modelo federado', Icon: Layers },
   { section: 'quatro-d', label: 'BIM 4D', Icon: Layers },
   { section: 'dividas', label: 'Dívidas', Icon: Wallet },
   { section: 'importar', label: 'Integrações', Icon: RefreshCw },
