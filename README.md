@@ -52,9 +52,13 @@ Datas são datas civis ISO. O calendário de dias úteis considera segunda a sex
 
 ## Níveis de planejamento
 
+**Continuidade:** o estado dos três níveis, as decisões tomadas e as pendências ficam em [Planejamento em três níveis](docs/planejamento-tres-niveis.md), que acompanha cada alteração de longo, médio ou curto prazo — o equivalente ao que [IFC e modelo federado](docs/ifc-federacao.md) faz para o BIM.
+
 A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`), que deduz a obra pela URL e mostra o nome dela junto das seções: "Planejamento de longo prazo", "Planejamento de médio prazo", "Planejamento de curto prazo", "Vagões", "Modelos IFC", "Modelo federado", "BIM 4D", "Dívidas" e "Integrações". Fora de uma obra, a lateral não mostra essas seções.
 
 **Longo prazo** (`/obras/{obraId}/longo-prazo`): define e lista as linhas de base da obra. Cada acionamento cria um registro novo, que copia o número e as datas planejadas dos vagões e as datas, o local e o peso das atividades. Reprogramar o planejamento atual nunca altera uma linha de base já salva — planejamento atual, linha de base e realizado permanecem registros distintos. A mesma tela traz o gráfico de Linha de Balanço: cada serviço é uma linha avançando pelos locais ao longo do tempo, com marcação de hoje, alternância para visão de tabela e sobreposição pontilhada da linha de base escolhida para comparação.
+
+A mesma tela traz a **curva de avanço acumulado**: planejado contra executado ao longo do tempo, que é a leitura que responde se a obra está adiantada ou atrasada — a Linha de Balanço responde onde. O planejado vem da linha de base escolhida, e a tela diz quando está usando o planejamento atual em vez dela: comparar o executado com um planejamento já reprogramado é comparar a obra com a desculpa dela. O planejado supõe avanço linear de cada frente entre início e término, aproximação declarada na tela; o executado não é aproximado, sai dos lançamentos datados, e por isso a linha para em hoje — prolongá-la inventaria medição. O desvio aparece em pontos percentuais e, quando é possível calcular sem inventar, em dias.
 
 Também é aqui que fica o **quadro de pendências**, em três colunas. Cada pendência é ligada a uma atividade e a um lead time em dias, e o limite de resolução não é digitado: o servidor calcula a partir do **início previsto da atividade menos o lead time**, porque o prazo de obtenção precisa caber antes de a frente começar. O card abre em detalhe com a descrição completa, a atividade vinculada, o lead time e a origem da data. Se a atividade for reprogramada depois, o card mostra o limite recalculado e sinaliza a divergência em relação à data gravada. Quem preferir continuar digitando a data pode deixar o lead time em branco.
 
@@ -68,7 +72,11 @@ Cada linha pode apontar para uma atividade do longo prazo, sem obrigar — é o 
 
 **A linha de base é o próprio plano congelado**: "Definir linha de base" duplica o plano com `frozenAt` marcado, e o congelado não aceita edição. Por ser um plano como outro qualquer, ele abre no mesmo cronograma e serve de comparação — as linhas são pareadas **pelo nome**, já que a cópia tem ids próprios.
 
-Nesta tela também fica o cadastro de equipes, que carrega empresa e equipe e abastece o recurso do cronograma; na planilha semanal a equipe é apenas uma opção. Excluir equipe é recusado enquanto ela estiver em uso.
+A janela de três meses aparece como lista de trabalho — atividade, vagão, local, período, equipe e percentual —, que é o que a reunião de médio prazo precisa ter na frente, e não só como contagem.
+
+A tela confere também a **cobertura entre os níveis**: quais frentes da janela não têm linha no plano do mês, e quais linhas do plano não aparecem em semana nenhuma da planilha. O pareamento é por **nome normalizado**, não por vínculo formal: `PlanTask.activityId` e `WeeklyCommitment.activityId` são opcionais e quase nunca preenchidos. É conferência, não vínculo, e erra quando o nome muda de um nível para o outro — a tela diz isso. E é sugestão, nunca exigência: nada bloqueia, cria linha sozinho ou pede vínculo, porque o curto prazo se sustentar sozinho é decisão de projeto.
+
+Nesta tela também fica o cadastro de equipes, que carrega empresa e equipe e abastece o recurso do cronograma; na planilha semanal a equipe é apenas uma opção. Excluir equipe é recusado enquanto ela estiver em uso. A carga da equipe soma os dois lugares onde ela é comprometida — a atividade do cronograma e a linha do plano do mês —, e a tabela mostra a separação. Contar só o cronograma dizia "dentro da capacidade" com o mês estourado, justamente para quem planeja na grade nova; linha de base congelada não entra na conta, porque retrato não é compromisso.
 
 As datas não se movem sozinhas, por decisão de escopo: a rede aponta a incoerência (sucessora que começa antes do término da predecessora) e a reprogramação é manual. Ligações que fechariam um ciclo são recusadas.
 

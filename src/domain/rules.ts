@@ -1,4 +1,4 @@
-import type { Activity, Id, LinkRule, LocalDate, PlanningData, PlanTask, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import type { Activity, Baseline, Id, LinkRule, LocalDate, NonFulfillmentCause, PlanningData, PlanTask, ProgressEntry, Wagon, WagonStatus, WeeklyCommitment } from './entities';
 import { addDays, periodDays } from './validation';
 
 export function validateActivity(activity: Activity): void {
@@ -41,8 +41,14 @@ export function ppc(commitments: WeeklyCommitment[]) {
 /** Atividades da equipe que se sobrepõem à janela, contra a capacidade cadastrada. */
 export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data: PlanningData) {
   const team = data.teams.find(t => t.id === teamId);
-  const assigned = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
-  return { assigned: assigned.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned.length > team.weeklyCapacity };
+  // A carga conta os dois lugares onde a equipe é comprometida: a atividade do cronograma e a
+  // linha do plano do mês. Contar só o cronograma dizia "dentro da capacidade" com o mês
+  // estourado, justamente para quem planeja na grade nova.
+  const activities = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
+  const tasks = data.planTasks.filter(t => t.teamId === teamId && t.plannedStart <= end && t.plannedEnd >= start
+    && !data.plans.find(p => p.id === t.planId)?.frozenAt);
+  const assigned = activities.length + tasks.length;
+  return { assigned, activities: activities.length, tasks: tasks.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned > team.weeklyCapacity };
 }
 /** Dependências cuja sucessora começa antes de a predecessora terminar. A data não é
  * corrigida sozinha — a reprogramação é manual —, então a incoerência é apontada. */
@@ -157,4 +163,91 @@ export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp> {
     });
   }
   return result;
+}
+
+/** O PPC de cada semana, da mais antiga para a mais recente. O valor de uma semana isolada diz
+ * pouco: o que o Last Planner usa é a série — se o comprometimento está sendo aprendido ou se a
+ * equipe promete a mesma coisa todo mês e falha pelo mesmo motivo. */
+export interface WeekPpc { weekStart: LocalDate; planned: number; fulfilled: number; pending: number; percent: number }
+export function ppcSeries(commitments: WeeklyCommitment[]): WeekPpc[] {
+  const weeks = new Map<string, WeeklyCommitment[]>();
+  for (const commitment of commitments) {
+    const week = weeks.get(commitment.weekStart);
+    if (week) week.push(commitment); else weeks.set(commitment.weekStart, [commitment]);
+  }
+  return [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, rows]) => ({ weekStart, ...ppc(rows) }));
+}
+
+/** As causas do não cumprimento em ordem de peso, com o acumulado — o Pareto. A lista fechada de
+ * 17 causas só serve para alguma coisa quando responde qual delas está custando a obra; coletar
+ * sem ordenar é o que a planilha já fazia. */
+export interface CauseTally { cause: NonFulfillmentCause; total: number; share: number; accumulated: number }
+export function causePareto(commitments: WeeklyCommitment[]): CauseTally[] {
+  const totals = new Map<NonFulfillmentCause, number>();
+  for (const commitment of commitments) {
+    if (commitment.fulfilled !== false || !commitment.cause) continue;
+    totals.set(commitment.cause, (totals.get(commitment.cause) ?? 0) + 1);
+  }
+  const failures = [...totals.values()].reduce((sum, total) => sum + total, 0);
+  if (!failures) return [];
+  let running = 0;
+  // Empate resolvido pelo nome: a ordem tem que ser a mesma a cada leitura, senão duas telas
+  // iguais mostram Paretos diferentes.
+  return [...totals.entries()].sort(([nameA, a], [nameB, b]) => b - a || nameA.localeCompare(nameB, 'pt-BR'))
+    .map(([cause, total]) => { running += total; return { cause, total, share: (total / failures) * 100, accumulated: (running / failures) * 100 }; });
+}
+
+/** Curva S: o avanço físico acumulado no tempo, planejado contra executado.
+ *
+ * O planejado de uma data é quanto do peso da obra deveria estar pronto ali, com cada frente
+ * avançando linearmente entre o seu início e o seu término. É aproximação declarada: a obra não
+ * avança em reta dentro de uma frente, mas a alternativa seria inventar uma curva de produção que
+ * ninguém mediu. O executado não é aproximado — sai do lançamento datado, que é medição.
+ *
+ * A referência do planejado é uma linha de base quando houver: comparar o executado com o
+ * planejamento atual, que foi reprogramado, é comparar a obra com a desculpa dela. */
+interface Planned { plannedStart: LocalDate; plannedEnd: LocalDate; weight: number }
+export interface CurvePoint { date: LocalDate; planned: number; executed: number }
+
+const share = (item: Planned, date: LocalDate) => {
+  if (date < item.plannedStart) return 0;
+  if (date >= item.plannedEnd) return 100;
+  return (periodDays(item.plannedStart, date, false) / periodDays(item.plannedStart, item.plannedEnd, false)) * 100;
+};
+
+export function plannedAt(items: Planned[], date: LocalDate): number {
+  const total = items.reduce((sum, item) => sum + item.weight, 0);
+  return total ? items.reduce((sum, item) => sum + share(item, date) * item.weight, 0) / total : 0;
+}
+
+/** Executado até a data: por atividade vale o último lançamento com data menor ou igual, e zero
+ * quando não houver nenhum. O percentual da atividade guarda só o valor de hoje, não a série. */
+export function executedAt(activities: Activity[], entries: ProgressEntry[], date: LocalDate): number {
+  const total = activities.reduce((sum, activity) => sum + activity.weight, 0);
+  if (!total) return 0;
+  const byActivity = new Map<Id, ProgressEntry[]>();
+  for (const entry of entries) {
+    if (entry.recordedDate > date) continue;
+    const list = byActivity.get(entry.activityId);
+    if (list) list.push(entry); else byActivity.set(entry.activityId, [entry]);
+  }
+  const at = (activity: Activity) => byActivity.get(activity.id)?.slice()
+    .sort((a, b) => a.recordedDate.localeCompare(b.recordedDate) || a.createdAt.localeCompare(b.createdAt)).at(-1)?.progress ?? 0;
+  return activities.reduce((sum, activity) => sum + at(activity) * activity.weight, 0) / total;
+}
+
+/** A curva amostrada semana a semana. `to` entra sempre, mesmo fora do passo, para a leitura não
+ * terminar antes da data que interessa. */
+export function progressCurve({ activities, entries, baseline, from, to, step = 7 }: {
+  activities: Activity[]; entries: ProgressEntry[]; baseline?: Baseline; from: LocalDate; to: LocalDate; step?: number;
+}): CurvePoint[] {
+  if (from > to) return [];
+  const reference: Planned[] = baseline ? baseline.activities : activities;
+  const points: CurvePoint[] = [];
+  for (let date = from; date <= to; date = addDays(date, step)) {
+    points.push({ date, planned: plannedAt(reference, date), executed: executedAt(activities, entries, date) });
+  }
+  if (points.at(-1)?.date !== to) points.push({ date: to, planned: plannedAt(reference, to), executed: executedAt(activities, entries, to) });
+  return points;
 }

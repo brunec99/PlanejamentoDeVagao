@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { applyCommand, type Command, type CommandContext } from '../src/application/use-cases/commands';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
 import { createMockData } from '../src/mocks/planning';
-import { rollUpPlan, ppc, teamLoad } from '../src/domain/rules';
+import { rollUpPlan, ppc, teamLoad, ppcSeries, causePareto, plannedAt, executedAt, progressCurve } from '../src/domain/rules';
 import type { PlanningData, Team, WeeklyCommitment } from '../src/domain/entities';
+import { addDays } from '../src/domain/validation';
 let id=0;
 const context=(actorId='user-1'):CommandContext=>({actorId,today:'2026-09-08',now:'2026-09-08T12:00:00Z',newId:()=>`test-${++id}`});
 const run=(d:PlanningData,c:Command,actorId='user-1')=>applyCommand(d,c,context(actorId));
@@ -138,13 +139,13 @@ test('ppc conta compromissos cumpridos sobre planejados, não a média de progre
 });
 test('carga da equipe acusa sobrecarga acima da capacidade semanal',()=>{
   const d=createMockData();
-  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:0,capacity:2,overloaded:false});
+  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:0,activities:0,tasks:0,capacity:2,overloaded:false});
   run(d,{type:'assign_team',activityId:'a3',teamId:'equipe-1'});
   run(d,{type:'assign_team',activityId:'b3',teamId:'equipe-1'});
-  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:2,capacity:2,overloaded:false});
+  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:2,activities:2,tasks:0,capacity:2,overloaded:false});
   run(d,{type:'assign_team',activityId:'a4',teamId:'equipe-1'});
-  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:3,capacity:2,overloaded:true});
-  assert.deepEqual(teamLoad('equipe-1','2026-08-22','2026-08-26',d),{assigned:0,capacity:2,overloaded:false});
+  assert.deepEqual(teamLoad('equipe-1','2026-09-01','2026-09-10',d),{assigned:3,activities:3,tasks:0,capacity:2,overloaded:true});
+  assert.deepEqual(teamLoad('equipe-1','2026-08-22','2026-08-26',d),{assigned:0,activities:0,tasks:0,capacity:2,overloaded:false});
 });
 test('linha de base exige vagão e não se move quando o plano é reprogramado',()=>{
   const d=createMockData();
@@ -219,4 +220,62 @@ test('o recuo leva os subitens e não passa de um degrau por vez',()=>{
   // Apagar um item apaga os subitens: deixá-los órfãos reescreveria a estrutura por conta.
   run(d,{type:'delete_plan_task',taskId:c});
   assert.deepEqual(d.planTasks.filter(t=>t.planId===planId).map(t=>t.name),['Fachada','Andaime']);
+});
+
+test('o PPC vira série: a semana isolada diz pouco',()=>{
+  const week=(weekStart:string,fulfilled:(boolean|undefined)[]):WeeklyCommitment[]=>fulfilled.map((f,i)=>({
+    ...commitment(`${weekStart}-${i}`,f),weekStart,weekEnd:'2026-09-13'}));
+  const series=ppcSeries([...week('2026-09-07',[true,true,false,false]),...week('2026-08-31',[true,false]),...week('2026-09-14',[true,undefined])]);
+  assert.deepEqual(series.map(s=>s.weekStart),['2026-08-31','2026-09-07','2026-09-14']);
+  assert.deepEqual(series.map(s=>Math.round(s.percent)),[50,50,50]);
+  // A semana em aberto aparece com o que já foi apurado, e diz quantas linhas faltam.
+  assert.equal(series[2].pending,1);assert.equal(series[2].planned,2);
+});
+
+test('as causas viram Pareto: a lista fechada só serve ordenada',()=>{
+  const fail=(id:string,cause:string):WeeklyCommitment=>({...commitment(id,false),cause:cause as WeeklyCommitment['cause']});
+  const rows=[fail('a','Falta de Material'),fail('b','Falta de Material'),fail('c','Chuva/Condições climáticas'),
+    fail('d','Falta de Material'),fail('e','Retrabalho'),commitment('f',true),commitment('g',undefined)];
+  const pareto=causePareto(rows);
+  assert.deepEqual(pareto.map(p=>[p.cause,p.total]),[['Falta de Material',3],['Chuva/Condições climáticas',1],['Retrabalho',1]]);
+  // O acumulado é sobre as falhas, não sobre tudo que foi prometido: a cumprida não entra.
+  assert.equal(Math.round(pareto[0].share),60);
+  assert.equal(Math.round(pareto.at(-1)!.accumulated),100);
+  assert.deepEqual(causePareto([commitment('x',true)]),[]);
+});
+
+test('a carga da equipe enxerga o plano do mês, não só o cronograma',()=>{
+  const d=createMockData();
+  const planId=run(d,{type:'create_plan',workId:'obra-1',month:'2026-09'});
+  const before=teamLoad('equipe-1','2026-09-01','2026-09-30',d);
+  run(d,{type:'create_plan_task',planId,name:'Alvenaria do 5º',plannedStart:'2026-09-07',plannedEnd:'2026-09-18',teamId:'equipe-1'});
+  const after=teamLoad('equipe-1','2026-09-01','2026-09-30',d);
+  assert.equal(after.assigned,before.assigned+1);
+  assert.equal(after.tasks,1);
+  // A linha de base é retrato, não compromisso: congelar o plano não dobra a carga da equipe.
+  run(d,{type:'freeze_plan_baseline',planId,name:'Base de setembro'});
+  assert.equal(teamLoad('equipe-1','2026-09-01','2026-09-30',d).tasks,1);
+});
+
+test('a curva S compara executado com a linha de base, não com o replanejamento',()=>{
+  const d=createMockData();
+  const baselineId=run(d,{type:'create_baseline',workId:'obra-1',name:'LB inicial'});
+  const baseline=d.baselines.find(b=>b.id===baselineId)!;
+  const wagonIds=new Set(d.wagons.filter(w=>d.sequences.some(s=>s.id===w.sequenceId&&s.workId==='obra-1')).map(w=>w.id));
+  const activities=d.activities.filter(a=>wagonIds.has(a.wagonId));
+  const first=baseline.activities.reduce((min,a)=>a.plannedStart<min?a.plannedStart:min,baseline.activities[0].plannedStart);
+  const last=baseline.activities.reduce((max,a)=>a.plannedEnd>max?a.plannedEnd:max,baseline.activities[0].plannedEnd);
+  // Antes de começar nada está previsto; no fim do prazo, tudo.
+  assert.equal(Math.round(plannedAt(baseline.activities,addDays(first,-1))),0);
+  assert.equal(Math.round(plannedAt(baseline.activities,last)),100);
+  const curve=progressCurve({activities,entries:d.progressEntries,baseline,from:first,to:last});
+  assert.ok(curve.length>1,'a curva precisa de mais de um ponto');
+  assert.equal(curve[0].date,first);assert.equal(curve.at(-1)!.date,last);
+  // A curva do planejado nunca desce: peso não volta para trás.
+  for (let i=1;i<curve.length;i++) assert.ok(curve[i].planned>=curve[i-1].planned-1e-9,`planejado caiu em ${curve[i].date}`);
+  // O executado do dia do lançamento reflete a medição, e o dia anterior não sabe dela.
+  const before=executedAt(activities,d.progressEntries,'2026-09-07');
+  run(d,{type:'record_progress',activityId:'b3',progress:100});
+  assert.ok(executedAt(activities,d.progressEntries,'2026-09-08')>before);
+  assert.equal(executedAt(activities,d.progressEntries,'2026-09-07'),before);
 });
