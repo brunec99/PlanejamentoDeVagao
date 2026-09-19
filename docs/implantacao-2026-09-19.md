@@ -37,3 +37,7 @@ Não foi declarada implantação em produção concluída. Não foi executado SQ
 ## Reversão
 
 Antes da alteração de banco, a produção permanece em `b048727`. Depois da migração 0020, voltar apenas o código não basta: a função antiga e a coluna `weekdays` fazem parte do contrato anterior. Reverter somente com restauração coordenada do esquema e dos dados preservados, ou corrigir a nova versão. A tabela aditiva `ifc_federations` pode permanecer sem uso durante uma reversão; não precisa ser excluída.
+
+## Push e prévia
+
+O commit `0ca2733` foi enviado à branch remota de implantação. A Vercel iniciou automaticamente uma prévia (deployment `J8hiv6uPWe5wrE9a3xsgnMmiUHxQ`). A migração 0021 recebeu em seguida `IF NOT EXISTS` na criação da tabela e do índice, permitindo reexecução após aplicação manual já concluída. Esse ajuste não executa a migração no banco.
