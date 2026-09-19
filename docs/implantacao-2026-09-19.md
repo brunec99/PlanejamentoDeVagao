@@ -1,5 +1,9 @@
 # Implantação — federação e planejamento — 19/09/2026
 
+## Estado atualizado
+
+Na conferência após o push, `plan_tasks.level`, `weekly_commitments.supplier` e `ifc_federations` passaram a responder HTTP 200 no Supabase. As migrações foram aplicadas durante a preparação por outra sessão; esta sessão confirmou o esquema resultante. O bloqueio de banco descrito no histórico abaixo está resolvido. A prévia do commit `f3351ae` terminou com sucesso na Vercel (deployment `GU7GBMuZyRhKXEncxS5PA5gGamhL`). O conjunto está validado para promoção por fast-forward a `main`, que dispara produção automaticamente.
+
 ## Pacote validado
 
 Inclui a página Modelo federado e sua revisão de layout, composições salvas, busca de elementos, estrutura de itens/subitens do médio prazo, planilha independente do curto prazo e documentação de continuidade.
@@ -10,7 +14,7 @@ Inclui a página Modelo federado e sua revisão de layout, composições salvas,
 - Branch remota `main` verificada antes da entrega: `b0487272756ea7588f5a825d007565f8459f64fc`.
 - Integração GitHub → Vercel existente; o último commit de `main` tem implantação Production bem-sucedida.
 
-## Banco: bloqueio confirmado
+## Histórico: bloqueio de banco identificado antes da aplicação
 
 Consulta somente de esquema via REST ao projeto Supabase configurado (`fanktscgrprylqqnwjje`) constatou:
 
@@ -32,7 +36,7 @@ Para concluir produção:
 3. Promover a branch para `main` e acompanhar o deployment automático da Vercel até sucesso.
 4. Verificar login, leitura/gravação de planejamento e salvamento/abertura de uma composição com modelos reais.
 
-Não foi declarada implantação em produção concluída. Não foi executado SQL remoto. Não foram alteradas credenciais ou variáveis de ambiente.
+Nesta fase inicial não foi declarada implantação em produção concluída. Esta sessão não executou SQL remoto. Não foram alteradas credenciais ou variáveis de ambiente.
 
 ## Reversão
 

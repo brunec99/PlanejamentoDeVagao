@@ -130,4 +130,4 @@ A base que foi preservada: versões explícitas, cópias imutáveis, aviso de se
 
 ## Preparação da implantação (19/09/2026)
 
-O build de produção foi executado com sucesso com acesso de rede/processos locais, além de TypeScript e 129 testes. A consulta ao Supabase confirmou que **0020 e 0021 ainda não estão aplicadas**. O código é entregue em branch de implantação; a produção permanece preservada até a atualização do banco. Ver [registro de implantação](implantacao-2026-09-19.md) para evidências, bloqueios e sequência de conclusão.
+O build de produção foi executado com sucesso com acesso de rede/processos locais, além de TypeScript e 129 testes. A consulta inicial ao Supabase identificou 0020 e 0021 pendentes; a conferência após o push confirmou as novas colunas e a tabela, resolvendo o bloqueio. A prévia Vercel do commit `f3351ae` foi concluída com sucesso e o conjunto segue para promoção a `main`. Ver [registro de implantação](implantacao-2026-09-19.md) para evidências, bloqueios e sequência de conclusão.
