@@ -8,11 +8,13 @@ import { searchElements } from './element-search';
 import { Callout } from '@/modules/planejamento/ui';
 import { readElementMap, type MapRow } from '@/modules/ifc/element-map';
 import { frame, loadFragments, type Federation } from '@/modules/ifc/fragments-stage';
+import { SectionControls } from '@/modules/ifc/section-controls';
+import { useSectionPlane } from '@/modules/ifc/use-section-plane';
 
 export interface FederationJob { token: number; versions: { id: string; label: string; modelId: string }[] }
 export type ViewerState = 'idle' | 'loading' | 'ready' | 'error' | 'unsupported';
 type Paint = 'modelo' | 'pavimento' | 'classe';
-interface Stage { three: typeof THREE; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls }
+interface Stage { three: typeof THREE; renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls }
 interface Part { versionId: string; label: string; modelId: string; model: FragmentsModel; rows: Map<number, MapRow>; byStorey: Map<string, number[]>; byClass: Map<string, number[]> }
 interface Loaded { federation: Federation; parts: Part[]; declared: number; matched: number; queue: Promise<void> }
 interface Picked { versionId: string; localId: number; row?: MapRow; label: string }
@@ -47,6 +49,8 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
   const [explorer, setExplorer] = useState<'modelos' | 'elementos'>('modelos');
   const busy = !!message;
   const usable = !!loaded && !busy && webgl;
+  const section = useSectionPlane(stageRef.current, loaded?.federation);
+  const clearView = () => { setHidden([]); setStorey(''); setPicked(undefined); section.reset(); };
   useEffect(() => {
     onState(!webgl ? 'unsupported' : error ? 'error' : busy || (job && !ready) ? 'loading' : loaded ? 'ready' : 'idle');
   }, [webgl, error, busy, job, ready, loaded, onState]);
@@ -71,7 +75,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
       camera.position.set(30, 24, 30);
       const controls = new OrbitControls(camera, dom);
       controls.enableDamping = true;
-      stageRef.current = { three, scene, camera, controls };
+      stageRef.current = { three, renderer, scene, camera, controls };
       const resize = () => {
         const width = host.clientWidth || 1, height = host.clientHeight || 1;
         renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix();
@@ -94,9 +98,10 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         const load = loadRef.current;
         if (!load) return;
         const sequence = ++pickSequence;
+        const planes = renderer.clippingPlanes;
         const hits = await Promise.all(load.parts.map(async part => ({ part, hit: await part.model.raycast({ camera, mouse: new three.Vector2(event.clientX, event.clientY), dom }).catch(() => null) })));
-        if (stopped || loadRef.current !== load || sequence !== pickSequence) return;
-        const nearest = hits.filter(entry => entry.hit).sort((a, b) => a.hit!.distance - b.hit!.distance)[0];
+        if (stopped || loadRef.current !== load || sequence !== pickSequence || renderer.clippingPlanes !== planes) return;
+        const nearest = hits.filter(entry => entry.hit && planes.every(plane => plane.distanceToPoint(entry.hit!.point) >= 0)).sort((a, b) => a.hit!.distance - b.hit!.distance)[0];
         setPicked(nearest?.hit ? { versionId: nearest.part.versionId, localId: nearest.hit.localId, row: nearest.part.rows.get(nearest.hit.localId), label: nearest.part.label } : undefined);
       };
       dom.addEventListener('pointerdown', down); dom.addEventListener('pointerup', up);
@@ -215,9 +220,10 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
       </label>
       <div className="flex gap-2">
         <button type="button" className="button-ghost min-h-10" title="Enquadrar todos os modelos carregados" disabled={!usable} onClick={() => { const stage = stageRef.current; if (stage && loaded) frame(stage.three, stage.camera, stage.controls, loaded.federation.models); }}><Maximize size={16} aria-hidden /><span className="sr-only sm:not-sr-only">Enquadrar</span></button>
-        <button type="button" className="button-ghost min-h-10" disabled={!usable} onClick={() => { setHidden([]); setStorey(''); setPicked(undefined); }}><RotateCcw size={16} aria-hidden /><span className="sr-only sm:not-sr-only">Mostrar tudo</span></button>
+        <button type="button" className="button-ghost min-h-10" disabled={!usable} onClick={clearView}><RotateCcw size={16} aria-hidden /><span className="sr-only sm:not-sr-only">Mostrar tudo</span></button>
       </div>
     </div>
+    <div className="border-b border-slate-100 p-3"><SectionControls value={section.value} disabled={!usable || !section.available} error={section.error} onChange={value => { section.setValue(value); setPicked(undefined); }} /></div>
     {error && <div className="m-3"><Callout tone="danger" role="alert">{error}</Callout></div>}
     <div ref={box} className="relative h-[360px] overflow-hidden bg-slate-100 sm:h-[480px] 2xl:h-[560px]" aria-busy={busy}>
       <canvas ref={canvas} className="h-full w-full" role="img" aria-label="Modelo federado. Arraste para orbitar e use a roda para aproximar. Consulte elementos pelo clique ou pela lista abaixo." />
@@ -226,7 +232,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
       {webgl && !job && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center"><Boxes size={40} className="text-slate-400" aria-hidden /><p className="font-semibold text-slate-700">Seu conjunto começa pela seleção</p><p className="max-w-sm text-sm leading-6 text-slate-500">Inclua os modelos, confira as versões e clique em Carregar conjunto.</p></div>}
       {usable && <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-3 py-2 text-xs text-slate-600 shadow-sm">Arraste para orbitar · Role para aproximar · Clique para selecionar</p>}
     </div>
-    {usable && (hidden.length > 0 || storey) && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900"><span>{hidden.length > 0 && `${hidden.length} modelo(s) oculto(s)`}{hidden.length > 0 && storey && ' · '}{storey && `Pavimento: ${storey}`}</span><button type="button" className="min-h-9 font-semibold underline underline-offset-4" onClick={() => { setHidden([]); setStorey(''); setPicked(undefined); }}>Limpar recorte</button></div>}
+    {usable && (hidden.length > 0 || storey || section.value.enabled) && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900"><span>{[hidden.length > 0 ? `${hidden.length} modelo(s) oculto(s)` : '', storey ? `Pavimento: ${storey}` : '', section.value.enabled ? `Corte ${section.value.axis.toUpperCase()}: ${section.value.position}%${section.value.inverted ? ' · invertido' : ''}` : ''].filter(Boolean).join(' · ')}</span><button type="button" className="min-h-9 font-semibold underline underline-offset-4" onClick={clearView}>Limpar recorte</button></div>}
     <div className="border-t border-slate-200">
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-3 py-2" aria-label="Painel de exploração">
         <button type="button" aria-pressed={explorer === 'modelos'} className={`min-h-10 rounded-lg px-3 text-sm font-semibold ${explorer === 'modelos' ? 'bg-blue-50 text-blue-800' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setExplorer('modelos')}>Modelos em cena{loaded ? ` (${loaded.parts.length})` : ''}</button>
@@ -245,6 +251,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
           </> : <>
             <label className="relative block"><span className="sr-only">Buscar elementos por nome, classe ou GlobalId</span><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-400" aria-hidden /><input type="search" disabled={!usable} className="field min-h-11 pl-9" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nome, classe ou GlobalId" /></label>
             <p className="my-2 text-xs text-slate-500" role="status">{!loaded ? 'Carregue o conjunto para buscar elementos.' : `${search.total.toLocaleString('pt-BR')} resultados nos modelos e pavimentos visíveis${search.total > 50 ? ' · mostrando os primeiros 50; refine a busca' : ''}.`}</p>
+            {section.value.enabled && <p className="mb-2 text-xs leading-5 text-amber-800">A busca inclui elementos além do plano de corte. Remova o corte para vê-los por inteiro.</p>}
             <ul className="max-h-64 space-y-1 overflow-y-auto custom-scrollbar">{search.results.map(item => <li key={`${item.versionId}:${item.localId}`}><button type="button" disabled={!usable} aria-pressed={picked?.versionId === item.versionId && picked.localId === item.localId} className={`w-full rounded-lg border p-3 text-left ${picked?.versionId === item.versionId && picked.localId === item.localId ? 'border-amber-300 bg-amber-50' : 'border-transparent hover:border-slate-200 hover:bg-slate-50'}`} onClick={() => setPicked(item)}><span className="block break-words text-sm font-medium text-slate-800">{item.row.name || 'Elemento sem nome'}</span><span className="mt-1 block break-words text-xs text-slate-500">{item.row.ifcClass} · {item.row.storey} · {item.label}</span></button></li>)}</ul>
             {loaded && !search.total && <p className="py-4 text-sm text-slate-500">Nenhum elemento encontrado. Ajuste a busca ou mostre todos os modelos e pavimentos.</p>}
           </>}

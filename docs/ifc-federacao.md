@@ -56,7 +56,7 @@ O contador descreve registros com GlobalId relacionados à geometria, não o tot
 - **Sistemas internos do IFC ainda não são extraídos.** A disciplina cadastrada no modelo é um texto e não equivale a um sistema interno.
 - Não há normalização de pavimentos entre arquivos: nomes distintos continuam distintos.
 - Modelos usam o posicionamento presente na geometria convertida; não há diagnóstico de georreferenciamento, transformação manual ou detecção de interferências.
-- A seleção de modelos/versões é persistida. Câmera, cor, pavimento e visibilidade são controles temporários da sessão e não são salvos.
+- A seleção de modelos/versões é persistida. Câmera, cor, pavimento, visibilidade e seccionamento são controles temporários da sessão e não são salvos.
 - Falha em uma geometria interrompe a carga do conjunto e apresenta o erro. Não há carregamento parcial silencioso.
 - Ainda não há histórico de alterações de uma mesma composição, comparação de revisões nem consumo pelo 4D.
 
@@ -131,3 +131,27 @@ A base que foi preservada: versões explícitas, cópias imutáveis, aviso de se
 ## Preparação da implantação (19/09/2026)
 
 O build de produção foi executado com sucesso com acesso de rede/processos locais, além de TypeScript e 129 testes. A consulta inicial ao Supabase identificou 0020 e 0021 pendentes; a conferência após o push confirmou as novas colunas e a tabela, resolvendo o bloqueio. A prévia Vercel do commit `f3351ae` foi concluída com sucesso e o conjunto segue para promoção a `main`. Ver [registro de implantação](implantacao-2026-09-19.md) para evidências, bloqueios e sequência de conclusão.
+
+## Seccionamento nos visualizadores (20/09/2026)
+
+Entregue nos visualizadores de **Modelos IFC** e **Modelo federado**, acima da cena. O campo **Seccionamento** permite ativar um plano de corte horizontal (Y) ou vertical (X/Z), ajustar a posição de 0 a 100% pelo slider ou campo numérico, inverter o lado preservado e remover o corte. Os controles ficam indisponíveis até existir geometria válida carregada. O corte inicial é horizontal, em 50%, desativado.
+
+### Comportamento e decisões
+
+- A posição é proporcional à caixa de toda a geometria carregada. Na federação, é a união das caixas em coordenadas globais: os modelos recebem o mesmo plano, preservando o alinhamento entre arquivos. Os eixos são os da cena, não os da câmera.
+- O lado de coordenada menor permanece visível por padrão; **Inverter lado** preserva o maior. O corte combina com pavimento e visibilidade por modelo sem mudar de posição quando esses filtros mudam.
+- **Remover corte** restaura a geometria respeitando os outros filtros. Na federação, **Mostrar tudo** e **Limpar recorte** também removem o seccionamento. Carregar/recarregar uma versão ou conjunto começa sem corte. A seleção do elemento é limpa ao ajustar o plano.
+- O renderer e todos os modelos Fragments compartilham os planos globais por `getClippingPlanesEvent`, para que renderização, descarte de tiles e raycast usem o mesmo corte. O Fragments transforma os planos internamente; não se aplica a transformação uma segunda vez.
+- A renderização recebe o plano imediatamente. As atualizações do worker são agrupadas com intervalo acima de `maxUpdateRate`, inclusive uma atualização final quando o valor muda durante uma operação pendente. Isso evita perder a última posição após arrastar o slider ou remover o corte. Desmontagem cancela timers e restaura callbacks.
+- O clique ignora resultados de uma configuração de corte anterior e pontos no lado oculto enquanto o worker atualiza. A busca textual e as contagens continuam considerando elementos inteiros dos modelos/pavimentos filtrados, incluindo os dois lados do plano; há aviso na busca quando o corte está ativo.
+- É uma ferramenta de visualização temporária: não modifica arquivos, quantitativos, dados IFC ou composições salvas. Não preenche as faces abertas do corte, não cria desenho de seção e não salva vistas. Nenhuma migração ou mudança de API foi necessária. BIM 4D permanece para outra etapa.
+
+### Arquivos e validação
+
+- `src/modules/ifc/section-plane.ts`: cálculo do plano global, caixa do conjunto e sincronização com Fragments.
+- `src/modules/ifc/use-section-plane.ts` e `section-controls.tsx`: estado por carga, ciclo de vida e controles compartilhados.
+- `src/modules/ifc/model-viewer.tsx` e `src/modules/federacao/viewer.tsx`: integração nas duas telas, seleção e limpeza.
+- `src/modules/tour/tours.ts`: orientação para encontrar os novos controles.
+- `tests/ifc-section.test.ts`: oito testes de eixos, extremos, coordenadas negativas, inversão, entradas inválidas, plano compartilhado, atualização final e descarte.
+- TypeScript e build de produção aprovados. Suíte completa: **141 testes aprovados**, incluindo os oito testes de seccionamento.
+- A inspeção visual nesta sessão não pôde ser concluída: o acesso de Computer Use foi encerrado pela restrição da URL atual do navegador. Não houve interação autenticada com modelos reais. Permanece pendente verificar visualmente corte, inversão, clique, filtros combinados, recarga e uso em tela estreita com os arquivos da obra. Os testes do controlador usam caixas e callbacks controlados; não substituem a validação WebGL/worker em navegador.

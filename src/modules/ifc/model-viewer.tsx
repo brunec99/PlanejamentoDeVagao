@@ -10,6 +10,8 @@ import { Callout, Empty, StatCard } from '@/modules/planejamento/ui';
 import { formatTimestamp } from '@/shared/format';
 import { readElementMap, type MapRow } from './element-map';
 import { MissingGeometry, frame, loadFragments, type Federation, type FragmentsApi } from './fragments-stage';
+import { SectionControls } from './section-controls';
+import { useSectionPlane } from './use-section-plane';
 
 type Three = typeof ThreeNS;
 type Paint = 'pavimento' | 'classe';
@@ -76,6 +78,7 @@ export function ModelViewer({ workId }: { workId: string }) {
   const loadRef = useRef<Loaded | undefined>(undefined);
   const pickedRef = useRef<Picked | undefined>(undefined);
   const busy = step !== '';
+  const section = useSectionPlane(stageRef.current, loadRef.current);
 
   useEffect(() => {
     if (!box || !canvas) return;
@@ -137,9 +140,11 @@ export function ModelViewer({ workId }: { workId: string }) {
         // O raycast do Fragments quer a posição do ponteiro na tela, não em NDC: é ele quem projeta,
         // usando o retângulo do canvas que recebe em `dom`.
         const mouse = new three.Vector2(event.clientX, event.clientY);
+        const planes = renderer.clippingPlanes;
         const hit = await load.model.raycast({ camera, mouse, dom: canvas }).catch(() => null);
-        if (dropped || loadRef.current !== load) return;
-        setPicked(hit ? { localId: hit.localId, row: load.byLocal.get(hit.localId) } : undefined);
+        if (dropped || loadRef.current !== load || renderer.clippingPlanes !== planes) return;
+        const visibleHit = hit && planes.every(plane => plane.distanceToPoint(hit.point) >= 0);
+        setPicked(visibleHit ? { localId: hit.localId, row: load.byLocal.get(hit.localId) } : undefined);
       };
       canvas.addEventListener('pointerdown', onDown);
       canvas.addEventListener('pointerup', onUp);
@@ -349,6 +354,7 @@ export function ModelViewer({ workId }: { workId: string }) {
             </button>
           </div>
 
+          <div className="mt-4"><SectionControls value={section.value} disabled={busy || !report || !section.available} error={section.error} onChange={value => { section.setValue(value); setPicked(undefined); }} /></div>
           {busy && <p role="status" className="mt-3 text-xs font-semibold text-blue-700">{step}</p>}
           {failure && <div className="mt-3 space-y-2">
             <Callout tone="danger" role="alert">{failure.message}</Callout>
