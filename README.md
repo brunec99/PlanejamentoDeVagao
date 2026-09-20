@@ -38,7 +38,7 @@ npm run build
 - Dívidas próprias e herdadas, sem duplicação; filtros de abertas, vencidas e resolvidas.
 - Reabertura de terminalidade exige gestor e justificativa, preserva liberações e alerta sucessores.
 - Login real via Google Workspace (domínio restrito), com papéis de gestor, planejador, consulta e admin; autorização por obra aplicada no servidor a cada comando.
-- Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/admin`, sem mexer em planejamento.
+- Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/configuracoes`, sem mexer em planejamento. O passo a passo de entrar, liberar acesso e resolver cada mensagem de erro está em [Como entrar com a conta Google](docs/login-google.md).
 - Repositório de modelos IFC por obra: cada envio transcreve o arquivo em tabelas e converte a geometria para Fragments, com histórico de versões.
 - Quantitativo do modelo: quantidades somadas por tipo, distribuição por classe IFC e por pavimento, consulta elemento a elemento e exportação em CSV.
 - Vinculação de elementos IFC a serviços por regras de propriedade, com marcação das regras que precisam de revisão.
@@ -159,7 +159,7 @@ Autenticação exclusivamente via Google OAuth, restrita ao domínio `atrincorpo
 2. Em **Authorized redirect URIs**, adicione exatamente: `https://<seu-projeto>.supabase.co/auth/v1/callback` (URL do próprio Supabase, não do app — pegue o `<seu-projeto>` da URL do seu `NEXT_PUBLIC_SUPABASE_URL`).
 3. Copie o **Client ID** e o **Client Secret** gerados.
 4. No Supabase Dashboard → **Authentication → Providers → Google**, ative o provedor e cole as duas credenciais.
-5. Acesse `/login` e entre com uma conta `@atrincorporadora.com.br`. O primeiro login de `bruno.engenharia@atrincorporadora.com.br` cria automaticamente o perfil administrador (com acesso a todas as obras já cadastradas); qualquer outra conta do domínio é criada como "Consulta" sem acesso a nenhuma obra até um admin liberar em `/admin`.
+5. Acesse `/login` e entre com uma conta `@atrincorporadora.com.br`. O primeiro login de `bruno.engenharia@atrincorporadora.com.br` cria automaticamente o perfil administrador (com acesso a todas as obras já cadastradas); qualquer outra conta do domínio é criada como "Consulta" sem acesso a nenhuma obra até um admin liberar em `/configuracoes`.
 
 Contas fora do domínio configurado são barradas e deslogadas no próprio callback, mesmo que completem o login no Google.
 
