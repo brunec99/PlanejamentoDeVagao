@@ -353,8 +353,10 @@ export function Gantt({ workId }: { workId: string }) {
             // Apontar não é reprogramar: o texto diz que ponta o vínculo prende, a data mais cedo
             // que ele permite e a que está lá — a correção é decisão de quem planeja.
             const issueText = issues.map(conflict => `${conflict.edge === 'start' ? 'Início' : 'Término'} não pode vir antes de ${formatDate(conflict.earliest)} pelo vínculo ${linkText(conflict.dependency)} (linha ${numberOf.get(conflict.dependency.predecessorId)}); está em ${formatDate(conflict.actual)}.`).join(' ');
-            // O alvo é do tempo decorrido; datas invertidas por dado antigo não podem quebrar a tela.
-            const target = item.plannedEnd < item.plannedStart ? undefined : targetPercent(item, today);
+            // O alvo é do tempo decorrido; datas invertidas por dado antigo, ou um período que não
+            // tem nenhum dia útil dentro, não podem quebrar a tela nem virar número inventado.
+            const elapsed = item.plannedEnd < item.plannedStart ? undefined : targetPercent(item, today);
+            const target = elapsed !== undefined && Number.isFinite(elapsed) ? elapsed : undefined;
             const gap = target === undefined ? undefined : Math.round(item.progress - target);
             const baseEnd = pair ? baseView(pair).plannedEnd : undefined;
             const variance = baseEnd ? drift(baseEnd, item.plannedEnd) : undefined;
