@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { applyCommand, type Command, type CommandContext } from '../src/application/use-cases/commands';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
 import { createMockData } from '../src/mocks/planning';
-import { rollUpPlan, ppc, teamLoad, ppcSeries, causePareto, plannedAt, executedAt, progressCurve } from '../src/domain/rules';
+import { rollUpPlan, ppc, teamLoad, ppcSeries, causePareto, plannedAt, executedAt, progressCurve, parseLinks, formatLink, linkBoundary, linkConflicts, targetPercent } from '../src/domain/rules';
 import type { PlanningData, Team, WeeklyCommitment } from '../src/domain/entities';
 import { addDays } from '../src/domain/validation';
 let id=0;
@@ -278,4 +278,75 @@ test('a curva S compara executado com a linha de base, não com o replanejamento
   run(d,{type:'record_progress',activityId:'b3',progress:100});
   assert.ok(executedAt(activities,d.progressEntries,'2026-09-08')>before);
   assert.equal(executedAt(activities,d.progressEntries,'2026-09-07'),before);
+});
+
+test('predecessora é lida como no Project: número, tipo e defasagem',()=>{
+  const { links, invalid } = parseLinks('12, 15II+2d, 7TT-1d, 9IT+3dd');
+  assert.deepEqual(links.map(l=>[l.number,l.type,l.lagDays,l.lagBusiness]),[
+    [12,'TI',0,true],[15,'II',2,true],[7,'TT',-1,true],[9,'IT',3,false]]);
+  assert.deepEqual(invalid,[]);
+  // Sem tipo escrito, é TI — o padrão do Project e o vínculo que a obra mais usa.
+  assert.equal(parseLinks('3').links[0].type,'TI');
+  // Sem unidade escrita, a defasagem é em dias úteis.
+  assert.equal(parseLinks('3TI+2d').links[0].lagBusiness,true);
+  assert.equal(parseLinks('3TI+2dd').links[0].lagBusiness,false);
+  // O que não é vínculo não vira vínculo silenciosamente: volta como inválido, para a tela dizer.
+  assert.deepEqual(parseLinks('12, alvenaria, 4XX').invalid,['alvenaria','4XX']);
+  assert.equal(parseLinks('12, alvenaria').links.length,1);
+  // Ida e volta: o texto que a célula mostra é lido de volta igual.
+  assert.equal(formatLink(12,{type:'TI',lagDays:0,lagBusiness:true}),'12');
+  assert.equal(formatLink(15,{type:'II',lagDays:2,lagBusiness:true}),'15II+2d');
+  assert.equal(formatLink(7,{type:'TT',lagDays:-1,lagBusiness:false}),'7TT-1dd');
+});
+
+test('cada tipo de vínculo prende a ponta que o nome diz',()=>{
+  // Predecessora de segunda (07/09/2026) a sexta (11/09/2026).
+  const pred={plannedStart:'2026-09-07',plannedEnd:'2026-09-11'};
+  const at=(type:'TI'|'II'|'TT'|'IT',lagDays=0,lagBusiness=true)=>linkBoundary({type,lagDays,lagBusiness},pred);
+  // TI: a sucessora não começa no dia em que a outra acaba — começa no próximo dia útil.
+  assert.deepEqual(at('TI'),{edge:'start',earliest:'2026-09-14'});
+  assert.deepEqual(at('II'),{edge:'start',earliest:'2026-09-07'});
+  assert.deepEqual(at('TT'),{edge:'end',earliest:'2026-09-11'});
+  assert.deepEqual(at('IT'),{edge:'end',earliest:'2026-09-07'});
+  // Defasagem útil pula o fim de semana; a corrida cai dentro dele.
+  assert.equal(at('II',2,true).earliest,'2026-09-09');
+  assert.equal(at('TT',2,true).earliest,'2026-09-15');
+  assert.equal(at('TT',2,false).earliest,'2026-09-13');
+  assert.equal(at('II',-2,true).earliest,'2026-09-03');
+});
+
+test('a incoerência é apontada por tipo de vínculo, e não reprogramada sozinha',()=>{
+  const d=createMockData();
+  const planId=run(d,{type:'create_plan',workId:'obra-1',month:'2026-09'});
+  const linha=(name:string,plannedStart:string,plannedEnd:string)=>run(d,{type:'create_plan_task',planId,name,plannedStart,plannedEnd});
+  const quarto=linha('Alvenaria do 4º','2026-09-07','2026-09-11');
+  const quinto=linha('Alvenaria do 5º','2026-09-09','2026-09-16');
+  const tasks=()=>d.planTasks.filter(t=>t.planId===planId);
+  // Como II+2d o vínculo é coerente: o 5º começa dois dias úteis depois do 4º.
+  run(d,{type:'link_plan_tasks',predecessorId:quarto,successorId:quinto,linkType:'II',lagDays:2});
+  assert.deepEqual(linkConflicts(tasks(),d.planDependencies),[]);
+  // O mesmo par como TI seria incoerente: o 5º começaria antes de o 4º terminar.
+  const dependency=d.planDependencies.find(dep=>dep.successorId===quinto)!;
+  dependency.type='TI';dependency.lagDays=0;
+  const conflicts=linkConflicts(tasks(),d.planDependencies);
+  assert.equal(conflicts.length,1);
+  assert.equal(conflicts[0].edge,'start');
+  assert.equal(conflicts[0].earliest,'2026-09-14');
+  // As datas continuam onde estavam: apontar não é reprogramar.
+  assert.equal(d.planTasks.find(t=>t.id===quinto)!.plannedStart,'2026-09-09');
+  // Tipo fora dos quatro e defasagem absurda são recusados — num par novo, porque o par repetido
+  // esbarra antes na checagem de duplicado.
+  const sexto=linha('Alvenaria do 6º','2026-09-21','2026-09-25');
+  assert.throws(()=>run(d,{type:'link_plan_tasks',predecessorId:quinto,successorId:sexto,linkType:'XX' as 'TI'}),/TI, II, TT ou IT/);
+  assert.throws(()=>run(d,{type:'link_plan_tasks',predecessorId:quinto,successorId:sexto,lagDays:9999}),/defasagem/);
+  assert.throws(()=>run(d,{type:'link_plan_tasks',predecessorId:quarto,successorId:quinto}),/já existe/);
+});
+
+test('percentual-alvo é leitura de tempo decorrido, não medição',()=>{
+  const task={plannedStart:'2026-09-07',plannedEnd:'2026-09-18'};
+  assert.equal(targetPercent(task,'2026-09-06'),0);
+  assert.equal(targetPercent(task,'2026-09-18'),100);
+  assert.equal(targetPercent(task,'2026-09-25'),100);
+  // Dez dias úteis no total; na sexta da primeira semana, cinco deles passaram.
+  assert.equal(Math.round(targetPercent(task,'2026-09-11')),50);
 });

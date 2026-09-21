@@ -1,5 +1,5 @@
-import type { Activity, Baseline, Id, LinkRule, LocalDate, NonFulfillmentCause, PlanningData, PlanTask, ProgressEntry, Wagon, WagonStatus, WeeklyCommitment } from './entities';
-import { addDays, periodDays } from './validation';
+import type { Activity, Baseline, Id, LinkRule, LinkType, LocalDate, NonFulfillmentCause, PlanDependency, PlanningData, PlanTask, ProgressEntry, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import { addBusinessDays, addDays, periodDays } from './validation';
 
 export function validateActivity(activity: Activity): void {
   if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
@@ -250,4 +250,78 @@ export function progressCurve({ activities, entries, baseline, from, to, step = 
   }
   if (points.at(-1)?.date !== to) points.push({ date: to, planned: plannedAt(reference, to), executed: executedAt(activities, entries, to) });
   return points;
+}
+
+/** Predecessoras escritas como no Project: número da linha, tipo do vínculo e defasagem.
+ *
+ * `12` · `12TI` · `12II+2d` · `12TT-1d` · `12TI+2dd` · `12TI,15II`
+ *
+ * O número é a posição na lista, não o número hierárquico do item: o hierárquico muda a cada
+ * recuo, e a referência apontaria para outra linha. O tipo, quando omitido, é TI — é o vínculo
+ * que 90% das obras usam e o padrão do Project. `d` são dias úteis; `dd`, corridos. */
+export interface ParsedLink { number: number; type: LinkType; lagDays: number; lagBusiness: boolean }
+const LINK_TYPES: LinkType[] = ['TI', 'II', 'TT', 'IT'];
+const LINK_PATTERN = /^(\d+)\s*(TI|II|TT|IT)?\s*(?:([+-])\s*(\d+)\s*(dd|d)?)?$/i;
+
+export function parseLinks(raw: string): { links: ParsedLink[]; invalid: string[] } {
+  const links: ParsedLink[] = [];
+  const invalid: string[] = [];
+  for (const piece of raw.split(/[,;]/).map(part => part.trim()).filter(Boolean)) {
+    const match = LINK_PATTERN.exec(piece.replace(/\s+/g, ''));
+    if (!match) { invalid.push(piece); continue; }
+    const [, number, type, sign, amount, unit] = match;
+    const lag = amount ? Number(amount) * (sign === '-' ? -1 : 1) : 0;
+    links.push({
+      number: Number(number),
+      type: (type?.toUpperCase() as LinkType) ?? 'TI',
+      lagDays: lag,
+      // Sem unidade escrita, a defasagem é em dias úteis, como o Project assume.
+      lagBusiness: (unit ?? 'd').toLowerCase() !== 'dd',
+    });
+  }
+  return { links, invalid };
+}
+
+/** O texto de volta para a célula. Vínculo TI sem defasagem sai como só o número, que é como o
+ * Project escreve e como o engenheiro lê. */
+export function formatLink(number: number, dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>): string {
+  const type = dependency.type === 'TI' ? '' : dependency.type;
+  if (!dependency.lagDays) return `${number}${type}`;
+  const sign = dependency.lagDays > 0 ? '+' : '-';
+  return `${number}${type || 'TI'}${sign}${Math.abs(dependency.lagDays)}${dependency.lagBusiness ? 'd' : 'dd'}`;
+}
+
+/** A data mais cedo que o vínculo permite para a sucessora, e qual ponta dela ele prende.
+ *
+ * TI prende o início um dia depois do término da predecessora — a sucessora não começa no mesmo
+ * dia em que a outra acaba. Os demais prendem a ponta que o nome diz, sem esse dia de folga. */
+export function linkBoundary(dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>, predecessor: Pick<PlanTask, 'plannedStart' | 'plannedEnd'>) {
+  const shift = (date: LocalDate) => (dependency.lagBusiness ? addBusinessDays(date, dependency.lagDays) : addDays(date, dependency.lagDays));
+  switch (dependency.type) {
+    case 'II': return { edge: 'start' as const, earliest: shift(predecessor.plannedStart) };
+    case 'TT': return { edge: 'end' as const, earliest: shift(predecessor.plannedEnd) };
+    case 'IT': return { edge: 'end' as const, earliest: shift(predecessor.plannedStart) };
+    default: return { edge: 'start' as const, earliest: shift(addBusinessDays(predecessor.plannedEnd, 1)) };
+  }
+}
+
+/** Vínculos que a programação atual desrespeita. As datas não se movem sozinhas nesta versão:
+ * a incoerência é apontada e a reprogramação é de quem planeja. */
+export function linkConflicts(tasks: PlanTask[], dependencies: PlanDependency[]) {
+  const byId = new Map(tasks.map(task => [task.id, task]));
+  return dependencies.flatMap(dependency => {
+    const predecessor = byId.get(dependency.predecessorId), successor = byId.get(dependency.successorId);
+    if (!predecessor || !successor) return [];
+    const { edge, earliest } = linkBoundary(dependency, predecessor);
+    const actual = edge === 'start' ? successor.plannedStart : successor.plannedEnd;
+    return actual < earliest ? [{ dependency, predecessor, successor, edge, earliest, actual }] : [];
+  });
+}
+
+/** Percentual-alvo: quanto do tempo planejado já passou na data de referência. É leitura de tempo,
+ * não medição física — a tela precisa dizer isso, senão vira um avanço que ninguém mediu. */
+export function targetPercent(task: Pick<PlanTask, 'plannedStart' | 'plannedEnd'>, date: LocalDate): number {
+  if (date < task.plannedStart) return 0;
+  if (date >= task.plannedEnd) return 100;
+  return (periodDays(task.plannedStart, date, true) / periodDays(task.plannedStart, task.plannedEnd, true)) * 100;
 }

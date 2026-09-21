@@ -25,7 +25,12 @@ export interface MediumTermPlan extends RecordBase { workId: Id; month: string; 
  * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui. */
 export interface PlanTask extends RecordBase { planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
 /** Dependência término-início entre linhas do plano mensal. */
-export interface PlanDependency extends RecordBase { predecessorId: Id; successorId: Id }
+/** Vínculo entre linhas do plano, nos quatro tipos do Project. `lagDays` é a defasagem: positiva
+ * é espera, negativa é antecipação. `lagBusiness` diz se ela conta em dias úteis (o `2d` digitado)
+ * ou corridos (`2dd`) — a distinção existe no Project e muda a data quando cai em fim de semana. */
+export type LinkType = 'TI' | 'II' | 'TT' | 'IT';
+export const LINK_TYPES: LinkType[] = ['TI', 'II', 'TT', 'IT'];
+export interface PlanDependency extends RecordBase { predecessorId: Id; successorId: Id; type: LinkType; lagDays: number; lagBusiness: boolean }
 /** Equipe executora, o cadastro que o cronograma usa como recurso e a planilha semanal usa
  * nas colunas Empresa e Equipe. Capacidade em atividades simultâneas por semana. */
 export interface Team extends RecordBase { workId: Id; company: string; name: string; weeklyCapacity: number }

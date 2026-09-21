@@ -28,3 +28,17 @@ export function periodDays(start: string, end: string, business: boolean): numbe
   }
   return count;
 }
+
+/** Anda `days` dias úteis a partir da data, pulando sábado e domingo. Zero devolve a própria data,
+ * mesmo que ela caia em fim de semana: quem pediu zero não pediu para mover nada. */
+export function addBusinessDays(date: string, days: number): string {
+  if (!days) return date;
+  const step = days > 0 ? 1 : -1;
+  let current = date, left = Math.abs(days);
+  while (left > 0) {
+    current = addDays(current, step);
+    const weekday = new Date(`${current}T00:00:00Z`).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) left--;
+  }
+  return current;
+}

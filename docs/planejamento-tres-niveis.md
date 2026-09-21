@@ -40,6 +40,36 @@ O único fio entre eles é um `activityId` opcional que quase nunca é preenchid
 
 A conferência de cobertura casa frentes **por nome normalizado**, não por vínculo: `PlanTask.activityId` e `WeeklyCommitment.activityId` são opcionais e quase nunca preenchidos. É a mesma estratégia que a comparação do plano do mês com a sua linha de base já usa. É conferência, não vínculo, e erra quando o nome muda entre níveis — a tela diz isso.
 
+## Etapa 2 — a grade do plano do mês no padrão Project (20/09/2026)
+
+Referência: o guia de usabilidade de cronograma trazido pelo usuário, de sistema já consolidado. Ele foi adotado como padrão desta grade; o que segue diz o que foi implementado e o que ficou fora, de propósito.
+
+### Vínculos nos quatro tipos, com defasagem
+
+Havia só um par predecessora/sucessora, e a coerência era conferida como se todo vínculo fosse Término-Início. Isso descreve mal a obra: a alvenaria do 5º não espera a do 4º terminar para começar — ela começa alguns dias depois de a outra começar, que é Início-Início com defasagem, e é assim que a equipe sobe o prédio. Quem só tinha TI ou mentia a data ou não usava o vínculo.
+
+- `PlanDependency` ganhou `type` (TI/II/TT/IT), `lagDays` e `lagBusiness`. Migração `0022_plan_link_types.sql`, que reescreve `commit_planning` por causa das três colunas. Os padrões descrevem o que já estava gravado: todo vínculo existente é TI sem defasagem.
+- `parseLinks` e `formatLink` leem e escrevem a sintaxe do Project (`12`, `12II+2d`, `12TT-1d`, `12TI+2dd`). O número é a **posição na lista**, não o número hierárquico — o hierárquico muda a cada recuo e a referência apontaria para outra linha.
+- `lagBusiness` separa `2d` de `2dd`: dois dias úteis e dois corridos caem em datas diferentes quando o intervalo atravessa um fim de semana.
+- `linkBoundary` dá a data mais cedo que cada tipo permite e qual ponta ele prende; `linkConflicts` aponta os vínculos desrespeitados. **Apontar não é reprogramar** — ver a decisão em aberto abaixo.
+
+### Percentual-alvo
+
+`targetPercent` devolve quanto do tempo útil planejado já passou na data de referência. É leitura de **tempo**, não medição física, e a tela precisa dizer isso: confundir os dois numa obra é grave, porque vira um avanço que ninguém mediu.
+
+### Na grade
+
+Cadeado (a grade abre bloqueada, contra alteração acidental em reunião), recolher e expandir item de resumo, teclado no padrão do Project (F2, Esc, Enter desce, setas), predecessoras com tipo e defasagem, incoerência apontada por tipo de vínculo, e as colunas calculadas de % alvo, desvio, término da base e variação em dias.
+
+### Decisões em aberto — precisam do usuário
+
+1. **Reprogramação automática (ASAP).** O guia exige datas, duração e predecessoras ligadas por um motor único (secao 7.1). Hoje as datas não se movem sozinhas: a rede aponta a incoerência e a reprogramação é manual — decisão anterior do próprio usuário, e não a desfiz sozinho. Ligar o motor muda datas na tela de quem planeja, e é a mudança de maior impacto do guia inteiro.
+2. **Rascunho com gravação atômica e motivo obrigatório** (secao 12). Hoje cada célula grava ao sair dela, o que o usuário pediu explicitamente. O guia quer rascunho local, revisão antes de salvar e motivo por revisão. A concorrência otimista já existe, mas no nível do snapshot inteiro (`planning_meta.version`), não por tarefa, e o histórico é por comando, sem motivo.
+
+### Do guia, ainda não implementado
+
+Colunas configuráveis e redimensionáveis, seleção de intervalo com copiar/colar e preencher para baixo, desfazer/refazer, filtros, modo reunião, calendário de feriados e jornada, e duração em horas ou meses. Nada disso foi tentado pela metade.
+
 ## Pendências
 
 - **Rede de atividades sem porta de entrada.** Os comandos `link_activities`/`unlink_activities`, a regra `dependencyConflicts` e a tabela `activity_dependencies` (migração 0010) existem, mas **nenhuma tela cria ou mostra** essas ligações. O plano do mês tem a sua própria rede, essa sim com tela. Decidir com o usuário: dar interface à rede das atividades do cronograma ou remover o caminho morto. Nada foi apagado por enquanto.
@@ -49,4 +79,4 @@ A conferência de cobertura casa frentes **por nome normalizado**, não por vín
 
 ## Migrações
 
-Nenhuma nesta etapa: as regras novas são cálculo sobre o que já está gravado. As últimas aplicadas são `0020_outline_and_supplier.sql` (item e subitem, fornecedor) e `0021_ifc_federations.sql`.
+A etapa 1 não precisou de nenhuma: era cálculo sobre o que já estava gravado. A etapa 2 traz `0022_plan_link_types.sql`, que acrescenta tipo e defasagem ao vínculo do plano e reescreve `commit_planning`. **Precisa ser aplicada antes de o código correspondente subir**: sem ela, tipo e defasagem são descartados em silêncio a cada gravação.

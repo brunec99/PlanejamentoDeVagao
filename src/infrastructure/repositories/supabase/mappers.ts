@@ -12,7 +12,7 @@ export interface Rows {
   restrictions: RestrictionRow[]; releases: ReleaseRow[]; terminality_debts: DebtRow[];
   teams: TeamRow[]; progress_entries: ProgressEntryRow[]; baselines: BaselineRow[];
   weekly_commitments: CommitmentRow[]; activity_dependencies: DependencyRow[]; ifc_models: IfcModelRow[];
-  medium_term_plans: PlanRow[]; plan_tasks: PlanTaskRow[]; plan_dependencies: DependencyRow[];
+  medium_term_plans: PlanRow[]; plan_tasks: PlanTaskRow[]; plan_dependencies: PlanDependencyRow[];
   ifc_model_versions: IfcVersionRow[]; link_rules: LinkRuleRow[];
   history_events: HistoryRow[]; profiles: ProfileRow[];
 }
@@ -30,6 +30,9 @@ interface ProgressEntryRow { id: string; created_at: string; updated_at: string;
 interface BaselineRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; created_by: string; wagons: BaselineWagon[]; activities: BaselineActivity[] }
 interface CommitmentRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; supplier: string | null; activity_id: string | null; week_start: string; week_end: string; responsible_id: string; team_id: string | null; start_date: string; end_date: string; fulfilled: boolean | null; cause: WeeklyCommitment['cause'] | null; justification: string | null; recorded_at: string | null; recorded_by: string | null }
 interface DependencyRow { id: string; created_at: string; updated_at: string; predecessor_id: string; successor_id: string }
+/** O vínculo do plano do mês tem tipo e defasagem; o da atividade do cronograma não tem, e por
+ * isso as duas tabelas não compartilham a mesma linha. */
+interface PlanDependencyRow extends DependencyRow { link_type: PlanDependency['type'] | null; lag_days: number | null; lag_business: boolean | null }
 interface PlanRow { id: string; created_at: string; updated_at: string; work_id: string; month: string; name: string; baseline_of: string | null; frozen_at: string | null; created_by: string }
 interface PlanTaskRow { id: string; created_at: string; updated_at: string; plan_id: string; name: string; planned_start: string; planned_end: string; team_id: string | null; activity_id: string | null; notes: string | null; progress: number; order_index: number; level: number | null }
 interface IfcModelRow { id: string; created_at: string; updated_at: string; work_id: string; name: string; discipline: string }
@@ -59,7 +62,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
     dependencies: rows.activity_dependencies.map((r): ActivityDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id })),
     plans: rows.medium_term_plans.map((r): MediumTermPlan => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, month: r.month, name: r.name, baselineOf: r.baseline_of ?? undefined, frozenAt: r.frozen_at ?? undefined, createdBy: r.created_by })),
     planTasks: rows.plan_tasks.map((r): PlanTask => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, planId: r.plan_id, name: r.name, plannedStart: r.planned_start, plannedEnd: r.planned_end, teamId: r.team_id ?? undefined, activityId: r.activity_id ?? undefined, notes: r.notes ?? undefined, progress: r.progress, order: r.order_index, level: r.level ?? 0 })),
-    planDependencies: rows.plan_dependencies.map((r): PlanDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id })),
+    planDependencies: rows.plan_dependencies.map((r): PlanDependency => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, predecessorId: r.predecessor_id, successorId: r.successor_id, type: r.link_type ?? 'TI', lagDays: r.lag_days ?? 0, lagBusiness: r.lag_business !== false })),
     ifcModels: rows.ifc_models.map((r): IfcModel => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, name: r.name, discipline: r.discipline })),
     ifcVersions: rows.ifc_model_versions.map((r): IfcModelVersion => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, modelId: r.model_id, version: r.version, fileName: r.file_name, fileSize: r.file_size, storagePath: r.storage_path ?? undefined, uploadedBy: r.uploaded_by, storeys: r.storeys, elementCount: r.element_count })),
     linkRules: rows.link_rules.map((r): LinkRule => ({ id: r.id, createdAt: r.created_at, updatedAt: r.updated_at, workId: r.work_id, order: r.order_index, serviceName: r.service_name, criteria: r.criteria })),
@@ -90,7 +93,7 @@ export function planningDataToPayload(data: PlanningData) {
     activity_dependencies: data.dependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId })),
     medium_term_plans: data.plans.map(p => ({ id: p.id, created_at: p.createdAt, updated_at: p.updatedAt, work_id: p.workId, month: p.month, name: p.name, baseline_of: p.baselineOf ?? null, frozen_at: p.frozenAt ?? null, created_by: p.createdBy })),
     plan_tasks: data.planTasks.map(t => ({ id: t.id, created_at: t.createdAt, updated_at: t.updatedAt, plan_id: t.planId, name: t.name, planned_start: t.plannedStart, planned_end: t.plannedEnd, team_id: t.teamId ?? null, activity_id: t.activityId ?? null, notes: t.notes ?? null, progress: t.progress, order_index: t.order, level: t.level })),
-    plan_dependencies: data.planDependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId })),
+    plan_dependencies: data.planDependencies.map(d => ({ id: d.id, created_at: d.createdAt, updated_at: d.updatedAt, predecessor_id: d.predecessorId, successor_id: d.successorId, link_type: d.type, lag_days: d.lagDays, lag_business: d.lagBusiness })),
     ifc_models: data.ifcModels.map(m => ({ id: m.id, created_at: m.createdAt, updated_at: m.updatedAt, work_id: m.workId, name: m.name, discipline: m.discipline })),
     ifc_model_versions: data.ifcVersions.map(v => ({ id: v.id, created_at: v.createdAt, updated_at: v.updatedAt, model_id: v.modelId, version: v.version, file_name: v.fileName, file_size: v.fileSize, storage_path: v.storagePath ?? null, uploaded_by: v.uploadedBy, storeys: v.storeys, element_count: v.elementCount })),
     link_rules: data.linkRules.map(r => ({ id: r.id, created_at: r.createdAt, updated_at: r.updatedAt, work_id: r.workId, order_index: r.order, service_name: r.serviceName, criteria: r.criteria })),

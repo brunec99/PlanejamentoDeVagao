@@ -1,5 +1,5 @@
-import type { Activity, BoardStatus, LinkRuleCriterion, NonFulfillmentCause, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
-import { NON_FULFILLMENT_CAUSES } from '../../domain/entities';
+import type { Activity, BoardStatus, LinkRuleCriterion, LinkType, NonFulfillmentCause, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import { LINK_TYPES, NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
@@ -42,7 +42,7 @@ export type Command =
   | { type: 'update_plan_task'; taskId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; progress: number }
   | { type: 'delete_plan_task'; taskId: string }
   | { type: 'set_plan_task_note'; taskId: string; note: string }
-  | { type: 'link_plan_tasks'; predecessorId: string; successorId: string }
+  | { type: 'link_plan_tasks'; predecessorId: string; successorId: string; linkType?: LinkType; lagDays?: number; lagBusiness?: boolean }
   | { type: 'unlink_plan_tasks'; dependencyId: string }
   | { type: 'link_activities'; predecessorId: string; successorId: string }
   | { type: 'unlink_activities'; dependencyId: string }
@@ -508,7 +508,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (predecessor.planId !== successor.planId) throw new Error('As linhas ligadas devem ser do mesmo plano.');
       const plan = planFor(successor.planId); checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
-      if (data.planDependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe.');
+      if (data.planDependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe. Edite a existente para trocar o tipo ou a defasagem.');
       const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
         if (from === target) return true;
         if (seen.has(from)) return false;
@@ -516,7 +516,11 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         return data.planDependencies.filter(d => d.predecessorId === from).some(d => reaches(d.successorId, target, seen));
       };
       if (reaches(successor.id, predecessor.id)) throw new Error('Essa ligação criaria um ciclo entre as linhas.');
-      const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id };
+      const linkType = command.linkType ?? 'TI';
+      if (!LINK_TYPES.includes(linkType)) throw new Error('Tipo de vínculo deve ser TI, II, TT ou IT.');
+      const lagDays = command.lagDays ?? 0;
+      if (!Number.isInteger(lagDays) || Math.abs(lagDays) > 365) throw new Error('A defasagem vai de -365 a 365 dias.');
+      const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id, type: linkType, lagDays, lagBusiness: command.lagBusiness !== false };
       data.planDependencies.push(dependency); entityId = dependency.id; break;
     }
     case 'unlink_plan_tasks': {
