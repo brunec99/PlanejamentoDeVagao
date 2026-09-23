@@ -113,3 +113,7 @@ Premissas declaradas: atividade concluída continua contando carga, igual ao `te
 ### Migração 0023 — aplicada
 
 `0023_plan_revisions.sql` veio do trabalho de 22/09 sobre as revisões do plano do mês. Ela acrescenta `schedule_meta` a `medium_term_plans` e `plan_tasks`, cria gatilhos que tornam imutáveis a linha de base congelada e o `history_events`, e reescreve `commit_planning`. O usuário a **aplicou no Supabase remoto em 23/09/2026**. A presença das colunas foi conferida pela API REST, com resposta 200 nas duas tabelas. A migração não é reexecutável, porque cria as funções `guard_*` e os gatilhos sem `or replace`/`if not exists`. Se for preciso rodá-la de novo em outro ambiente, é necessário remover antes os gatilhos e as funções.
+
+### Aba 1 — longo prazo como leitura do Prevision (23/09/2026)
+
+A pedido do usuário, a aba 1 passou a dizer, na descrição e num aviso logo abaixo do título, que o cronograma de longo prazo **por enquanto é mantido apenas no Prevision**. A tela serve para consultar esses dados e criar e acompanhar restrições. As atividades chegam pela importação em Integrações. Linhas de base e curva de avanço continuam disponíveis, mas não substituem a edição do cronograma, que não é feita aqui.
