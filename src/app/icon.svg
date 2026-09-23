@@ -1,10 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect x="4" y="6" width="24" height="16" rx="4" fill="#1e40af"/>
-  <rect x="7" y="9" width="7" height="6" rx="1" fill="white"/>
-  <rect x="18" y="9" width="7" height="6" rx="1" fill="white"/>
-  <rect x="4" y="18" width="24" height="3" fill="#1e3a8a"/>
-  <circle cx="10" cy="25" r="2.6" fill="#0f172a"/>
-  <circle cx="22" cy="25" r="2.6" fill="#0f172a"/>
-  <circle cx="10" cy="25" r="1" fill="#94a3b8"/>
-  <circle cx="22" cy="25" r="1" fill="#94a3b8"/>
+  <rect width="32" height="32" rx="7" fill="#1d4ed8"/>
+  <path d="M4.5 19.5a11.5 4.5 0 0 1 23 0" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="11" y="6" width="10" height="17" rx="1" fill="#fff"/>
+  <path d="M13 9h2v2h-2zM17 9h2v2h-2zM13 13h2v2h-2zM17 13h2v2h-2zM13 17h2v2h-2zM17 17h2v2h-2z" fill="#1d4ed8"/>
+  <path d="M27.5 19.5a11.5 4.5 0 0 1-21.2 2.4" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M4.3 19.6l2.6 3.9 1.6-3.6z" fill="#fbbf24"/>
 </svg>
