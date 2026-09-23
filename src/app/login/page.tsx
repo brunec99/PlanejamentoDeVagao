@@ -1,8 +1,11 @@
 import Image from 'next/image';
+import { redirect } from 'next/navigation';
 import { signInWithGoogle } from './actions';
 export const metadata = { title: 'Entrar' };
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; redirect?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; redirect?: string; code?: string }> }) {
   const params = await searchParams;
+  // O login fica fora do middleware; se o Supabase devolver o código aqui, ele segue para a troca por sessão.
+  if (params.code) redirect(`/auth/callback?code=${encodeURIComponent(params.code)}&redirect=${encodeURIComponent(params.redirect ?? '/obras')}`);
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 px-4 py-10 font-sans">
       <div className="pointer-events-none absolute top-[-15%] right-[-5%] h-[40%] w-[40%] rounded-full bg-blue-100/60 blur-[100px]" />

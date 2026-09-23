@@ -2,6 +2,18 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
+  // Quando o endereço de retorno não está na lista do Supabase, ele devolve o código do login para
+  // o Site URL em vez de /auth/callback. Sem este desvio o código era ignorado e a pessoa voltava
+  // ao login como se nada tivesse acontecido; aqui ele segue para a troca por sessão.
+  const code = request.nextUrl.searchParams.get('code');
+  if (code && !request.nextUrl.pathname.startsWith('/api/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/auth/callback';
+    url.search = '';
+    url.searchParams.set('code', code);
+    url.searchParams.set('redirect', request.nextUrl.pathname === '/' ? '/obras' : request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
   let response = NextResponse.next({ request });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {

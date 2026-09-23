@@ -65,3 +65,14 @@ Numa instalação nova não existe ninguém para liberar o primeiro acesso. Por 
 ## O que o sistema não faz
 
 Não cria senha, não envia "esqueci minha senha" e não aceita conta de fora do domínio — nem para visita, nem para cliente, nem temporariamente. Quem precisa ver a obra precisa de uma conta da ATR. Se a conta Google de alguém for desativada pela empresa, o acesso ao sistema cai junto, sem nenhum passo adicional aqui.
+
+## "Faço login e volto para a tela de login" (23/09/2026)
+
+Quando o endereço de retorno (`https://<site>/auth/callback?...`) não está na lista **Redirect URLs** do Supabase, o Supabase devolve o código do login para o **Site URL**. Até esta data, o código chegava numa página que não sabia usá-lo e a pessoa voltava ao login sem mensagem nenhuma. Agora o middleware (`src/proxy.ts`) e a página de login encaminham qualquer `?code=` para `/auth/callback`, e o login conclui mesmo nesse caso. Se o código for inválido, aparece a mensagem "Falha ao entrar com Google".
+
+Ainda assim, a configuração certa no Supabase (**Authentication → URL Configuration**) é:
+
+- **Site URL:** `https://obra360-atr.vercel.app`
+- **Redirect URLs:** `https://obra360-atr.vercel.app/**` e, para testes locais, `http://127.0.0.1:3000/**`.
+
+O desvio foi validado localmente com um código falso. O login completo com Google precisa ser confirmado pelo usuário no navegador.
