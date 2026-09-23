@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FocusEvent, type FormEvent } from 're
 import type { Command } from '@/application/use-cases/commands';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { NON_FULFILLMENT_CAUSES, type Activity, type Team, type Wagon, type WeeklyCommitment } from '@/domain/entities';
+import { teamLabel } from '@/domain/resources';
 import { causePareto, leadTimeDeadline, ppc, ppcSeries, type WeekPpc } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
@@ -93,8 +94,9 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const columns = WEEKDAYS.map(day => ({ day, date: addDays(week, day - 1) }));
 
   return <>
-    <p className="eyebrow">{selected.work.code}</p>
-    <h1 className="page-title">Planejamento e controle da produção</h1>
+    <p className="eyebrow">Aba 4 · {selected.work.code} · {selected.work.name}</p>
+    <h1 className="page-title">Cronograma de curto prazo</h1>
+    <p className="mt-1 text-sm text-slate-500">Planilha da semana: equipe, cumprimento (Sim/Não) e causa do não cumprimento, com o PPC.</p>
 
     <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-600">
       <label className="flex items-center gap-2">Semana analisada
@@ -108,10 +110,15 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
     </div>
 
     <p className="mt-2 text-xs leading-5 text-slate-500">
-      As células de SEG a SÁB se preenchem a partir de Início e Término — é a única automação da tela.<br />
+      As células de SEG a SÁB se preenchem a partir de Início e Término.<br />
       Trocar a Semana de uma linha desloca Início e Término pelo mesmo número de semanas, e a linha sai da semana exibida.<br />
       A linha com Status <strong className="font-semibold text-slate-600">Não</strong> ganha as ações de fechamento: levar o compromisso para a semana seguinte e gerar pendência no quadro do longo prazo.
     </p>
+
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
+      <p className="text-slate-600">{teams.length ? `${teams.length} equipes disponíveis nesta obra.` : 'Nenhuma equipe cadastrada nesta obra.'} A alocação é opcional. Na nova linha, escolher uma equipe preenche o fornecedor se estiver vazio.</p>
+      <Link className="text-link shrink-0" href={workPath(workId, 'configuracoes')}>{readOnly ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}</Link>
+    </div>
 
     {error && <div className="mt-3"><Callout tone="danger" role="alert">{error}</Callout></div>}
 
@@ -124,7 +131,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
             <th scope="col" className="w-32 px-2 py-2">Início</th>
             <th scope="col" className="w-32 px-2 py-2">Término</th>
             <th scope="col" className="px-2 py-2">Atividade</th>
-            <th scope="col" className="w-36 px-2 py-2">Equipe</th>
+            <th scope="col" className="w-60 px-2 py-2">Recurso · empreiteiro / equipe</th>
             {columns.map(({ day, date }) => <th scope="col" key={day} className="w-11 px-1 py-2 text-center">{NAMES[day]}<span className="block font-semibold tabular-nums text-slate-400">{dayMonth(date)}</span></th>)}
             <th scope="col" className="w-20 px-2 py-2">Status</th>
             <th scope="col" className="w-44 px-2 py-2">Causas</th>
@@ -136,10 +143,12 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <tbody>
           {rows.map((row, index) => {
             const saving = busy === row.id;
+            const team = teams.find(t => t.id === row.teamId);
             return <tr key={row.id} className={`border-t border-slate-100 ${saving ? 'bg-amber-50/60' : 'hover:bg-slate-50/60'}`}>
               <td className="px-1 py-1">
-                <input className="cell" defaultValue={row.supplier} disabled={readOnly} aria-label={`Fornecedor da linha ${index + 1}`} placeholder="—"
+                <input key={row.supplier} className="cell" defaultValue={row.supplier} disabled={readOnly || !!busy} aria-label={`Fornecedor da linha ${index + 1}`} placeholder="—"
                   onBlur={e => save(row, { supplier: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+                {!readOnly && team?.company && row.supplier !== team.company && <button type="button" disabled={!!busy} className="px-1 text-left text-[10px] font-semibold text-blue-700" onClick={() => save(row, { supplier: team.company })}>Usar {team.company}</button>}
               </td>
               <td className="px-1 py-1">
                 <input className="cell tabular-nums" type="date" defaultValue={row.weekStart} disabled={readOnly}
@@ -159,10 +168,10 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
                   onBlur={e => save(row, { name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
               </td>
               <td className="px-1 py-1">
-                <select className="cell" defaultValue={row.teamId ?? ''} disabled={readOnly} aria-label={`Equipe da linha ${index + 1}`}
+                <select className="cell" value={row.teamId ?? ''} disabled={readOnly || !!busy} aria-label={`Empreiteiro e equipe da linha ${index + 1}`}
                   onChange={e => save(row, { teamId: e.target.value || undefined })}>
                   <option value="">Sem equipe</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  {teams.map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
                 </select>
               </td>
               {WEEKDAYS.map(day => {
@@ -526,9 +535,9 @@ function BlankRow({ workId, week, weekEnd, teams, responsibleId, busy, onSave }:
     </td>
     <td className="px-1 py-1">
       <select className="cell" value={draft.teamId} disabled={busy} aria-label="Equipe da nova linha"
-        onChange={e => change({ teamId: e.target.value })} onBlur={leave}>
+        onChange={e => { const team = teams.find(t => t.id === e.target.value); change({ teamId: e.target.value, supplier: draft.supplier.trim() ? draft.supplier : team?.company ?? '' }); }} onBlur={leave}>
         <option value="">Sem equipe</option>
-        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        {teams.map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
       </select>
     </td>
     <td colSpan={11} className="px-2 py-1 text-slate-400">o calendário sai do período depois de criar a linha</td>

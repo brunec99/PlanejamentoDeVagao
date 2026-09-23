@@ -2,7 +2,7 @@
 
 ## Direção acordada
 
-Priorizar a montagem e a exploração do modelo federado. O BIM 4D fica para uma etapa posterior; a tela existente continua acessível, mas ainda não consome as composições salvas.
+Priorizar a montagem e a exploração do modelo federado. No redesenho de 23/09/2026, o BIM 4D (aba 6) ganhou a simulação animada do cronograma de longo prazo (ver a seção "Simulação 4D" abaixo). A tela **ainda não consome as composições salvas** da federação, o que continua como próxima etapa.
 
 Este documento é o ponto de continuidade entre os modelos de IA que trabalham no repositório. Em cada alteração de IFC/federação, atualizar aqui: comportamento entregue, decisões, arquivos envolvidos, migrações, validação e pendências. Não descrever intenção como funcionalidade pronta. Preservar alterações locais de outro trabalho. A mesma orientação foi acrescentada ao `AGENTS.md` local, que atualmente é ignorado pelo Git; este documento e o README mantêm a orientação em arquivos versionáveis.
 
@@ -155,3 +155,31 @@ Entregue nos visualizadores de **Modelos IFC** e **Modelo federado**, acima da c
 - `tests/ifc-section.test.ts`: oito testes de eixos, extremos, coordenadas negativas, inversão, entradas inválidas, plano compartilhado, atualização final e descarte.
 - TypeScript e build de produção aprovados. Suíte completa: **141 testes aprovados**, incluindo os oito testes de seccionamento.
 - A inspeção visual nesta sessão não pôde ser concluída: o acesso de Computer Use foi encerrado pela restrição da URL atual do navegador. Não houve interação autenticada com modelos reais. Permanece pendente verificar visualmente corte, inversão, clique, filtros combinados, recarga e uso em tela estreita com os arquivos da obra. Os testes do controlador usam caixas e callbacks controlados; não substituem a validação WebGL/worker em navegador.
+
+
+## Simulação 4D — redesenho em seis abas (23/09/2026)
+
+No redesenho, o sistema passou a se chamar "Sistema de Gestão de Projetos – ATR". O Modelo federado virou a **aba 5**, e o BIM 4D, a **aba 6**. A tela de modelos IFC continua existindo com o nome **Arquivos IFC**, no grupo Apoio da lateral. O usuário esclareceu que "seleção em vídeo" significa **simulação animada**, sem exportação de arquivo de vídeo.
+
+**Implementado, sem migração:** a tela BIM 4D (`/obras/{obraId}/quatro-d`) anima o cronograma de longo prazo sobre o modelo federado carregado.
+
+- **Linha do tempo:** vai do menor início ao maior término das atividades da obra e da linha de base escolhida. Avança em quadros de 1 dia, 1 semana ou 1 mês, a 1–8 quadros por segundo. Tem reproduzir/pausar, quadro anterior/seguinte, reinício, "Hoje", controle deslizante e data exata, e a reprodução para no último quadro.
+- **Modos:**
+  - **Planejado:** o serviço aparece quando começa a janela prevista e fica cheio no término previsto.
+  - **Executado:** último lançamento datado até a data.
+  - **Planejado × executado:** cor pelo desvio em relação à linha de base escolhida ou, sem ela, ao cronograma atual. Com tolerância de 5 pontos, o serviço fica adiantado, no prazo ou atrasado.
+- **Serviços não iniciados:** ficam ocultos ou, por opção, aparecem como fantasma translúcido. O avanço parcial continua sendo um tom do serviço inteiro, nunca verificação por elemento.
+- **Painel "Nesta data":** lista os serviços que começam e terminam no quadro, os que estão em execução e o planejado × executado geral.
+- **Tabela serviço × vagão:** acompanha a data, com planejado e executado, e segue como alternativa sem WebGL.
+
+**Como a cena é repintada:** os elementos são agrupados uma única vez, a cada carga ou mudança de regras, em células serviço × pavimento. Cada quadro envia ao Fragments só as células que mudaram: `highlight` para cor e opacidade, `setVisible` para ocultar e um `update(true)` ao final. Isso roda em `requestAnimationFrame`, e quadros são pulados enquanto a pintura anterior não termina. A geometria só é carregada por ação explícita. As funções puras estão em `src/modules/quatro-d/simulation.ts`, com testes em `tests/four-d-simulation.test.ts` (11).
+
+**Pendente de validação num navegador com IFC real:**
+
+- desempenho de `highlight`/`setVisible` com centenas de milhares de elementos a 8 quadros/s;
+- se o destaque persiste em elementos ocultados e reexibidos;
+- se o worker acumula materiais;
+- a ordenação da transparência do fantasma;
+- o comportamento dos controles em telas estreitas.
+
+**Próximas etapas:** consumir as composições salvas da federação no 4D e estender as regras de vínculo para além de pavimento e tipo.

@@ -1,3 +1,4 @@
+import type { WorkCalendar, TaskDuration } from './plan-schedule';
 export type Id = string;
 /** ISO calendar date (YYYY-MM-DD), without timezone conversion. */
 export type LocalDate = string;
@@ -17,13 +18,13 @@ export interface ActivityDependency extends RecordBase { predecessorId: Id; succ
  * Um plano por mês por obra. A linha de base é o próprio plano congelado — `baselineOf` aponta
  * para o plano de origem e `frozenAt` marca o congelamento; plano congelado não aceita edição,
  * e por isso pode ser aberto no mesmo cronograma para comparar com o vivo. */
-export interface MediumTermPlan extends RecordBase { workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id }
+export interface MediumTermPlan extends RecordBase { version?: number; calendar?: WorkCalendar; workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id }
 /** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
  * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
 /** Tarefa do plano do mês. `level` é o recuo, como no MS Project: o pai de uma linha é a linha
  * anterior mais próxima com nível menor. Linha com filhos é resumo — início, término e avanço
  * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui. */
-export interface PlanTask extends RecordBase { planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
+export interface PlanTask extends RecordBase { version?: number; duration?: TaskDuration; anchorStart?: string; sourceTaskId?: Id; planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
 /** Dependência término-início entre linhas do plano mensal. */
 /** Vínculo entre linhas do plano, nos quatro tipos do Project. `lagDays` é a defasagem: positiva
  * é espera, negativa é antecipação. `lagBusiness` diz se ela conta em dias úteis (o `2d` digitado)

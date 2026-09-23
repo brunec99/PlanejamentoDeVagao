@@ -80,3 +80,32 @@ Colunas configuráveis e redimensionáveis, seleção de intervalo com copiar/co
 ## Migrações
 
 A etapa 1 não precisou de nenhuma: era cálculo sobre o que já estava gravado. A etapa 2 traz `0022_plan_link_types.sql`, que acrescenta tipo e defasagem ao vínculo do plano e reescreve `commit_planning`. **Precisa ser aplicada antes de o código correspondente subir**: sem ela, tipo e defasagem são descartados em silêncio a cada gravação.
+
+## Etapa 3 — redesenho em seis abas (23/09/2026)
+
+O sistema passou a se chamar **Sistema de Gestão de Projetos – ATR** e a navegação da obra virou seis abas numeradas na lateral (`WORK_TABS` em `src/modules/layout/work-nav.tsx`): 1 Cronograma de longo prazo, 2 Planejamento por vagões, 3 Cronograma de médio prazo, 4 Cronograma de curto prazo, 5 Modelo federado, 6 BIM 4D. Arquivos IFC, Dívidas, Integrações e Configurações da obra ficaram num grupo **Apoio** abaixo das abas, por escolha do usuário. No celular, as abas viram uma faixa rolável (`WorkTabsMobile`). O cabeçalho comum das abas está em `src/modules/layout/tab-header.tsx`, e abrir uma obra leva à aba 1. Um documento de orçamento integrado ao IFC (EAP e composições) foi apresentado junto do pedido, e o usuário decidiu deixá-lo fora do escopo.
+
+### Aba 1 — longo prazo
+
+A ordem da tela mudou para Linha de Balanço → módulo de restrições → curva de avanço → linhas de base. O quadro antes chamado "Pendências" passou a se chamar **Módulo de restrições**. A entidade sempre foi `Restriction`, e "pendência" continua designando o item de terminalidade do vagão (`PendingItem`): usar a mesma palavra para as duas coisas confundia. Nenhum comando nem dado mudou.
+
+### Aba 3 — alocação de recursos e atrasos contra a linha de base
+
+Regras novas, puras, em `src/domain/schedule-analysis.ts` (testes em `tests/schedule-analysis.test.ts`):
+
+- `weeklyTeamLoad(data, workId, from, to)`: carga semana a semana (semanas começando na segunda) por equipe. Soma as atividades do cronograma e as tarefas **não resumo** dos planos vivos, contra `weeklyCapacity`. Plano congelado ou linha de base não conta, pelo mesmo motivo do `teamLoad`: retrato não é compromisso. Cada semana devolve os itens que a compõem, para a tela mostrar quem causa a superalocação. Uma linha "sem equipe" aparece só como informação.
+- `baselineVariance(live, baseline, calendar)`: variação de início e término em **dias úteis do calendário do plano**, com sinal positivo para atraso. O pareamento usa primeiro `sourceTaskId` e depois o nome normalizado. Cada tarefa sai com o status atrasada/adiantada/no prazo, conforme o término, ou como nova/removida. O resumo traz a quantidade de atrasadas, o maior atraso, o atraso médio e a variação do término do plano.
+
+Telas novas, montadas abaixo da grade em `medio-prazo/page.tsx`:
+
+- `ResourceAnalysis`: grade equipes × semanas colorida por carga/capacidade, com texto e ícone além da cor. Um clique na célula lista os itens da semana, e o histograma da equipe escolhida traz a linha de capacidade. O período é o mês de um plano vivo ou as próximas 12 semanas.
+- `BaselineDelays`: escolha do plano e de uma das suas linhas de base congeladas, com indicadores, comparação em barras (atual × base) das tarefas atrasadas e tabela completa de variações.
+
+Premissas declaradas: atividade concluída continua contando carga, igual ao `teamLoad`. Tarefa que começa atrasada e termina no prazo conta como "no prazo", mas o Δ de início aparece. Linhas de resumo ficam fora da análise de atrasos.
+
+**Validação:** 9 testes novos passando. As telas não foram abertas logadas no navegador.
+
+### Pendências desta etapa
+
+- Validar no navegador, com dados reais, a grade de carga e a comparação com a linha de base.
+- A capacidade continua sendo "atividades simultâneas por semana". Um histograma em homens-hora exigiria cadastrar quantidade de pessoas e produtividade, o que não existe hoje.

@@ -38,11 +38,11 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
   const detail = restrictions.find(r => r.id === openId);
 
   return <section className="mt-8" aria-labelledby="pendencias-title">
-    <h2 id="pendencias-title" className="text-lg font-bold text-slate-900">Pendências</h2>
-    <p className="mt-1 text-sm text-slate-500">Cada pendência é ligada a uma atividade e a um lead time: o limite de resolução sai do início previsto da atividade menos esse lead time, porque a obtenção precisa caber antes de a frente começar. Abra o card para ver a descrição completa e de onde veio a data. Enquanto uma pendência estiver aberta e bloquear a execução, o vagão não aceita lançamento de progresso.</p>
+    <h2 id="pendencias-title" className="text-lg font-bold text-slate-900">Módulo de restrições</h2>
+    <p className="mt-1 text-sm text-slate-500">Cada restrição é ligada a uma atividade e a um lead time: o limite de resolução sai do início previsto da atividade menos esse lead time, porque a obtenção precisa caber antes de a frente começar. Abra o card para ver a descrição completa e de onde veio a data. Enquanto uma restrição estiver aberta e bloquear a execução, o vagão não aceita lançamento de progresso.</p>
 
     <div className="my-5">
-      <CommandForm title="Registrar pendência" submit="Registrar pendência" command={d => {
+      <CommandForm title="Registrar restrição" submit="Registrar restrição" command={d => {
         const activity = activityOf(value(d, 'activityId'));
         const raw = value(d, 'leadTimeDays');
         const lead = isInteger(raw) ? number(d, 'leadTimeDays') : undefined;
@@ -58,7 +58,7 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
     </div>
 
     <div className="mb-5 grid gap-4 sm:grid-cols-3">
-      <StatCard label="Pendências abertas" value={pendingOpen.length} />
+      <StatCard label="Restrições abertas" value={pendingOpen.length} />
       <StatCard label="Com prazo vencido" value={overdue.length} tone={overdue.length > 0 ? 'danger' : 'default'} />
       <StatCard label="Mais próxima do limite" tone={next && deadlineOf(next) < planning.today ? 'danger' : 'default'} value={next ? <>{formatDate(deadlineOf(next))}<span className="mt-1 block truncate text-xs font-medium text-slate-500">{next.description}</span></> : '—'} />
     </div>
@@ -67,7 +67,7 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
       const cards = restrictions.filter(r => columnOf(r) === column);
       return <section key={column} className="panel" aria-labelledby={`coluna-${column}`}>
         <h3 id={`coluna-${column}`} className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">{boardStatusLabels[column]}<span className="badge-muted tabular-nums">{cards.length}</span></h3>
-        <div className="space-y-3 p-5">{cards.length === 0 ? <Empty>Nenhuma pendência nesta coluna.</Empty> : cards.map(r => {
+        <div className="space-y-3 p-5">{cards.length === 0 ? <Empty>Nenhuma restrição nesta coluna.</Empty> : cards.map(r => {
           const activity = activityOf(r.activityId);
           const limit = deadlineFor(r, activity);
           const late = r.status === 'open' && limit < planning.today;
@@ -96,7 +96,7 @@ function RestrictionFields({ workId, activities, locations }: { workId: string; 
   const days = isInteger(lead) ? Number(lead) : undefined;
   const used = locations.filter(l => activities.some(a => a.locationId === l.id));
   return <>
-    <TextField name="description" label="Descrição da pendência" />
+    <TextField name="description" label="Descrição da restrição" />
     <Field label="Local">
       <select className="field" required value={locationId} onChange={e => { setLocationId(e.target.value); setActivityId(''); }}>
         <option value="">Selecione</option>
@@ -134,8 +134,8 @@ function CardDetail({ restriction, activity, wagon, workId, responsible, today, 
     <div className="p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Pendência · {boardStatusLabels[columnOf(restriction)]}</p>
-          <h3 id="pendencia-detalhe" className="mt-1 text-base font-bold text-slate-900">Detalhe da pendência</h3>
+          <p className="eyebrow">Restrição · {boardStatusLabels[columnOf(restriction)]}</p>
+          <h3 id="pendencia-detalhe" className="mt-1 text-base font-bold text-slate-900">Detalhe da restrição</h3>
         </div>
         <button ref={closeButton} type="button" className="button-ghost" onClick={() => dialog.current?.close()}>Fechar</button>
       </div>
@@ -178,10 +178,10 @@ function MoveAction({ restriction }: { restriction: Restriction }) {
   if (context.state !== 'ready') return null;
   const target: Exclude<BoardStatus, 'resolvida'> = restriction.boardStatus === 'identificada' ? 'em_tratativa' : 'identificada';
   return <div className="space-y-3">
-    <button type="button" className="button-ghost" disabled={busy} aria-label={`Mover pendência “${restriction.description}” para ${boardStatusLabels[target]}`} onClick={async () => {
+    <button type="button" className="button-ghost" disabled={busy} aria-label={`Mover restrição “${restriction.description}” para ${boardStatusLabels[target]}`} onClick={async () => {
       if (busy) return; setBusy(true); setError('');
       try { await context.execute({ type: 'move_restriction', restrictionId: restriction.id, boardStatus: target }); }
-      catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível mover a pendência.'); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível mover a restrição.'); }
       finally { setBusy(false); }
     }}>{busy ? 'Movendo…' : target === 'em_tratativa' ? 'Iniciar tratativa →' : '← Voltar para identificada'}</button>
     {error && <Callout tone="danger" role="alert">{error}</Callout>}

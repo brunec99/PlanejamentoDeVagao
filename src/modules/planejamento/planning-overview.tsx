@@ -1,12 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { PlanningActions } from './planning-actions';
 import { usePlanning } from './planning-provider';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, releaseLabels, wagonLabel, wagonPath } from '@/shared/format';
 import { LoadState, Missing, Status, Progress, Empty, Callout, StatCard } from './ui';
+import { TabHeader } from '@/modules/layout/tab-header';
 
 export function PlanningOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -23,14 +23,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
   const openDebts = debts.filter(d => data.pendingItems.some(p => p.id === d.pendingItemId && p.status === 'open')).length;
 
   return <>
-    <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800" href="/obras"><ArrowLeft size={15} />Obras</Link>
-    <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="eyebrow">Planejamento por período · {work.code}</p>
-        <h1 className="page-title">{work.name}</h1>
-        <p className="mt-1 text-sm text-slate-500">Cada vagão reúne as atividades previstas entre seus marcos de início e término.</p>
-      </div>
-    </div>
+    <TabHeader workId={workId} section="vagoes" description="Cada vagão é um período de takt e reúne as atividades previstas entre seus marcos de início e término." />
 
     <div data-tour="planejamento-stats" className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard label="Vagões planejados" value={wagons.length} />

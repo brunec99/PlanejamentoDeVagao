@@ -80,3 +80,44 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .federation-page button:disabled { cursor: not-allowed; opacity: .45; }
 .federation-page select:disabled, .federation-page input:disabled { cursor: not-allowed; background-color: #f8fafc; color: #64748b; }
 .federation-page summary::marker { color: #64748b; }
+
+/* Plano mensal: cada painel rola no próprio eixo horizontal e compartilha a posição vertical. */
+.plan-workspace { --plan-row-bg: #fff; }
+.plan-panes { display: grid; grid-template-columns: minmax(0, 1fr); }
+.plan-scroll { overflow: auto; height: clamp(240px, 48vh, 540px); scrollbar-gutter: stable; scrollbar-width: auto; }
+.plan-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.plan-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border: 2px solid #f1f5f9; border-radius: 8px; }
+.plan-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+.plan-table-row { background: var(--plan-row-bg); border-bottom: 1px solid #e2e8f0; }
+.plan-table-row.is-summary { --plan-row-bg: #f1f5f9; }
+.plan-table-row:hover { --plan-row-bg: #f8fafc; }
+.plan-table-row.is-selected { --plan-row-bg: #eff6ff; box-shadow: inset 3px 0 #2563eb; }
+.plan-table-row.is-saving { --plan-row-bg: #fffbeb; }
+.plan-identity { display: flex; flex: none; align-items: center; align-self: stretch; background: var(--plan-row-bg); border-right: 2px solid #cbd5e1; }
+.plan-table-header .plan-identity { background: #f1f5f9; }
+.plan-workspace .cell { min-height: 28px; font-size: 12px; }
+.plan-workspace button:disabled, .plan-workspace select:disabled { cursor: not-allowed; opacity: .5; }
+.plan-tool { display: inline-flex; height: 34px; min-width: 34px; align-items: center; justify-content: center; border-radius: 6px; color: #475569; font-size: 12px; }
+.plan-tool:hover:not(:disabled) { background: #e2e8f0; }
+@media (min-width: 1024px) {
+  .plan-panes-split { grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); }
+}
+@media (min-width: 1280px) {
+  .plan-identity { position: sticky; left: 0; z-index: 15; }
+}
+
+/* Grade de revisão do médio prazo. */
+.schedule-grid { table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.schedule-grid th, .schedule-grid td { height: 28px; padding: 3px 6px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.schedule-grid th { position: sticky; top: 0; z-index: 20; background: #f1f5f9; text-align: left; }
+.schedule-grid td { background: white; font-variant-numeric: tabular-nums; }
+.schedule-grid .schedule-name { position: sticky; left: 0; z-index: 10; }
+.schedule-grid th.schedule-name { z-index: 30; }
+.schedule-grid .schedule-selected { background: #eff6ff; }
+.schedule-grid .schedule-modified { box-shadow: inset 3px 0 #d97706; }
+.schedule-grid .schedule-done td { background: #f0fdf4; }
+.schedule-grid td:focus { outline: 2px solid #2563eb; outline-offset: -2px; }
+.schedule-grid input, .schedule-grid select { width: 100%; min-width: 0; background: white; outline: 2px solid #2563eb; }
+.schedule-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.schedule-resize:focus { outline: 2px solid #2563eb; }
+@media (pointer: coarse) { .schedule-grid th, .schedule-grid td { height: 36px; } }

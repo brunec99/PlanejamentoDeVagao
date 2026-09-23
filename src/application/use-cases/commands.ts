@@ -1,3 +1,4 @@
+import { scheduleTasks, planSnapshot, DEFAULT_CALENDAR, type WorkCalendar } from '../../domain/plan-schedule';
 import type { Activity, BoardStatus, LinkRuleCriterion, LinkType, NonFulfillmentCause, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
 import { LINK_TYPES, NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
@@ -5,6 +6,7 @@ import { planSequenceRegeneration } from './regenerate-sequence';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
 export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
 export type Command =
+  | { type: 'save_plan_revision'; planId: string; expectedSnapshot: string; reason: string; tasks: PlanTask[]; links: import('../../domain/entities').PlanDependency[]; calendar: WorkCalendar }
   | { type: 'create_work'; name: string; code: string; previsionProjectId?: string }
   | { type: 'create_sequence'; workId: string; name: string; taktDays: number; calendar: 'calendar_days' | 'business_days' }
   | { type: 'create_wagon'; sequenceId: string; number: number; predecessorId?: string; plannedStart: string; plannedEnd: string; responsibleId: string }
@@ -24,6 +26,7 @@ export type Command =
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
   | { type: 'create_team'; workId: string; company: string; name: string; weeklyCapacity: number }
+  | { type: 'update_team'; teamId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'delete_team'; teamId: string }
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
@@ -44,6 +47,7 @@ export type Command =
   | { type: 'set_plan_task_note'; taskId: string; note: string }
   | { type: 'link_plan_tasks'; predecessorId: string; successorId: string; linkType?: LinkType; lagDays?: number; lagBusiness?: boolean }
   | { type: 'unlink_plan_tasks'; dependencyId: string }
+  | { type: 'replace_plan_predecessors'; taskId: string; links: { predecessorId: string; linkType: LinkType; lagDays: number; lagBusiness: boolean }[] }
   | { type: 'link_activities'; predecessorId: string; successorId: string }
   | { type: 'unlink_activities'; dependencyId: string }
   | { type: 'set_activity_note'; activityId: string; note: string }
@@ -309,20 +313,27 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       }
       entityId = wagon.id; wagonId = wagon.id; break;
     }
-    case 'create_team': {
-      checkWork(command.workId); const name = requireText(command.name, 'Nome da equipe');
+    case 'create_team':
+    case 'update_team': {
+      const existing = command.type === 'update_team' ? data.teams.find(t => t.id === command.teamId) : undefined;
+      if (command.type === 'update_team' && !existing) throw new Error('Equipe não encontrada.');
+      const workId = command.type === 'create_team' ? command.workId : existing!.workId;
+      checkWork(workId); const name = requireText(command.name, 'Nome da equipe');
       const company = requireText(command.company, 'Empresa');
       if (!Number.isInteger(command.weeklyCapacity) || command.weeklyCapacity <= 0) throw new Error('Capacidade deve ser um número inteiro positivo de atividades por semana.');
-      if (data.teams.some(t => t.workId === command.workId && t.name.toLowerCase() === name.toLowerCase() && t.company.toLowerCase() === company.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra para esta empresa.');
-      const team = { ...base(), workId: command.workId, company, name, weeklyCapacity: command.weeklyCapacity };
-      data.teams.push(team); entityId = team.id; break;
+      if (data.teams.some(t => t.id !== existing?.id && t.workId === workId && t.name.toLowerCase() === name.toLowerCase() && t.company.toLowerCase() === company.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra para esta empresa.');
+      const fields = { company, name, weeklyCapacity: command.weeklyCapacity };
+      if (existing) { Object.assign(existing, fields); touch(existing); entityId = existing.id; }
+      else { const team = { ...base(), workId, ...fields }; data.teams.push(team); entityId = team.id; }
+      break;
     }
     case 'delete_team': {
       const team = data.teams.find(t => t.id === command.teamId); if (!team) throw new Error('Equipe não encontrada.');
       checkWork(team.workId);
       // Apagar a equipe deixaria atividade e compromisso apontando para o vazio.
       if (data.activities.some(a => a.teamId === team.id)) throw new Error('Esta equipe está atribuída a atividades. Troque o recurso delas antes de excluir.');
-      if (data.commitments.some(c => c.teamId === team.id)) throw new Error('Esta equipe tem compromissos na planilha semanal. Exclua as linhas antes de excluir a equipe.');
+      if (data.planTasks.some(t => t.teamId === team.id)) throw new Error('Esta equipe está vinculada ao médio prazo ou a uma linha de base. Preserve o cadastro enquanto houver vínculos.');
+      if (data.commitments.some(c => c.teamId === team.id)) throw new Error('Esta equipe tem compromissos na planilha semanal. Remova a alocação antes de excluir a equipe.');
       data.teams = data.teams.filter(t => t.id !== team.id); entityId = team.id; break;
     }
     case 'assign_team': {
@@ -436,10 +447,71 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const tasks = data.planTasks.filter(t => t.planId === plan.id);
       if (!tasks.length) throw new Error('Preencha o plano antes de definir a linha de base.');
       // A linha de base é o próprio plano congelado: mesma estrutura, aberta no mesmo cronograma.
-      const frozen = { ...base(), workId: plan.workId, month: plan.month, name: requireText(command.name, 'Nome da linha de base'), baselineOf: plan.id, frozenAt: now, createdBy: actorId };
+      const frozen = { ...base(), calendar: structuredClone(plan.calendar ?? DEFAULT_CALENDAR), version: plan.version ?? 0, workId: plan.workId, month: plan.month, name: requireText(command.name, 'Nome da linha de base'), baselineOf: plan.id, frozenAt: now, createdBy: actorId };
       data.plans.push(frozen);
-      for (const task of tasks) data.planTasks.push({ ...base(), planId: frozen.id, name: task.name, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, teamId: task.teamId, activityId: task.activityId, notes: task.notes, progress: task.progress, order: task.order, level: task.level });
+      const copies = new Map<string, string>();
+      for (const task of tasks) {
+        const copy = { ...task, ...base(), planId: frozen.id, sourceTaskId: task.id };
+        copies.set(task.id, copy.id); data.planTasks.push(copy);
+      }
+      const links = data.planDependencies.filter(d => copies.has(d.predecessorId) && copies.has(d.successorId));
+      for (const link of links) data.planDependencies.push({ ...link, ...base(), predecessorId: copies.get(link.predecessorId)!, successorId: copies.get(link.successorId)! });
       entityId = frozen.id; break;
+    }
+    case 'save_plan_revision': {
+      const plan = planFor(command.planId); checkWork(plan.workId);
+      if (plan.frozenAt || plan.baselineOf) throw new Error('Linha de base não aceita edição.');
+      const reason = requireText(command.reason, 'Motivo da atualização');
+      if (planSnapshot(plan, data.planTasks, data.planDependencies) !== command.expectedSnapshot) throw new Error('Outra pessoa alterou o cronograma. Atualize a página antes de salvar novamente; nenhuma alteração foi gravada.');
+      if (!Array.isArray(command.tasks) || command.tasks.length > 3000 || !Array.isArray(command.links) || command.links.length > 10000) throw new Error('Revisão excede o limite de 3000 tarefas ou 10000 vínculos.');
+      const before = data.planTasks.filter(t => t.planId === plan.id);
+      const ids = new Set<string>();
+      const tasks = command.tasks.map((input, index) => {
+        if (typeof input.id !== 'string' || !input.id || ids.has(input.id) || data.planTasks.some(t => t.id === input.id && t.planId !== plan.id)) throw new Error('Identificador de tarefa inválido ou repetido.');
+        ids.add(input.id);
+        const old = before.find(t => t.id === input.id);
+        if (!old && data.history.some(h => h.entityId === input.id)) throw new Error('Identificador de tarefa já utilizado.');
+        if (!Number.isFinite(input.progress) || input.progress < 0 || input.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+        if (!Number.isInteger(input.level) || input.level < 0 || input.level > (index ? command.tasks[index-1].level + 1 : 0)) throw new Error('Hierarquia inválida.');
+        if (input.teamId && !data.teams.some(t => t.id === input.teamId && t.workId === plan.workId)) throw new Error('Equipe deve pertencer à obra.');
+        validatePeriod(input.plannedStart, input.plannedEnd);
+        if (input.anchorStart) validateDate(input.anchorStart);
+        const summary = command.tasks[index+1]?.level > input.level;
+        if (summary && old && input.progress !== old.progress) throw new Error('Progresso de resumo é calculado.');
+        return { ...base(), ...old, id: input.id, planId: plan.id, name: requireText(input.name, 'Nome'),
+          plannedStart: input.plannedStart, plannedEnd: input.plannedEnd, progress: input.progress, level: input.level, order: index+1,
+          teamId: input.teamId || undefined, notes: typeof input.notes === 'string' ? input.notes : undefined,
+          duration: input.duration, anchorStart: input.anchorStart, version: (old?.version ?? 0) + 1, updatedAt: now };
+      });
+      const linkIds = new Set<string>();
+      const links = command.links.map(input => {
+        if (!input.id || linkIds.has(input.id) || data.planDependencies.some(l => l.id === input.id && !before.some(t => t.id === l.successorId))) throw new Error('Identificador de vínculo inválido.');
+        linkIds.add(input.id);
+        return { ...base(), id: input.id, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lagDays: input.lagDays, lagBusiness: input.lagBusiness !== false };
+      });
+      const calculated = scheduleTasks(tasks, links, command.calendar);
+      for (const task of calculated) {
+        const submitted = tasks.find(t => t.id === task.id)!;
+        if (submitted.plannedStart !== task.plannedStart || submitted.plannedEnd !== task.plannedEnd) throw new Error('Datas divergentes do cálculo. Revise o rascunho antes de salvar.');
+      }
+      const revision = newId();
+      for (const id of new Set([...before.map(t=>t.id), ...calculated.map(t=>t.id)])) {
+        const old=before.find(t=>t.id===id), next=calculated.find(t=>t.id===id);
+        const changes: Record<string, unknown> = {};
+        for (const field of ['name','plannedStart','plannedEnd','duration','anchorStart','teamId','notes','progress','level','order'] as const) {
+          if(JSON.stringify(old?.[field])!==JSON.stringify(next?.[field])) changes[field]={before:old?.[field]??null,after:next?.[field]??null};
+        }
+        const oldLinks=data.planDependencies.filter(l=>l.successorId===id).map(({predecessorId,type,lagDays,lagBusiness})=>({predecessorId,type,lagDays,lagBusiness}));
+        const nextLinks=links.filter(l=>l.successorId===id).map(({predecessorId,type,lagDays,lagBusiness})=>({predecessorId,type,lagDays,lagBusiness}));
+        if(JSON.stringify(oldLinks)!==JSON.stringify(nextLinks)) changes.predecessors={before:oldLinks,after:nextLinks};
+        if(Object.keys(changes).length) data.history.push({id:newId(),entityId:id,entityType:'planning',action:'plan_task_revision',authorId:actorId,occurredAt:now,changes:{revision,planId:plan.id,reason,fields:changes}});
+      }
+      const oldIds=new Set(before.map(t=>t.id));
+      data.planTasks=[...data.planTasks.filter(t=>t.planId!==plan.id),...calculated];
+      data.planDependencies=[...data.planDependencies.filter(l=>!oldIds.has(l.successorId)),...links];
+      data.history.push({id:revision,entityId:plan.id,entityType:'planning',action:'plan_revision',authorId:actorId,occurredAt:now,changes:{reason,calendar:{before:plan.calendar??DEFAULT_CALENDAR,after:command.calendar}}});
+      plan.calendar=structuredClone(command.calendar); plan.version=(plan.version??0)+1; touch(plan);
+      return plan.id;
     }
     case 'create_plan_task': case 'update_plan_task': {
       const plan = command.type === 'create_plan_task' ? planFor(command.planId) : planFor(taskFor(command.taskId).planId);
@@ -522,6 +594,23 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (!Number.isInteger(lagDays) || Math.abs(lagDays) > 365) throw new Error('A defasagem vai de -365 a 365 dias.');
       const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id, type: linkType, lagDays, lagBusiness: command.lagBusiness !== false };
       data.planDependencies.push(dependency); entityId = dependency.id; break;
+    }
+    case 'replace_plan_predecessors': {
+      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
+      if (!Array.isArray(command.links) || command.links.length > 100) throw new Error('Informe no máximo 100 predecessoras por operação.');
+      // Valida em uma cópia: até uma chamada direta mantém o estado intacto em caso de erro.
+      const draft = structuredClone(data);
+      const before = data.planDependencies.filter(d => d.successorId === task.id);
+      draft.planDependencies = draft.planDependencies.filter(d => d.successorId !== task.id);
+      for (const link of command.links) applyCommand(draft, {
+        type: 'link_plan_tasks', predecessorId: link.predecessorId, successorId: task.id,
+        linkType: link.linkType, lagDays: link.lagDays, lagBusiness: link.lagBusiness,
+      }, context);
+      data.planDependencies = draft.planDependencies;
+      data.history.push({ id: newId(), entityId: task.id, entityType: 'planning', action: 'plan_predecessors_changed', authorId: actorId, occurredAt: now,
+        changes: { before, after: data.planDependencies.filter(d => d.successorId === task.id) } });
+      entityId = task.id; break;
     }
     case 'unlink_plan_tasks': {
       const dependency = data.planDependencies.find(d => d.id === command.dependencyId); if (!dependency) throw new Error('Dependência não encontrada.');

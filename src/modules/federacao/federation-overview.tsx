@@ -95,9 +95,9 @@ export function FederationOverview({ workId }: { workId: string }) {
 
   return <div className="federation-page">
     <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-      <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{work.name} · Coordenação</p>
+      <div><p className="eyebrow">Aba 5 · {work.code} · {work.name}</p>
         <h1 className="page-title">Modelo federado</h1>
-        <p className="mt-1 text-sm text-slate-600">Escolha os modelos e as versões. Explore tudo em uma mesma cena.</p>
+        <p className="mt-1 text-sm text-slate-600">Os modelos IFC da obra numa mesma cena, para análise virtual dos projetos.</p>
       </div>
       <Link className="button-ghost min-h-10" href={workPath(workId, 'ifc')}>Arquivos IFC <ArrowUpRight size={16} aria-hidden /></Link>
     </header>

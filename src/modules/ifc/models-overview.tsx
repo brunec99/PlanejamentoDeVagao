@@ -87,8 +87,8 @@ export function ModelsOverview({ workId }: { workId: string }) {
   const columns = ['Versão', 'Arquivo', 'Arquivo original', 'Pavimentos lidos', 'Elementos', ...(transcriptions ? ['Transcrição e 3D'] : []), 'Enviado por', 'Quando'];
 
   return <>
-    <p className="eyebrow">{selected.work.code}</p>
-    <h1 className="page-title">Modelos IFC</h1>
+    <p className="eyebrow">Apoio · {selected.work.code} · alimenta o Modelo federado e o BIM 4D</p>
+    <h1 className="page-title">Arquivos IFC</h1>
     <p className="mt-1 max-w-3xl text-sm text-slate-500">O IFC entra aqui e sai em duas metades. Os dados são transcritos em tabelas — elementos, propriedades e quantidades — e a geometria é convertida para Fragments, um binário compacto que o visualizador 3D abre direto no navegador. As duas metades se reencontram pelo GlobalId, e é esse par que o repositório guarda. Guardar o arquivo .ifc original é opcional: nem o planejamento nem o 3D dependem dele. Todas as versões são preservadas: cada envio empilha uma versão nova, sem substituir as anteriores.</p>
 
     <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

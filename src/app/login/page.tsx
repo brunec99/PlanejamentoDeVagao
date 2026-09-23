@@ -16,8 +16,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <div className="h-8 w-px bg-slate-200" />
             <Image src="/logo-takt.png" alt="Takt Engenharia" width={150} height={84} className="h-9 w-auto object-contain" priority />
           </div>
-          <h1 className="text-xl font-bold leading-snug text-white">Planejamento Vagão</h1>
-          <p className="text-base font-light text-blue-100">Planejamento por período de takt</p>
+          <h1 className="text-xl font-bold leading-snug text-white">Sistema de Gestão de Projetos – ATR</h1>
+          <p className="text-base font-light text-blue-100">Cronogramas, vagões, modelo federado e BIM 4D</p>
         </div>
       </div>
 

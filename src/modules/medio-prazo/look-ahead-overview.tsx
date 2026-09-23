@@ -1,14 +1,15 @@
 'use client';
 import { useState } from 'react';
-import { CommandForm, Field, TextField, number, value } from '@/modules/planejamento/forms';
+import Link from 'next/link';
+import { Users } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
-import type { Activity, Team } from '@/domain/entities';
+import type { Activity } from '@/domain/entities';
 import { rollUpPlan, teamLoad, weightedProgress } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
-import { Gantt } from '@/modules/medio-prazo/gantt';
-import { formatDate, wagonLabel } from '@/shared/format';
+import { ScheduleSheet } from '@/modules/medio-prazo/schedule-sheet';
+import { formatDate, wagonLabel, workPath } from '@/shared/format';
 
 /** O vínculo formal entre os níveis é opcional e quase nunca preenchido, então a conferência
  * pareia pelo nome — sem acento, sem caixa e sem espaço repetido. É a mesma estratégia que o
@@ -22,6 +23,7 @@ export function LookAheadOverview({ workId }: { workId: string }) {
   const context = usePlanning();
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [planId, setPlanId] = useState('');
+  const [section, setSection] = useState<'window' | 'teams' | 'coverage' | 'history'>('window');
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
@@ -83,11 +85,17 @@ export function LookAheadOverview({ workId }: { workId: string }) {
   const teamLabel = (teamId?: string) => { const team = teams.find(t => t.id === teamId); return team ? `${team.company} · ${team.name}` : undefined; };
 
   return <>
-    <p className="eyebrow">{work.code}</p>
-    <h1 className="page-title">Planejamento de médio prazo</h1>
-    <p className="mt-1 text-sm text-slate-500">Look Ahead de três meses: a janela vai de hoje ({formatDate(today)}) até {formatDate(windowEnd)} e desliza junto com o dia atual — cada dia entra uma data nova no fim e sai uma no começo, não é uma revisão trimestral.</p>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div><p className="eyebrow">Aba 3 · {work.code} · {work.name}</p><h1 className="page-title">Cronograma de médio prazo</h1><p className="mt-1 text-sm text-slate-500">Gantt do mês com alocação de recursos, análise de superalocação e linha de base com cálculo de atrasos.</p></div>
+      <Link className="button-ghost" href={workPath(workId, 'configuracoes')}><Users size={16} aria-hidden />Configurar recursos</Link>
+    </div>
+    <ScheduleSheet workId={workId} />
+    <div className="mb-4 mt-8 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-bold text-slate-800">Apoio ao planejamento</h2><p className="mt-1 text-xs text-slate-500">Janela móvel de 90 dias: {formatDate(today)} a {formatDate(windowEnd)}.</p></div></div>
+    <div className="flex flex-wrap gap-1 border-b border-slate-200" aria-label="Informações de apoio ao planejamento">
+      {([{ id: 'window', label: 'Próximos 90 dias' }, { id: 'teams', label: 'Carga das equipes' }, { id: 'coverage', label: 'Cobertura entre níveis' }, { id: 'history', label: 'Histórico de avanço' }] as const).map(tab => <button key={tab.id} type="button" onClick={() => setSection(tab.id)} aria-pressed={section === tab.id} className={`min-h-11 border-b-2 px-4 text-sm font-semibold ${section === tab.id ? 'border-blue-600 text-blue-800' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>{tab.label}</button>)}
+    </div>
 
-    <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {section === 'window' && <><div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard label="Atividades na janela" value={lookAhead.length} />
       <StatCard label="Atividades sem equipe" value={withoutTeam} tone={withoutTeam > 0 ? 'warning' : 'default'} />
       <StatCard label="Equipes em sobrecarga" value={overloaded} tone={overloaded > 0 ? 'danger' : 'default'} />
@@ -130,22 +138,16 @@ export function LookAheadOverview({ workId }: { workId: string }) {
                 })}</tbody>
               </table>
             </div>}
-    </section>
+    </section></>}
 
-    <Panel title="Equipes" tourId="medio-teams">
-      <p className="text-sm leading-6 text-slate-600">A capacidade semanal é o número de atividades simultâneas que a equipe consegue executar. A carga soma os dois lugares onde a equipe é comprometida dentro da janela de três meses: as atividades do cronograma e as linhas do plano do mês — linha de base congelada não entra na conta. Empresa e equipe cadastradas aqui são as que a planilha de curto prazo oferece.</p>
-      <div className="my-4">
-        <CommandForm title="Cadastrar equipe" submit="Cadastrar equipe" command={d => ({ type: 'create_team', workId, company: value(d, 'company'), name: value(d, 'name'), weeklyCapacity: number(d, 'weeklyCapacity') })}>
-          <TextField name="company" label="Empresa" />
-          <TextField name="name" label="Nome da equipe" />
-          <TextField name="weeklyCapacity" label="Capacidade semanal (atividades simultâneas)" type="number" min={1} step="1" defaultValue={1} />
-        </CommandForm>
-      </div>
+    {section === 'teams' && <div className="my-4"><Panel title="Carga das equipes na janela" tourId="medio-teams">
+      <p className="text-sm leading-6 text-slate-600">A capacidade semanal é o número de atividades simultâneas que a equipe consegue executar. A carga soma os dois lugares onde a equipe é comprometida dentro da janela de três meses: as atividades do cronograma e as linhas do plano do mês — linha de base congelada não entra na conta. O cadastro em Configurações da obra abastece os recursos do plano do mês e da planilha de curto prazo.</p>
+      <div className="my-4"><Link className="text-link inline-flex min-h-10 items-center gap-2 text-sm" href={workPath(workId, 'configuracoes')}><Users size={15} aria-hidden />Gerenciar empreiteiros e equipes da obra</Link></div>
       {teams.length === 0
         ? <Empty>Nenhuma equipe cadastrada nesta obra. Sem equipes não é possível identificar quem executa cada atividade nem apurar sobrecarga.</Empty>
         : <div className="-mx-1 overflow-x-auto custom-scrollbar" role="region" aria-label="Equipes da obra" tabIndex={0}>
             <table className="data-table min-w-[980px]">
-              <thead><tr>{['Equipe', 'Empresa', 'Capacidade semanal', 'Do cronograma', 'Do plano do mês', 'Total na janela', 'Situação', 'Ações'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
+              <thead><tr>{['Equipe', 'Empresa', 'Capacidade semanal', 'Do cronograma', 'Do plano do mês', 'Total na janela', 'Situação'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
               <tbody>{loads.map(load => <tr key={load.team.id}>
                 <th scope="row">{load.team.name}</th>
                 <td className="whitespace-nowrap">{load.team.company}</td>
@@ -154,15 +156,12 @@ export function LookAheadOverview({ workId }: { workId: string }) {
                 <td className="tabular-nums">{load.tasks}</td>
                 <td className="font-semibold tabular-nums text-slate-800">{load.assigned}</td>
                 <td className={load.overloaded ? 'font-semibold text-amber-600' : ''}>{load.overloaded ? `Sobrecarga · ${load.assigned - load.capacity} além da capacidade` : 'Dentro da capacidade'}</td>
-                <td>{actor.role !== 'viewer' && <DeleteTeam team={load.team} />}</td>
               </tr>)}</tbody>
             </table>
           </div>}
-    </Panel>
+    </Panel></div>}
 
-    <Gantt workId={workId} />
-
-    <div className="my-6"><Panel title="Cobertura entre os níveis">
+    {section === 'coverage' && <div className="my-4"><Panel title="Cobertura entre os níveis">
       <p className="text-sm leading-6 text-slate-600">Confere se o que a janela diz que vem tem linha no plano do mês, e se o que está no plano do mês aparece na planilha de alguma semana que cubra o período dele. O pareamento é pelo nome normalizado — sem acento, sem caixa e sem espaço repetido —, não pelo vínculo formal: é conferência, não vínculo, e ela erra quando o nome muda de um nível para o outro.</p>
 
       {!plan
@@ -221,9 +220,9 @@ export function LookAheadOverview({ workId }: { workId: string }) {
           </>}
 
       <div className="mt-5"><Callout tone="info">Isto é sugestão, nunca exigência: nada aqui bloqueia o plano, cria linha sozinho nem pede que você vincule uma coisa à outra. A planilha da semana se sustenta sozinha por decisão de quem planeja — ela mistura frentes de obra com tarefas que não existem no cronograma, e uma linha fora destas listas não está errada.</Callout></div>
-    </Panel></div>
+    </Panel></div>}
 
-    <section className="panel overflow-hidden" aria-labelledby="entries-title">
+    {section === 'history' && <><section className="panel my-4 overflow-hidden" aria-labelledby="entries-title">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
         <h2 id="entries-title" className="text-sm font-bold text-slate-800">Histórico de lançamentos</h2>
         <span className="badge-muted">{entries.length} {entries.length === 1 ? 'lançamento' : 'lançamentos'}</span>
@@ -248,21 +247,6 @@ export function LookAheadOverview({ workId }: { workId: string }) {
       {entries.length > shown.length && <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Mostrando os {shown.length} lançamentos mais recentes de {entries.length}. O histórico completo de cada atividade fica no detalhe do vagão.</p>}
     </section>
 
-    <div className="my-6"><Callout tone="info">Cada lançamento fica registrado com a sua data: o percentual da atividade é sempre o valor corrente, e é a série datada que permite comparar uma semana com a anterior.</Callout></div>
+    <div className="my-4"><Callout tone="info">Cada lançamento fica registrado com a sua data: o percentual da atividade é sempre o valor corrente, e é a série datada que permite comparar uma semana com a anterior.</Callout></div></>}
   </>;
-}
-
-function DeleteTeam({ team }: { team: Team }) {
-  const context = usePlanning();
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  if (context.state !== 'ready') return null;
-  return <div className="space-y-2">
-    <button type="button" className="button-ghost" disabled={busy} aria-label={`Excluir a equipe ${team.name} da empresa ${team.company}`} onClick={async () => {
-      if (busy) return; setBusy(true); setError('');
-      try { await context.execute({ type: 'delete_team', teamId: team.id }); }
-      catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível excluir a equipe.'); }
-      finally { setBusy(false); }
-    }}>{busy ? 'Excluindo…' : 'Excluir'}</button>
-    {error && <Callout tone="danger" role="alert">{error}</Callout>}
-  </div>;
 }

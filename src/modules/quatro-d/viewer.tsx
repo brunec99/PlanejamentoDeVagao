@@ -5,15 +5,18 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 import type { FragmentsModel, FragmentsModels, MaterialDefinition, RenderedFaces } from '@thatopen/fragments';
 import type { LinkRule } from '@/domain/entities';
 import { serviceForElement, type ElementFacts } from '@/domain/rules';
+import type { ServiceLook } from './simulation';
 import { NO_CLASS, NO_STOREY, readElementMap, type MapRow } from '@/modules/ifc/element-map';
 import { frame, loadFragments, MissingGeometry, type Federation } from '@/modules/ifc/fragments-stage';
 
 type Three = typeof ThreeNS;
-export interface ViewerService { name: string; color: string; percent: number | undefined }
+/** Serviço como a simulação quer vê-lo no quadro atual: cor, intensidade e se aparece. */
+export interface ViewerService { name: string; look: ServiceLook }
 export interface ViewerJob { token: number; versions: { id: string; label: string }[] }
 
 const NEUTRAL = '#94a3b8';
 const NO_SERVICE = '';
+const NEUTRAL_KEY = 'neutral';
 const count = (value: number) => value.toLocaleString('pt-BR');
 
 interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls }
@@ -22,7 +25,12 @@ interface Item { model: FragmentsModel; localId: number; storey: string; ifcClas
 interface Loaded { fragments: FragmentsModels; models: FragmentsModel[]; faces: RenderedFaces; items: Item[]; declared: number; unconverted: number }
 /** localId só vale dentro do seu modelo, então toda cor e todo recorte vão por modelo. */
 interface Slice { model: FragmentsModel; localIds: number[] }
-interface Grouping { load: Loaded; byService: { service: string; slices: Slice[] }[]; byStorey: Map<string, Slice[]> }
+/** Célula = serviço × pavimento. É a menor unidade que a simulação e o recorte mudam, então cada
+ * quadro manda no máximo um comando por célula e por modelo — e só para as que mudaram. */
+interface Cell { key: string; service: string; storey: string; slices: Slice[] }
+interface Grouping { load: Loaded; cells: Cell[] }
+/** O que já foi mandado ao Fragments, para aplicar só a diferença no quadro seguinte. */
+interface Applied { grouping: Grouping; storey: string; cells: Map<string, { visible: boolean; material: string }> }
 
 /** A regra casa com o que o arquivo diz do elemento. A transcrição dá nome à ausência para poder
  * filtrar por ela na tela; aqui a ausência volta a ser vazia, que é o que a regra entende. */
@@ -31,24 +39,29 @@ const factsOf = (row: { storey: string; ifcClass: string }): ElementFacts => ({
   tipo: row.ifcClass === NO_CLASS ? '' : row.ifcClass,
 });
 
+const lookKey = (look: ServiceLook | undefined) => look ? `${look.display}|${look.color}|${look.strength}` : NEUTRAL_KEY;
+
 /** Avanço parcial vira tom e opacidade do serviço inteiro. Nunca "feito/não feito" por elemento:
  * o percentual é do serviço e não diz quais elementos foram executados. */
-function materialFor(three: Three, faces: RenderedFaces, service: ViewerService | undefined): MaterialDefinition {
-  if (!service) return { color: new three.Color(NEUTRAL), opacity: 0.22, transparent: true, depthWrite: false, renderedFaces: faces };
-  const full = new three.Color(service.color);
+function materialFor(three: Three, faces: RenderedFaces, look: ServiceLook | undefined): MaterialDefinition {
+  if (!look) return { color: new three.Color(NEUTRAL), opacity: 0.22, transparent: true, depthWrite: false, renderedFaces: faces };
+  const full = new three.Color(look.color);
   const pale = full.clone().lerp(new three.Color('#ffffff'), 0.78);
-  const ratio = Math.min(1, Math.max(0, (service.percent ?? 0) / 100));
+  // Fantasma: o serviço ainda não começou nesta data, mas fica como referência de volume.
+  if (look.display === 'ghost') return { color: pale, opacity: 0.12, transparent: true, depthWrite: false, renderedFaces: faces };
+  const ratio = Math.min(1, Math.max(0, look.strength));
   const opacity = 0.32 + 0.68 * ratio;
   return { color: new three.Color().lerpColors(pale, full, ratio), opacity, transparent: opacity < 1, depthWrite: opacity > 0.85, renderedFaces: faces };
 }
 
 /** Junta os localIds por chave e por modelo, para mandar um comando por grupo em vez de um por
  * elemento: a conversa com o worker é assíncrona e um modelo tem centenas de milhares de itens. */
-function push(index: Map<string, Slice[]>, key: string, item: Item) {
-  let slices = index.get(key);
-  if (!slices) { slices = []; index.set(key, slices); }
-  const slice = slices.find(candidate => candidate.model === item.model);
-  if (slice) slice.localIds.push(item.localId); else slices.push({ model: item.model, localIds: [item.localId] });
+function push(index: Map<string, Cell>, service: string, item: Item) {
+  const key = `${service}\u0000${item.storey}`;
+  let cell = index.get(key);
+  if (!cell) { cell = { key, service, storey: item.storey, slices: [] }; index.set(key, cell); }
+  const slice = cell.slices.find(candidate => candidate.model === item.model);
+  if (slice) slice.localIds.push(item.localId); else cell.slices.push({ model: item.model, localIds: [item.localId] });
 }
 
 export function FourDViewer({ job, rules, services, storey, onReport, onError }: {
@@ -204,72 +217,104 @@ export function FourDViewer({ job, rules, services, storey, onReport, onError }:
     };
   }, [job, ready, onError]);
 
-  // Agrupamento: o serviço de cada elemento sai das regras, então os grupos são refeitos quando
+  // Agrupamento: o serviço de cada elemento sai das regras, então as células são refeitas quando
   // as regras mudam — nunca quando só a data muda, que é repintura.
   useEffect(() => {
     if (!loaded) return;
-    const byService = new Map<string, Slice[]>();
-    const byStorey = new Map<string, Slice[]>();
+    const cells = new Map<string, Cell>();
     let linked = 0;
     for (const item of loaded.items) {
       const service = serviceForElement(rules, factsOf(item)) ?? NO_SERVICE;
       if (service !== NO_SERVICE) linked++;
-      push(byService, service, item);
-      push(byStorey, item.storey, item);
+      push(cells, service, item);
     }
     onReport({ elements: loaded.items.length, linked });
-    setGrouping({ load: loaded, byService: [...byService].map(([service, slices]) => ({ service, slices })), byStorey });
+    setGrouping({ load: loaded, cells: [...cells.values()] });
   }, [loaded, rules, onReport]);
 
-  // Pintura: trocar a data da consulta muda o percentual de cada serviço, e com ele o tom. Só o
-  // material de cada grupo é reaplicado — a geometria convertida continua carregada.
+  // Pintura por quadro. A simulação troca a data várias vezes por segundo; cada troca só guarda o
+  // alvo mais recente e pede um requestAnimationFrame. Se a pintura anterior ainda conversa com o
+  // worker, o quadro é pulado (fica marcado como pendente) em vez de enfileirado: ao terminar, a
+  // pintura aplica direto o alvo mais novo. Nada disso recarrega geometria.
+  const targetRef = useRef<{ grouping: Grouping; services: ViewerService[]; storey: string } | undefined>(undefined);
+  const appliedRef = useRef<Applied | undefined>(undefined);
+  const runRef = useRef({ busy: false, dirty: false, raf: 0 });
+
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || !grouping) return;
-    let cancelled = false;
+    targetRef.current = grouping ? { grouping, services, storey } : undefined;
+    const run = runRef.current;
 
     const paint = async () => {
-      const byName = new Map(services.map(service => [service.name, service]));
+      const target = targetRef.current;
+      const stage = stageRef.current;
+      if (!target || !stage) return;
+      run.busy = true; run.dirty = false;
+      const { grouping: current, storey: cut } = target;
+      const looks = new Map(target.services.map(service => [service.name, service.look]));
       try {
-        for (const group of grouping.byService) {
-          const definition = materialFor(stage.three, grouping.load.faces, group.service === NO_SERVICE ? undefined : byName.get(group.service));
-          for (const slice of group.slices) {
-            if (cancelled) return;
-            await slice.model.highlight(slice.localIds, definition);
+        let applied = appliedRef.current;
+        // Carga nova: tudo começou visível e neutro (a carga pinta a malha inteira de neutro).
+        if (!applied || applied.grouping !== current) {
+          applied = { grouping: current, storey: '', cells: new Map(current.cells.map(cell => [cell.key, { visible: true, material: NEUTRAL_KEY }])) };
+          appliedRef.current = applied;
+        }
+        let changed = false;
+        // O recorte por pavimento também esconde a malha convertida sem linha transcrita, que não
+        // pertence a célula nenhuma; por isso a troca de recorte mexe no modelo inteiro primeiro.
+        if (applied.storey !== cut) {
+          const hideAll = cut !== '';
+          for (const model of current.load.models) {
+            if (targetRef.current?.grouping !== current) return;
+            if (hideAll) await model.setVisible(undefined, false); else await model.resetVisible();
           }
+          for (const state of applied.cells.values()) state.visible = !hideAll;
+          applied.storey = cut;
+          changed = true;
         }
-        if (cancelled) return;
-        await grouping.load.fragments.update(true);
-      } catch { /* federação descartada no meio: a carga seguinte repinta tudo. */ }
+        for (const cell of current.cells) {
+          if (targetRef.current?.grouping !== current) return;
+          const look = cell.service === NO_SERVICE ? undefined : looks.get(cell.service);
+          const visible = (!cut || cell.storey === cut) && look?.display !== 'hidden';
+          const material = lookKey(look);
+          const state = applied.cells.get(cell.key) ?? { visible: true, material: NEUTRAL_KEY };
+          if (visible && state.material !== material) {
+            const definition = materialFor(stage.three, current.load.faces, look);
+            for (const slice of cell.slices) await slice.model.highlight(slice.localIds, definition);
+            state.material = material; changed = true;
+          }
+          if (state.visible !== visible) {
+            for (const slice of cell.slices) await slice.model.setVisible(slice.localIds, visible);
+            state.visible = visible; changed = true;
+          }
+          applied.cells.set(cell.key, state);
+        }
+        if (changed && targetRef.current?.grouping === current) await current.load.fragments.update(true);
+      } catch {
+        // Federação descartada no meio: a carga seguinte recomeça do zero.
+        appliedRef.current = undefined;
+      } finally {
+        run.busy = false;
+        if (run.dirty) schedule();
+      }
     };
-    paint();
 
-    return () => { cancelled = true; };
-  }, [grouping, services]);
+    function schedule() {
+      if (run.raf) return;
+      run.raf = requestAnimationFrame(() => {
+        run.raf = 0;
+        if (run.busy) { run.dirty = true; return; }
+        void paint();
+      });
+    }
 
-  // Recorte por pavimento: esconde e mostra, sem tocar na cor nem recarregar nada.
-  useEffect(() => {
-    if (!grouping) return;
-    let cancelled = false;
+    if (grouping) schedule();
+  }, [grouping, services, storey]);
 
-    const cut = async () => {
-      try {
-        for (const model of grouping.load.models) {
-          if (cancelled) return;
-          if (storey) await model.setVisible(undefined, false); else await model.resetVisible();
-        }
-        for (const slice of storey ? grouping.byStorey.get(storey) ?? [] : []) {
-          if (cancelled) return;
-          await slice.model.setVisible(slice.localIds, true);
-        }
-        if (cancelled) return;
-        await grouping.load.fragments.update(true);
-      } catch { /* federação descartada no meio: a carga seguinte reaplica o recorte. */ }
-    };
-    cut();
-
-    return () => { cancelled = true; };
-  }, [grouping, storey]);
+  useEffect(() => () => {
+    const run = runRef.current;
+    if (run.raf) cancelAnimationFrame(run.raf);
+    run.raf = 0;
+  }, []);
 
   const empty = loaded !== undefined && loaded.items.length === 0;
   const scene = webgl && !busy && !failure && loaded !== undefined && loaded.items.length > 0;

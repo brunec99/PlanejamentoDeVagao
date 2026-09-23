@@ -4,7 +4,7 @@ import { Building2, Settings, LogOut } from 'lucide-react';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
-import { WorkNav } from '@/modules/layout/work-nav';
+import { WorkNav, WorkTabsMobile } from '@/modules/layout/work-nav';
 import { TourProvider } from '@/modules/tour/tour-provider';
 import { TourOverlay } from '@/modules/tour/tour-overlay';
 import { HelpButton } from '@/modules/tour/help-button';
@@ -24,13 +24,17 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <a className="skip-link" href="#main">Ir para o conteúdo</a>
       <SidebarWrapper>
         <div className="space-y-3 border-b border-slate-100 p-5">
-          <Link href="/obras" className="block space-y-2.5">
-            <Image src="/logo-atr.png" alt="ATR Incorporadora" width={140} height={61} className="h-7 w-auto object-contain" priority />
-            <Image src="/logo-takt.png" alt="Takt Engenharia" width={200} height={112} className="h-8 w-auto object-contain" priority />
+          <Link href="/obras" className="block space-y-3">
+            <div className="flex items-center gap-3">
+              <Image src="/logo-atr.png" alt="ATR Incorporadora" width={140} height={61} className="h-7 w-auto object-contain" priority />
+              <div className="h-7 w-px bg-slate-200" />
+              <Image src="/logo-takt.png" alt="Takt Engenharia" width={200} height={112} className="h-7 w-auto object-contain" priority />
+            </div>
+            <p className="text-[13px] font-bold leading-tight text-slate-800">Sistema de Gestão de Projetos<span className="text-blue-700"> · ATR</span></p>
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4">
-          <p className="eyebrow mb-1 mt-1 px-3">Planejamento</p>
+          <p className="eyebrow mb-1 mt-1 px-3">Empreendimentos</p>
           <div className="space-y-0.5">
             <Link href="/obras" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-900">
               <Building2 size={17} className="shrink-0 text-blue-600" />Obras
@@ -66,13 +70,14 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 md:hidden">
           <Link href="/obras" className="flex items-center gap-2.5">
             <Image src="/logo-atr.png" alt="ATR Incorporadora" width={90} height={39} className="h-6 w-auto object-contain" priority />
-            <Image src="/logo-takt.png" alt="Takt Engenharia" width={110} height={62} className="h-7 w-auto object-contain" priority />
+            <span className="text-sm font-bold leading-tight text-slate-800">Gestão de Projetos<span className="text-blue-700"> · ATR</span></span>
           </Link>
           <div className="flex items-center gap-3">
             <HelpButton variant="icon" />
             {profile?.role === 'admin' && <Link href="/configuracoes" className="text-slate-500"><Settings size={18} /></Link>}
           </div>
         </header>
+        <WorkTabsMobile />
         <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 p-5 md:p-8">
           {children}
         </main>

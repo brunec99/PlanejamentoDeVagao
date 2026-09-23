@@ -16,18 +16,17 @@ export function BaselinesOverview({ workId }: { workId: string }) {
   const person = (id: string) => data.users.find(u => u.id === id)?.name ?? id;
 
   return <>
-    <p className="eyebrow">{selected.work.code}</p>
-    <h1 className="page-title">Planejamento de longo prazo</h1>
-    <p className="mt-1 text-sm text-slate-500">Linha de Balanço da obra e as linhas de base salvas para comparação com o realizado.</p>
+    <h2 className="mt-8 text-lg font-bold text-slate-900">Linhas de base</h2>
+    <p className="mt-1 text-sm text-slate-500">Fotografias imutáveis do cronograma, usadas na Linha de Balanço e na curva de avanço para comparar com o realizado.</p>
 
-    <div className="my-6">
+    <div className="my-5">
       <CommandForm title="Definir linha de base" submit="Definir linha de base" command={d => ({ type: 'create_baseline', workId, name: value(d, 'name') })}>
         <TextField name="name" label="Nome da linha de base" />
       </CommandForm>
     </div>
 
     <section data-tour="longo-baselines" className="panel overflow-hidden">
-      <h2 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">Linhas de base</h2>
+      <h3 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">Linhas de base salvas</h3>
       {baselines.length === 0
         ? <div className="p-5"><Empty>Nenhuma linha de base salva. Cada acionamento cria um registro novo, sem substituir os anteriores.</Empty></div>
         : <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Linhas de base" tabIndex={0}>

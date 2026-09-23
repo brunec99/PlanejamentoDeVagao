@@ -5,7 +5,7 @@ import { WorkActions } from '@/modules/planejamento/planning-actions';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
-import { planningPath } from '@/shared/format';
+import { workPath } from '@/shared/format';
 
 export function WorksOverview() {
   const context = usePlanning();
@@ -24,7 +24,7 @@ export function WorksOverview() {
           const selected = selectWorkPlanning(planning, work.id)!;
           const terminais = selected.wagons.filter(w => w.status === 'terminal').length;
           const atividades = planning.data.activities.filter(a => selected.wagons.some(w => w.id === a.wagonId)).length;
-          return <Link href={planningPath(work.id)} key={work.id} className="card-accent group border-blue-100 transition-shadow hover:shadow-md">
+          return <Link href={workPath(work.id, 'longo-prazo')} key={work.id} className="card-accent group border-blue-100 transition-shadow hover:shadow-md">
             <div className="card-accent-bar from-blue-500 to-cyan-400" />
             <div className="flex items-start justify-between gap-3 p-5">
               <div className="min-w-0">

@@ -1,8 +1,17 @@
-# Sistema de Planejamento Vagão
+# Sistema de Gestão de Projetos – ATR
 
 Aplicação em Next.js, TypeScript, Tailwind CSS e App Router. O vagão é um **período temporal**, sem pavimento ou local próprio. Os locais pertencem às atividades.
 
-A interface está organizada em três níveis de planejamento — longo, médio e curto prazo — mais o módulo de vagões, que continua sendo onde a execução é registrada. Veja [Níveis de planejamento](#níveis-de-planejamento).
+A interface de cada obra é organizada em **seis abas numeradas**, do planejamento macro para a semana e depois para o modelo:
+
+1. **Cronograma de longo prazo** — Linha de Balanço e módulo de restrições (mais curva de avanço e linhas de base).
+2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
+3. **Cronograma de médio prazo** — Gantt do mês, alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos.
+4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento.
+5. **Modelo federado** — os IFCs da obra numa mesma cena, para análise virtual dos projetos.
+6. **BIM 4D** — o cronograma de longo prazo ligado ao modelo federado, com simulação animada.
+
+Abaixo das abas, o grupo **Apoio** reúne Arquivos IFC, Dívidas, Integrações e Configurações da obra. Veja [Níveis de planejamento](#níveis-de-planejamento).
 
 ## Executar
 
@@ -54,15 +63,15 @@ Datas são datas civis ISO. O calendário de dias úteis considera segunda a sex
 
 **Continuidade:** o estado dos três níveis, as decisões tomadas e as pendências ficam em [Planejamento em três níveis](docs/planejamento-tres-niveis.md), que acompanha cada alteração de longo, médio ou curto prazo — o equivalente ao que [IFC e modelo federado](docs/ifc-federacao.md) faz para o BIM.
 
-A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`), que deduz a obra pela URL e mostra o nome dela junto das seções: "Planejamento de longo prazo", "Planejamento de médio prazo", "Planejamento de curto prazo", "Vagões", "Modelos IFC", "Modelo federado", "BIM 4D", "Dívidas" e "Integrações". Fora de uma obra, a lateral não mostra essas seções.
+A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`), que deduz a obra pela URL e mostra o nome dela, as seis abas numeradas (`WORK_TABS`, cada uma com título e resumo) e o grupo Apoio. No celular a lateral some e as seis abas viram uma faixa rolável sob o cabeçalho (`WorkTabsMobile`). Cada aba abre com o mesmo cabeçalho (`src/modules/layout/tab-header.tsx`): número da aba, código e nome da obra, título e o que a aba responde. Abrir uma obra leva à aba 1. Fora de uma obra, a lateral não mostra essas seções.
 
-**Longo prazo** (`/obras/{obraId}/longo-prazo`): define e lista as linhas de base da obra. Cada acionamento cria um registro novo, que copia o número e as datas planejadas dos vagões e as datas, o local e o peso das atividades. Reprogramar o planejamento atual nunca altera uma linha de base já salva — planejamento atual, linha de base e realizado permanecem registros distintos. A mesma tela traz o gráfico de Linha de Balanço: cada serviço é uma linha avançando pelos locais ao longo do tempo, com marcação de hoje, alternância para visão de tabela e sobreposição pontilhada da linha de base escolhida para comparação.
+**Longo prazo** (`/obras/{obraId}/longo-prazo`, aba 1): a tela abre com a Linha de Balanço, seguida do módulo de restrições, da curva de avanço e das linhas de base. Define e lista as linhas de base da obra. Cada acionamento cria um registro novo, que copia o número e as datas planejadas dos vagões e as datas, o local e o peso das atividades. Reprogramar o planejamento atual nunca altera uma linha de base já salva — planejamento atual, linha de base e realizado permanecem registros distintos. A mesma tela traz o gráfico de Linha de Balanço: cada serviço é uma linha avançando pelos locais ao longo do tempo, com marcação de hoje, alternância para visão de tabela e sobreposição pontilhada da linha de base escolhida para comparação.
 
 A mesma tela traz a **curva de avanço acumulado**: planejado contra executado ao longo do tempo, que é a leitura que responde se a obra está adiantada ou atrasada — a Linha de Balanço responde onde. O planejado vem da linha de base escolhida, e a tela diz quando está usando o planejamento atual em vez dela: comparar o executado com um planejamento já reprogramado é comparar a obra com a desculpa dela. O planejado supõe avanço linear de cada frente entre início e término, aproximação declarada na tela; o executado não é aproximado, sai dos lançamentos datados, e por isso a linha para em hoje — prolongá-la inventaria medição. O desvio aparece em pontos percentuais e, quando é possível calcular sem inventar, em dias.
 
-Também é aqui que fica o **quadro de pendências**, em três colunas. Cada pendência é ligada a uma atividade e a um lead time em dias, e o limite de resolução não é digitado: o servidor calcula a partir do **início previsto da atividade menos o lead time**, porque o prazo de obtenção precisa caber antes de a frente começar. O card abre em detalhe com a descrição completa, a atividade vinculada, o lead time e a origem da data. Se a atividade for reprogramada depois, o card mostra o limite recalculado e sinaliza a divergência em relação à data gravada. Quem preferir continuar digitando a data pode deixar o lead time em branco.
+Também é aqui que fica o **módulo de restrições** (antes chamado "Pendências" na tela — a entidade sempre foi `Restriction`, e "pendência" continua sendo o nome do item de terminalidade no vagão), em três colunas. Cada restrição é ligada a uma atividade e a um lead time em dias, e o limite de resolução não é digitado: o servidor calcula a partir do **início previsto da atividade menos o lead time**, porque o prazo de obtenção precisa caber antes de a frente começar. O card abre em detalhe com a descrição completa, a atividade vinculada, o lead time e a origem da data. Se a atividade for reprogramada depois, o card mostra o limite recalculado e sinaliza a divergência em relação à data gravada. Quem preferir continuar digitando a data pode deixar o lead time em branco.
 
-**Médio prazo** (`/obras/{obraId}/medio-prazo`): o **plano do mês**, escrito do zero. A tela nasce em branco — nada vem importado — e o planejador cria um plano por mês e escreve as linhas: nome, início, término, duração, recurso, predecessora e anotação. A leitura é a do MS Project: numeração de item, predecessoras pelo número da linha, setas da rede e a barra na régua de tempo.
+**Médio prazo** (`/obras/{obraId}/medio-prazo`, aba 3): abaixo da grade ficam a **alocação de recursos semana a semana**, com superalocação por equipe, e a **linha de base e atrasos**, com a variação de início e término em dias úteis — detalhes em [Planejamento em três níveis](docs/planejamento-tres-niveis.md). O **plano do mês**, escrito do zero. A tela nasce em branco — nada vem importado — e o planejador cria um plano por mês e escreve as linhas: nome, início, término, duração, recurso, predecessora e anotação. A leitura é a do MS Project: numeração de item, predecessoras pelo número da linha, setas da rede e a barra na régua de tempo.
 
 O plano tem **item e subitem**. A estrutura é o recuo, como o MS Project guarda: `PlanTask.level`, e o pai de uma linha é a anterior mais próxima com nível menor — não existe `parentId`. Recuar leva a subárvore inteira, e excluir um item exclui os subitens dele; deixá-los órfãos reescreveria a estrutura por conta própria.
 
@@ -118,7 +127,7 @@ Nada disso entra no snapshot do planejamento. Um modelo real tem centenas de mil
 
 Os vínculos elemento a elemento **não são armazenados**: só as regras são. Cada comando trafega o snapshot inteiro do planejamento, e materializar dezenas de milhares de elementos tornaria toda gravação proporcional ao tamanho do modelo. O vínculo é resolvido na visualização, a partir das regras.
 
-**BIM 4D** (`/obras/{obraId}/quatro-d`): reúne as versões escolhidas num modelo federado — a mesma geometria convertida do visualizador —, colore os elementos pelo serviço vinculado por regra e responde a uma data. O executado até a data vem do histórico datado (o último lançamento de cada atividade até aquele dia), e uma linha de base pode ser escolhida para comparação. Há recorte por pavimento e uma tabela serviço × vagão com a mesma informação do 3D, para a tela seguir utilizável sem WebGL. O modelo só é carregado por ação explícita.
+**BIM 4D** (`/obras/{obraId}/quatro-d`, aba 6): anima o cronograma de longo prazo sobre o modelo, com reproduzir/pausar, passo de dia, semana ou mês e três modos (Planejado, Executado e Planejado × executado) — detalhes em [IFC e modelo federado](docs/ifc-federacao.md). Reúne as versões escolhidas num modelo federado — a mesma geometria convertida do visualizador —, colore os elementos pelo serviço vinculado por regra e responde a uma data. O executado até a data vem do histórico datado (o último lançamento de cada atividade até aquele dia), e uma linha de base pode ser escolhida para comparação. Há recorte por pavimento e uma tabela serviço × vagão com a mesma informação do 3D, para a tela seguir utilizável sem WebGL. O modelo só é carregado por ação explícita.
 
 ### O que ainda não existe
 
