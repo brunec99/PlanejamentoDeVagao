@@ -9,7 +9,7 @@ export type TourKey = 'obras' | 'longoPrazo' | 'medioPrazo' | 'curtoPrazo' | 'pl
 
 export const tours: Record<TourKey, TourStep[]> = {
   obras: [
-    { title: 'Bem-vindo ao Sistema de Gestão de Projetos – ATR', body: 'Este tour explica a tela em que você está. Use "Próximo" para avançar e "Sair" a qualquer momento — ele não altera nada, é só um guia.' },
+    { title: 'Bem-vindo ao Obra 360', body: 'Este tour explica a tela em que você está. Use "Próximo" para avançar e "Sair" a qualquer momento — ele não altera nada, é só um guia.' },
     { target: 'obras-actions', title: 'Cadastrar obra', body: 'Cria uma nova obra no sistema. Depois disso, use Configurações para liberar o acesso de outros usuários a ela.' },
     { target: 'obras-grid', title: 'Suas obras', body: 'Cada cartão é uma obra que você tem acesso. Os números mostram quantos vagões existem, quantos já são terminais e quantas atividades estão planejadas. Clique num cartão para abrir o planejamento.' },
   ],

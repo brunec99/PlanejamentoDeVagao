@@ -117,3 +117,7 @@ Premissas declaradas: atividade concluída continua contando carga, igual ao `te
 ### Aba 1 — longo prazo como leitura do Prevision (23/09/2026)
 
 A pedido do usuário, a aba 1 passou a dizer, na descrição e num aviso logo abaixo do título, que o cronograma de longo prazo **por enquanto é mantido apenas no Prevision**. A tela serve para consultar esses dados e criar e acompanhar restrições. As atividades chegam pela importação em Integrações. Linhas de base e curva de avanço continuam disponíveis, mas não substituem a edição do cronograma, que não é feita aqui.
+
+### Nome do sistema: Obra 360 (23/09/2026)
+
+O usuário escolheu o nome **Obra 360** para substituir "Sistema de Gestão de Projetos – ATR". O novo nome aparece na lateral, com o subtítulo "Gestão de projetos e obras", no cabeçalho do celular, no login, no título da aba do navegador (`Obra 360 · ATR`) e no tour. A troca foi só de texto na tela. O **endereço do site** (projeto `planejamento-de-vagao` na Vercel), o **repositório** e o `package.json` não mudaram. Mudar o endereço exige atualizar o Site URL e as Redirect URLs no Supabase. A recomendação é fazer isso junto com um domínio próprio.

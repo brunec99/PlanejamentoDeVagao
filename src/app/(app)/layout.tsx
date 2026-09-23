@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
               <div className="h-7 w-px bg-slate-200" />
               <Image src="/logo-takt.png" alt="Takt Engenharia" width={200} height={112} className="h-7 w-auto object-contain" priority />
             </div>
-            <p className="text-[13px] font-bold leading-tight text-slate-800">Sistema de Gestão de Projetos<span className="text-blue-700"> · ATR</span></p>
+            <div className="leading-tight"><p className="text-base font-bold text-slate-900">Obra <span className="text-blue-700">360</span></p><p className="text-[11px] font-medium text-slate-500">Gestão de projetos e obras</p></div>
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4">
@@ -70,7 +70,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 md:hidden">
           <Link href="/obras" className="flex items-center gap-2.5">
             <Image src="/logo-atr.png" alt="ATR Incorporadora" width={90} height={39} className="h-6 w-auto object-contain" priority />
-            <span className="text-sm font-bold leading-tight text-slate-800">Gestão de Projetos<span className="text-blue-700"> · ATR</span></span>
+            <span className="text-sm font-bold leading-tight text-slate-900">Obra <span className="text-blue-700">360</span></span>
           </Link>
           <div className="flex items-center gap-3">
             <HelpButton variant="icon" />

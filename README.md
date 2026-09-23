@@ -1,4 +1,6 @@
-# Sistema de Gestão de Projetos – ATR
+# Obra 360 · ATR
+
+Gestão de projetos e obras da ATR Incorporadora. O nome "Obra 360" aparece na lateral, no login, no título da aba do navegador e no tour; o endereço do site e o nome do repositório não mudaram.
 
 Aplicação em Next.js, TypeScript, Tailwind CSS e App Router. O vagão é um **período temporal**, sem pavimento ou local próprio. Os locais pertencem às atividades.
 
