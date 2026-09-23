@@ -1,4 +1,5 @@
--- Criada, ainda não aplicada. Mantém o contrato transacional de 0022.
+-- Aplicada no Supabase remoto em 23/09/2026. Mantém o contrato transacional de 0022.
+-- Não é reexecutável: as funções guard_* e os gatilhos usam create sem "or replace"/"if not exists".
 alter table medium_term_plans add column if not exists schedule_meta jsonb not null default '{}';
 alter table plan_tasks add column if not exists schedule_meta jsonb not null default '{}';
 create or replace function commit_planning(p_expected_version bigint, p_payload jsonb, p_deletes jsonb default '{}'::jsonb)
