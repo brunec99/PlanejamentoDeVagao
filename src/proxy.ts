@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
 
 export async function proxy(request: NextRequest) {
   // Quando o endereço de retorno não está na lista do Supabase, ele devolve o código do login para
@@ -14,6 +15,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('redirect', request.nextUrl.pathname === '/' ? '/obras' : request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
+  if (devBypassProfileId()) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {

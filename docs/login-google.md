@@ -76,3 +76,9 @@ Ainda assim, a configuração certa no Supabase (**Authentication → URL Config
 - **Redirect URLs:** `https://obra360-atr.vercel.app/**` e, para testes locais, `http://127.0.0.1:3000/**`.
 
 O desvio foi validado localmente com um código falso. O login completo com Google precisa ser confirmado pelo usuário no navegador.
+
+## Acesso local sem login, temporário (25/09/2026)
+
+A pedido do usuário, para facilitar testes, o sistema pode pular o login do Google **apenas localmente**. Com `DEV_AUTH_BYPASS_PROFILE_ID=<id do perfil>` no `.env.local`, o `next dev` entra direto com aquele perfil: o middleware deixa passar e o `getRouteProfile` devolve o perfil indicado (`src/infrastructure/auth/dev-bypass.ts`). Há duas travas. A variável só vale com `NODE_ENV=development` e é ignorada sempre que `VERCEL` estiver definida, então **o site publicado continua exigindo o Google**, mesmo que alguém configure a variável lá. Remover produção do login foi descartado: exporia dados reais e apagaria o registro de quem alterou o quê.
+
+Para voltar ao normal, apague a linha do `.env.local`. A retirada do código fica para quando o usuário pedir a volta do login também localmente.

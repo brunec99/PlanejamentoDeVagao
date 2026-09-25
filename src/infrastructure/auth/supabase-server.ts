@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import type { User } from '../../domain/entities';
 import { getServiceClient } from '../repositories/supabase/client';
+import { devBypassProfileId } from './dev-bypass';
 
 /** SSR client bound to the request's cookies. Only for auth (getUser/signIn/signOut) — never for querying
  * planning tables, since RLS denies the anon/authenticated role by design (see 0001_init.sql). */
@@ -34,6 +35,8 @@ async function loadProfile(id: string): Promise<User | null> {
 
 /** For Route Handlers: returns the signed-in user's profile, or null if unauthenticated / not provisioned. */
 export async function getRouteProfile(): Promise<User | null> {
+  const bypass = devBypassProfileId();
+  if (bypass) return loadProfile(bypass);
   const authUser = await getAuthUser();
   if (!authUser) return null;
   return loadProfile(authUser.id);
