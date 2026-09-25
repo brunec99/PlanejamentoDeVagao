@@ -140,4 +140,14 @@ Arquivos: `src/modules/curto-prazo/sheet-controls.tsx` (`PillSelect`, `PillCombo
 
 **Validação:** a tela foi aberta num Chrome controlado por script, pelo acesso local sem login, com linhas de exemplo injetadas só no navegador: nenhum dado foi gravado. Foram conferidos as pílulas, o Não aguardando causa, o funil de Empresa e a criação de equipe filtrada pela empresa, sem erros no console. A gravação real de cada lista ainda não foi exercitada, porque exigiria escrever no banco de produção.
 
-**Em aberto:** a numeração da semana é contada a partir da primeira semana com linha na obra (em obra nova, a atual é a 1). A planilha de origem usa outra origem (ex.: 113). Falta decidir se o número deve seguir a contagem da planilha.
+**Resolvido em seguida (ver "Semana 1 de cada obra"):** a numeração da semana era contada a partir da primeira semana com linha na obra (em obra nova, a atual é a 1). A planilha de origem usa outra origem (ex.: 113). Falta decidir se o número deve seguir a contagem da planilha.
+
+## Semana 1 de cada obra (25/09/2026)
+
+A pedido do usuário, **Configurações da obra** ganhou o campo **Numeração das semanas**, que define a semana 1 da obra. É dela que sai o número de cada semana no curto prazo, para bater com a planilha da obra (que estava na semana 113). A semana 1 pode ser informada de dois jeitos: pelo **número da semana atual** (113 → semana 1 = 29/07/2024) ou pela **data**. Qualquer dia vale pela segunda-feira da semana. Há também um botão para voltar à numeração automática, que conta a partir da primeira semana com linha na planilha. No curto prazo, ao lado de "Semana atual", o link "definir/alterar semana 1" leva ao campo. A lista de semanas passa a começar na semana 1.
+
+**Onde fica:** tabela própria `work_settings` (migração `0025_work_settings.sql`, **criada e não aplicada**), lida e gravada por `GET/PUT /api/work-settings`, com o gancho `useWorkSettings` (`src/modules/configuracoes/work-settings.ts`). Ficou fora do snapshot de propósito: outra sessão estava alterando `entities`, `commands` e `mappers`, e pôr a semana 1 em `works` exigiria reescrever `commit_planning`. Sem a migração, a leitura responde "indisponível", o curto prazo segue com a numeração automática e a configuração mostra o aviso. Consulta vê, os demais perfis gravam, e a obra é verificada no servidor. O banco recusa uma data que não seja segunda-feira.
+
+**Regras:** `src/domain/week-numbering.ts` (`normalizeWeekOne`, `weekNumberFrom`, `weekOneFromCurrent`), com testes em `tests/week-numbering.test.ts` (5). Semanas anteriores à semana 1 aparecem com número zero ou negativo.
+
+**Validação:** a rota respondeu "indisponível" com o banco atual e recusou data inválida. No navegador de teste, com a resposta simulada, a configuração mostrou a prévia "113 → 29/07/2024", e o curto prazo passou a mostrar "Semana atual: 113", com as semanas de 1 a 117. A gravação real depende da `0025`.

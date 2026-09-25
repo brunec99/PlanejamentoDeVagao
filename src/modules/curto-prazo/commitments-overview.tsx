@@ -11,6 +11,8 @@ import { Field } from '@/modules/planejamento/forms';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
 import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
+import { useWorkSettings } from '@/modules/configuracoes/work-settings';
+import { weekNumberFrom } from '@/domain/week-numbering';
 import { applySheetView, companyOptions, compareText, distinctValues, textKey, weekOptions, type Accessor, type SheetFilters, type SheetSort } from '@/modules/curto-prazo/sheet-view';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6] as const;
@@ -36,6 +38,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const [filters, setFilters] = useState<SheetFilters>({});
   const [sort, setSort] = useState<SheetSort>();
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
+  const { weekOneStart } = useWorkSettings(workId);
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
@@ -47,11 +50,12 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const teams = data.teams.filter(t => t.workId === workId).sort((a, b) => a.company.localeCompare(b.company) || a.name.localeCompare(b.name, 'pt-BR'));
   const commitments = data.commitments.filter(c => c.workId === workId);
   const currentWeek = startOfWeek(planning.today);
-  const firstWeek = startOfWeek(commitments.reduce((earliest, c) => (c.weekStart < earliest ? c.weekStart : earliest), planning.today));
+  // A semana 1 vem das configurações da obra; sem ela, é a primeira semana com linha na planilha.
+  const firstWeek = weekOneStart ?? startOfWeek(commitments.reduce((earliest, c) => (c.weekStart < earliest ? c.weekStart : earliest), planning.today));
   // Da primeira semana da obra até quatro à frente, mais qualquer semana já usada fora desse intervalo.
   const weeks = [...new Set([...weekOptions(firstWeek, currentWeek), ...commitments.map(c => c.weekStart)])].sort();
   const week = weeks.includes(chosen) ? chosen : currentWeek;
-  const weekNumber = (start: string) => Math.floor((Date.parse(start) - Date.parse(firstWeek)) / 604800000) + 1;
+  const weekNumber = (start: string) => weekNumberFrom(firstWeek, start);
   const weekRows = commitments.filter(c => c.weekStart === week);
   const stats = ppc(weekRows);
   const series = ppcSeries(commitments);
@@ -191,7 +195,8 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           {[...weeks].reverse().map(w => <option key={w} value={w}>{weekNumber(w)} · {dayMonth(w)} a {dayMonth(addDays(w, 5))}{w === currentWeek ? ' (atual)' : ''}</option>)}
         </select>
       </label>
-      <span>Semana atual: <span className="tabular-nums text-slate-900">{weekNumber(currentWeek)}</span></span>
+      <span>Semana atual: <span className="tabular-nums text-slate-900">{weekNumber(currentWeek)}</span>
+        <Link className="text-link ml-2 font-normal" href={workPath(workId, 'configuracoes')}>{weekOneStart ? 'alterar semana 1' : 'definir semana 1'}</Link></span>
       <span>PPC: <span className="tabular-nums text-slate-900">{stats.planned ? `${Math.round(stats.percent)}%` : '—'}</span>
         {stats.pending > 0 && <span className="ml-1 font-normal text-slate-400">({stats.pending} sem status)</span>}</span>
     </div>
