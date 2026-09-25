@@ -8,7 +8,7 @@ import { workPath } from '@/shared/format';
 /** As seis abas do sistema, na ordem em que o planejamento desce do macro para a semana e depois
  * sobe para o modelo. O número faz parte do nome: é assim que a equipe se refere a elas. */
 export const WORK_TABS = [
-  { section: 'longo-prazo', short: 'Longo prazo', label: 'Cronograma de longo prazo', hint: 'Linha de balanço · Restrições' },
+  { section: 'longo-prazo', short: 'Longo prazo', label: 'Cronograma de longo prazo', hint: 'Fluxograma · Linha de balanço · Restrições' },
   { section: 'vagoes', short: 'Vagões', label: 'Planejamento por vagões', hint: 'Períodos de takt · Terminalidade' },
   { section: 'medio-prazo', short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
   { section: 'curto-prazo', short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },

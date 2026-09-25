@@ -86,7 +86,7 @@ export function LookAheadOverview({ workId }: { workId: string }) {
 
   return <>
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="eyebrow">Aba 3 · {work.code} · {work.name}</p><h1 className="page-title">Cronograma de médio prazo</h1><p className="mt-1 text-sm text-slate-500">Gantt do mês com alocação de recursos, análise de superalocação e linha de base com cálculo de atrasos.</p></div>
+      <div><p className="eyebrow">Aba 3 · {work.code} · {work.name}</p><h1 className="page-title">Cronograma de médio prazo</h1><p className="mt-1 text-sm text-slate-500">Um cronograma por mês, com horizonte de três meses, no layout do MS Project: tabela e Gantt lado a lado, agendamento automático, datas reais e linha de base.</p></div>
       <Link className="button-ghost" href={workPath(workId, 'configuracoes')}><Users size={16} aria-hidden />Configurar recursos</Link>
     </div>
     <ScheduleSheet workId={workId} />

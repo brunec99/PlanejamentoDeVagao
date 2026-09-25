@@ -63,8 +63,8 @@ Cadeado (a grade abre bloqueada, contra alteração acidental em reunião), reco
 
 ### Decisões em aberto — precisam do usuário
 
-1. **Reprogramação automática (ASAP).** O guia exige datas, duração e predecessoras ligadas por um motor único (secao 7.1). Hoje as datas não se movem sozinhas: a rede aponta a incoerência e a reprogramação é manual — decisão anterior do próprio usuário, e não a desfiz sozinho. Ligar o motor muda datas na tela de quem planeja, e é a mudança de maior impacto do guia inteiro.
-2. **Rascunho com gravação atômica e motivo obrigatório** (secao 12). Hoje cada célula grava ao sair dela, o que o usuário pediu explicitamente. O guia quer rascunho local, revisão antes de salvar e motivo por revisão. A concorrência otimista já existe, mas no nível do snapshot inteiro (`planning_meta.version`), não por tarefa, e o histórico é por comando, sem motivo.
+1. *(Resolvida em 25/09/2026 — ver etapa 4: o usuário escolheu o agendamento automático.)* **Reprogramação automática (ASAP).** O guia exige datas, duração e predecessoras ligadas por um motor único (secao 7.1). Hoje as datas não se movem sozinhas: a rede aponta a incoerência e a reprogramação é manual — decisão anterior do próprio usuário, e não a desfiz sozinho. Ligar o motor muda datas na tela de quem planeja, e é a mudança de maior impacto do guia inteiro.
+2. *(Resolvida: o rascunho com "Revisar e salvar" e motivo obrigatório foi implementado depois desta etapa, e o usuário confirmou em 25/09/2026 que quer mantê-lo.)* **Rascunho com gravação atômica e motivo obrigatório** (secao 12). Hoje cada célula grava ao sair dela, o que o usuário pediu explicitamente. O guia quer rascunho local, revisão antes de salvar e motivo por revisão. A concorrência otimista já existe, mas no nível do snapshot inteiro (`planning_meta.version`), não por tarefa, e o histórico é por comando, sem motivo.
 
 ### Do guia, ainda não implementado
 
@@ -122,6 +122,125 @@ A pedido do usuário, a aba 1 passou a dizer, na descrição e num aviso logo ab
 
 O usuário escolheu o nome **Obra 360** para substituir "Sistema de Gestão de Projetos – ATR". O novo nome aparece na lateral, com o subtítulo "Gestão de projetos e obras", no cabeçalho do celular, no login, no título da aba do navegador (`Obra 360 · ATR`) e no tour. A troca foi só de texto na tela. O **endereço do site** (projeto `planejamento-de-vagao` na Vercel), o **repositório** e o `package.json` não mudaram. Mudar o endereço exige atualizar o Site URL e as Redirect URLs no Supabase. A recomendação é fazer isso junto com um domínio próprio.
 
+## Etapa 4 — planejador de longo prazo: fluxograma que se expande em Linha de Balanço (25/09/2026)
+
+A pedido do usuário, a aba 1 ganhou uma ferramenta para **preencher** o planejamento de longo prazo no próprio sistema. Ela reproduz o "Planejamento de Longo Prazo" do App-ATR (`~/Applications/App-ATR`), criado entre 13 e 20/05/2026 e removido em 08/07/2026 no commit `10995b7` ("Remove módulos LOB, Restrições e PMP"). A documentação daquela ferramenta é o histórico do Git: `git show 10995b7^:src/app/dashboard/planejamento-longo-prazo/PlanejamentoLongoPrazoClient.tsx` (2.197 linhas) e `git show 10995b7^:src/lib/data/planejamento-lp.ts`. O repositório não tinha documento escrito, e esses dois arquivos foram a fonte da reprodução. Lá o plano ficava no Redis (Upstash) como um JSON por projeto.
+
+### O que a aba 1 mostra agora
+
+A aba tem duas visões, alternadas no cabeçalho, e o endereço guarda a escolhida em `?visao=`:
+
+- **Planejador** (padrão, `src/modules/longo-prazo/planner/`): o cronograma de longo prazo é montado aqui.
+- **Vagões e restrições** (`?visao=prevision`, chamada "Prevision e restrições" na primeira versão do dia): a tela anterior. Mostra a Linha de Balanço das atividades dos vagões, o módulo de restrições, a curva de avanço e as linhas de base dos vagões. O aviso diz que essas atividades são só leitura aqui e que quem responde por elas é o plano.
+
+### O modelo do plano (igual ao original)
+
+Cada **serviço** percorre uma faixa contínua de pavimentos, do inicial ao final, e tem:
+
+- uma **duração por pavimento**, em dias corridos, com a opção de duração própria em alguns pavimentos;
+- um **ritmo**: dias entre o início de um pavimento e o início do seguinte (0 = todos juntos);
+- **predecessoras**, cada uma com espera em dias (negativa = antecipação) e dois modos:
+  - **cruzamento automático**: em cada pavimento que os dois serviços têm em comum, o sucessor só começa depois que a predecessora terminou ali;
+  - **pavimento específico**: o sucessor começa no seu primeiro pavimento depois que a predecessora termina aquele pavimento.
+- **equipes**, com nome e número de pessoas;
+- **unidade de medição** (%, apartamento, m², m, unidade ou outra) e total previsto.
+
+A obra tem um número de pavimentos, e cada um pode ter um nome ("Térreo", "Cobertura"). O botão "Usar os locais da obra" preenche esses nomes com os locais importados do Prevision, em ordem de altura (`height`/`byHeight`, agora exportados por `line-of-balance.tsx`). Fachadas, halls e equipamentos ficam de fora, porque não têm altura.
+
+### Telas do planejador
+
+- **Fluxograma** (`plan-canvas.tsx`): diagrama de rede AON. Cada coluna é um nível de precedência, cada cartão é um serviço e as setas são as predecessoras, com a espera e o pavimento de referência escritos na seta. Cada cartão traz uma miniatura da Linha de Balanço do serviço e pode ser expandido no lugar, mostrando os pavimentos com início e término.
+- **Expandir em Linha de Balanço**: a obra inteira passa para a Linha de Balanço, e cada retângulo de pavimento sai da miniatura do cartão e anima até a sua posição no gráfico (tempo × pavimento). Com `prefers-reduced-motion` a troca é instantânea. Na Linha de Balanço há zoom, linha de hoje, sobreposição cinza da linha de base escolhida e barra de avanço medido por pavimento. Arrastar um serviço o reprograma: a data nunca fica antes do mínimo das predecessoras, e as sucessoras são empurradas.
+- **Indicadores**: serviços, pavimentos, prazo planejado em meses (com a diferença para a linha de base) e avanço físico.
+- **Resumo dos serviços**: tabela expansível por pavimento, com botão de ocultar e mostrar.
+- **Alocação de equipes**: pico diário de pessoas por equipe em cada semana.
+- **Formulário do serviço** (`activity-form.tsx`), **pavimentos**, **linhas de base** e **medições** (`plan-panels.tsx`).
+- **Exportar e importar** em JSON. A importação também aceita o `.plp.json` exportado pela ferramenta antiga (`fromLegacyProject`), que converte as chaves em português e a predecessora única dos arquivos mais antigos.
+- Plano vazio oferece um **exemplo de edifício** encadeado (`examplePlanDocument`), para partir de algo e ajustar.
+
+### Onde o dado fica — decisão
+
+O plano é **um documento JSON por obra**, na tabela `long_term_plans` (migração `0024_long_term_plans.sql`), lido e gravado por `GET/PUT /api/long-term-plan` (`src/app/api/long-term-plan/route.ts`). Ele fica **fora do snapshot de planejamento** e não passa por `commit_planning`, como `ifc_federations`. Motivos:
+
+- O original já era um documento único.
+- O plano é editado como um todo: arrastar um serviço reprograma a cadeia inteira.
+- Uma migração ausente ou um plano com problema não derruba as outras telas, porque o snapshot lê todas as tabelas em cada requisição.
+
+Consequências dessa escolha:
+
+- O plano e as `Activity` dos vagões são registros distintos, ligados pela geração de vagões (seção seguinte). Editar o plano não muda os vagões sozinho.
+- **Não há histórico campo a campo** (`history_events`). Ficam registrados só a última gravação (`updated_at`, `updated_by`) e as linhas de base, que são fotos do plano.
+- **Concorrência**: cada gravação envia a `revision` lida, e o servidor só grava se ela ainda for a do banco. Se outra pessoa salvou no meio tempo, a resposta é 409, a tela fica só leitura e oferece recarregar. Assim nenhuma edição é apagada em silêncio.
+- **Salvamento automático** 1 s depois da última alteração, como no original. Fechar a aba com alteração pendente faz o navegador perguntar antes.
+- Perfil **Consulta** vê tudo e não altera nada, e a API recusa a gravação.
+
+### Diferenças em relação ao original — correções
+
+Regras em `src/domain/long-term-plan.ts`, com testes em `tests/long-term-plan.test.ts`:
+
+- **Cruzamento automático exato.** O original olhava só o primeiro ou o último pavimento. Com duração própria num pavimento do meio, ou com faixas de pavimentos diferentes, a sucessora podia cruzar a predecessora. Agora a regra confere todos os pavimentos em comum. Sem pavimento em comum, vale término-início do serviço inteiro.
+- **Fim do serviço** é o do pavimento que termina por último. O original usava a duração padrão do último pavimento e ignorava as durações próprias. O mesmo vale para a alocação de equipes, que no original também ignorava a duração por pavimento.
+- **Término mostrado é o último dia trabalhado.** O original exibia o dia seguinte: 5 dias a partir de segunda apareciam terminando no sábado.
+- **Reprogramação em ordem topológica.** O original fazia várias passadas sem ordem. **Ciclo de predecessoras** agora é impedido: o formulário não oferece as opções que fechariam um ciclo, e a API recusa.
+- **Avanço físico ponderado** pelos pavimento-dias de cada serviço. Serviço com unidade e ainda sem medição conta como 0%. O original fazia média simples só dos serviços já medidos, o que inflava o avanço no começo da obra.
+- A unidade de medição fica **travada** depois da primeira medição do serviço. No original isso estava pela metade (`temMedicoes = false`).
+- Excluir um serviço remove também os vínculos que apontavam para ele e as medições dele.
+
+### O que ficou de fora
+
+- **Restrições criadas no formulário do serviço.** O original tinha um quadro de restrições próprio. Aqui a `Restriction` depende de um vagão, e o serviço do planejador não tem vagão. As restrições continuam na visão "Prevision e restrições".
+- **Vários projetos por obra.** O original tinha uma lista de projetos. Aqui é um plano por obra, e as linhas de base guardam as versões.
+- Dias úteis e feriados: o macro é em dias corridos, como no original.
+
+### Migração 0024 — aplicada em 25/09/2026
+
+`0024_long_term_plans.sql` cria `long_term_plans` com `work_id` como chave, `document` jsonb, `revision`, `updated_at` e `updated_by`, e liga o RLS sem política: o acesso é só pela API, com a chave de serviço, como nas tabelas IFC. **Não reescreve `commit_planning`** e pode ser rodada de novo (`if not exists`). O usuário a aplicou no Supabase remoto em 25/09/2026; a tabela responde pela API REST.
+
+### Validação (25/09/2026)
+
+- `npx tsc --noEmit`: sem erros. `npm test`: 249 testes passando, 15 deles novos, em `tests/long-term-plan.test.ts`. Os testes cobrem o cálculo por pavimento, o cruzamento exato, a predecessora por pavimento, a cascata e o "Recalcular", os níveis do fluxograma, o ciclo, a validação, o pico de equipe, o avanço ponderado, o plano de exemplo e a conversão do `.plp.json` antigo.
+- **Navegador** (Playwright sobre o `next dev` local, com o acesso sem login de `DEV_AUTH_BYPASS_PROFILE_ID`, na obra Brizz Smart Stay). Como a `0024` ainda não existe no banco, a API do plano foi **simulada** no navegador. O que foi conferido:
+  - o fluxograma com setas e rótulos de espera e pavimento;
+  - a animação fluxograma → Linha de Balanço e a volta;
+  - o cartão expandido nos pavimentos;
+  - o cadastro de um serviço com predecessora, gravado com o vínculo;
+  - o arraste da Estrutura, que empurrou a Alvenaria os mesmos 19 dias e gravou com a revisão seguinte;
+  - o plano vazio com "exemplo de edifício";
+  - os painéis de pavimentos, linhas de base e medições;
+  - a visão "Prevision e restrições".
+  
+  Nenhum erro apareceu no console. Na primeira rodada os rótulos de todos os serviços caíam no mesmo pavimento e se sobrepunham. Isso foi corrigido: cada serviço desloca o rótulo três pavimentos.
+- **API de verdade, sem a migração:** o GET responde "Aplique a migração 0024_long_term_plans.sql…". O PUT com pavimento fora da obra é recusado com a mensagem da validação.
+- **Não validado:** gravação real no Supabase, dois usuários salvando ao mesmo tempo (o 409), celular, e um plano grande (400 serviços × 60 pavimentos). No último caso as camadas esmaecidas continuam no DOM, e com linha de base são cerca de 48 mil retângulos.
+
+### O plano é o responsável pelas atividades dos vagões (25/09/2026)
+
+Decisão do usuário, no mesmo dia: **o plano de longo prazo responde pelas atividades dos vagões**. O botão **"Gerar vagões"** no Planejador (`planner/wagon-sync.tsx`) leva o plano salvo para uma sequência de vagões da obra, ou cria uma se a obra ainda não tem.
+
+**Como funciona** (`src/application/use-cases/sync-long-term-plan.ts`, comando `sync_long_term_plan` em `commands.ts`, rota `POST /api/long-term-plan/sync`):
+
+- Cada serviço × pavimento do plano vira atividade de vagão, com o pavimento como local, criado se ainda não existir. Entram todos os serviços, inclusive os ocultos no gráfico, porque ocultar é só leitura.
+- **Vagões liberados não mudam.** O plano ocupa só a cauda não liberada, a partir do dia seguinte ao último vagão liberado, ou de hoje / do início da sequência, o que vier mais tarde. O que termina antes dessa fronteira fica fora, e a prévia informa quantos.
+- A cauda vira uma **grade contínua** de vagões com o takt da sequência. Em dias úteis, cada vagão vai de segunda a domingo e conta só os dias úteis como takt; sem essa continuidade, o fatiamento recusaria as atividades. Cada serviço × pavimento é fatiado nos vagões que atravessa pelo mesmo `sliceActivity` da importação do Prevision ("parte 2 de 3 · 35%", peso proporcional). Vagão da grade sem atividade não é criado.
+- **Idempotente.** Vagão que começa no mesmo dia de um vagão da cauda reaproveita o registro, com as restrições e pendências dele. Atividade com a mesma chave `plano:<serviço>:<pavimento>#<parte>@<início do vagão>` reaproveita o registro, com avanço, critérios, equipe e anotação. Gerar de novo sem mudar o plano não perde nada; um teste garante isso.
+- O que sai é sempre mostrado na prévia antes de confirmar: vagões da cauda que não voltam, e junto deles restrições e pendências; atividades que o plano não gera mais, e quantas tinham avanço ou critério atendido; atividades do Prevision ou de demonstração na cauda, que são substituídas. Atividade **manual** sobrevive se o vagão dela continua e ela ainda cabe no período.
+- A equipe da atividade é preenchida quando o nome de uma equipe do plano coincide com uma equipe cadastrada na obra.
+- A rota lê o plano **salvo** no banco, nunca o que o navegador mandar, e exige a revisão que a tela mostra (409 se mudou). A rota genérica `/api/planning/commands` recusa `sync_long_term_plan`.
+- Depois de gerar, `long_term_plans` guarda a revisão, a sequência, a data e o autor. O Planejador avisa quando o plano mudou depois da última geração.
+- **Prevision:** a sincronização em Integrações continua atualizando o cache de leitura, mas **não regenera** sequência que já tem atividade de origem `long_term`. Regenerar ali apagaria a cauda montada pelo plano.
+- Origem nova `Activity.origin = 'long_term'`, com rótulo "Plano de longo prazo" no detalhe do vagão.
+
+**Migração 0026** (`0026_long_term_wagons.sql`) — **aplicada pelo usuário em 25/09/2026.** Ela acrescenta `synced_revision`, `synced_sequence_id`, `synced_at` e `synced_by` a `long_term_plans` e alarga a checagem `activities_origin_check` para aceitar `long_term`. Não reescreve `commit_planning`. Ficou separada da 0024 porque a 0024 já tinha sido aplicada quando a decisão veio. As colunas novas foram conferidas pela API REST (resposta 200).
+
+**Validação:** 6 testes novos em `tests/long-term-sync.test.ts` cobrem a geração encadeada, os pesos somando 1 por serviço × pavimento, a idempotência com avanço e restrição preservados, o adiamento que troca vagões, o vagão liberado intocado com a cauda começando no dia seguinte, a grade em dias úteis e o bloqueio na rota genérica. No navegador, o diálogo foi conferido com a API simulada: prévia, confirmação e aviso de "vagões em dia". **Não foi rodada nenhuma geração real no Supabase:** a primeira deve ser feita pelo usuário, conferindo a prévia. Na obra Brizz Smart Stay, a sequência "Planejamento principal" tem takt de 21 dias e atividades do Prevision na cauda, que seriam substituídas pelas do plano.
+
+### Pendências
+
+- Primeira geração real de vagões, conferindo a prévia.
+- O médio prazo e o 4D leem as atividades dos vagões; passam a refletir o plano só depois de gerar os vagões.
+- Restrições ligadas a serviço e pavimento do planejador.
+- Histórico de alterações do plano.
+
 ## Curto prazo com a cara da planilha (25/09/2026)
 
 O usuário pediu que a aba 4 ficasse mais parecida com a planilha do Google Sheets usada hoje, com o mesmo efeito de lista suspensa para empresas, semanas, status e causas. Decisões tomadas com ele:
@@ -141,6 +260,86 @@ Arquivos: `src/modules/curto-prazo/sheet-controls.tsx` (`PillSelect`, `PillCombo
 **Validação:** a tela foi aberta num Chrome controlado por script, pelo acesso local sem login, com linhas de exemplo injetadas só no navegador: nenhum dado foi gravado. Foram conferidos as pílulas, o Não aguardando causa, o funil de Empresa e a criação de equipe filtrada pela empresa, sem erros no console. A gravação real de cada lista ainda não foi exercitada, porque exigiria escrever no banco de produção.
 
 **Resolvido em seguida (ver "Semana 1 de cada obra"):** a numeração da semana era contada a partir da primeira semana com linha na obra (em obra nova, a atual é a 1). A planilha de origem usa outra origem (ex.: 113). Falta decidir se o número deve seguir a contagem da planilha.
+
+## Etapa 4 — o médio prazo no layout do MS Project (25/09/2026)
+
+O usuário pediu que a aba 3 ficasse mais parecida com o MS Project, que é onde a equipe faz o médio prazo hoje, e mandou um print da tela do Project que usam (Gantt de acompanhamento da obra MZN). As decisões foram tomadas com ele antes de codar:
+
+| Pergunta | Decisão |
+| --- | --- |
+| O que mais faz falta | Tabela e Gantt lado a lado; datas que se recalculam. Caminho crítico e arrastar barras **não** foram pedidos. |
+| Reprogramação | Automática, como o Project. Data digitada = "Não iniciar antes de". |
+| Origem do plano | Digitado direto no sistema (sem importar XML do Project). |
+| Período | **Um cronograma por mês**, cada um com **horizonte de três meses**. O usuário chegou a responder "janela móvel" e se corrigiu. |
+| Mês seguinte | Nasce como **cópia do mês anterior**. |
+| Linha de base | Quando o usuário clicar, como no Project. |
+| Datas reais | Como no Project: % > 0 preenche o início real, 100% preenche o término real, e a data real prende a tarefa. |
+| Gravação | Mantém rascunho + "Revisar e salvar" com motivo obrigatório. |
+| Visual | Layout do Project, visual do Obra 360 (sem faixa de opções nem azul do Project). |
+
+### Tela (`src/modules/medio-prazo/schedule-sheet.tsx` + `gantt-chart.tsx`)
+
+- **Tabela e Gantt lado a lado**, com divisória arrastável e a mesma rolagem vertical. Modos "Tabela e Gantt", "Somente tabela" e "Somente Gantt" e escala Dias/Semanas/Meses ficam na barra de status, como no Project. O Gantt se alinha à tabela **medindo** a altura da linha e do cabeçalho (ResizeObserver), não por constante.
+- **Colunas do print**, nesta ordem: Id, Indicadores, % concluída, Nome da tarefa (com EAP 1.1 e recolher), Duração ("10 dias", "10 dias corridos", "0 dias"), Início real, Término real, Início, Término, Início e Término da linha de base, Predecessoras ("18;19", "27TI+6 dias") e Nomes dos recursos. Anotações, % alvo, Desvio, Decorrido e Variação continuam disponíveis em "Colunas", ocultas por padrão. Datas no formato "Seg 24/08/26", com "ND" onde não há data. A entrada aceita o mesmo texto copiado do Project.
+- **Linha 0**: resumo do cronograma inteiro (envelope das datas, % ponderado pela duração).
+- **Indicadores**: concluída, "Não iniciar antes de" (só quando é a restrição, e não a rede, que segura o início), fora do horizonte e anotação. Cada um tem ícone e texto, nunca só cor.
+- **Gantt de acompanhamento** (`gantt-chart.tsx`, componente só de apresentação):
+  - barra azul com o avanço preenchido e, com linha de base escolhida, barra cinza embaixo;
+  - resumo como colchete preto e marco como losango com "dd/mm";
+  - setas com cotovelo nos quatro tipos de vínculo;
+  - linha verde de hoje, tracejado no início e no fim do horizonte, sombra fora do horizonte e nos dias não úteis;
+  - clique na barra seleciona a linha na tabela.
+  As funções de layout são puras e testadas em `tests/gantt-chart.test.ts`.
+- **Ferramentas e teclado do Project**: Inserir tarefa acima da selecionada (Insert), recuar e diminuir o recuo (Alt+Shift+→/←), Vincular as selecionadas em TI (Ctrl+F2), Desvincular (Ctrl+Shift+F2) e Excluir. Mantidos: cadeado, desfazer e refazer, Ctrl+D, copiar e colar, filtros e modo reunião. Recuar uma linha que vira resumo tira dela os vínculos e as datas reais, que passam a ficar nas subtarefas.
+- **Horizonte**: o cabeçalho mostra "Horizonte de três meses: Ter 01/09/26 a Seg 30/11/26". Tarefas fora dele recebem indicador e aviso e têm o filtro "Fora do horizonte". São sinalizadas, **não bloqueadas**, porque a rede pode empurrar uma tarefa para fora.
+- **Novo cronograma do mês**: o mês seguinte ao último vem sugerido, junto com "Cópia de ‹mês›" ou "Em branco".
+- **Linha de base**: a mais recente aparece por padrão (o Project mostra a base sempre).
+- **Plano gravado antes desta etapa**: ao abrir, a tela aplica a regra nova. Tarefa com % e sem início real recebe o início previsto, e o "Não iniciar antes de" passa a valer junto das predecessoras. Um aviso azul diz quantas linhas mudaram. O ajuste vai ao banco no próximo "Revisar e salvar", e o diálogo de revisão também o menciona. Sem isso, o servidor recusaria a gravação.
+- Removido `src/modules/medio-prazo/gantt.tsx`: a grade antiga, sem uso desde a etapa 2. O passo "medio-gantt" do tour apontava para ela e estava quebrado; agora aponta para a tela nova, e os textos do tour foram reescritos.
+- Corrigido no caminho: começar a digitar direto numa célula selecionava a primeira letra, e a segunda a apagava.
+
+### Domínio e servidor
+
+- `PlanTask.actualStart`/`actualEnd` e `MediumTermPlan.copiedFromPlanId`, gravados em `schedule_meta` (jsonb criado na 0023). **Nenhuma migração nova.**
+- `scheduleTasks` (`src/domain/plan-schedule.ts`):
+  - com data real, o início é o início real e o término é o término real, e a rede não move a tarefa;
+  - sem data real, o início é o **mais tarde** entre `anchorStart` ("Não iniciar antes de") e os limites das predecessoras. Antes, `anchorStart` era ignorado quando havia predecessora;
+  - **marco** (duração 0) tem início = término e, ligado por TI, fica no dia em que a predecessora termina, como no Project. A tarefa depois dele começa no dia útil seguinte.
+- `withProgress`, `withActualStart` e `withActualEnd` aplicam as regras do Project entre % e datas reais:
+  - 0% apaga as datas reais;
+  - % acima de 0 preenche o início real;
+  - 100% preenche o término real;
+  - término real põe a tarefa em 100% e recalcula a duração.
+  Limpar o término real com 100% é recusado, e a mensagem pede para reduzir o % antes.
+- `parseDuration` e `formatDuration` entendem o texto do Project ("10 dias", "10 dias corridos", "8 horas", "2 meses", "0 dias"). `parseLinks` e `formatLink` passam a escrever `27TI+6 dias` e `12II+2 dias corridos`, com `;` como separador, e continuam aceitando `2d`/`2dd` e vírgula.
+- `planWindow(month)`: do dia 1 do mês ao último dia do mês + 2.
+- `rollUpPlan`: o resumo passa a ter início real (o mais cedo), término real (só quando todas as subtarefas terminaram) e `milestone`.
+- `save_plan_revision` valida as datas reais:
+  - término real exige início real, e o início não pode vir depois do término;
+  - término real exige 100%, e % acima de 0 exige início real;
+  - resumo não recebe data real.
+  As datas reais entram no histórico por campo.
+- `create_plan` com `copyFrom`:
+  - copia tarefas (com ids novos), vínculos, calendário, recursos, anotações, % e datas reais;
+  - deixa de fora as tarefas concluídas antes do novo horizonte e os resumos que ficam sem filhos;
+  - acerta os níveis;
+  - quando uma tarefa perde uma predecessora, fixa o início dela para a data não pular;
+  - recusa copiar de linha de base, de mês posterior e de outra obra.
+  O plano de origem não muda.
+
+### Validação
+
+- `npm test`: 249 testes passando, incluindo `tests/plan-monthly.test.ts` (14 testes) e `tests/gantt-chart.test.ts` (11 testes). `tests/plan-schedule.test.ts` e `tests/expansao.test.ts` foram ajustados à regra nova: duração 0 agora é aceita, revisão com % exige início real, e mudou o formato do texto do vínculo.
+- `npm run typecheck`: limpo nos arquivos desta etapa. Os únicos erros são de `src/modules/longo-prazo/planner/`, trabalho em andamento de outra sessão.
+- **Navegador**: a tela foi aberta com `next dev` e o acesso de desenvolvimento, e dirigida por Playwright sem janela, com as gravações bloqueadas na rede. O cenário foi montado só no rascunho, **sem salvar**: resumo com três subtarefas, predecessoras `2` e `3TI+2 dias`, marco de 0 dias, 100% e 40%. As datas conferiram com o Project. A tabela e o Gantt ficaram alinhados, e o console não registrou erros.
+
+### Pendências
+
+- Não foi feito nenhum "Revisar e salvar" real com datas reais nem criado nenhum mês por cópia no Supabase. As duas coisas estão cobertas pelos testes do comando, mas falta um uso real.
+- Não foi validado com um plano grande (centenas de linhas) nem em tela de celular. No celular, o modo "Somente tabela" é o indicado.
+- Não pedidos e não feitos: caminho crítico e folga, arrastar barras no Gantt, importar ou exportar XML do Project, e "rolar até a tarefa".
+- O resumo de marcos conta com peso 1 no % ponderado.
+
 
 ## Semana 1 de cada obra (25/09/2026)
 

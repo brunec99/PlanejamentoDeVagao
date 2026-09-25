@@ -9,7 +9,7 @@ export interface ProductionSequence extends RecordBase { workId: Id; name: strin
 /** A wagon is a temporal production cycle. Locations belong only to activities. */
 export interface Wagon extends RecordBase { sequenceId: Id; number: number; predecessorId?: Id; plannedStart: LocalDate; plannedEnd: LocalDate; taktDays: number; actualStart?: LocalDate; responsibleIds: Id[] }
 export type ActivityStatus = 'not_started' | 'in_progress' | 'completed';
-export interface Activity extends RecordBase { wagonId: Id; name: string; locationId: Id; responsibleId: Id; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number; status: ActivityStatus; weight: number; mandatory: boolean; origin: 'manual' | 'mock' | 'prevision'; previsionExternalId?: string; teamId?: Id; notes?: string }
+export interface Activity extends RecordBase { wagonId: Id; name: string; locationId: Id; responsibleId: Id; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number; status: ActivityStatus; weight: number; mandatory: boolean; origin: 'manual' | 'mock' | 'prevision' | 'long_term'; previsionExternalId?: string; teamId?: Id; notes?: string }
 /** Dependência término-início entre atividades. O produto reprograma manualmente, por decisão
  * de escopo: a dependência serve para ler a rede e apontar incoerência, nunca para mover datas. */
 export interface ActivityDependency extends RecordBase { predecessorId: Id; successorId: Id }
@@ -17,14 +17,17 @@ export interface ActivityDependency extends RecordBase { predecessorId: Id; succ
 /** Plano mensal de médio prazo: a folha que o planejador preenche para o mês, que nasce vazia.
  * Um plano por mês por obra. A linha de base é o próprio plano congelado — `baselineOf` aponta
  * para o plano de origem e `frozenAt` marca o congelamento; plano congelado não aceita edição,
- * e por isso pode ser aberto no mesmo cronograma para comparar com o vivo. */
-export interface MediumTermPlan extends RecordBase { version?: number; calendar?: WorkCalendar; workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id }
+ * e por isso pode ser aberto no mesmo cronograma para comparar com o vivo. `copiedFromPlanId` aponta
+ * o plano do mês anterior de que este nasceu como cópia (o horizonte de cada plano é de três meses). */
+export interface MediumTermPlan extends RecordBase { version?: number; calendar?: WorkCalendar; workId: Id; month: string; name: string; baselineOf?: Id; frozenAt?: string; createdBy: Id; copiedFromPlanId?: Id }
 /** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
  * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
 /** Tarefa do plano do mês. `level` é o recuo, como no MS Project: o pai de uma linha é a linha
  * anterior mais próxima com nível menor. Linha com filhos é resumo — início, término e avanço
- * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui. */
-export interface PlanTask extends RecordBase { version?: number; duration?: TaskDuration; anchorStart?: string; sourceTaskId?: Id; planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
+ * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui.
+ * `anchorStart` é a restrição "Não iniciar antes de"; `actualStart`/`actualEnd` são o início e o
+ * término reais, que prendem as datas como no Project. `duration` de valor zero é marco. */
+export interface PlanTask extends RecordBase { version?: number; duration?: TaskDuration; anchorStart?: string; sourceTaskId?: Id; planId: Id; name: string; plannedStart: LocalDate; plannedEnd: LocalDate; actualStart?: LocalDate; actualEnd?: LocalDate; teamId?: Id; activityId?: Id; notes?: string; progress: number; order: number; level: number }
 /** Dependência término-início entre linhas do plano mensal. */
 /** Vínculo entre linhas do plano, nos quatro tipos do Project. `lagDays` é a defasagem: positiva
  * é espera, negativa é antecipação. `lagBusiness` diz se ela conta em dias úteis (o `2d` digitado)

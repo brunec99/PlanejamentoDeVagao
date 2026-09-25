@@ -121,3 +121,10 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .schedule-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
 .schedule-resize:focus { outline: 2px solid #2563eb; }
 @media (pointer: coarse) { .schedule-grid th, .schedule-grid td { height: 36px; } }
+/* Grade do cronograma no layout do MS Project: cabeçalho em duas linhas e linha fixa, que o Gantt mede para se alinhar. */
+.project-grid th { height: 44px; white-space: normal; line-height: 1.15; vertical-align: bottom; font-size: 11px; }
+.project-grid td { height: 26px; padding: 2px 6px; }
+.project-grid input, .project-grid select { height: 20px; font-size: 12px; }
+.schedule-grid .project-plan-row td { background: #f8fafc; }
+.schedule-grid .project-row-selected td:not(.schedule-selected) { background: #f5f9ff; }
+@media (pointer: coarse) { .project-grid td { height: 34px; } }

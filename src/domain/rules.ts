@@ -128,9 +128,17 @@ export function validateSequence(wagons: Wagon[]): void {
  * resumo do MS Project. Guardar essas datas seria manter duas verdades sobre a mesma coisa: quem
  * edita o subitem esperaria o item acompanhar, e ele não acompanharia. Então o item é calculado
  * aqui, na leitura, a partir de quem está debaixo dele. */
-export interface PlanRollUp { number: string; summary: boolean; leaves: number; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number }
+export interface PlanRollUp {
+  number: string; summary: boolean; leaves: number; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number;
+  /** Resumo: o início real mais cedo entre os subitens que já começaram. */
+  actualStart?: LocalDate;
+  /** Resumo: o término real mais tarde, só quando todos os subitens terminaram. */
+  actualEnd?: LocalDate;
+  /** Linha folha de duração zero. Opcional no tipo para quem monta a linha à mão; `rollUpPlan` sempre preenche. */
+  milestone?: boolean;
+}
 
-export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp> {
+export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp & { milestone: boolean }> {
   // A ordem é que define a estrutura: o pai de uma linha é a anterior mais próxima com nível menor.
   const rows = tasks.slice().sort((a, b) => a.order - b.order);
   const hasChildren = (at: number) => rows[at + 1] !== undefined && rows[at + 1].level > rows[at].level;
@@ -138,7 +146,7 @@ export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp> {
   // que é como o MS Project resume o percentual de um item.
   const weight = (task: PlanTask) => Math.max(1, periodDays(task.plannedStart, task.plannedEnd, false));
   const counters: number[] = [];
-  const result = new Map<Id, PlanRollUp>();
+  const result = new Map<Id, PlanRollUp & { milestone: boolean }>();
 
   for (let at = 0; at < rows.length; at++) {
     const task = rows[at];
@@ -151,12 +159,15 @@ export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp> {
     const leaves: PlanTask[] = [];
     for (let below = at + 1; below < rows.length && rows[below].level > task.level; below++) if (!hasChildren(below)) leaves.push(rows[below]);
     if (!leaves.length) {
-      result.set(task.id, { number, summary: false, leaves: 0, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, progress: task.progress });
+      result.set(task.id, { number, summary: false, leaves: 0, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, progress: task.progress, actualStart: task.actualStart, actualEnd: task.actualEnd, milestone: task.duration?.value === 0 });
       continue;
     }
     const total = leaves.reduce((sum, leaf) => sum + weight(leaf), 0);
+    const started = leaves.filter(leaf => leaf.actualStart).map(leaf => leaf.actualStart!).sort();
+    const finished = leaves.every(leaf => leaf.actualEnd) ? leaves.map(leaf => leaf.actualEnd!).sort() : [];
     result.set(task.id, {
-      number, summary: true, leaves: leaves.length,
+      number, summary: true, leaves: leaves.length, milestone: false,
+      actualStart: started[0], actualEnd: finished.at(-1),
       plannedStart: leaves.reduce((min, leaf) => (leaf.plannedStart < min ? leaf.plannedStart : min), leaves[0].plannedStart),
       plannedEnd: leaves.reduce((max, leaf) => (leaf.plannedEnd > max ? leaf.plannedEnd : max), leaves[0].plannedEnd),
       progress: leaves.reduce((sum, leaf) => sum + leaf.progress * weight(leaf), 0) / total,
@@ -254,14 +265,16 @@ export function progressCurve({ activities, entries, baseline, from, to, step = 
 
 /** Predecessoras escritas como no Project: número da linha, tipo do vínculo e defasagem.
  *
- * `12` · `12TI` · `12II+2d` · `12TT-1d` · `12TI+2dd` · `12TI,15II`
+ * `12` · `12TI` · `12II+2d` · `12TT-1 dia` · `12TI+2dd` · `27TI+6 dias` · `12II+2 dias corridos` · `12;15II`
  *
  * O número é a posição na lista, não o número hierárquico do item: o hierárquico muda a cada
  * recuo, e a referência apontaria para outra linha. O tipo, quando omitido, é TI — é o vínculo
- * que 90% das obras usam e o padrão do Project. `d` são dias úteis; `dd`, corridos. */
+ * que 90% das obras usam e o padrão do Project. `d`/`dias` são dias úteis; `dd`/`dias corridos`,
+ * corridos. Separe as predecessoras com `;` (como o Project) ou `,`. */
 export interface ParsedLink { number: number; type: LinkType; lagDays: number; lagBusiness: boolean }
 const LINK_TYPES: LinkType[] = ['TI', 'II', 'TT', 'IT'];
-const LINK_PATTERN = /^(\d+)\s*(TI|II|TT|IT)?\s*(?:([+-])\s*(\d+)\s*(dd|d)?)?$/i;
+// Sem espaços: `6 dias corridos` chega aqui como `6diascorridos`.
+const LINK_PATTERN = /^(\d+)(TI|II|TT|IT)?(?:([+-])(\d+)(dd|d|dias?(?:de)?corridos?|dias?)?)?$/i;
 
 export function parseLinks(raw: string): { links: ParsedLink[]; invalid: string[] } {
   const links: ParsedLink[] = [];
@@ -271,24 +284,30 @@ export function parseLinks(raw: string): { links: ParsedLink[]; invalid: string[
     if (!match) { invalid.push(piece); continue; }
     const [, number, type, sign, amount, unit] = match;
     const lag = amount ? Number(amount) * (sign === '-' ? -1 : 1) : 0;
+    const lower = (unit ?? 'd').toLowerCase();
     links.push({
       number: Number(number),
       type: (type?.toUpperCase() as LinkType) ?? 'TI',
       lagDays: lag,
       // Sem unidade escrita, a defasagem é em dias úteis, como o Project assume.
-      lagBusiness: (unit ?? 'd').toLowerCase() !== 'dd',
+      lagBusiness: lower !== 'dd' && !lower.includes('corrido'),
     });
   }
   return { links, invalid };
 }
 
-/** O texto de volta para a célula. Vínculo TI sem defasagem sai como só o número, que é como o
- * Project escreve e como o engenheiro lê. */
+/** O texto de volta para a célula, no português do Project. Vínculo TI sem defasagem sai como só
+ * o número; com defasagem, `27TI+6 dias`, `12II+2 dias corridos`, `5TT-1 dia`. */
 export function formatLink(number: number, dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>): string {
   const type = dependency.type === 'TI' ? '' : dependency.type;
   if (!dependency.lagDays) return `${number}${type}`;
-  const sign = dependency.lagDays > 0 ? '+' : '-';
-  return `${number}${type || 'TI'}${sign}${Math.abs(dependency.lagDays)}${dependency.lagBusiness ? 'd' : 'dd'}`;
+  const sign = dependency.lagDays > 0 ? '+' : '-', amount = Math.abs(dependency.lagDays);
+  const unit = (amount === 1 ? 'dia' : 'dias') + (dependency.lagBusiness ? '' : amount === 1 ? ' corrido' : ' corridos');
+  return `${number}${type || 'TI'}${sign}${amount} ${unit}`;
+}
+/** A célula inteira de predecessoras, separadas por `;` como no Project. */
+export function formatLinks(list: ParsedLink[]): string {
+  return list.map(link => formatLink(link.number, link)).join(';');
 }
 
 /** A data mais cedo que o vínculo permite para a sucessora, e qual ponta dela ele prende.

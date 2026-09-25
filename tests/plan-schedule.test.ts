@@ -16,7 +16,7 @@ test('calendário considera feriados, horas, meses úteis e corridos',()=>{
  assert.equal(endFor('2026-09-04',parseDuration('2dd'),c).end,'2026-09-05');
  assert.equal(endFor('2026-09-01',parseDuration('1mês'),calendar).end,'2026-09-28');
  assert.equal(endFor('2026-09-01',parseDuration('1md'),calendar).end,'2026-09-30');
- assert.throws(()=>parseDuration('-1d'));assert.throws(()=>parseDuration('0d'));assert.throws(()=>parseDuration('NaN'));
+ assert.throws(()=>parseDuration('-1d'));assert.deepEqual(parseDuration('0d'),{value:0,unit:'d'});assert.throws(()=>parseDuration('NaN'));
 });
 test('múltiplas predecessoras e defasagens positivas e negativas',()=>{
  const tasks=[task('1'),task('2'),task('3','2026-09-10')];
@@ -40,7 +40,7 @@ test('datas civis independem de fuso e alvo respeita calendário',()=>{
 function setup(){const data=createMockData();data.plans.push({id:'p',...stamp,workId:'obra-1',month:'2026-09',name:'Teste',createdBy:'user-1'});data.planTasks.push(task('1'),task('2'));return data;}
 test('revisão exige motivo, perfil e snapshot, preserva rascunho e grava histórico',async()=>{
  const data=setup(),plan=data.plans.find(p=>p.id==='p')!;const repository=new MockPlanningRepository(data);
- const tasks=structuredClone(data.planTasks.filter(t=>t.planId==='p'));tasks[0].progress=40;
+ const tasks=structuredClone(data.planTasks.filter(t=>t.planId==='p'));tasks[0].progress=40;tasks[0].actualStart=tasks[0].plannedStart;
  const command={type:'save_plan_revision' as const,planId:'p',expectedSnapshot:planSnapshot(plan,data.planTasks,data.planDependencies),reason:'Reunião',tasks,links:[],calendar};
  await assert.rejects(repository.transaction(d=>applyCommand(d,{...command,reason:''},context)),/Motivo/);
  await assert.rejects(repository.transaction(d=>applyCommand(d,command,{...context,actorId:'user-3'})),/consulta/);
@@ -51,7 +51,7 @@ test('revisão exige motivo, perfil e snapshot, preserva rascunho e grava histó
 });
 test('erro numa tarefa rejeita lote todo e baseline preserva vínculos e IDs de origem',async()=>{
  const data=setup(),plan=data.plans.find(p=>p.id==='p')!;data.planDependencies.push(link());
- const repository=new MockPlanningRepository(data);const tasks=scheduleTasks(data.planTasks.filter(t=>t.planId==='p'),[link()]);tasks[0].progress=20;tasks[1].progress=101;
+ const repository=new MockPlanningRepository(data);const tasks=scheduleTasks(data.planTasks.filter(t=>t.planId==='p'),[link()]);tasks[0].progress=20;tasks[0].actualStart=tasks[0].plannedStart;tasks[1].progress=101;
  await assert.rejects(repository.transaction(d=>applyCommand(d,{type:'save_plan_revision',planId:'p',expectedSnapshot:planSnapshot(plan,data.planTasks,data.planDependencies),reason:'Teste',tasks,links:[link()],calendar},context)),/100/);
  assert.deepEqual(await repository.getSnapshot(),data);
  const id=applyCommand(data,{type:'freeze_plan_baseline',planId:'p',name:'Base teste'},context);

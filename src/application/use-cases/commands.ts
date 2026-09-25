@@ -1,8 +1,9 @@
-import { scheduleTasks, planSnapshot, DEFAULT_CALENDAR, type WorkCalendar } from '../../domain/plan-schedule';
-import type { Activity, BoardStatus, LinkRuleCriterion, LinkType, NonFulfillmentCause, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import { scheduleTasks, planSnapshot, planWindow, withProgress, DEFAULT_CALENDAR, type WorkCalendar } from '../../domain/plan-schedule';
+import type { Activity, BoardStatus, LinkRuleCriterion, LinkType, MediumTermPlan, NonFulfillmentCause, PlanDependency, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
 import { LINK_TYPES, NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
+import { LONG_TERM_PREFIX, planLongTermSync, type LongTermSlot } from './sync-long-term-plan';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
 export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
 export type Command =
@@ -36,7 +37,8 @@ export type Command =
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
-  | { type: 'create_plan'; workId: string; month: string; name?: string }
+  /** `copyFrom`: plano vivo de mês anterior da mesma obra, copiado como ponto de partida. */
+  | { type: 'create_plan'; workId: string; month: string; name?: string; copyFrom?: string }
   | { type: 'delete_plan'; planId: string }
   | { type: 'freeze_plan_baseline'; planId: string; name: string }
   | { type: 'create_plan_task'; planId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; level?: number }
@@ -57,7 +59,8 @@ export type Command =
   | { type: 'delete_link_rule'; ruleId: string }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
   | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
-  | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string };
+  | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string }
+  | { type: 'sync_long_term_plan'; sequenceId: string; responsibleId: string; slots: LongTermSlot[] };
 export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
 export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
 
@@ -80,6 +83,36 @@ function subtree(rows: PlanTask[], at: number) {
   const family = [rows[at]];
   for (let i = at + 1; i < rows.length && rows[i].level > rows[at].level; i++) family.push(rows[i]);
   return family;
+}
+
+/** O plano do mês nasce como cópia do anterior: mesmas linhas com novos ids, menos o que já
+ * terminou antes da janela nova e os resumos que ficaram sem filhos. Linha que perdeu uma
+ * predecessora ganha a restrição "Não iniciar antes de" no início atual, para não saltar de data. */
+function copyPlanForward(source: PlanTask[], sourceLinks: PlanDependency[], plan: MediumTermPlan, base: () => RecordBase): { tasks: PlanTask[]; links: PlanDependency[] } {
+  const horizon = planWindow(plan.month);
+  const rows = source.slice().sort((a, b) => a.order - b.order);
+  const hasChildren = (list: PlanTask[], at: number) => list[at + 1] !== undefined && list[at + 1].level > list[at].level;
+  const wasSummary = new Set(rows.filter((_, at) => hasChildren(rows, at)).map(t => t.id));
+  let kept = rows.filter(t => wasSummary.has(t.id) || !(t.progress === 100 && (t.actualEnd ?? t.plannedEnd) < horizon.start));
+  for (let size = -1; size !== kept.length;) { size = kept.length; kept = kept.filter((t, at) => !wasSummary.has(t.id) || hasChildren(kept, at)); }
+  const ids = new Map(kept.map(t => [t.id, base().id]));
+  const links = sourceLinks.filter(l => ids.has(l.predecessorId) && ids.has(l.successorId))
+    .map(l => ({ ...l, ...base(), predecessorId: ids.get(l.predecessorId)!, successorId: ids.get(l.successorId)! }));
+  const lostLink = new Set(sourceLinks.filter(l => ids.has(l.successorId) && !ids.has(l.predecessorId)).map(l => l.successorId));
+  let previous = -1;
+  const tasks = kept.map((t, at) => {
+    const { id: _id, version: _version, sourceTaskId: _source, ...rest } = t;
+    const level = Math.min(Math.max(0, t.level), previous + 1); previous = level;
+    return { ...rest, ...base(), id: ids.get(t.id)!, planId: plan.id, order: at + 1, level, ...(lostLink.has(t.id) ? { anchorStart: t.plannedStart } : {}) };
+  });
+  // Resumo não carrega real; folha com % passa pela regra do Project (dado antigo com % e sem
+  // início real ganha as datas reais), senão a primeira revisão do mês novo seria recusada.
+  const calendar = plan.calendar ?? DEFAULT_CALENDAR;
+  const normalized = tasks.map((t, at) => {
+    if (hasChildren(tasks, at)) { const { actualStart: _s, actualEnd: _e, ...summary } = t; return summary; }
+    return t.progress > 0 ? withProgress(t, t.progress, calendar) : t;
+  });
+  return { tasks: scheduleTasks(normalized, links, calendar), links };
 }
 
 function wagonFor(data: PlanningData, id: string): Wagon {
@@ -429,8 +462,20 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       checkWork(command.workId);
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(command.month)) throw new Error('Informe o mês no formato AAAA-MM.');
       if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf)) throw new Error('Esta obra já tem um plano para este mês.');
-      const plan = { ...base(), workId: command.workId, month: command.month, name: command.name?.trim() || `Plano de ${command.month}`, createdBy: actorId };
-      data.plans.push(plan); entityId = plan.id; break;
+      const source = command.copyFrom === undefined ? undefined : planFor(command.copyFrom);
+      if (source) {
+        if (source.workId !== command.workId) throw new Error('O plano de origem deve ser da mesma obra.');
+        if (source.baselineOf || source.frozenAt) throw new Error('Copie de um plano vivo, não de uma linha de base.');
+        if (source.month >= command.month) throw new Error('O plano de origem deve ser de um mês anterior ao novo plano.');
+      }
+      const plan: MediumTermPlan = { ...base(), workId: command.workId, month: command.month, name: command.name?.trim() || `Plano de ${command.month}`, createdBy: actorId,
+        ...(source ? { copiedFromPlanId: source.id, ...(source.calendar ? { calendar: structuredClone(source.calendar) } : {}) } : {}) };
+      data.plans.push(plan);
+      if (source) {
+        const copy = copyPlanForward(data.planTasks.filter(t => t.planId === source.id), data.planDependencies.filter(l => data.planTasks.some(t => t.planId === source.id && t.id === l.successorId)), plan, base);
+        data.planTasks.push(...copy.tasks); data.planDependencies.push(...copy.links);
+      }
+      entityId = plan.id; break;
     }
     case 'delete_plan': {
       const plan = planFor(command.planId); checkWork(plan.workId);
@@ -478,10 +523,18 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         if (input.anchorStart) validateDate(input.anchorStart);
         const summary = command.tasks[index+1]?.level > input.level;
         if (summary && old && input.progress !== old.progress) throw new Error('Progresso de resumo é calculado.');
+        if (input.actualStart) validateDate(input.actualStart);
+        if (input.actualEnd) validateDate(input.actualEnd);
+        const row = `Linha ${index+1}`;
+        if (summary && (input.actualStart || input.actualEnd)) throw new Error(`${row}: tarefa-resumo não recebe início ou término real; informe nas subtarefas.`);
+        if (input.actualEnd && !input.actualStart) throw new Error(`${row}: término real exige início real.`);
+        if (input.actualStart && input.actualEnd && input.actualStart > input.actualEnd) throw new Error(`${row}: início real não pode ser depois do término real.`);
+        if (input.actualEnd && input.progress !== 100) throw new Error(`${row}: tarefa com término real deve estar 100% concluída.`);
+        if (!summary && input.progress > 0 && !input.actualStart) throw new Error(`${row}: tarefa com % concluído precisa de início real.`);
         return { ...base(), ...old, id: input.id, planId: plan.id, name: requireText(input.name, 'Nome'),
           plannedStart: input.plannedStart, plannedEnd: input.plannedEnd, progress: input.progress, level: input.level, order: index+1,
           teamId: input.teamId || undefined, notes: typeof input.notes === 'string' ? input.notes : undefined,
-          duration: input.duration, anchorStart: input.anchorStart, version: (old?.version ?? 0) + 1, updatedAt: now };
+          duration: input.duration, anchorStart: input.anchorStart, actualStart: input.actualStart || undefined, actualEnd: input.actualEnd || undefined, version: (old?.version ?? 0) + 1, updatedAt: now };
       });
       const linkIds = new Set<string>();
       const links = command.links.map(input => {
@@ -498,7 +551,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       for (const id of new Set([...before.map(t=>t.id), ...calculated.map(t=>t.id)])) {
         const old=before.find(t=>t.id===id), next=calculated.find(t=>t.id===id);
         const changes: Record<string, unknown> = {};
-        for (const field of ['name','plannedStart','plannedEnd','duration','anchorStart','teamId','notes','progress','level','order'] as const) {
+        for (const field of ['name','plannedStart','plannedEnd','duration','anchorStart','actualStart','actualEnd','teamId','notes','progress','level','order'] as const) {
           if(JSON.stringify(old?.[field])!==JSON.stringify(next?.[field])) changes[field]={before:old?.[field]??null,after:next?.[field]??null};
         }
         const oldLinks=data.planDependencies.filter(l=>l.successorId===id).map(({predecessorId,type,lagDays,lagBusiness})=>({predecessorId,type,lagDays,lagBusiness}));
@@ -759,8 +812,62 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       validateSequence(data.wagons);
       entityId = sequence.id; break;
     }
+    case 'sync_long_term_plan': {
+      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      const workId = sequence.workId; checkWork(workId); responsible(command.responsibleId, workId);
+      if (!Array.isArray(command.slots) || command.slots.length > 100_000) throw new Error('Plano inválido.');
+      for (const slot of command.slots) {
+        if (typeof slot?.key !== 'string' || !slot.key.startsWith(LONG_TERM_PREFIX)) throw new Error('Plano inválido.');
+        requireText(slot.name, 'Serviço'); requireText(slot.location, 'Pavimento'); validatePeriod(slot.plannedStart, slot.plannedEnd);
+      }
+      const plan = planLongTermSync(data, sequence.id, command.slots, today);
+      if (plan.aborted) throw new Error(plan.reason);
+      if (!plan.wagons.length) throw new Error('O plano não tem serviço a partir da fronteira dos vagões liberados: nada a gerar.');
+      const removedWagons = new Set(plan.removedWagonIds), removedActivities = new Set(plan.removedActivityIds);
+      const removedRestrictions = new Set(plan.removedRestrictionIds), removedPending = new Set(plan.removedPendingIds);
+      const tail = data.wagons.filter(w => w.sequenceId === sequence.id && !removedWagons.has(w.id) && w.id !== plan.frozenWagonId && !data.releases.some(r => r.wagonId === w.id));
+      data.wagons = data.wagons.filter(w => !removedWagons.has(w.id));
+      data.activities = data.activities.filter(a => !removedActivities.has(a.id));
+      data.criteria = data.criteria.filter(c => !removedActivities.has(c.activityId));
+      data.pendingItems = data.pendingItems.filter(p => !removedPending.has(p.id));
+      data.restrictions = data.restrictions.filter(r => !removedRestrictions.has(r.id));
+      for (const item of [...data.pendingItems, ...data.restrictions]) if (item.activityId && removedActivities.has(item.activityId)) { item.activityId = undefined; touch(item); }
+      // Mesmos cuidados da regeneração pelo Prevision: o payload trafega inteiro, e filho de
+      // atividade removida reinserido derrubaria a transação pela chave estrangeira.
+      data.progressEntries = data.progressEntries.filter(p => !removedActivities.has(p.activityId));
+      for (const commitment of data.commitments) if (commitment.activityId && removedActivities.has(commitment.activityId)) { commitment.activityId = undefined; touch(commitment); }
+      for (const task of data.planTasks) if (task.activityId && removedActivities.has(task.activityId)) { task.activityId = undefined; touch(task); }
+      data.dependencies = data.dependencies.filter(d => !removedActivities.has(d.predecessorId) && !removedActivities.has(d.successorId));
+      const teams = data.teams.filter(t => t.workId === workId);
+      const teamFor = (names: string[]) => names.map(n => teams.find(t => t.name.trim().toLowerCase() === n.trim().toLowerCase())).find(Boolean)?.id;
+      let predecessorId = plan.frozenWagonId; let number = plan.startNumber;
+      // Numeração nova pode colidir no meio da troca com um vagão mantido: numera provisoriamente
+      // fora da faixa e acerta no fim, antes da validação da sequência.
+      for (const wagon of tail) wagon.number = -wagon.number - 1_000_000;
+      for (const planned of plan.wagons) {
+        let wagon = tail.find(w => w.plannedStart === planned.plannedStart);
+        if (wagon) Object.assign(wagon, { number, predecessorId, plannedEnd: planned.plannedEnd, taktDays: planned.taktDays, updatedAt: now });
+        else { wagon = { ...base(), sequenceId: sequence.id, number, predecessorId, plannedStart: planned.plannedStart, plannedEnd: planned.plannedEnd, taktDays: planned.taktDays, responsibleIds: [command.responsibleId] }; data.wagons.push(wagon); }
+        for (const item of planned.activities) {
+          let location = data.locations.find(l => l.workId === workId && l.name === item.location);
+          if (!location) { location = { ...base(), workId, name: item.location, code: '' }; data.locations.push(location); }
+          const existing = data.activities.find(a => a.previsionExternalId === item.externalId);
+          if (existing) {
+            Object.assign(existing, { wagonId: wagon.id, name: requireText(item.name, 'Atividade'), locationId: location.id, plannedStart: item.plannedStart, plannedEnd: item.plannedEnd, weight: item.weight > 0 ? item.weight : 1, origin: 'long_term' as const, teamId: existing.teamId ?? teamFor(item.teamNames), updatedAt: now });
+            validateActivity(existing);
+          } else {
+            const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(item.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: item.plannedStart, plannedEnd: item.plannedEnd, progress: 0, status: 'not_started', weight: item.weight > 0 ? item.weight : 1, mandatory: true, origin: 'long_term', previsionExternalId: item.externalId, teamId: teamFor(item.teamNames) };
+            validateActivity(activity); data.activities.push(activity);
+            data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local do serviço no pavimento', mandatory: true, fulfilled: false });
+          }
+        }
+        predecessorId = wagon.id; number++;
+      }
+      validateSequence(data.wagons);
+      entityId = sequence.id; break;
+    }
   }
-  data.history.push({ id: newId(), entityId: wagonId ?? entityId, entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning', action: command.type, authorId: actorId, occurredAt: now, changes: { targetId: entityId, ...command } });
+  data.history.push({ id: newId(), entityId: wagonId ?? entityId, entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning', action: command.type, authorId: actorId, occurredAt: now, changes: { targetId: entityId, ...(command.type === 'sync_long_term_plan' ? { type: command.type, sequenceId: command.sequenceId, slots: command.slots.length } : command) } });
   for (const id of beforeTerminal) if (!isTerminal(id, data)) data.history.push({ id: newId(), entityId: id, entityType: 'wagon', action: 'terminality_reopened', authorId: actorId, occurredAt: now, changes: { reason: 'reason' in command ? command.reason : undefined } });
   return entityId;
 }

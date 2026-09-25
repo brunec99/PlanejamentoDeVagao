@@ -23,7 +23,7 @@ function serviceOf(name: string) {
 const days = (from: number, to: number) => Math.round((to - from) / DAY) + 1;
 /** Altura do local na obra, para as linhas seguirem a ordem física e não a alfabética.
  * Os nomes vêm do Prevision: "Térreo", "5º pavto", "Cobertura", "Barrilete", "Fach - Sul". */
-function height(name: string): number {
+export function height(name: string): number {
   const text = name.toLowerCase();
   const floor = /(\d+)\s*º?\s*(pav|pavto|pavimento|andar)/.exec(text) ?? /^\s*(\d+)/.exec(text);
   // Fachada, hall e equipamento atravessam a obra inteira: não têm altura, ficam no fim.
@@ -37,7 +37,7 @@ function height(name: string): number {
   if (/barrilete|casa de m[áa]q|reservat/.test(text)) return 950;
   return 9999; // fachadas, halls, equipamentos: sem altura própria, vão para o fim
 }
-function byHeight(a: Location, b: Location) {
+export function byHeight(a: Location, b: Location) {
   const diff = height(a.name) - height(b.name);
   return diff !== 0 ? diff : a.name.localeCompare(b.name, 'pt-BR', { numeric: true });
 }

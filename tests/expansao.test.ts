@@ -295,8 +295,8 @@ test('predecessora é lida como no Project: número, tipo e defasagem',()=>{
   assert.equal(parseLinks('12, alvenaria').links.length,1);
   // Ida e volta: o texto que a célula mostra é lido de volta igual.
   assert.equal(formatLink(12,{type:'TI',lagDays:0,lagBusiness:true}),'12');
-  assert.equal(formatLink(15,{type:'II',lagDays:2,lagBusiness:true}),'15II+2d');
-  assert.equal(formatLink(7,{type:'TT',lagDays:-1,lagBusiness:false}),'7TT-1dd');
+  assert.equal(formatLink(15,{type:'II',lagDays:2,lagBusiness:true}),'15II+2 dias');
+  assert.equal(formatLink(7,{type:'TT',lagDays:-1,lagBusiness:false}),'7TT-1 dia corrido');
 });
 
 test('cada tipo de vínculo prende a ponta que o nome diz',()=>{

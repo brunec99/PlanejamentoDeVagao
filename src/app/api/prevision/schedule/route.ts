@@ -75,6 +75,13 @@ export async function POST(request: NextRequest) {
   const sequences = snapshot.sequences.filter(s => s.workId === auth.workId);
   const regeneration = [];
   for (const sequence of sequences) {
+    // Sequência cujos vagões vêm do plano de longo prazo tem dono: o Prevision atualiza só o cache
+    // de leitura, e regenerar aqui apagaria a cauda que o plano montou.
+    const wagonIds = new Set(snapshot.wagons.filter(w => w.sequenceId === sequence.id).map(w => w.id));
+    if (snapshot.activities.some(a => a.origin === 'long_term' && wagonIds.has(a.wagonId))) {
+      regeneration.push({ sequenceName: sequence.name, aborted: true, reason: 'Os vagões desta sequência são gerados pelo plano de longo prazo; o Prevision não os altera.' });
+      continue;
+    }
     const preview = planSequenceRegeneration(snapshot, sequence.id, projectId, rows, sequence.defaultTaktDays, DEMO_DATE);
     if (preview.aborted) {
       regeneration.push({ sequenceName: sequence.name, aborted: true, reason: preview.reason });
