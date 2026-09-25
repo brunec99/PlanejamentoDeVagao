@@ -3,14 +3,15 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type FocusEvent, type FormEvent } from 'react';
 import type { Command } from '@/application/use-cases/commands';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
-import { NON_FULFILLMENT_CAUSES, type Activity, type Team, type Wagon, type WeeklyCommitment } from '@/domain/entities';
-import { teamLabel } from '@/domain/resources';
+import { NON_FULFILLMENT_CAUSES, type Activity, type Wagon, type WeeklyCommitment } from '@/domain/entities';
 import { causePareto, leadTimeDeadline, ppc, ppcSeries, type WeekPpc } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Field } from '@/modules/planejamento/forms';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
+import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
+import { applySheetView, companyOptions, compareText, distinctValues, textKey, weekOptions, type Accessor, type SheetFilters, type SheetSort } from '@/modules/curto-prazo/sheet-view';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6] as const;
 const NAMES = { 1: 'SEG', 2: 'TER', 3: 'QUA', 4: 'QUI', 5: 'SEX', 6: 'SÁB' } as const;
@@ -20,8 +21,11 @@ const dayMonth = (date: string) => formatDate(date).slice(0, 5);
 // exige atenção. Nenhuma paleta nova: o que muda de tela para tela é o significado, não o tom.
 const BAR = '#1d4ed8', HERE = '#b45309', HEAVY = '#be123c';
 /** Campos que a linha em branco acumula antes de existir: só a atividade é obrigatória. */
-type Draft = { supplier: string; startDate: string; endDate: string; name: string; teamId: string };
-const EMPTY_DRAFT: Draft = { supplier: '', startDate: '', endDate: '', name: '', teamId: '' };
+type Draft = { supplier: string; startDate: string; endDate: string; name: string; teamName: string };
+const EMPTY_DRAFT: Draft = { supplier: '', startDate: '', endDate: '', name: '', teamName: '' };
+/** Capacidade de uma equipe criada na própria planilha. É um ponto de partida, não uma medição:
+ * o planejador ajusta nas configurações da obra, e a análise de carga do médio prazo usa o valor. */
+const NEW_TEAM_CAPACITY = 3;
 
 export function CommitmentsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -29,6 +33,9 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [pendencyFor, setPendencyFor] = useState('');
+  const [filters, setFilters] = useState<SheetFilters>({});
+  const [sort, setSort] = useState<SheetSort>();
+  const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
@@ -40,16 +47,17 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const teams = data.teams.filter(t => t.workId === workId).sort((a, b) => a.company.localeCompare(b.company) || a.name.localeCompare(b.name, 'pt-BR'));
   const commitments = data.commitments.filter(c => c.workId === workId);
   const currentWeek = startOfWeek(planning.today);
-  const weeks = [...new Set([currentWeek, ...commitments.map(c => c.weekStart)])].sort().reverse();
-  const week = weeks.includes(chosen) ? chosen : currentWeek;
   const firstWeek = startOfWeek(commitments.reduce((earliest, c) => (c.weekStart < earliest ? c.weekStart : earliest), planning.today));
+  // Da primeira semana da obra até quatro à frente, mais qualquer semana já usada fora desse intervalo.
+  const weeks = [...new Set([...weekOptions(firstWeek, currentWeek), ...commitments.map(c => c.weekStart)])].sort();
+  const week = weeks.includes(chosen) ? chosen : currentWeek;
   const weekNumber = (start: string) => Math.floor((Date.parse(start) - Date.parse(firstWeek)) / 604800000) + 1;
-  const rows = commitments.filter(c => c.weekStart === week).sort((a, b) => a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt));
-  const stats = ppc(rows);
+  const weekRows = commitments.filter(c => c.weekStart === week);
+  const stats = ppc(weekRows);
   const series = ppcSeries(commitments);
   const wagonIds = new Set(selected.wagons.map(w => w.id));
   const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
-  const pendencyRow = rows.find(r => r.id === pendencyFor);
+  const pendencyRow = weekRows.find(r => r.id === pendencyFor);
 
   const run = async (command: Command, key: string) => {
     if (busy) return;
@@ -92,16 +100,95 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
 
   const weekEnd = addDays(week, 6);
   const columns = WEEKDAYS.map(day => ({ day, date: addDays(week, day - 1) }));
+  const marked = (row: WeeklyCommitment, day: number) => { const date = addDays(row.weekStart, day - 1); return row.startDate <= date && date <= row.endDate; };
+  const teamOf = (row: WeeklyCommitment) => teams.find(t => t.id === row.teamId);
+  /** A empresa da linha é o fornecedor escrito nela; sem ele, a empresa da equipe alocada. */
+  const companyOf = (row: WeeklyCommitment) => row.supplier.trim() || teamOf(row)?.company || '';
+  const companies = companyOptions(teams.map(t => t.company), commitments.map(c => c.supplier));
+  const teamsOfCompany = (company: string) => company.trim() ? teams.filter(t => textKey(t.company) === textKey(company)) : [];
+  // "Não" escolhido e ainda sem causa não é gravado: o comando exige a causa, e inventar uma
+  // poluiria o Pareto. A linha fica marcada até a causa ser escolhida.
+  const statusOf = (row: WeeklyCommitment) => row.fulfilled === undefined ? (awaitingCause.includes(row.id) ? 'Não' : '') : row.fulfilled ? 'Sim' : 'Não';
+  const weekLabel = (start: string) => `${weekNumber(start)} · ${dayMonth(start)}`;
+
+  const accessors: Record<string, Accessor<WeeklyCommitment>> = {
+    empresa: companyOf, semana: r => String(weekNumber(r.weekStart)), inicio: r => dayMonth(r.startDate), termino: r => dayMonth(r.endDate),
+    atividade: r => r.name, equipe: r => teamOf(r)?.name ?? '',
+    ...Object.fromEntries(WEEKDAYS.map(day => [`d${day}`, (r: WeeklyCommitment) => marked(r, day) ? 'x' : ''])),
+    status: statusOf, causas: r => r.cause ?? '', justificativa: r => r.justification ?? '',
+  };
+  const sortKeys: Record<string, Accessor<WeeklyCommitment>> = { inicio: r => r.startDate, termino: r => r.endDate };
+  // Ordem da planilha de origem: as linhas de cada empresa juntas, e dentro dela pela data de início.
+  const defaultOrder = (a: WeeklyCommitment, b: WeeklyCommitment) => {
+    const [x, y] = [companyOf(a), companyOf(b)];
+    if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
+    return compareText(x, y) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt);
+  };
+  const rows = applySheetView([...weekRows], accessors, filters, sort, defaultOrder, sortKeys);
+  const filtered = Object.values(filters).some(Boolean) || !!sort;
+  const waiting = weekRows.filter(r => r.fulfilled === undefined && awaitingCause.includes(r.id)).length;
+
+  const header = (column: string, label: string, className: string, align: 'left' | 'center' = 'left') =>
+    <th key={column} scope="col" className={className}><ColumnFilter label={label} align={align} values={distinctValues(weekRows, accessors[column])}
+      selected={filters[column]} onChange={next => setFilters(current => ({ ...current, [column]: next }))}
+      sort={sort?.column === column ? sort.dir : undefined} onSort={dir => setSort(dir ? { column, dir } : undefined)} /></th>;
+
+  /** Equipe existente da empresa é só alocada; nome novo entra no cadastro daquela empresa antes. */
+  const assignTeam = async (row: WeeklyCommitment, name: string) => {
+    const company = companyOf(row);
+    const existing = teamsOfCompany(company).find(t => textKey(t.name) === textKey(name));
+    if (existing) return save(row, { teamId: existing.id, supplier: row.supplier || existing.company });
+    if (!company) { setError('Escolha a empresa da linha antes de criar uma equipe.'); return; }
+    if (busy) return;
+    setBusy(row.id); setError('');
+    try {
+      const teamId = await context.execute({ type: 'create_team', workId, company, name: name.trim(), weeklyCapacity: NEW_TEAM_CAPACITY });
+      await context.execute({ type: 'update_commitment', commitmentId: row.id, name: row.name, supplier: row.supplier || company, teamId, weekStart: row.weekStart, startDate: row.startDate, endDate: row.endDate });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar.'); }
+    finally { setBusy(''); }
+  };
+  /** Trocar a empresa desfaz a equipe de outra empresa: a equipe pertence a uma empresa só. */
+  const assignCompany = (row: WeeklyCommitment, company: string) => {
+    const team = teamOf(row);
+    return save(row, { supplier: company, teamId: team && textKey(team.company) !== textKey(company) ? undefined : row.teamId });
+  };
+  const setStatus = (row: WeeklyCommitment, value: string) => {
+    if (value === 'Sim') {
+      setAwaitingCause(ids => ids.filter(id => id !== row.id));
+      return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: row.justification }, row.id);
+    }
+    if (value === 'Não' && row.fulfilled !== false) setAwaitingCause(ids => ids.includes(row.id) ? ids : [...ids, row.id]);
+  };
+  const setCause = (row: WeeklyCommitment, cause: string) => {
+    if (!cause) return;
+    setAwaitingCause(ids => ids.filter(id => id !== row.id));
+    return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: row.justification }, row.id);
+  };
+  const createRow = async (draft: Draft) => {
+    if (busy) return;
+    setBusy('nova'); setError('');
+    try {
+      const company = draft.supplier.trim();
+      let teamId: string | undefined;
+      if (draft.teamName.trim() && company) {
+        teamId = teamsOfCompany(company).find(t => textKey(t.name) === textKey(draft.teamName))?.id
+          ?? await context.execute({ type: 'create_team', workId, company, name: draft.teamName.trim(), weeklyCapacity: NEW_TEAM_CAPACITY });
+      }
+      await context.execute({ type: 'create_commitment', workId, name: draft.name.trim(), weekStart: week, responsibleId: actor.id,
+        supplier: company, teamId: teamId ?? null, startDate: draft.startDate || undefined, endDate: draft.endDate || undefined });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar.'); }
+    finally { setBusy(''); }
+  };
 
   return <>
     <p className="eyebrow">Aba 4 · {selected.work.code} · {selected.work.name}</p>
     <h1 className="page-title">Cronograma de curto prazo</h1>
-    <p className="mt-1 text-sm text-slate-500">Planilha da semana: equipe, cumprimento (Sim/Não) e causa do não cumprimento, com o PPC.</p>
+    <p className="mt-1 text-sm text-slate-500">Planejamento e controle da produção: a planilha da semana, com empresa, equipe, cumprimento (Sim/Não) e causa do não cumprimento.</p>
 
     <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-600">
       <label className="flex items-center gap-2">Semana analisada
-        <select className="field max-w-52 py-1.5" value={week} onChange={e => { setChosen(e.target.value); setPendencyFor(''); }}>
-          {weeks.map(w => <option key={w} value={w}>{weekNumber(w)} · {dayMonth(w)} a {dayMonth(addDays(w, 5))}</option>)}
+        <select className="field max-w-60 py-1.5" value={week} onChange={e => { setChosen(e.target.value); setPendencyFor(''); }}>
+          {[...weeks].reverse().map(w => <option key={w} value={w}>{weekNumber(w)} · {dayMonth(w)} a {dayMonth(addDays(w, 5))}{w === currentWeek ? ' (atual)' : ''}</option>)}
         </select>
       </label>
       <span>Semana atual: <span className="tabular-nums text-slate-900">{weekNumber(currentWeek)}</span></span>
@@ -109,51 +196,54 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         {stats.pending > 0 && <span className="ml-1 font-normal text-slate-400">({stats.pending} sem status)</span>}</span>
     </div>
 
-    <p className="mt-2 text-xs leading-5 text-slate-500">
-      As células de SEG a SÁB se preenchem a partir de Início e Término.<br />
-      Trocar a Semana de uma linha desloca Início e Término pelo mesmo número de semanas, e a linha sai da semana exibida.<br />
-      A linha com Status <strong className="font-semibold text-slate-600">Não</strong> ganha as ações de fechamento: levar o compromisso para a semana seguinte e gerar pendência no quadro do longo prazo.
-    </p>
-
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
-      <p className="text-slate-600">{teams.length ? `${teams.length} equipes disponíveis nesta obra.` : 'Nenhuma equipe cadastrada nesta obra.'} A alocação é opcional. Na nova linha, escolher uma equipe preenche o fornecedor se estiver vazio.</p>
+      <p className="text-slate-600">Empresa e Equipe: escolha na lista ou digite um nome novo. Equipe nova entra no cadastro da empresa da linha, com capacidade de {NEW_TEAM_CAPACITY} atividades por semana, ajustável nas configurações. Os dias de SEG a SÁB se marcam a partir de Início e Término.</p>
       <Link className="text-link shrink-0" href={workPath(workId, 'configuracoes')}>{readOnly ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}</Link>
     </div>
 
     {error && <div className="mt-3"><Callout tone="danger" role="alert">{error}</Callout></div>}
+    {waiting > 0 && <div className="mt-3"><Callout tone="warning" role="status">{waiting === 1 ? '1 linha marcada como Não aguarda' : `${waiting} linhas marcadas como Não aguardam`} a causa. O Não só é gravado depois que a causa é escolhida.</Callout></div>}
+    {filtered && <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+      <span>Mostrando {rows.length} de {weekRows.length} linhas.</span>
+      <button type="button" className="text-link" onClick={() => { setFilters({}); setSort(undefined); }}>Limpar filtros e classificação</button>
+    </div>}
 
     <div className="panel mt-4 overflow-x-auto custom-scrollbar" role="region" aria-label={`Planilha da semana ${weekNumber(week)}`} tabIndex={0}>
-      <table data-tour="curto-commitments" className="w-full min-w-[1560px] text-left text-xs">
+      <table data-tour="curto-commitments" className="w-full min-w-[1760px] border-collapse text-left text-xs">
         <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          <tr>
-            <th scope="col" className="w-40 px-2 py-2">Fornecedor</th>
-            <th scope="col" className="w-32 px-2 py-2">Semana</th>
-            <th scope="col" className="w-32 px-2 py-2">Início</th>
-            <th scope="col" className="w-32 px-2 py-2">Término</th>
-            <th scope="col" className="px-2 py-2">Atividade</th>
-            <th scope="col" className="w-60 px-2 py-2">Recurso · empreiteiro / equipe</th>
-            {columns.map(({ day, date }) => <th scope="col" key={day} className="w-11 px-1 py-2 text-center">{NAMES[day]}<span className="block font-semibold tabular-nums text-slate-400">{dayMonth(date)}</span></th>)}
-            <th scope="col" className="w-20 px-2 py-2">Status</th>
-            <th scope="col" className="w-44 px-2 py-2">Causas</th>
-            <th scope="col" className="w-44 px-2 py-2">Justificativa</th>
-            <th scope="col" className="w-44 px-2 py-2">Do não cumprido</th>
+          <tr className="text-[10px] font-semibold normal-case tracking-normal text-slate-400">
+            <th colSpan={6} className="px-2 pt-1.5" />
+            {columns.map(({ day, date }) => <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">{dayMonth(date)}</th>)}
+            <th colSpan={5} />
+          </tr>
+          <tr className="border-b border-slate-200">
+            {header('empresa', 'Empresa', 'w-44 px-2 py-1.5')}
+            {header('semana', 'Semana', 'w-28 px-2 py-1.5')}
+            {header('inicio', 'Início', 'w-32 px-2 py-1.5')}
+            {header('termino', 'Término', 'w-32 px-2 py-1.5')}
+            {header('atividade', 'Atividade', 'min-w-72 px-2 py-1.5')}
+            {header('equipe', 'Equipe', 'w-40 px-2 py-1.5')}
+            {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'w-14 border-l border-slate-200 px-1 py-1.5', 'center'))}
+            {header('status', 'Status', 'w-24 px-2 py-1.5')}
+            {header('causas', 'Causas', 'min-w-[14rem] px-2 py-1.5')}
+            {header('justificativa', 'Justificativas', 'w-56 px-2 py-1.5')}
+            <th scope="col" className="min-w-[13rem] px-2 py-1.5">Do não cumprido</th>
             <th scope="col" className="w-8"><span className="sr-only">Excluir</span></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
             const saving = busy === row.id;
-            const team = teams.find(t => t.id === row.teamId);
-            return <tr key={row.id} className={`border-t border-slate-100 ${saving ? 'bg-amber-50/60' : 'hover:bg-slate-50/60'}`}>
+            const status = statusOf(row);
+            const missingCause = status === 'Não' && !row.cause;
+            return <tr key={row.id} className={`border-t border-slate-100 ${saving ? 'bg-amber-50/60' : missingCause ? 'bg-rose-50/40' : 'hover:bg-slate-50/60'}`}>
               <td className="px-1 py-1">
-                <input key={row.supplier} className="cell" defaultValue={row.supplier} disabled={readOnly || !!busy} aria-label={`Fornecedor da linha ${index + 1}`} placeholder="—"
-                  onBlur={e => save(row, { supplier: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
-                {!readOnly && team?.company && row.supplier !== team.company && <button type="button" disabled={!!busy} className="px-1 text-left text-[10px] font-semibold text-blue-700" onClick={() => save(row, { supplier: team.company })}>Usar {team.company}</button>}
+                <PillCombo value={companyOf(row)} options={companies} disabled={readOnly || !!busy} ariaLabel={`Empresa da linha ${index + 1}`} placeholder="Empresa"
+                  onCommit={value => assignCompany(row, value)} />
               </td>
               <td className="px-1 py-1">
-                <input className="cell tabular-nums" type="date" defaultValue={row.weekStart} disabled={readOnly}
-                  aria-label={`Semana da linha ${index + 1}, qualquer dia da semana`} title={`Semana ${weekNumber(row.weekStart)}`}
-                  onBlur={e => moveWeek(row, e.target.value)} />
+                <PillSelect value={row.weekStart} disabled={readOnly || !!busy} ariaLabel={`Semana da linha ${index + 1}`} title={`${dayMonth(row.weekStart)} a ${dayMonth(addDays(row.weekStart, 5))}`}
+                  options={weeks.map(w => ({ value: w, label: weekLabel(w) }))} onChange={value => moveWeek(row, value)} />
               </td>
               <td className="px-1 py-1">
                 <input className="cell tabular-nums" type="date" defaultValue={row.startDate} disabled={readOnly} min={row.weekStart} max={row.weekEnd}
@@ -168,46 +258,35 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
                   onBlur={e => save(row, { name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
               </td>
               <td className="px-1 py-1">
-                <select className="cell" value={row.teamId ?? ''} disabled={readOnly || !!busy} aria-label={`Empreiteiro e equipe da linha ${index + 1}`}
-                  onChange={e => save(row, { teamId: e.target.value || undefined })}>
-                  <option value="">Sem equipe</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
-                </select>
+                <PillCombo value={teamOf(row)?.name ?? ''} options={teamsOfCompany(companyOf(row)).map(t => t.name)} disabled={readOnly || !!busy}
+                  allowCreate={!!companyOf(row)} emptyHint={companyOf(row) ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
+                  createLabel={text => `Criar equipe “${text}” em ${companyOf(row)}`} ariaLabel={`Equipe da linha ${index + 1}`} placeholder="Equipe"
+                  onCommit={value => assignTeam(row, value)} />
               </td>
-              {WEEKDAYS.map(day => {
-                const date = addDays(week, day - 1);
-                const marked = row.startDate <= date && date <= row.endDate;
-                return <td key={day} className={`px-1 py-1 text-center font-bold ${marked ? 'bg-blue-100 text-blue-800' : 'text-slate-200'}`}>{marked ? 'x' : ''}</td>;
-              })}
+              {WEEKDAYS.map(day => <td key={day} className={`border-l border-slate-100 px-1 py-1 text-center font-bold ${marked(row, day) ? 'bg-blue-100 text-blue-800' : 'text-slate-200'}`}>{marked(row, day) ? 'x' : ''}</td>)}
               <td className="px-1 py-1">
-                <select className="cell" disabled={readOnly} aria-label={`Status da linha ${index + 1}`}
-                  value={row.fulfilled === undefined ? '' : row.fulfilled ? 'sim' : 'nao'}
-                  onChange={e => { if (e.target.value) run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: e.target.value === 'sim', cause: e.target.value === 'nao' ? row.cause ?? NON_FULFILLMENT_CAUSES[0] : undefined, justification: row.justification }, row.id); }}>
-                  <option value="">—</option>
-                  <option value="sim">Sim</option>
-                  <option value="nao">Não</option>
-                </select>
+                <PillSelect value={status} tone={status === 'Sim' ? 'success' : status === 'Não' ? 'danger' : 'neutral'} disabled={readOnly || !!busy}
+                  ariaLabel={`Status da linha ${index + 1}`} options={[{ value: 'Sim', label: 'Sim' }, { value: 'Não', label: 'Não' }]} onChange={value => setStatus(row, value)} />
               </td>
               <td className="px-1 py-1">
-                <select className="cell" disabled={readOnly || row.fulfilled !== false} aria-label={`Causa da linha ${index + 1}`} value={row.cause ?? ''}
-                  onChange={e => run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause: e.target.value, justification: row.justification }, row.id)}>
-                  {NON_FULFILLMENT_CAUSES.map(cause => <option key={cause} value={cause}>{cause}</option>)}
-                </select>
+                <PillSelect value={row.cause ?? ''} tone={missingCause ? 'required' : 'neutral'} disabled={readOnly || !!busy || status !== 'Não'}
+                  ariaLabel={`Causa da linha ${index + 1}`} placeholder={missingCause ? 'Escolha a causa' : ''} title={status !== 'Não' ? 'A causa só é pedida quando o Status é Não.' : undefined}
+                  options={NON_FULFILLMENT_CAUSES.map(cause => ({ value: cause, label: cause }))} onChange={value => setCause(row, value)} />
               </td>
               <td className="px-1 py-1">
                 <input className="cell" defaultValue={row.justification ?? ''} disabled={readOnly || row.fulfilled === undefined} aria-label={`Justificativa da linha ${index + 1}`}
                   onBlur={e => { if (row.fulfilled !== undefined && e.target.value !== (row.justification ?? '')) run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: row.fulfilled, cause: row.cause, justification: e.target.value }, row.id); }} />
               </td>
               <td className="px-1 py-1">
-                {row.fulfilled === false && !readOnly && <div className="flex flex-col gap-1">
+                {row.fulfilled === false && !readOnly && <div className="flex gap-1 whitespace-nowrap">
                   <button type="button" className="button-ghost justify-start px-2 py-1 text-[11px]" disabled={saving}
                     aria-label={`Levar ${row.name} para a próxima semana`}
                     title={alreadyCarried(row)
                       ? `Já existe uma linha com esta atividade e este fornecedor na semana ${weekNumber(addDays(row.weekStart, 7))}`
                       : `Cria a mesma linha na semana ${weekNumber(addDays(row.weekStart, 7))}, sem apontamento`}
-                    onClick={() => carry(row)}>{alreadyCarried(row) ? 'Levar de novo' : 'Levar para a próxima semana'}</button>
+                    onClick={() => carry(row)}>{alreadyCarried(row) ? 'Levar de novo' : 'Levar p/ próxima'}</button>
                   <button type="button" className="button-ghost justify-start px-2 py-1 text-[11px]" aria-haspopup="dialog"
-                    aria-label={`Gerar pendência a partir de ${row.name}`} onClick={() => setPendencyFor(row.id)}>Gerar pendência</button>
+                    aria-label={`Gerar restrição a partir de ${row.name}`} onClick={() => setPendencyFor(row.id)}>Gerar restrição</button>
                 </div>}
               </td>
               <td className="px-1 py-1">
@@ -217,10 +296,12 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
               </td>
             </tr>;
           })}
-          {!readOnly && <BlankRow workId={workId} week={week} weekEnd={weekEnd} teams={teams} responsibleId={actor.id} busy={busy === 'nova'} onSave={run} />}
+          {!readOnly && <BlankRow week={week} weekEnd={weekEnd} weekNumber={weekNumber(week)} companies={companies}
+            teamNames={company => teamsOfCompany(company).map(t => t.name)} busy={busy === 'nova'} onCreate={createRow} />}
         </tbody>
       </table>
-      {rows.length === 0 && <div className="border-t border-slate-100 p-4"><Empty>Semana em branco. Escreva a primeira atividade na última linha da planilha.</Empty></div>}
+      {weekRows.length === 0 && <div className="border-t border-slate-100 p-4"><Empty>Semana em branco. Escreva a primeira atividade na última linha da planilha.</Empty></div>}
+      {weekRows.length > 0 && rows.length === 0 && <div className="border-t border-slate-100 p-4"><Empty>Nenhuma linha com esses filtros.</Empty></div>}
     </div>
 
     <section className="mt-8" aria-labelledby="fechamento-title">
@@ -393,7 +474,7 @@ function CausesPareto({ all, weekRows, weekLabel }: { all: WeeklyCommitment[]; w
   </section>;
 }
 
-/** A pendência nasce da falha: o Não da planilha vira item do quadro do longo prazo, sem passar
+/** A restrição nasce da falha: o Não da planilha vira item do quadro do longo prazo, sem passar
  * pelo plano do mês. O modelo é por vagão — o servidor exige `wagonId` —, e o lead time só existe
  * preso a uma atividade daquele vagão, porque o limite é contado para trás a partir do início
  * previsto dela. Sem lead time, o prazo é digitado. */
@@ -430,7 +511,7 @@ function PendencyDialog({ row, wagons, activities, workId, actorId, weekLabel, e
       setSavedId(await execute({ type: 'create_restriction', wagonId, activityId: activity?.id, description: description.trim(),
         responsibleId: actorId, dueDate: deadline, blocksExecution, blocksTerminality,
         leadTimeDays: activity ? leadDays : undefined }));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar a pendência.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar a restrição.'); }
     finally { setBusy(false); }
   };
 
@@ -440,7 +521,7 @@ function PendencyDialog({ row, wagons, activities, workId, actorId, weekLabel, e
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="eyebrow">Semana {weekLabel} · não cumprido</p>
-          <h3 id="pendencia-da-falha" className="mt-1 text-base font-bold text-slate-900">Gerar pendência</h3>
+          <h3 id="pendencia-da-falha" className="mt-1 text-base font-bold text-slate-900">Gerar restrição</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">{row.name}{row.supplier && ` · ${row.supplier}`}<br />{row.cause}</p>
         </div>
         <button ref={closeButton} type="button" className="button-ghost" onClick={() => dialog.current?.close()}>Fechar</button>
@@ -448,7 +529,7 @@ function PendencyDialog({ row, wagons, activities, workId, actorId, weekLabel, e
 
       {wagons.length === 0
         ? <div className="mt-5 space-y-3">
-            <Callout tone="warning" role="status">A pendência é pendurada em um vagão, e esta obra ainda não tem nenhum. Enquanto a sequência de vagões não existir, não há onde registrar o problema no longo prazo — a causa continua guardada na linha da planilha.</Callout>
+            <Callout tone="warning" role="status">A restrição é pendurada em um vagão, e esta obra ainda não tem nenhum. Enquanto a sequência de vagões não existir, não há onde registrar o problema no longo prazo — a causa continua guardada na linha da planilha.</Callout>
             <Link className="text-link text-sm" href={workPath(workId)}>Abrir os vagões da obra</Link>
           </div>
         : <form className="mt-5 space-y-4" onSubmit={submit}>
@@ -464,7 +545,7 @@ function PendencyDialog({ row, wagons, activities, workId, actorId, weekLabel, e
                 {options.map(a => <option key={a.id} value={a.id}>{a.name} · início {formatDate(a.plannedStart)}</option>)}
               </select>
             </Field>
-            <Field label="Descrição da pendência">
+            <Field label="Descrição da restrição">
               <textarea className="field" rows={3} required value={description} onChange={e => setDescription(e.target.value)} />
             </Field>
             <Field label="Lead time (dias para obter)">
@@ -486,60 +567,57 @@ function PendencyDialog({ row, wagons, activities, workId, actorId, weekLabel, e
                 <input type="checkbox" className="accent-blue-700" checked={blocksTerminality} onChange={e => setBlocksTerminality(e.target.checked)} />Bloqueia terminalidade
               </label>
             </div>
-            <p className="text-xs leading-5 text-slate-500">A pendência entra com você como responsável e a linha da planilha não muda: ela continua com o Não e a causa, que são o registro do que aconteceu.</p>
-            <button className="button" type="submit" disabled={busy || blocked}>{busy ? 'Criando…' : savedId ? 'Criar outra pendência' : 'Criar pendência'}</button>
+            <p className="text-xs leading-5 text-slate-500">A restrição entra com você como responsável e a linha da planilha não muda: ela continua com o Não e a causa, que são o registro do que aconteceu.</p>
+            <button className="button" type="submit" disabled={busy || blocked}>{busy ? 'Criando…' : savedId ? 'Criar outra restrição' : 'Criar restrição'}</button>
             {error && <Callout tone="danger" role="alert">{error}</Callout>}
-            {savedId && <Callout tone="success" role="status">Pendência criada. Acompanhe no <Link className="text-link" href={workPath(workId, 'longo-prazo')}>quadro de pendências</Link>.</Callout>}
+            {savedId && <Callout tone="success" role="status">Restrição criada. Acompanhe no <Link className="text-link" href={workPath(workId, 'longo-prazo')}>quadro de restrições</Link>.</Callout>}
           </form>}
     </div>
   </dialog>;
 }
 
-/** Linha em branco no fim: escreveu a atividade, a linha existe. Fornecedor, equipe e datas podem
+/** Linha em branco no fim: escreveu a atividade, a linha existe. Empresa, equipe e datas podem
  * ficar em branco — sem período, a linha nasce no primeiro dia da semana e se ajusta na planilha. */
-function BlankRow({ workId, week, weekEnd, teams, responsibleId, busy, onSave }: { workId: string; week: string; weekEnd: string; teams: Team[]; responsibleId: string; busy: boolean; onSave: (command: Command, key: string) => Promise<void> }) {
+function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCreate }: { week: string; weekEnd: string; weekNumber: number; companies: string[]; teamNames: (company: string) => string[]; busy: boolean; onCreate: (draft: Draft) => Promise<void> }) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const change = (patch: Partial<Draft>) => setDraft(current => ({ ...current, ...patch }));
   const create = async (next: Draft) => {
     if (!next.name.trim() || busy) return;
     setDraft(EMPTY_DRAFT);
-    await onSave({ type: 'create_commitment', workId, name: next.name.trim(), weekStart: week, responsibleId,
-      supplier: next.supplier.trim(), teamId: next.teamId || null,
-      startDate: next.startDate || undefined, endDate: next.endDate || undefined }, 'nova');
+    await onCreate(next);
   };
-  /** Só cria quando o foco deixa a linha em branco: andar de célula em célula é continuar
-   * preenchendo a mesma linha, não gravá-la a cada campo. */
+  /** Só cria quando o foco deixa a linha em branco: andar de célula em célula — inclusive abrir a
+   * lista suspensa de empresa ou equipe — é continuar preenchendo a mesma linha. */
   const leave = (event: FocusEvent<HTMLElement>) => {
-    const row = event.currentTarget.closest('tr');
-    if (!row?.contains(event.relatedTarget)) create(draft);
+    const next = event.relatedTarget as HTMLElement | null;
+    if (!event.currentTarget.closest('tr')?.contains(next) && !next?.closest('[data-sheet-popover]')) create(draft);
   };
-  return <tr className="border-t border-slate-100 bg-blue-50/30">
+  return <tr className="border-t border-slate-100 bg-blue-50/30" onBlur={leave}>
     <td className="px-1 py-1">
-      <input className="cell" value={draft.supplier} disabled={busy} aria-label="Fornecedor da nova linha" placeholder="Fornecedor"
-        onChange={e => change({ supplier: e.target.value })} onBlur={leave} />
+      <PillCombo value={draft.supplier} options={companies} disabled={busy} ariaLabel="Empresa da nova linha" placeholder="Empresa"
+        onCommit={value => change({ supplier: value, teamName: teamNames(value).some(name => textKey(name) === textKey(draft.teamName)) ? draft.teamName : '' })} />
     </td>
-    <td className="px-2 py-1 tabular-nums text-slate-400">{dayMonth(week)}</td>
+    <td className="px-2 py-1 tabular-nums text-slate-400">{weekNumber}</td>
     <td className="px-1 py-1">
       <input className="cell tabular-nums" type="date" value={draft.startDate} disabled={busy} min={week} max={weekEnd}
-        aria-label="Início da nova linha" onChange={e => change({ startDate: e.target.value })} onBlur={leave} />
+        aria-label="Início da nova linha" onChange={e => change({ startDate: e.target.value })} />
     </td>
     <td className="px-1 py-1">
       <input className="cell tabular-nums" type="date" value={draft.endDate} disabled={busy} min={draft.startDate || week} max={weekEnd}
-        aria-label="Término da nova linha" onChange={e => change({ endDate: e.target.value })} onBlur={leave} />
+        aria-label="Término da nova linha" onChange={e => change({ endDate: e.target.value })} />
     </td>
     <td className="px-1 py-1">
       <input className="cell" value={draft.name} disabled={busy} aria-label="Atividade da nova linha"
         placeholder={busy ? 'Criando…' : 'Escreva a atividade e tecle Enter'}
-        onChange={e => change({ name: e.target.value })} onBlur={leave}
+        onChange={e => change({ name: e.target.value })}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); create(draft); } }} />
     </td>
     <td className="px-1 py-1">
-      <select className="cell" value={draft.teamId} disabled={busy} aria-label="Equipe da nova linha"
-        onChange={e => { const team = teams.find(t => t.id === e.target.value); change({ teamId: e.target.value, supplier: draft.supplier.trim() ? draft.supplier : team?.company ?? '' }); }} onBlur={leave}>
-        <option value="">Sem equipe</option>
-        {teams.map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
-      </select>
+      <PillCombo value={draft.teamName} options={teamNames(draft.supplier)} disabled={busy} allowCreate={!!draft.supplier.trim()}
+        emptyHint={draft.supplier.trim() ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
+        createLabel={text => `Criar equipe “${text}” em ${draft.supplier}`} ariaLabel="Equipe da nova linha" placeholder="Equipe"
+        onCommit={value => change({ teamName: value })} />
     </td>
-    <td colSpan={11} className="px-2 py-1 text-slate-400">o calendário sai do período depois de criar a linha</td>
+    <td colSpan={11} className="px-2 py-1 text-slate-400">os dias se marcam a partir do período depois de criar a linha</td>
   </tr>;
 }

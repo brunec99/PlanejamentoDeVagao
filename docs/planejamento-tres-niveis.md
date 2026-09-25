@@ -121,3 +121,23 @@ A pedido do usuário, a aba 1 passou a dizer, na descrição e num aviso logo ab
 ### Nome do sistema: Obra 360 (23/09/2026)
 
 O usuário escolheu o nome **Obra 360** para substituir "Sistema de Gestão de Projetos – ATR". O novo nome aparece na lateral, com o subtítulo "Gestão de projetos e obras", no cabeçalho do celular, no login, no título da aba do navegador (`Obra 360 · ATR`) e no tour. A troca foi só de texto na tela. O **endereço do site** (projeto `planejamento-de-vagao` na Vercel), o **repositório** e o `package.json` não mudaram. Mudar o endereço exige atualizar o Site URL e as Redirect URLs no Supabase. A recomendação é fazer isso junto com um domínio próprio.
+
+## Curto prazo com a cara da planilha (25/09/2026)
+
+O usuário pediu que a aba 4 ficasse mais parecida com a planilha do Google Sheets usada hoje, com o mesmo efeito de lista suspensa para empresas, semanas, status e causas. Decisões tomadas com ele:
+
+- **Empresa:** lista suspensa com as empresas do cadastro e as já digitadas na planilha, sem repetir grafias equivalentes (`companyOptions`). Aceita digitar uma empresa nova, que passa a aparecer na lista.
+- **Equipe:** lista filtrada pela empresa da linha. Um nome novo cria a equipe no cadastro daquela empresa (`create_team`), com capacidade 3 (`NEW_TEAM_CAPACITY`) como ponto de partida, ajustável em Configurações. Trocar a empresa de uma linha desfaz a equipe de outra empresa.
+- **Semana:** lista da primeira semana da obra até 4 semanas depois da atual (`weekOptions`), no formato "número · início". Vale para a coluna e para o "Semana analisada".
+- **Status:** pílula verde (Sim) ou vermelha (Não).
+- **Causas:** a lista fica travada até o Status ser Não, e então é obrigatória. Escolher Não sem causa não grava nada: a linha fica marcada e um aviso aparece no topo. O apontamento é gravado quando a causa é escolhida, porque `record_fulfillment` exige a causa. **Correção de comportamento:** antes, a tela mandava a primeira causa da lista automaticamente, gerando causa falsa no Pareto.
+- **Filtros:** funil em todas as colunas, como no Sheets, com classificação A→Z/Z→A, busca e marcação de valores. A classificação de datas usa a data, não o texto "dd/mm". Filtro e classificação não alteram o PPC, que continua sendo da semana inteira.
+- **Ordem padrão:** por empresa e, dentro dela, por início, como na planilha de origem.
+- **Aparência:** manteve o estilo do Obra 360, por escolha do usuário, sem a faixa azul do Sheets.
+- **Vocabulário:** "Gerar pendência" virou **Gerar restrição**, alinhado ao módulo de restrições da aba 1.
+
+Arquivos: `src/modules/curto-prazo/sheet-controls.tsx` (`PillSelect`, `PillCombo` e `ColumnFilter`; os popovers ficam num portal com `data-sheet-popover`) e `src/modules/curto-prazo/sheet-view.ts` (filtro, ordem, semanas e empresas). Os testes estão em `tests/sheet-view.test.ts` (8) e `tests/sheet-controls.test.ts` (4).
+
+**Validação:** a tela foi aberta num Chrome controlado por script, pelo acesso local sem login, com linhas de exemplo injetadas só no navegador: nenhum dado foi gravado. Foram conferidos as pílulas, o Não aguardando causa, o funil de Empresa e a criação de equipe filtrada pela empresa, sem erros no console. A gravação real de cada lista ainda não foi exercitada, porque exigiria escrever no banco de produção.
+
+**Em aberto:** a numeração da semana é contada a partir da primeira semana com linha na obra (em obra nova, a atual é a 1). A planilha de origem usa outra origem (ex.: 113). Falta decidir se o número deve seguir a contagem da planilha.
