@@ -18,28 +18,34 @@ const CHUNK = 1000;
 async function versionAccess(versionId: string) {
   const profile = await getRouteProfile();
   if (!profile) return { error: NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 }) };
-  const snapshot = await new SupabasePlanningRepository().getSnapshot();
+  const snapshot = await new SupabasePlanningRepository().getSnapshot({ workIds: profile.workIds });
   const version = snapshot.ifcVersions.find(v => v.id === versionId);
   const model = version && snapshot.ifcModels.find(m => m.id === version.modelId);
   if (!version || !model) return { error: NextResponse.json({ error: 'Versão não encontrada.' }, { status: 400 }) };
-  if (!profile.workIds.includes(model.workId)) return { error: NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 }) };
+  if (!profile.workIds.includes(model.workId))
+    return { error: NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 }) };
   return { profile, version };
 }
 
 export async function POST(request: NextRequest) {
   let body: { versionId?: unknown; reset?: unknown; finish?: unknown; elements?: unknown; properties?: unknown; quantities?: unknown };
-  try { body = await request.json(); }
-  catch { return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 }); }
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
+  }
   const versionId = typeof body.versionId === 'string' ? body.versionId : '';
   if (!versionId) return NextResponse.json({ error: 'Versão não informada.' }, { status: 400 });
 
-  const access = await versionAccess(versionId).catch(() => ({ error: NextResponse.json({ error: 'Falha ao consultar a versão.' }, { status: 502 }) }));
+  const access = await versionAccess(versionId).catch(() => ({
+    error: NextResponse.json({ error: 'Falha ao consultar a versão.' }, { status: 502 }),
+  }));
   if ('error' in access) return access.error;
   if (access.profile.role === 'viewer') return NextResponse.json({ error: 'Seu perfil permite apenas consulta.' }, { status: 403 });
 
   const client = getServiceClient();
   const now = new Date().toISOString();
-  const rows = <T>(value: unknown) => (Array.isArray(value) ? value as T[] : []);
+  const rows = <T>(value: unknown) => (Array.isArray(value) ? (value as T[]) : []);
 
   try {
     // Reextrair substitui o que é daquela versão, para a operação ser idempotente.
@@ -50,36 +56,102 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const elements = rows<{ expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; attributes?: Record<string, unknown> }>(body.elements)
-      .map(e => ({ id: `${versionId}:${e.expressId}`, created_at: now, version_id: versionId, express_id: e.expressId, global_id: e.globalId ?? null, ifc_class: e.ifcClass, name: e.name ?? null, object_type: e.objectType ?? null, storey: e.storey ?? null, attributes: e.attributes ?? {} }));
-    const properties = rows<{ expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }>(body.properties)
-      .map(p => ({ id: crypto.randomUUID(), created_at: now, version_id: versionId, express_id: p.expressId, pset: p.pset, name: p.name, value_text: p.valueText ?? null, value_number: p.valueNumber ?? null, unit: p.unit ?? null }));
-    const quantities = rows<{ expressId: number; qset: string; name: string; kind: string; value: number; unit?: string }>(body.quantities)
-      .map(q => ({ id: crypto.randomUUID(), created_at: now, version_id: versionId, express_id: q.expressId, qset: q.qset, name: q.name, kind: q.kind, value: q.value, unit: q.unit ?? null }));
+    const elements = rows<{
+      expressId: number;
+      globalId?: string;
+      ifcClass: string;
+      name?: string;
+      objectType?: string;
+      storey?: string;
+      attributes?: Record<string, unknown>;
+    }>(body.elements).map(e => ({
+      id: `${versionId}:${e.expressId}`,
+      created_at: now,
+      version_id: versionId,
+      express_id: e.expressId,
+      global_id: e.globalId ?? null,
+      ifc_class: e.ifcClass,
+      name: e.name ?? null,
+      object_type: e.objectType ?? null,
+      storey: e.storey ?? null,
+      attributes: e.attributes ?? {},
+    }));
+    const properties = rows<{ expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }>(
+      body.properties,
+    ).map(p => ({
+      id: crypto.randomUUID(),
+      created_at: now,
+      version_id: versionId,
+      express_id: p.expressId,
+      pset: p.pset,
+      name: p.name,
+      value_text: p.valueText ?? null,
+      value_number: p.valueNumber ?? null,
+      unit: p.unit ?? null,
+    }));
+    const quantities = rows<{ expressId: number; qset: string; name: string; kind: string; value: number; unit?: string }>(
+      body.quantities,
+    ).map(q => ({
+      id: crypto.randomUUID(),
+      created_at: now,
+      version_id: versionId,
+      express_id: q.expressId,
+      qset: q.qset,
+      name: q.name,
+      kind: q.kind,
+      value: q.value,
+      unit: q.unit ?? null,
+    }));
 
-    if (elements.length) { const { error } = await client.from('ifc_elements').upsert(elements, { onConflict: 'id' }); if (error) throw new Error(error.message); }
-    if (properties.length) { const { error } = await client.from('ifc_properties').insert(properties); if (error) throw new Error(error.message); }
-    if (quantities.length) { const { error } = await client.from('ifc_quantities').insert(quantities); if (error) throw new Error(error.message); }
+    if (elements.length) {
+      const { error } = await client.from('ifc_elements').upsert(elements, { onConflict: 'id' });
+      if (error) throw new Error(error.message);
+    }
+    if (properties.length) {
+      const { error } = await client.from('ifc_properties').insert(properties);
+      if (error) throw new Error(error.message);
+    }
+    if (quantities.length) {
+      const { error } = await client.from('ifc_quantities').insert(quantities);
+      if (error) throw new Error(error.message);
+    }
 
     if (body.finish === true) {
-      const { count, error: countError } = await client.from('ifc_elements').select('id', { count: 'exact', head: true }).eq('version_id', versionId);
+      const { count, error: countError } = await client
+        .from('ifc_elements')
+        .select('id', { count: 'exact', head: true })
+        .eq('version_id', versionId);
       if (countError) throw new Error(countError.message);
       // A geometria não é contada aqui: ela é um objeto convertido à parte, registrado por
       // /api/ifc/fragments. Esta contagem é da transcrição de dados.
-      const { error } = await client.from('ifc_model_versions').update({ extracted_at: now, element_rows: count ?? 0 }).eq('id', versionId);
+      const { error } = await client
+        .from('ifc_model_versions')
+        .update({ extracted_at: now, element_rows: count ?? 0 })
+        .eq('id', versionId);
       if (error) throw new Error(error.message);
-      return NextResponse.json({ gravados: { elements: elements.length, properties: properties.length, quantities: quantities.length }, total: count ?? 0 }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        { gravados: { elements: elements.length, properties: properties.length, quantities: quantities.length }, total: count ?? 0 },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     }
-    return NextResponse.json({ gravados: { elements: elements.length, properties: properties.length, quantities: quantities.length } }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(
+      { gravados: { elements: elements.length, properties: properties.length, quantities: quantities.length } },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (cause) {
-    return NextResponse.json({ error: `Falha ao gravar a transcrição do modelo: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` }, { status: 502 });
+    return NextResponse.json(
+      { error: `Falha ao gravar a transcrição do modelo: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` },
+      { status: 502 },
+    );
   }
 }
 
 export async function GET(request: NextRequest) {
   const versionId = request.nextUrl.searchParams.get('versionId') ?? '';
   if (!versionId) return NextResponse.json({ error: 'Versão não informada.' }, { status: 400 });
-  const access = await versionAccess(versionId).catch(() => ({ error: NextResponse.json({ error: 'Falha ao consultar a versão.' }, { status: 502 }) }));
+  const access = await versionAccess(versionId).catch(() => ({
+    error: NextResponse.json({ error: 'Falha ao consultar a versão.' }, { status: 502 }),
+  }));
   if ('error' in access) return access.error;
 
   const client = getServiceClient();
@@ -93,9 +165,12 @@ export async function GET(request: NextRequest) {
       // e, pior, receber só as primeiras mil linhas que a API REST devolve — uma amostra com cara
       // de total. A função ifc_version_summary (migração 0018) agrupa e devolve o resumo inteiro.
       const { data, error } = await client.rpc('ifc_version_summary', { p_version_id: versionId });
-      if (error) throw new Error(/does not exist/i.test(error.message)
-        ? 'A função de resumo não existe no banco: rode a migração 0018_ifc_summary.sql no Supabase.'
-        : error.message);
+      if (error)
+        throw new Error(
+          /does not exist/i.test(error.message)
+            ? 'A função de resumo não existe no banco: rode a migração 0018_ifc_summary.sql no Supabase.'
+            : error.message,
+        );
       return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
     }
 
@@ -113,7 +188,10 @@ export async function GET(request: NextRequest) {
     for (let taken = 0; taken < size; taken += CHUNK) {
       const wanted = Math.min(CHUNK, size - taken);
       const from = page * size + taken;
-      let query = client.from('ifc_elements').select(colunas, { count: taken === 0 ? 'exact' : undefined }).eq('version_id', versionId);
+      let query = client
+        .from('ifc_elements')
+        .select(colunas, { count: taken === 0 ? 'exact' : undefined })
+        .eq('version_id', versionId);
       if (mapa) query = query.not('global_id', 'is', null);
       if (storey) query = query.eq('storey', storey);
       if (ifcClass) query = query.eq('ifc_class', ifcClass);
@@ -125,6 +203,9 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ pagina: page, porPagina: size, total, elementos }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (cause) {
-    return NextResponse.json({ error: `Falha ao ler a transcrição do modelo: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` }, { status: 502 });
+    return NextResponse.json(
+      { error: `Falha ao ler a transcrição do modelo: ${cause instanceof Error ? cause.message : 'erro desconhecido.'}` },
+      { status: 502 },
+    );
   }
 }

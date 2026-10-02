@@ -5,16 +5,72 @@ import { sliceActivity } from '../src/application/use-cases/slice-activity';
 import { isTerminal, isOverdue, wagonStatus, weightedProgress, validateSequence } from '../src/domain/rules';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
 import { getPlanning } from '../src/application/use-cases/get-planning';
-test('fim do takt não conclui vagão', () => { const d = createMockData(); assert.equal(isOverdue(d.wagons[1], d, DEMO_DATE), true); assert.equal(isTerminal('v2', d), false); });
-test('100% exige critérios obrigatórios', () => { const d = createMockData(); assert.equal(isTerminal('v6', d), false); d.criteria[5].fulfilled = true; assert.equal(isTerminal('v6', d), true); });
-test('vagão vazio não é terminal', () => { const d = createMockData(); d.activities = []; assert.equal(isTerminal('v1', d), false); });
-test('pendência e restrição bloqueiam terminalidade', () => { const d = createMockData(); d.pendingItems[0].wagonId = 'v1'; assert.equal(isTerminal('v1', d), false); d.pendingItems[0].status = 'resolved'; assert.equal(isTerminal('v1', d), true); d.restrictions[0].wagonId = 'v1'; assert.equal(isTerminal('v1', d), false); });
-test('status separa restrição, produção e início', () => { const d = createMockData(); assert.deepEqual(d.wagons.map(w => wagonStatus(w,d)), ['terminal','in_production','restricted','in_production','not_started','in_production']); });
-test('progresso considera pesos e rejeita valores inválidos', () => { const d = createMockData(); const a = { ...d.activities[0], weight: 3 }; const b = { ...d.activities[4], weight: 1 }; assert.equal(weightedProgress([a,b]),75); assert.throws(() => weightedProgress([{ ...a, weight: 0 }])); assert.throws(() => weightedProgress([{ ...a, progress: 101 }])); assert.equal(weightedProgress([]),0); });
-test('sequência rejeita ciclos, ramificações e predecessor de outra frente', () => { const d = createMockData(); validateSequence(d.wagons); assert.throws(() => validateSequence(d.wagons.map(w => w.id === 'v1' ? {...w, predecessorId:'v3'} : w))); assert.throws(() => validateSequence(d.wagons.map(w => w.id === 'v3' ? {...w, predecessorId:'v1'} : w))); assert.throws(() => validateSequence(d.wagons.map(w => w.id === 'v4' ? {...w, predecessorId:'v1'} : w))); });
-test('liberação excepcional não encerra pendência nem predecessor', () => { const d = createMockData(); assert.equal(d.releases.find(r => r.wagonId === 'v3')?.type, 'exceptional'); assert.equal(isTerminal('v2', d), false); assert.equal(d.pendingItems.find(p => p.id === d.debts[0].pendingItemId)?.status, 'open'); });
-test('repositório isola snapshots e instâncias', async () => { const a = new MockPlanningRepository(); const snapshot = await a.getSnapshot(); snapshot.wagons.length = 0; assert.equal((await a.getSnapshot()).wagons.length,6); assert.equal((await new MockPlanningRepository().getSnapshot()).wagons.length,6); });
-test('consulta entrega sucessor derivado e status calculado', async () => { const result = await getPlanning(new MockPlanningRepository(), DEMO_DATE); assert.equal(result.wagons[0].successorId,'v2'); assert.equal(result.wagons[0].status,'terminal'); });
+test('fim do takt não conclui vagão', () => {
+  const d = createMockData();
+  assert.equal(isOverdue(d.wagons[1], d, DEMO_DATE), true);
+  assert.equal(isTerminal('v2', d), false);
+});
+test('100% exige critérios obrigatórios', () => {
+  const d = createMockData();
+  assert.equal(isTerminal('v6', d), false);
+  d.criteria[5].fulfilled = true;
+  assert.equal(isTerminal('v6', d), true);
+});
+test('vagão vazio não é terminal', () => {
+  const d = createMockData();
+  d.activities = [];
+  assert.equal(isTerminal('v1', d), false);
+});
+test('pendência e restrição bloqueiam terminalidade', () => {
+  const d = createMockData();
+  d.pendingItems[0].wagonId = 'v1';
+  assert.equal(isTerminal('v1', d), false);
+  d.pendingItems[0].status = 'resolved';
+  assert.equal(isTerminal('v1', d), true);
+  d.restrictions[0].wagonId = 'v1';
+  assert.equal(isTerminal('v1', d), false);
+});
+test('status separa restrição, produção e início', () => {
+  const d = createMockData();
+  assert.deepEqual(
+    d.wagons.map(w => wagonStatus(w, d)),
+    ['terminal', 'in_production', 'restricted', 'in_production', 'not_started', 'in_production'],
+  );
+});
+test('progresso considera pesos e rejeita valores inválidos', () => {
+  const d = createMockData();
+  const a = { ...d.activities[0], weight: 3 };
+  const b = { ...d.activities[4], weight: 1 };
+  assert.equal(weightedProgress([a, b]), 75);
+  assert.throws(() => weightedProgress([{ ...a, weight: 0 }]));
+  assert.throws(() => weightedProgress([{ ...a, progress: 101 }]));
+  assert.equal(weightedProgress([]), 0);
+});
+test('sequência rejeita ciclos, ramificações e predecessor de outra frente', () => {
+  const d = createMockData();
+  validateSequence(d.wagons);
+  assert.throws(() => validateSequence(d.wagons.map(w => (w.id === 'v1' ? { ...w, predecessorId: 'v3' } : w))));
+  assert.throws(() => validateSequence(d.wagons.map(w => (w.id === 'v3' ? { ...w, predecessorId: 'v1' } : w))));
+  assert.throws(() => validateSequence(d.wagons.map(w => (w.id === 'v4' ? { ...w, predecessorId: 'v1' } : w))));
+});
+test('liberação excepcional não encerra pendência nem predecessor', () => {
+  const d = createMockData();
+  assert.equal(d.releases.find(r => r.wagonId === 'v3')?.type, 'exceptional');
+  assert.equal(isTerminal('v2', d), false);
+  assert.equal(d.pendingItems.find(p => p.id === d.debts[0].pendingItemId)?.status, 'open');
+});
+test('repositório isola snapshots e instâncias', async () => {
+  const a = new MockPlanningRepository();
+  const snapshot = await a.getSnapshot();
+  snapshot.wagons.length = 0;
+  assert.equal((await a.getSnapshot()).wagons.length, 6);
+  assert.equal((await new MockPlanningRepository().getSnapshot()).wagons.length, 6);
+});
+test('consulta entrega sucessor derivado e status calculado', async () => {
+  const result = await getPlanning(new MockPlanningRepository(), DEMO_DATE);
+  assert.equal(result.wagons[0].successorId, 'v2');
+  assert.equal(result.wagons[0].status, 'terminal');
+});
 
 test('vagão reúne atividades em locais distintos sem local próprio', async () => {
   const d = createMockData();
@@ -49,11 +105,24 @@ test('fatia divide a atividade pelos vagões preservando 100% e o período de ca
     { id: 'w2', plannedStart: '2026-09-22', plannedEnd: '2026-10-12' },
     { id: 'w3', plannedStart: '2026-10-13', plannedEnd: '2026-11-02' },
   ];
-  const row = { externalId: '9', name: 'Estrutura de concreto', location: 'Térreo', plannedStart: '2026-09-10', plannedEnd: '2026-10-20', progress: 0 };
+  const row = {
+    externalId: '9',
+    name: 'Estrutura de concreto',
+    location: 'Térreo',
+    plannedStart: '2026-09-10',
+    plannedEnd: '2026-10-20',
+    progress: 0,
+  };
   const slices = sliceActivity(row, wagons);
   assert.equal(slices.length, 3);
-  assert.equal(slices.reduce((s, x) => s + x.percent, 0), 100);
-  assert.deepEqual(slices.map(s => s.wagonId), ['w1', 'w2', 'w3']);
+  assert.equal(
+    slices.reduce((s, x) => s + x.percent, 0),
+    100,
+  );
+  assert.deepEqual(
+    slices.map(s => s.wagonId),
+    ['w1', 'w2', 'w3'],
+  );
   // cada fatia cabe inteira na janela do seu vagão
   slices.forEach((slice, i) => {
     assert.ok(slice.row.plannedStart >= wagons[i].plannedStart && slice.row.plannedEnd <= wagons[i].plannedEnd);
@@ -70,7 +139,17 @@ test('atividade que começa antes do primeiro vagão entra inteira nele, recorta
   // são anteriores ao início do planejamento e não pertencem a vagão nenhum. O restante (a
   // partir do início do vagão 1) entra inteiro nele, com o período recortado.
   const wagons = [{ id: 'w1', plannedStart: '2026-09-08', plannedEnd: '2026-09-28' }];
-  const slices = sliceActivity({ externalId: '9', name: 'Estrutura de concreto', location: '4º pav', plannedStart: '2026-08-25', plannedEnd: '2026-09-14', progress: 62.5 }, wagons);
+  const slices = sliceActivity(
+    {
+      externalId: '9',
+      name: 'Estrutura de concreto',
+      location: '4º pav',
+      plannedStart: '2026-08-25',
+      plannedEnd: '2026-09-14',
+      progress: 62.5,
+    },
+    wagons,
+  );
   assert.equal(slices.length, 1);
   assert.equal(slices[0].wagonId, 'w1');
   assert.equal(slices[0].percent, 100);
@@ -87,13 +166,19 @@ test('lacuna real entre vagões existentes não é forçada a caber 100% num del
     { id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-10' },
     { id: 'w2', plannedStart: '2026-09-15', plannedEnd: '2026-09-25' },
   ];
-  const slices = sliceActivity({ externalId: '10', name: 'Alvenaria', location: '3º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-20', progress: 0 }, wagons);
+  const slices = sliceActivity(
+    { externalId: '10', name: 'Alvenaria', location: '3º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-20', progress: 0 },
+    wagons,
+  );
   assert.equal(slices.length, 0);
 });
 
 test('atividade contida num único vagão não vira fatia', () => {
   const wagons = [{ id: 'w1', plannedStart: '2026-09-01', plannedEnd: '2026-09-21' }];
-  const slices = sliceActivity({ externalId: '3', name: 'Alvenaria', location: '2º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-12', progress: 0 }, wagons);
+  const slices = sliceActivity(
+    { externalId: '3', name: 'Alvenaria', location: '2º pav', plannedStart: '2026-09-05', plannedEnd: '2026-09-12', progress: 0 },
+    wagons,
+  );
   assert.equal(slices.length, 1);
   assert.equal(slices[0].percent, 100);
   assert.equal(slices[0].row.name, 'Alvenaria');

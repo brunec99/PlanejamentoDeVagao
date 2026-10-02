@@ -1,27 +1,86 @@
 import { scheduleTasks, planSnapshot, planWindow, withProgress, DEFAULT_CALENDAR, type WorkCalendar } from '../../domain/plan-schedule';
-import type { Activity, BoardStatus, LinkRuleCriterion, LinkType, MediumTermPlan, NonFulfillmentCause, PlanDependency, PlanningData, PlanTask, RecordBase, Restriction, Wagon } from '../../domain/entities';
+import type {
+  Activity,
+  BoardStatus,
+  LinkRuleCriterion,
+  LinkType,
+  MediumTermPlan,
+  NonFulfillmentCause,
+  PlanDependency,
+  PlanningData,
+  PlanTask,
+  RecordBase,
+  Restriction,
+  Wagon,
+} from '../../domain/entities';
 import { LINK_TYPES, NON_FULFILLMENT_CAUSES } from '../../domain/entities';
-import { isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
+import { actsAsManager, isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { LONG_TERM_PREFIX, planLongTermSync, type LongTermSlot } from './sync-long-term-plan';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
-export type ActivityInput = Pick<Activity, 'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'>;
+export type ActivityInput = Pick<
+  Activity,
+  'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
+>;
 export type Command =
-  | { type: 'save_plan_revision'; planId: string; expectedSnapshot: string; reason: string; tasks: PlanTask[]; links: import('../../domain/entities').PlanDependency[]; calendar: WorkCalendar }
+  | {
+      type: 'save_plan_revision';
+      planId: string;
+      expectedSnapshot: string;
+      reason: string;
+      tasks: PlanTask[];
+      links: import('../../domain/entities').PlanDependency[];
+      calendar: WorkCalendar;
+    }
   | { type: 'create_work'; name: string; code: string; previsionProjectId?: string }
   | { type: 'create_sequence'; workId: string; name: string; taktDays: number; calendar: 'calendar_days' | 'business_days' }
-  | { type: 'create_wagon'; sequenceId: string; number: number; predecessorId?: string; plannedStart: string; plannedEnd: string; responsibleId: string }
+  | {
+      type: 'create_wagon';
+      sequenceId: string;
+      number: number;
+      predecessorId?: string;
+      plannedStart: string;
+      plannedEnd: string;
+      responsibleId: string;
+    }
   | { type: 'edit_wagon'; wagonId: string; plannedStart: string; plannedEnd: string; responsibleId: string }
   | { type: 'create_location'; workId: string; name: string }
   | { type: 'create_activity'; wagonId: string; activity: ActivityInput; reason?: string }
   | { type: 'update_activity'; activityId: string; activity: ActivityInput; progress: number; status: Activity['status']; reason?: string }
   | { type: 'create_criterion'; activityId: string; description: string; mandatory: boolean; reason?: string }
   | { type: 'set_criterion'; criterionId: string; fulfilled: boolean; reason?: string }
-  | { type: 'create_pending'; wagonId: string; activityId?: string; description: string; responsibleId: string; dueDate: string; blocksTerminality: boolean; reason?: string }
+  | {
+      type: 'create_pending';
+      wagonId: string;
+      activityId?: string;
+      description: string;
+      responsibleId: string;
+      dueDate: string;
+      blocksTerminality: boolean;
+      reason?: string;
+    }
   | { type: 'resolve_pending'; pendingId: string; resolution: string }
-  | { type: 'create_restriction'; wagonId: string; activityId?: string; description: string; responsibleId: string; dueDate: string; blocksExecution: boolean; blocksTerminality: boolean; leadTimeDays?: number; reason?: string }
+  | {
+      type: 'create_restriction';
+      wagonId: string;
+      activityId?: string;
+      description: string;
+      responsibleId: string;
+      dueDate: string;
+      blocksExecution: boolean;
+      blocksTerminality: boolean;
+      leadTimeDays?: number;
+      reason?: string;
+    }
   | { type: 'resolve_restriction'; restrictionId: string; resolution: string }
-  | { type: 'release'; wagonId: string; mode: 'initial' | 'normal' | 'exceptional'; justification?: string; responsibleId?: string; dueDate?: string }
+  | {
+      type: 'release';
+      wagonId: string;
+      mode: 'initial' | 'normal' | 'exceptional';
+      justification?: string;
+      responsibleId?: string;
+      dueDate?: string;
+    }
   | { type: 'import_activities'; wagonId: string; projectId: string; responsibleId: string; rows: ImportedActivity[]; reason?: string }
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
@@ -31,8 +90,28 @@ export type Command =
   | { type: 'delete_team'; teamId: string }
   | { type: 'assign_team'; activityId: string; teamId: string | null }
   | { type: 'record_progress'; activityId: string; progress: number; reason?: string }
-  | { type: 'create_commitment'; workId: string; name: string; weekStart: string; responsibleId: string; supplier?: string; teamId?: string | null; activityId?: string | null; startDate?: string; endDate?: string }
-  | { type: 'update_commitment'; commitmentId: string; name: string; supplier: string; teamId?: string | null; weekStart: string; startDate: string; endDate: string }
+  | {
+      type: 'create_commitment';
+      workId: string;
+      name: string;
+      weekStart: string;
+      responsibleId: string;
+      supplier?: string;
+      teamId?: string | null;
+      activityId?: string | null;
+      startDate?: string;
+      endDate?: string;
+    }
+  | {
+      type: 'update_commitment';
+      commitmentId: string;
+      name: string;
+      supplier: string;
+      teamId?: string | null;
+      weekStart: string;
+      startDate: string;
+      endDate: string;
+    }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
   | { type: 'create_baseline'; workId: string; name: string }
@@ -41,28 +120,73 @@ export type Command =
   | { type: 'create_plan'; workId: string; month: string; name?: string; copyFrom?: string }
   | { type: 'delete_plan'; planId: string }
   | { type: 'freeze_plan_baseline'; planId: string; name: string }
-  | { type: 'create_plan_task'; planId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; level?: number }
+  | {
+      type: 'create_plan_task';
+      planId: string;
+      name: string;
+      plannedStart: string;
+      plannedEnd: string;
+      teamId?: string | null;
+      activityId?: string | null;
+      level?: number;
+    }
   | { type: 'indent_plan_task'; taskId: string }
   | { type: 'outdent_plan_task'; taskId: string }
-  | { type: 'update_plan_task'; taskId: string; name: string; plannedStart: string; plannedEnd: string; teamId?: string | null; activityId?: string | null; progress: number }
+  | {
+      type: 'update_plan_task';
+      taskId: string;
+      name: string;
+      plannedStart: string;
+      plannedEnd: string;
+      teamId?: string | null;
+      activityId?: string | null;
+      progress: number;
+    }
   | { type: 'delete_plan_task'; taskId: string }
   | { type: 'set_plan_task_note'; taskId: string; note: string }
   | { type: 'link_plan_tasks'; predecessorId: string; successorId: string; linkType?: LinkType; lagDays?: number; lagBusiness?: boolean }
   | { type: 'unlink_plan_tasks'; dependencyId: string }
-  | { type: 'replace_plan_predecessors'; taskId: string; links: { predecessorId: string; linkType: LinkType; lagDays: number; lagBusiness: boolean }[] }
+  | {
+      type: 'replace_plan_predecessors';
+      taskId: string;
+      links: { predecessorId: string; linkType: LinkType; lagDays: number; lagBusiness: boolean }[];
+    }
   | { type: 'link_activities'; predecessorId: string; successorId: string }
   | { type: 'unlink_activities'; dependencyId: string }
   | { type: 'set_activity_note'; activityId: string; note: string }
   | { type: 'create_ifc_model'; workId: string; name: string; discipline: string }
-  | { type: 'add_ifc_version'; modelId: string; fileName: string; fileSize: number; storagePath?: string | null; storeys: string[]; elementCount: number }
+  | {
+      type: 'add_ifc_version';
+      modelId: string;
+      fileName: string;
+      fileSize: number;
+      storagePath?: string | null;
+      storeys: string[];
+      elementCount: number;
+    }
   | { type: 'create_link_rule'; workId: string; serviceName: string; criteria: LinkRuleCriterion[] }
   | { type: 'delete_link_rule'; ruleId: string }
   | { type: 'set_takt'; sequenceId: string; taktDays: number }
   | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string }
   | { type: 'sync_long_term_plan'; sequenceId: string; responsibleId: string; slots: LongTermSlot[] };
-export interface ImportedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; progress: number; baselineStart?: string; baselineEnd?: string; weight?: number }
-export interface CommandContext { actorId: string; today: string; now: string; newId: () => string }
+export interface ImportedActivity {
+  externalId: string;
+  name: string;
+  location: string;
+  plannedStart: string;
+  plannedEnd: string;
+  progress: number;
+  baselineStart?: string;
+  baselineEnd?: string;
+  weight?: number;
+}
+export interface CommandContext {
+  actorId: string;
+  today: string;
+  now: string;
+  newId: () => string;
+}
 
 /** O período da linha da semana, conferido contra a semana dela. É o intervalo digitado que
  * manda: o calendário de segunda a sábado é desenhado a partir dele, não guardado. */
@@ -88,28 +212,49 @@ function subtree(rows: PlanTask[], at: number) {
 /** O plano do mês nasce como cópia do anterior: mesmas linhas com novos ids, menos o que já
  * terminou antes da janela nova e os resumos que ficaram sem filhos. Linha que perdeu uma
  * predecessora ganha a restrição "Não iniciar antes de" no início atual, para não saltar de data. */
-function copyPlanForward(source: PlanTask[], sourceLinks: PlanDependency[], plan: MediumTermPlan, base: () => RecordBase): { tasks: PlanTask[]; links: PlanDependency[] } {
+function copyPlanForward(
+  source: PlanTask[],
+  sourceLinks: PlanDependency[],
+  plan: MediumTermPlan,
+  base: () => RecordBase,
+): { tasks: PlanTask[]; links: PlanDependency[] } {
   const horizon = planWindow(plan.month);
   const rows = source.slice().sort((a, b) => a.order - b.order);
   const hasChildren = (list: PlanTask[], at: number) => list[at + 1] !== undefined && list[at + 1].level > list[at].level;
   const wasSummary = new Set(rows.filter((_, at) => hasChildren(rows, at)).map(t => t.id));
   let kept = rows.filter(t => wasSummary.has(t.id) || !(t.progress === 100 && (t.actualEnd ?? t.plannedEnd) < horizon.start));
-  for (let size = -1; size !== kept.length;) { size = kept.length; kept = kept.filter((t, at) => !wasSummary.has(t.id) || hasChildren(kept, at)); }
+  for (let size = -1; size !== kept.length;) {
+    size = kept.length;
+    kept = kept.filter((t, at) => !wasSummary.has(t.id) || hasChildren(kept, at));
+  }
   const ids = new Map(kept.map(t => [t.id, base().id]));
-  const links = sourceLinks.filter(l => ids.has(l.predecessorId) && ids.has(l.successorId))
+  const links = sourceLinks
+    .filter(l => ids.has(l.predecessorId) && ids.has(l.successorId))
     .map(l => ({ ...l, ...base(), predecessorId: ids.get(l.predecessorId)!, successorId: ids.get(l.successorId)! }));
   const lostLink = new Set(sourceLinks.filter(l => ids.has(l.successorId) && !ids.has(l.predecessorId)).map(l => l.successorId));
   let previous = -1;
   const tasks = kept.map((t, at) => {
     const { id: _id, version: _version, sourceTaskId: _source, ...rest } = t;
-    const level = Math.min(Math.max(0, t.level), previous + 1); previous = level;
-    return { ...rest, ...base(), id: ids.get(t.id)!, planId: plan.id, order: at + 1, level, ...(lostLink.has(t.id) ? { anchorStart: t.plannedStart } : {}) };
+    const level = Math.min(Math.max(0, t.level), previous + 1);
+    previous = level;
+    return {
+      ...rest,
+      ...base(),
+      id: ids.get(t.id)!,
+      planId: plan.id,
+      order: at + 1,
+      level,
+      ...(lostLink.has(t.id) ? { anchorStart: t.plannedStart } : {}),
+    };
   });
   // Resumo não carrega real; folha com % passa pela regra do Project (dado antigo com % e sem
   // início real ganha as datas reais), senão a primeira revisão do mês novo seria recusada.
   const calendar = plan.calendar ?? DEFAULT_CALENDAR;
   const normalized = tasks.map((t, at) => {
-    if (hasChildren(tasks, at)) { const { actualStart: _s, actualEnd: _e, ...summary } = t; return summary; }
+    if (hasChildren(tasks, at)) {
+      const { actualStart: _s, actualEnd: _e, ...summary } = t;
+      return summary;
+    }
     return t.progress > 0 ? withProgress(t, t.progress, calendar) : t;
   });
   return { tasks: scheduleTasks(normalized, links, calendar), links };
@@ -121,12 +266,16 @@ function wagonFor(data: PlanningData, id: string): Wagon {
   return wagon;
 }
 export function ancestors(data: PlanningData, wagon: Wagon): Wagon[] {
-  const result: Wagon[] = []; const visited = new Set([wagon.id]); let id = wagon.predecessorId;
+  const result: Wagon[] = [];
+  const visited = new Set([wagon.id]);
+  let id = wagon.predecessorId;
   while (id) {
     if (visited.has(id)) throw new Error('Ciclo na sequência.');
-    visited.add(id); const previous = wagonFor(data, id);
+    visited.add(id);
+    const previous = wagonFor(data, id);
     if (previous.sequenceId !== wagon.sequenceId) throw new Error('Vínculo inválido.');
-    result.push(previous); id = previous.predecessorId;
+    result.push(previous);
+    id = previous.predecessorId;
   }
   return result;
 }
@@ -136,17 +285,34 @@ export function assessRelease(data: PlanningData, wagonId: string) {
   const priorIds = new Set(ancestors(data, wagon).map(w => w.id));
   const pending = data.pendingItems.filter(p => priorIds.has(p.wagonId) && p.status === 'open');
   const debts = data.debts.filter(d => pending.some(p => p.id === d.pendingItemId));
-  const restrictions = data.restrictions.filter(r => priorIds.has(r.wagonId) && r.status === 'open' && (r.blocksExecution || r.blocksTerminality));
+  const restrictions = data.restrictions.filter(
+    r => priorIds.has(r.wagonId) && r.status === 'open' && (r.blocksExecution || r.blocksTerminality),
+  );
   const uncovered: string[] = [];
   for (const prior of ancestors(data, wagon)) {
     const all = data.activities.filter(a => a.wagonId === prior.id);
     if (!all.some(a => a.mandatory)) uncovered.push(`${prior.number}: nenhuma atividade obrigatória cadastrada`);
     for (const a of all) {
-      const incomplete = (a.mandatory && (a.progress < 100 || a.status !== 'completed')) || data.criteria.some(c => c.activityId === a.id && c.mandatory && !c.fulfilled);
+      const incomplete =
+        (a.mandatory && (a.progress < 100 || a.status !== 'completed')) ||
+        data.criteria.some(c => c.activityId === a.id && c.mandatory && !c.fulfilled);
       if (incomplete && !pending.some(p => p.wagonId === prior.id && (!p.activityId || p.activityId === a.id))) uncovered.push(a.name);
     }
   }
-  return { previous, pending, debts, restrictions, uncovered, normal: !!previous && isTerminal(previous.id, data) && pending.length === 0 && debts.length === 0 && restrictions.length === 0 && uncovered.length === 0 };
+  return {
+    previous,
+    pending,
+    debts,
+    restrictions,
+    uncovered,
+    normal:
+      !!previous &&
+      isTerminal(previous.id, data) &&
+      pending.length === 0 &&
+      debts.length === 0 &&
+      restrictions.length === 0 &&
+      uncovered.length === 0,
+  };
 }
 
 /** Mutates an isolated transaction draft only. Exceptions discard every change. */
@@ -159,23 +325,57 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
   const checkWork = (workId: string) => {
     if (!data.works.some(w => w.id === workId) || !actor.workIds.includes(workId)) throw new Error('Você não tem acesso a esta obra.');
   };
-  const workOf = (wagon: Wagon) => { const sequence = data.sequences.find(s => s.id === wagon.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.'); checkWork(sequence.workId); return sequence.workId; };
-  const responsible = (id: string, workId: string) => { if (!data.users.some(u => u.id === id && u.workIds.includes(workId))) throw new Error('Responsável deve pertencer à obra.'); };
+  const workOf = (wagon: Wagon) => {
+    const sequence = data.sequences.find(s => s.id === wagon.sequenceId);
+    if (!sequence) throw new Error('Sequência não encontrada.');
+    checkWork(sequence.workId);
+    return sequence.workId;
+  };
+  const responsible = (id: string, workId: string) => {
+    if (!data.users.some(u => u.id === id && u.workIds.includes(workId))) throw new Error('Responsável deve pertencer à obra.');
+  };
   const ensureExecution = (wagon: Wagon, activityId?: string) => {
     if (!data.releases.some(r => r.wagonId === wagon.id)) throw new Error('Libere o vagão antes de registrar execução.');
-    if (data.restrictions.some(r => r.wagonId === wagon.id && r.status === 'open' && r.blocksExecution && (!r.activityId || !activityId || r.activityId === activityId))) throw new Error('Resolva a restrição de execução antes de avançar.');
+    if (
+      data.restrictions.some(
+        r =>
+          r.wagonId === wagon.id &&
+          r.status === 'open' &&
+          r.blocksExecution &&
+          (!r.activityId || !activityId || r.activityId === activityId),
+      )
+    )
+      throw new Error('Resolva a restrição de execução antes de avançar.');
   };
   const checkActivity = (input: ActivityInput, wagon: Wagon) => {
-    const workId = workOf(wagon); responsible(input.responsibleId, workId);
-    requireText(input.name, 'Nome da atividade'); validatePeriod(input.plannedStart, input.plannedEnd);
-    if (input.plannedStart < wagon.plannedStart || input.plannedEnd > wagon.plannedEnd) throw new Error('A previsão da atividade deve estar dentro do período do vagão.');
+    const workId = workOf(wagon);
+    responsible(input.responsibleId, workId);
+    requireText(input.name, 'Nome da atividade');
+    validatePeriod(input.plannedStart, input.plannedEnd);
+    if (input.plannedStart < wagon.plannedStart || input.plannedEnd > wagon.plannedEnd)
+      throw new Error('A previsão da atividade deve estar dentro do período do vagão.');
     if (!data.locations.some(l => l.id === input.locationId && l.workId === workId)) throw new Error('Local deve pertencer à obra.');
     if (!Number.isFinite(input.weight) || input.weight <= 0) throw new Error('Peso deve ser positivo.');
   };
-  const checkReopen = (wagon: Wagon, reason?: string) => { if (isTerminal(wagon.id, data)) { if (actor.role !== 'manager') throw new Error('Somente gestor pode reabrir um vagão terminal.'); requireText(reason ?? '', 'Justificativa de reabertura'); } };
-  const touch = (record: RecordBase) => { record.updatedAt = now; };
-  const planFor = (id: string) => { const plan = data.plans.find(p => p.id === id); if (!plan) throw new Error('Plano não encontrado.'); return plan; };
-  const taskFor = (id: string) => { const task = data.planTasks.find(t => t.id === id); if (!task) throw new Error('Linha do plano não encontrada.'); return task; };
+  const checkReopen = (wagon: Wagon, reason?: string) => {
+    if (isTerminal(wagon.id, data)) {
+      if (!actsAsManager(actor.role)) throw new Error('Somente gestor ou admin pode reabrir um vagão terminal.');
+      requireText(reason ?? '', 'Justificativa de reabertura');
+    }
+  };
+  const touch = (record: RecordBase) => {
+    record.updatedAt = now;
+  };
+  const planFor = (id: string) => {
+    const plan = data.plans.find(p => p.id === id);
+    if (!plan) throw new Error('Plano não encontrado.');
+    return plan;
+  };
+  const taskFor = (id: string) => {
+    const task = data.planTasks.find(t => t.id === id);
+    if (!task) throw new Error('Linha do plano não encontrada.');
+    return task;
+  };
   /** A equipe da linha da semana é opcional; quando vem, tem que ser da obra. */
   const teamOf = (teamId: string | null | undefined, workId: string) => {
     if (!teamId) return undefined;
@@ -183,67 +383,147 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     if (!team) throw new Error('Equipe deve pertencer à obra.');
     return team.id;
   };
-  let entityId = ''; let wagonId: string | undefined;
+  let entityId = '';
+  let wagonId: string | undefined;
   const beforeTerminal = new Set(data.wagons.filter(w => isTerminal(w.id, data)).map(w => w.id));
   switch (command.type) {
     case 'create_work': {
-      if (actor.role !== 'manager') throw new Error('Somente gestor pode cadastrar obras.');
+      if (!actsAsManager(actor.role)) throw new Error('Somente gestor ou admin pode cadastrar obras.');
       const code = requireText(command.code, 'Código');
       if (data.works.some(w => w.code.toLowerCase() === code.toLowerCase())) throw new Error('Código de obra já utilizado.');
-      if (command.previsionProjectId && (!/^\d+$/.test(command.previsionProjectId) || data.works.some(w => w.previsionProjectId === command.previsionProjectId))) throw new Error('Projeto Prevision inválido ou já vinculado.');
-      const work = { ...base(), name: requireText(command.name, 'Nome'), code, description: '', active: true, previsionProjectId: command.previsionProjectId };
-      data.works.push(work); actor.workIds.push(work.id); entityId = work.id; break;
+      if (
+        command.previsionProjectId &&
+        (!/^\d+$/.test(command.previsionProjectId) || data.works.some(w => w.previsionProjectId === command.previsionProjectId))
+      )
+        throw new Error('Projeto Prevision inválido ou já vinculado.');
+      const work = {
+        ...base(),
+        name: requireText(command.name, 'Nome'),
+        code,
+        description: '',
+        active: true,
+        previsionProjectId: command.previsionProjectId,
+      };
+      data.works.push(work);
+      actor.workIds.push(work.id);
+      entityId = work.id;
+      break;
     }
     case 'create_sequence': {
-      checkWork(command.workId); requireText(command.name, 'Nome');
-      if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365) throw new Error('Takt deve ter entre 1 e 365 dias.');
-      const sequence = { ...base(), workId: command.workId, name: command.name.trim(), defaultTaktDays: command.taktDays, calendar: command.calendar };
-      data.sequences.push(sequence); entityId = sequence.id; break;
+      checkWork(command.workId);
+      requireText(command.name, 'Nome');
+      if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365)
+        throw new Error('Takt deve ter entre 1 e 365 dias.');
+      const sequence = {
+        ...base(),
+        workId: command.workId,
+        name: command.name.trim(),
+        defaultTaktDays: command.taktDays,
+        calendar: command.calendar,
+      };
+      data.sequences.push(sequence);
+      entityId = sequence.id;
+      break;
     }
     case 'create_location': {
-      checkWork(command.workId); const name = requireText(command.name, 'Local');
-      if (data.locations.some(l => l.workId === command.workId && l.name.toLowerCase() === name.toLowerCase())) throw new Error('Local já cadastrado.');
-      const location = { ...base(), workId: command.workId, name, code: '' }; data.locations.push(location); entityId = location.id; break;
+      checkWork(command.workId);
+      const name = requireText(command.name, 'Local');
+      if (data.locations.some(l => l.workId === command.workId && l.name.toLowerCase() === name.toLowerCase()))
+        throw new Error('Local já cadastrado.');
+      const location = { ...base(), workId: command.workId, name, code: '' };
+      data.locations.push(location);
+      entityId = location.id;
+      break;
     }
     case 'create_wagon': {
-      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
-      checkWork(sequence.workId); responsible(command.responsibleId, sequence.workId); validatePeriod(command.plannedStart, command.plannedEnd);
+      const sequence = data.sequences.find(s => s.id === command.sequenceId);
+      if (!sequence) throw new Error('Sequência não encontrada.');
+      checkWork(sequence.workId);
+      responsible(command.responsibleId, sequence.workId);
+      validatePeriod(command.plannedStart, command.plannedEnd);
       if (!Number.isInteger(command.number) || command.number <= 0) throw new Error('Número deve ser inteiro positivo.');
       const existing = data.wagons.filter(w => w.sequenceId === sequence.id);
       if (existing.length > 0 && !command.predecessorId) throw new Error('Selecione o último vagão como predecessor.');
       const previous = command.predecessorId ? wagonFor(data, command.predecessorId) : undefined;
-      if (previous && (previous.sequenceId !== sequence.id || previous.plannedEnd >= command.plannedStart)) throw new Error('O período deve começar após o predecessor da mesma sequência.');
+      if (previous && (previous.sequenceId !== sequence.id || previous.plannedEnd >= command.plannedStart))
+        throw new Error('O período deve começar após o predecessor da mesma sequência.');
       const taktDays = periodDays(command.plannedStart, command.plannedEnd, sequence.calendar === 'business_days');
       if (!taktDays) throw new Error('O período precisa conter dias de produção.');
-      const wagon = { ...base(), sequenceId: sequence.id, number: command.number, predecessorId: command.predecessorId, plannedStart: command.plannedStart, plannedEnd: command.plannedEnd, taktDays, responsibleIds: [command.responsibleId] };
-      data.wagons.push(wagon); validateSequence(data.wagons); entityId = wagon.id; wagonId = wagon.id; break;
+      const wagon = {
+        ...base(),
+        sequenceId: sequence.id,
+        number: command.number,
+        predecessorId: command.predecessorId,
+        plannedStart: command.plannedStart,
+        plannedEnd: command.plannedEnd,
+        taktDays,
+        responsibleIds: [command.responsibleId],
+      };
+      data.wagons.push(wagon);
+      validateSequence(data.wagons);
+      entityId = wagon.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'edit_wagon': {
-      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon);
-      if (wagon.actualStart || data.releases.some(r => r.wagonId === wagon.id)) throw new Error('Só é possível replanejar vagões ainda não liberados.');
-      responsible(command.responsibleId, workId); validatePeriod(command.plannedStart, command.plannedEnd);
-      if (data.activities.some(a => a.wagonId === wagon.id && (a.plannedStart < command.plannedStart || a.plannedEnd > command.plannedEnd))) throw new Error('O novo período deve conter todas as atividades.');
-      const previous = data.wagons.find(w => w.id === wagon.predecessorId); const next = data.wagons.find(w => w.predecessorId === wagon.id);
-      if ((previous && previous.plannedEnd >= command.plannedStart) || (next && next.plannedStart <= command.plannedEnd)) throw new Error('O período não pode sobrepor seus vizinhos.');
+      const wagon = wagonFor(data, command.wagonId);
+      const workId = workOf(wagon);
+      if (wagon.actualStart || data.releases.some(r => r.wagonId === wagon.id))
+        throw new Error('Só é possível replanejar vagões ainda não liberados.');
+      responsible(command.responsibleId, workId);
+      validatePeriod(command.plannedStart, command.plannedEnd);
+      if (data.activities.some(a => a.wagonId === wagon.id && (a.plannedStart < command.plannedStart || a.plannedEnd > command.plannedEnd)))
+        throw new Error('O novo período deve conter todas as atividades.');
+      const previous = data.wagons.find(w => w.id === wagon.predecessorId);
+      const next = data.wagons.find(w => w.predecessorId === wagon.id);
+      if ((previous && previous.plannedEnd >= command.plannedStart) || (next && next.plannedStart <= command.plannedEnd))
+        throw new Error('O período não pode sobrepor seus vizinhos.');
       const seq = data.sequences.find(s => s.id === wagon.sequenceId)!;
       const taktDays = periodDays(command.plannedStart, command.plannedEnd, seq.calendar === 'business_days');
       if (!taktDays) throw new Error('O período precisa conter dias de produção.');
-      Object.assign(wagon, { plannedStart: command.plannedStart, plannedEnd: command.plannedEnd, taktDays, responsibleIds: [command.responsibleId] }); touch(wagon); entityId = wagon.id; wagonId = wagon.id; break;
+      Object.assign(wagon, {
+        plannedStart: command.plannedStart,
+        plannedEnd: command.plannedEnd,
+        taktDays,
+        responsibleIds: [command.responsibleId],
+      });
+      touch(wagon);
+      entityId = wagon.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_activity': {
-      const wagon = wagonFor(data, command.wagonId); checkActivity(command.activity, wagon); checkReopen(wagon, command.reason);
-      const activity: Activity = { ...base(), ...command.activity, name: command.activity.name.trim(), wagonId: wagon.id, progress: 0, status: 'not_started', origin: 'manual' };
-      data.activities.push(activity); entityId = activity.id; wagonId = wagon.id; break;
+      const wagon = wagonFor(data, command.wagonId);
+      checkActivity(command.activity, wagon);
+      checkReopen(wagon, command.reason);
+      const activity: Activity = {
+        ...base(),
+        ...command.activity,
+        name: command.activity.name.trim(),
+        wagonId: wagon.id,
+        progress: 0,
+        status: 'not_started',
+        origin: 'manual',
+      };
+      data.activities.push(activity);
+      entityId = activity.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'update_activity': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); checkActivity(command.activity, wagon);
-      const next = { ...activity, ...command.activity, progress: command.progress, status: command.status }; validateActivity(next);
-      if (command.progress > activity.progress || (command.status === 'completed' && activity.status !== 'completed')) ensureExecution(wagon, activity.id);
+      const activity = data.activities.find(a => a.id === command.activityId);
+      if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId);
+      checkActivity(command.activity, wagon);
+      const next = { ...activity, ...command.activity, progress: command.progress, status: command.status };
+      validateActivity(next);
+      if (command.progress > activity.progress || (command.status === 'completed' && activity.status !== 'completed'))
+        ensureExecution(wagon, activity.id);
       if (command.status !== 'not_started' && activity.status === 'not_started') ensureExecution(wagon, activity.id);
       if (command.status === 'not_started' && command.progress !== 0) throw new Error('Atividade não iniciada deve ter progresso zero.');
       if (isTerminal(wagon.id, data)) checkReopen(wagon, command.reason);
-      if (command.progress < activity.progress || (activity.status === 'completed' && command.status !== 'completed')) requireText(command.reason ?? '', 'Justificativa da correção');
+      if (command.progress < activity.progress || (activity.status === 'completed' && command.status !== 'completed'))
+        requireText(command.reason ?? '', 'Justificativa da correção');
       // Atividade fatiada entre vagões (id termina em "#N"): mexer no peso de uma fatia
       // subtrai a diferença da fatia seguinte, para as partes continuarem somando o peso
       // original da atividade inteira em vez de inflar o progresso ponderado do vagão.
@@ -255,175 +535,367 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         if (sibling) {
           const siblingWeight = sibling.weight - weightDelta;
           if (siblingWeight <= 0) throw new Error(`Esse ajuste zeraria o peso da fatia seguinte (${sibling.name}). Reduza menos.`);
-          sibling.weight = Math.round(siblingWeight * 100) / 100; touch(sibling);
+          sibling.weight = Math.round(siblingWeight * 100) / 100;
+          touch(sibling);
         }
       }
-      Object.assign(activity, next); touch(activity);
-      if ((activity.progress > 0 || activity.status !== 'not_started') && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
-      entityId = activity.id; wagonId = wagon.id; break;
+      Object.assign(activity, next);
+      touch(activity);
+      if ((activity.progress > 0 || activity.status !== 'not_started') && !wagon.actualStart) {
+        wagon.actualStart = today;
+        touch(wagon);
+      }
+      entityId = activity.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_criterion': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); workOf(wagon); checkReopen(wagon, command.reason);
-      const criterion = { ...base(), activityId: activity.id, description: requireText(command.description, 'Critério'), mandatory: command.mandatory, fulfilled: false };
-      data.criteria.push(criterion); entityId = criterion.id; wagonId = wagon.id; break;
+      const activity = data.activities.find(a => a.id === command.activityId);
+      if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId);
+      workOf(wagon);
+      checkReopen(wagon, command.reason);
+      const criterion = {
+        ...base(),
+        activityId: activity.id,
+        description: requireText(command.description, 'Critério'),
+        mandatory: command.mandatory,
+        fulfilled: false,
+      };
+      data.criteria.push(criterion);
+      entityId = criterion.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'set_criterion': {
-      const criterion = data.criteria.find(c => c.id === command.criterionId); if (!criterion) throw new Error('Critério não encontrado.');
-      const activity = data.activities.find(a => a.id === criterion.activityId)!; const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
-      if (!command.fulfilled) checkReopen(wagon, command.reason); else ensureExecution(wagon, activity.id);
-      criterion.fulfilled = command.fulfilled; criterion.confirmedAt = command.fulfilled ? now : undefined; criterion.confirmedBy = command.fulfilled ? actorId : undefined; touch(criterion); entityId = criterion.id; wagonId = wagon.id; break;
+      const criterion = data.criteria.find(c => c.id === command.criterionId);
+      if (!criterion) throw new Error('Critério não encontrado.');
+      const activity = data.activities.find(a => a.id === criterion.activityId)!;
+      const wagon = wagonFor(data, activity.wagonId);
+      workOf(wagon);
+      if (!command.fulfilled) checkReopen(wagon, command.reason);
+      else ensureExecution(wagon, activity.id);
+      criterion.fulfilled = command.fulfilled;
+      criterion.confirmedAt = command.fulfilled ? now : undefined;
+      criterion.confirmedBy = command.fulfilled ? actorId : undefined;
+      touch(criterion);
+      entityId = criterion.id;
+      wagonId = wagon.id;
+      break;
     }
-    case 'create_pending': case 'create_restriction': {
-      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon); checkReopen(wagon, command.reason); responsible(command.responsibleId, workId);
+    case 'create_pending':
+    case 'create_restriction': {
+      const wagon = wagonFor(data, command.wagonId);
+      const workId = workOf(wagon);
+      checkReopen(wagon, command.reason);
+      responsible(command.responsibleId, workId);
       const activity = command.activityId ? data.activities.find(a => a.id === command.activityId && a.wagonId === wagon.id) : undefined;
       if (command.activityId && !activity) throw new Error('Atividade não pertence ao vagão.');
       const leadTimeDays = command.type === 'create_restriction' ? command.leadTimeDays : undefined;
       let dueDate = command.dueDate;
       if (leadTimeDays !== undefined) {
         if (!activity) throw new Error('Vincule a pendência a uma atividade para calcular o limite pelo lead time.');
-        if (!Number.isInteger(leadTimeDays) || leadTimeDays < 0) throw new Error('Lead time deve ser um número inteiro de dias, zero ou mais.');
+        if (!Number.isInteger(leadTimeDays) || leadTimeDays < 0)
+          throw new Error('Lead time deve ser um número inteiro de dias, zero ou mais.');
         dueDate = leadTimeDeadline(activity.plannedStart, leadTimeDays);
       }
       validateDate(dueDate);
-      const record = { ...base(), wagonId: wagon.id, activityId: command.activityId, description: requireText(command.description, 'Descrição'), responsibleId: command.responsibleId, dueDate, blocksTerminality: command.blocksTerminality, status: 'open' as const };
-      if (command.type === 'create_pending') data.pendingItems.push(record); else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution, boardStatus: 'identificada', leadTimeDays });
-      entityId = record.id; wagonId = wagon.id; break;
+      const record = {
+        ...base(),
+        wagonId: wagon.id,
+        activityId: command.activityId,
+        description: requireText(command.description, 'Descrição'),
+        responsibleId: command.responsibleId,
+        dueDate,
+        blocksTerminality: command.blocksTerminality,
+        status: 'open' as const,
+      };
+      if (command.type === 'create_pending') data.pendingItems.push(record);
+      else data.restrictions.push({ ...record, blocksExecution: command.blocksExecution, boardStatus: 'identificada', leadTimeDays });
+      entityId = record.id;
+      wagonId = wagon.id;
+      break;
     }
-    case 'resolve_pending': case 'resolve_restriction': {
-      const record = command.type === 'resolve_pending' ? data.pendingItems.find(p => p.id === command.pendingId) : data.restrictions.find(r => r.id === command.restrictionId);
+    case 'resolve_pending':
+    case 'resolve_restriction': {
+      const record =
+        command.type === 'resolve_pending'
+          ? data.pendingItems.find(p => p.id === command.pendingId)
+          : data.restrictions.find(r => r.id === command.restrictionId);
       if (!record) throw new Error('Registro não encontrado.');
-      const wagon = wagonFor(data, record.wagonId); workOf(wagon);
+      const wagon = wagonFor(data, record.wagonId);
+      workOf(wagon);
       if (record.status === 'resolved') throw new Error('Registro já resolvido.');
       requireText(command.resolution, 'Descrição da resolução');
-      record.status = 'resolved'; Object.assign(record, { resolution: command.resolution.trim(), resolvedAt: now });
+      record.status = 'resolved';
+      Object.assign(record, { resolution: command.resolution.trim(), resolvedAt: now });
       if (command.type === 'resolve_restriction') (record as Restriction).boardStatus = 'resolvida';
-      touch(record); entityId = record.id; wagonId = wagon.id; break;
+      touch(record);
+      entityId = record.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'release': {
-      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon);
+      const wagon = wagonFor(data, command.wagonId);
+      const workId = workOf(wagon);
       if (data.releases.some(r => r.wagonId === wagon.id)) throw new Error('Vagão já liberado.');
       const assessment = assessRelease(data, wagon.id);
       if (command.mode === 'initial' && wagon.predecessorId) throw new Error('Liberação inicial só vale para o primeiro vagão.');
       if (command.mode !== 'initial' && !wagon.predecessorId) throw new Error('Utilize liberação inicial.');
       if (assessment.restrictions.length) throw new Error('Resolva as restrições impeditivas dos antecessores.');
-      if (command.mode === 'normal' && !assessment.normal) throw new Error('Liberação normal exige predecessor terminal e nenhuma dívida ou pendência herdada.');
+      if (command.mode === 'normal' && !assessment.normal)
+        throw new Error('Liberação normal exige predecessor terminal e nenhuma dívida ou pendência herdada.');
       if (command.mode === 'exceptional') {
-        if (actor.role !== 'manager') throw new Error('Somente gestor pode liberar excepcionalmente.');
-        requireText(command.justification ?? '', 'Justificativa'); responsible(command.responsibleId ?? '', workId); validateDate(command.dueDate ?? '');
+        if (!actsAsManager(actor.role)) throw new Error('Somente gestor ou admin pode liberar excepcionalmente.');
+        requireText(command.justification ?? '', 'Justificativa');
+        responsible(command.responsibleId ?? '', workId);
+        validateDate(command.dueDate ?? '');
         if (command.dueDate! <= today) throw new Error('O prazo de regularização deve ser futuro.');
-        if (assessment.uncovered.length) throw new Error('Registre pendências para todas as condições não atendidas: ' + assessment.uncovered.join(', '));
+        if (assessment.uncovered.length)
+          throw new Error('Registre pendências para todas as condições não atendidas: ' + assessment.uncovered.join(', '));
         if (!assessment.pending.length) throw new Error('Sem pendências: utilize a liberação normal.');
       }
-      const release = { ...base(), wagonId: wagon.id, predecessorId: wagon.predecessorId, type: command.mode, authorizedBy: actorId, releasedAt: now, justification: command.mode === 'exceptional' ? command.justification!.trim() : undefined, regularizationResponsibleId: command.mode === 'exceptional' ? command.responsibleId : undefined, dueDate: command.mode === 'exceptional' ? command.dueDate : undefined, acceptedPendingIds: command.mode === 'exceptional' ? assessment.pending.map(p => p.id) : [], acknowledgedDebtIds: assessment.debts.map(d => d.id) };
+      const release = {
+        ...base(),
+        wagonId: wagon.id,
+        predecessorId: wagon.predecessorId,
+        type: command.mode,
+        authorizedBy: actorId,
+        releasedAt: now,
+        justification: command.mode === 'exceptional' ? command.justification!.trim() : undefined,
+        regularizationResponsibleId: command.mode === 'exceptional' ? command.responsibleId : undefined,
+        dueDate: command.mode === 'exceptional' ? command.dueDate : undefined,
+        acceptedPendingIds: command.mode === 'exceptional' ? assessment.pending.map(p => p.id) : [],
+        acknowledgedDebtIds: assessment.debts.map(d => d.id),
+      };
       data.releases.push(release);
-      if (command.mode === 'exceptional') for (const pending of assessment.pending) {
-        if (!data.debts.some(d => d.pendingItemId === pending.id)) data.debts.push({ ...base(), pendingItemId: pending.id, releaseId: release.id, responsibleId: command.responsibleId!, dueDate: command.dueDate! });
-      }
-      entityId = release.id; wagonId = wagon.id; break;
+      if (command.mode === 'exceptional')
+        for (const pending of assessment.pending) {
+          if (!data.debts.some(d => d.pendingItemId === pending.id))
+            data.debts.push({
+              ...base(),
+              pendingItemId: pending.id,
+              releaseId: release.id,
+              responsibleId: command.responsibleId!,
+              dueDate: command.dueDate!,
+            });
+        }
+      entityId = release.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'import_activities': {
-      const wagon = wagonFor(data, command.wagonId); const workId = workOf(wagon); responsible(command.responsibleId, workId); checkReopen(wagon, command.reason);
+      const wagon = wagonFor(data, command.wagonId);
+      const workId = workOf(wagon);
+      responsible(command.responsibleId, workId);
+      checkReopen(wagon, command.reason);
       if (!/^\d+$/.test(command.projectId)) throw new Error('Projeto Prevision inválido.');
       const work = data.works.find(w => w.id === workId)!;
-      if ((work.previsionProjectId && work.previsionProjectId !== command.projectId) || data.works.some(w => w.id !== workId && w.previsionProjectId === command.projectId)) throw new Error('A obra selecionada não corresponde ao vínculo com este projeto Prevision.');
+      if (
+        (work.previsionProjectId && work.previsionProjectId !== command.projectId) ||
+        data.works.some(w => w.id !== workId && w.previsionProjectId === command.projectId)
+      )
+        throw new Error('A obra selecionada não corresponde ao vínculo com este projeto Prevision.');
       if (!command.rows.length) throw new Error('Selecione ao menos uma atividade.');
-      work.previsionProjectId = command.projectId; touch(work);
+      work.previsionProjectId = command.projectId;
+      touch(work);
       for (const row of command.rows) {
         const externalId = `${command.projectId}:${row.externalId}`;
-        if (data.activities.some(a => a.previsionExternalId === externalId)) throw new Error(`Atividade ${row.name} já importada. Nenhuma alteração foi aplicada.`);
+        if (data.activities.some(a => a.previsionExternalId === externalId))
+          throw new Error(`Atividade ${row.name} já importada. Nenhuma alteração foi aplicada.`);
         validatePeriod(row.plannedStart, row.plannedEnd);
-        if (row.plannedStart < wagon.plannedStart || row.plannedEnd > wagon.plannedEnd) throw new Error('Selecione um vagão cujo período contenha integralmente as atividades.');
+        if (row.plannedStart < wagon.plannedStart || row.plannedEnd > wagon.plannedEnd)
+          throw new Error('Selecione um vagão cujo período contenha integralmente as atividades.');
         if (row.progress > 0) ensureExecution(wagon);
         const locationName = requireText(row.location, 'Local');
         let location = data.locations.find(l => l.workId === workId && l.name === locationName);
-        if (!location) { location = { ...base(), workId, name: locationName, code: '' }; data.locations.push(location); }
-        const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(row.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: row.plannedStart, plannedEnd: row.plannedEnd, progress: row.progress, status: row.progress === 100 ? 'completed' : row.progress > 0 ? 'in_progress' : 'not_started', weight: typeof row.weight === 'number' && row.weight > 0 ? row.weight : 1, mandatory: true, origin: 'prevision', previsionExternalId: externalId };
-        validateActivity(activity); data.activities.push(activity);
+        if (!location) {
+          location = { ...base(), workId, name: locationName, code: '' };
+          data.locations.push(location);
+        }
+        const activity: Activity = {
+          ...base(),
+          wagonId: wagon.id,
+          name: requireText(row.name, 'Atividade'),
+          locationId: location.id,
+          responsibleId: command.responsibleId,
+          plannedStart: row.plannedStart,
+          plannedEnd: row.plannedEnd,
+          progress: row.progress,
+          status: row.progress === 100 ? 'completed' : row.progress > 0 ? 'in_progress' : 'not_started',
+          weight: typeof row.weight === 'number' && row.weight > 0 ? row.weight : 1,
+          mandatory: true,
+          origin: 'prevision',
+          previsionExternalId: externalId,
+        };
+        validateActivity(activity);
+        data.activities.push(activity);
         // External completion never implies locally accepted terminality.
-        data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local da atividade importada', mandatory: true, fulfilled: false });
-        if (row.progress > 0 && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
+        data.criteria.push({
+          ...base(),
+          activityId: activity.id,
+          description: 'Conferência local da atividade importada',
+          mandatory: true,
+          fulfilled: false,
+        });
+        if (row.progress > 0 && !wagon.actualStart) {
+          wagon.actualStart = today;
+          touch(wagon);
+        }
       }
-      entityId = wagon.id; wagonId = wagon.id; break;
+      entityId = wagon.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_team':
     case 'update_team': {
       const existing = command.type === 'update_team' ? data.teams.find(t => t.id === command.teamId) : undefined;
       if (command.type === 'update_team' && !existing) throw new Error('Equipe não encontrada.');
       const workId = command.type === 'create_team' ? command.workId : existing!.workId;
-      checkWork(workId); const name = requireText(command.name, 'Nome da equipe');
+      checkWork(workId);
+      const name = requireText(command.name, 'Nome da equipe');
       const company = requireText(command.company, 'Empresa');
-      if (!Number.isInteger(command.weeklyCapacity) || command.weeklyCapacity <= 0) throw new Error('Capacidade deve ser um número inteiro positivo de atividades por semana.');
-      if (data.teams.some(t => t.id !== existing?.id && t.workId === workId && t.name.toLowerCase() === name.toLowerCase() && t.company.toLowerCase() === company.toLowerCase())) throw new Error('Equipe já cadastrada nesta obra para esta empresa.');
+      if (!Number.isInteger(command.weeklyCapacity) || command.weeklyCapacity <= 0)
+        throw new Error('Capacidade deve ser um número inteiro positivo de atividades por semana.');
+      if (
+        data.teams.some(
+          t =>
+            t.id !== existing?.id &&
+            t.workId === workId &&
+            t.name.toLowerCase() === name.toLowerCase() &&
+            t.company.toLowerCase() === company.toLowerCase(),
+        )
+      )
+        throw new Error('Equipe já cadastrada nesta obra para esta empresa.');
       const fields = { company, name, weeklyCapacity: command.weeklyCapacity };
-      if (existing) { Object.assign(existing, fields); touch(existing); entityId = existing.id; }
-      else { const team = { ...base(), workId, ...fields }; data.teams.push(team); entityId = team.id; }
+      if (existing) {
+        Object.assign(existing, fields);
+        touch(existing);
+        entityId = existing.id;
+      } else {
+        const team = { ...base(), workId, ...fields };
+        data.teams.push(team);
+        entityId = team.id;
+      }
       break;
     }
     case 'delete_team': {
-      const team = data.teams.find(t => t.id === command.teamId); if (!team) throw new Error('Equipe não encontrada.');
+      const team = data.teams.find(t => t.id === command.teamId);
+      if (!team) throw new Error('Equipe não encontrada.');
       checkWork(team.workId);
       // Apagar a equipe deixaria atividade e compromisso apontando para o vazio.
-      if (data.activities.some(a => a.teamId === team.id)) throw new Error('Esta equipe está atribuída a atividades. Troque o recurso delas antes de excluir.');
-      if (data.planTasks.some(t => t.teamId === team.id)) throw new Error('Esta equipe está vinculada ao médio prazo ou a uma linha de base. Preserve o cadastro enquanto houver vínculos.');
-      if (data.commitments.some(c => c.teamId === team.id)) throw new Error('Esta equipe tem compromissos na planilha semanal. Remova a alocação antes de excluir a equipe.');
-      data.teams = data.teams.filter(t => t.id !== team.id); entityId = team.id; break;
+      if (data.activities.some(a => a.teamId === team.id))
+        throw new Error('Esta equipe está atribuída a atividades. Troque o recurso delas antes de excluir.');
+      if (data.planTasks.some(t => t.teamId === team.id))
+        throw new Error('Esta equipe está vinculada ao médio prazo ou a uma linha de base. Preserve o cadastro enquanto houver vínculos.');
+      if (data.commitments.some(c => c.teamId === team.id))
+        throw new Error('Esta equipe tem compromissos na planilha semanal. Remova a alocação antes de excluir a equipe.');
+      data.teams = data.teams.filter(t => t.id !== team.id);
+      entityId = team.id;
+      break;
     }
     case 'assign_team': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); const workId = workOf(wagon);
-      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId)) throw new Error('Equipe deve pertencer à obra.');
-      activity.teamId = command.teamId ?? undefined; touch(activity); entityId = activity.id; wagonId = wagon.id; break;
+      const activity = data.activities.find(a => a.id === command.activityId);
+      if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId);
+      const workId = workOf(wagon);
+      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId))
+        throw new Error('Equipe deve pertencer à obra.');
+      activity.teamId = command.teamId ?? undefined;
+      touch(activity);
+      entityId = activity.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'record_progress': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
-      if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+      const activity = data.activities.find(a => a.id === command.activityId);
+      if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId);
+      workOf(wagon);
+      if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100)
+        throw new Error('Progresso deve ficar entre 0 e 100.');
       if (command.progress > activity.progress) ensureExecution(wagon, activity.id);
       if (command.progress < activity.progress) requireText(command.reason ?? '', 'Justificativa da correção');
       if (command.progress < 100 && isTerminal(wagon.id, data)) checkReopen(wagon, command.reason);
-      const status = command.progress === 100 ? 'completed' as const : command.progress > 0 ? 'in_progress' as const : 'not_started' as const;
-      Object.assign(activity, { progress: command.progress, status }); validateActivity(activity); touch(activity);
+      const status =
+        command.progress === 100 ? ('completed' as const) : command.progress > 0 ? ('in_progress' as const) : ('not_started' as const);
+      Object.assign(activity, { progress: command.progress, status });
+      validateActivity(activity);
+      touch(activity);
       // O escalar da atividade é só o valor corrente; a série datada fica em progressEntries.
-      data.progressEntries.push({ ...base(), activityId: activity.id, recordedDate: today, progress: command.progress, recordedBy: actorId });
-      if (activity.status !== 'not_started' && !wagon.actualStart) { wagon.actualStart = today; touch(wagon); }
-      entityId = activity.id; wagonId = wagon.id; break;
+      data.progressEntries.push({
+        ...base(),
+        activityId: activity.id,
+        recordedDate: today,
+        progress: command.progress,
+        recordedBy: actorId,
+      });
+      if (activity.status !== 'not_started' && !wagon.actualStart) {
+        wagon.actualStart = today;
+        touch(wagon);
+      }
+      entityId = activity.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_commitment': {
       // A planilha da semana não depende de cadastro nenhum: o nome e o fornecedor são escritos na
       // própria linha, a equipe é opcional e a atividade do cronograma é vínculo opcional — a
       // planilha real mistura frentes de obra com tarefas que não estão em cronograma algum.
-      const workId = command.workId; checkWork(workId);
+      const workId = command.workId;
+      checkWork(workId);
       const name = requireText(command.name, 'Atividade');
       if (command.activityId) {
         const linked = data.activities.find(a => a.id === command.activityId);
         if (!linked || workOf(wagonFor(data, linked.wagonId)) !== workId) throw new Error('A atividade vinculada deve ser da mesma obra.');
       }
-      responsible(command.responsibleId, workId); validateDate(command.weekStart);
-      const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
+      responsible(command.responsibleId, workId);
+      validateDate(command.weekStart);
+      const weekStart = startOfWeek(command.weekStart),
+        weekEnd = addDays(weekStart, 6);
       // Linha nova nasce no primeiro dia da semana: a data é editável, e o calendário vem dela.
-      const startDate = command.startDate ?? weekStart, endDate = command.endDate ?? startDate;
-      const commitment = { ...base(), workId, name, supplier: command.supplier?.trim() ?? '', weekStart, weekEnd,
-        responsibleId: command.responsibleId, activityId: command.activityId ?? undefined,
-        teamId: teamOf(command.teamId, workId), ...period(startDate, endDate, weekStart, weekEnd) };
-      data.commitments.push(commitment); entityId = commitment.id; break;
+      const startDate = command.startDate ?? weekStart,
+        endDate = command.endDate ?? startDate;
+      const commitment = {
+        ...base(),
+        workId,
+        name,
+        supplier: command.supplier?.trim() ?? '',
+        weekStart,
+        weekEnd,
+        responsibleId: command.responsibleId,
+        activityId: command.activityId ?? undefined,
+        teamId: teamOf(command.teamId, workId),
+        ...period(startDate, endDate, weekStart, weekEnd),
+      };
+      data.commitments.push(commitment);
+      entityId = commitment.id;
+      break;
     }
     case 'update_commitment': {
-      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      const commitment = data.commitments.find(c => c.id === command.commitmentId);
+      if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
       // Tudo na linha é editável, inclusive a semana: mover uma linha de semana é corrigir a
       // célula, e a nova semana é que passa a conter o período.
       validateDate(command.weekStart);
-      const weekStart = startOfWeek(command.weekStart), weekEnd = addDays(weekStart, 6);
+      const weekStart = startOfWeek(command.weekStart),
+        weekEnd = addDays(weekStart, 6);
       Object.assign(commitment, {
-        name: requireText(command.name, 'Atividade'), supplier: command.supplier?.trim() ?? '',
-        teamId: teamOf(command.teamId, commitment.workId), weekStart, weekEnd,
+        name: requireText(command.name, 'Atividade'),
+        supplier: command.supplier?.trim() ?? '',
+        teamId: teamOf(command.teamId, commitment.workId),
+        weekStart,
+        weekEnd,
         ...period(command.startDate, command.endDate, weekStart, weekEnd),
       });
-      touch(commitment); entityId = commitment.id; break;
+      touch(commitment);
+      entityId = commitment.id;
+      break;
     }
     case 'record_fulfillment': {
-      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      const commitment = data.commitments.find(c => c.id === command.commitmentId);
+      if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
       // A planilha é editável: corrigir o apontamento é trocar a célula, não excluir a linha.
       let cause: NonFulfillmentCause | undefined;
@@ -431,171 +903,346 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         cause = NON_FULFILLMENT_CAUSES.find(option => option === requireText(command.cause ?? '', 'Causa do não cumprimento'));
         if (!cause) throw new Error('Causa fora da lista de causas de não cumprimento.');
       }
-      Object.assign(commitment, { fulfilled: command.fulfilled, cause, justification: command.justification?.trim() || undefined, recordedAt: now, recordedBy: actorId });
-      touch(commitment); entityId = commitment.id; break;
+      Object.assign(commitment, {
+        fulfilled: command.fulfilled,
+        cause,
+        justification: command.justification?.trim() || undefined,
+        recordedAt: now,
+        recordedBy: actorId,
+      });
+      touch(commitment);
+      entityId = commitment.id;
+      break;
     }
     case 'delete_commitment': {
-      const commitment = data.commitments.find(c => c.id === command.commitmentId); if (!commitment) throw new Error('Compromisso não encontrado.');
+      const commitment = data.commitments.find(c => c.id === command.commitmentId);
+      if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
       // A planilha permite apagar a linha, inclusive já apurada: é como se corrige um apontamento.
-      data.commitments = data.commitments.filter(c => c.id !== commitment.id); entityId = commitment.id; break;
+      data.commitments = data.commitments.filter(c => c.id !== commitment.id);
+      entityId = commitment.id;
+      break;
     }
     case 'create_baseline': {
-      checkWork(command.workId); const name = requireText(command.name, 'Nome da linha de base');
+      checkWork(command.workId);
+      const name = requireText(command.name, 'Nome da linha de base');
       const sequenceIds = new Set(data.sequences.filter(s => s.workId === command.workId).map(s => s.id));
       const wagons = data.wagons.filter(w => sequenceIds.has(w.sequenceId));
       if (!wagons.length) throw new Error('Cadastre ao menos um vagão antes de definir a linha de base.');
       const wagonIds = new Set(wagons.map(w => w.id));
-      const baseline = { ...base(), workId: command.workId, name, createdBy: actorId,
+      const baseline = {
+        ...base(),
+        workId: command.workId,
+        name,
+        createdBy: actorId,
         wagons: wagons.map(w => ({ id: w.id, number: w.number, plannedStart: w.plannedStart, plannedEnd: w.plannedEnd })),
-        activities: data.activities.filter(a => wagonIds.has(a.wagonId)).map(a => ({ id: a.id, wagonId: a.wagonId, name: a.name, locationId: a.locationId, plannedStart: a.plannedStart, plannedEnd: a.plannedEnd, weight: a.weight })) };
-      data.baselines.push(baseline); entityId = baseline.id; break;
+        activities: data.activities
+          .filter(a => wagonIds.has(a.wagonId))
+          .map(a => ({
+            id: a.id,
+            wagonId: a.wagonId,
+            name: a.name,
+            locationId: a.locationId,
+            plannedStart: a.plannedStart,
+            plannedEnd: a.plannedEnd,
+            weight: a.weight,
+          })),
+      };
+      data.baselines.push(baseline);
+      entityId = baseline.id;
+      break;
     }
     case 'move_restriction': {
-      const restriction = data.restrictions.find(r => r.id === command.restrictionId); if (!restriction) throw new Error('Restrição não encontrada.');
-      const wagon = wagonFor(data, restriction.wagonId); workOf(wagon);
+      const restriction = data.restrictions.find(r => r.id === command.restrictionId);
+      if (!restriction) throw new Error('Restrição não encontrada.');
+      const wagon = wagonFor(data, restriction.wagonId);
+      workOf(wagon);
       if (restriction.status === 'resolved') throw new Error('Restrição resolvida não volta ao quadro.');
-      if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa') throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
-      restriction.boardStatus = command.boardStatus; touch(restriction); entityId = restriction.id; wagonId = wagon.id; break;
+      if (command.boardStatus !== 'identificada' && command.boardStatus !== 'em_tratativa')
+        throw new Error('Coluna inválida: resolver a restrição exige registrar a resolução.');
+      restriction.boardStatus = command.boardStatus;
+      touch(restriction);
+      entityId = restriction.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_plan': {
       checkWork(command.workId);
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(command.month)) throw new Error('Informe o mês no formato AAAA-MM.');
-      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf)) throw new Error('Esta obra já tem um plano para este mês.');
+      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf))
+        throw new Error('Esta obra já tem um plano para este mês.');
       const source = command.copyFrom === undefined ? undefined : planFor(command.copyFrom);
       if (source) {
         if (source.workId !== command.workId) throw new Error('O plano de origem deve ser da mesma obra.');
         if (source.baselineOf || source.frozenAt) throw new Error('Copie de um plano vivo, não de uma linha de base.');
         if (source.month >= command.month) throw new Error('O plano de origem deve ser de um mês anterior ao novo plano.');
       }
-      const plan: MediumTermPlan = { ...base(), workId: command.workId, month: command.month, name: command.name?.trim() || `Plano de ${command.month}`, createdBy: actorId,
-        ...(source ? { copiedFromPlanId: source.id, ...(source.calendar ? { calendar: structuredClone(source.calendar) } : {}) } : {}) };
+      const plan: MediumTermPlan = {
+        ...base(),
+        workId: command.workId,
+        month: command.month,
+        name: command.name?.trim() || `Plano de ${command.month}`,
+        createdBy: actorId,
+        ...(source ? { copiedFromPlanId: source.id, ...(source.calendar ? { calendar: structuredClone(source.calendar) } : {}) } : {}),
+      };
       data.plans.push(plan);
       if (source) {
-        const copy = copyPlanForward(data.planTasks.filter(t => t.planId === source.id), data.planDependencies.filter(l => data.planTasks.some(t => t.planId === source.id && t.id === l.successorId)), plan, base);
-        data.planTasks.push(...copy.tasks); data.planDependencies.push(...copy.links);
+        const copy = copyPlanForward(
+          data.planTasks.filter(t => t.planId === source.id),
+          data.planDependencies.filter(l => data.planTasks.some(t => t.planId === source.id && t.id === l.successorId)),
+          plan,
+          base,
+        );
+        data.planTasks.push(...copy.tasks);
+        data.planDependencies.push(...copy.links);
       }
-      entityId = plan.id; break;
+      entityId = plan.id;
+      break;
     }
     case 'delete_plan': {
-      const plan = planFor(command.planId); checkWork(plan.workId);
-      if (data.plans.some(p => p.baselineOf === plan.id)) throw new Error('Este plano tem linhas de base salvas. Exclua-as antes de excluir o plano.');
+      const plan = planFor(command.planId);
+      checkWork(plan.workId);
+      if (data.plans.some(p => p.baselineOf === plan.id))
+        throw new Error('Este plano tem linhas de base salvas. Exclua-as antes de excluir o plano.');
       const taskIds = new Set(data.planTasks.filter(t => t.planId === plan.id).map(t => t.id));
       data.planDependencies = data.planDependencies.filter(d => !taskIds.has(d.predecessorId) && !taskIds.has(d.successorId));
       data.planTasks = data.planTasks.filter(t => !taskIds.has(t.id));
       data.plans = data.plans.filter(p => p.id !== plan.id);
-      entityId = plan.id; break;
+      entityId = plan.id;
+      break;
     }
     case 'freeze_plan_baseline': {
-      const plan = planFor(command.planId); checkWork(plan.workId);
+      const plan = planFor(command.planId);
+      checkWork(plan.workId);
       if (plan.baselineOf) throw new Error('Esta já é uma linha de base.');
       const tasks = data.planTasks.filter(t => t.planId === plan.id);
       if (!tasks.length) throw new Error('Preencha o plano antes de definir a linha de base.');
       // A linha de base é o próprio plano congelado: mesma estrutura, aberta no mesmo cronograma.
-      const frozen = { ...base(), calendar: structuredClone(plan.calendar ?? DEFAULT_CALENDAR), version: plan.version ?? 0, workId: plan.workId, month: plan.month, name: requireText(command.name, 'Nome da linha de base'), baselineOf: plan.id, frozenAt: now, createdBy: actorId };
+      const frozen = {
+        ...base(),
+        calendar: structuredClone(plan.calendar ?? DEFAULT_CALENDAR),
+        version: plan.version ?? 0,
+        workId: plan.workId,
+        month: plan.month,
+        name: requireText(command.name, 'Nome da linha de base'),
+        baselineOf: plan.id,
+        frozenAt: now,
+        createdBy: actorId,
+      };
       data.plans.push(frozen);
       const copies = new Map<string, string>();
       for (const task of tasks) {
         const copy = { ...task, ...base(), planId: frozen.id, sourceTaskId: task.id };
-        copies.set(task.id, copy.id); data.planTasks.push(copy);
+        copies.set(task.id, copy.id);
+        data.planTasks.push(copy);
       }
       const links = data.planDependencies.filter(d => copies.has(d.predecessorId) && copies.has(d.successorId));
-      for (const link of links) data.planDependencies.push({ ...link, ...base(), predecessorId: copies.get(link.predecessorId)!, successorId: copies.get(link.successorId)! });
-      entityId = frozen.id; break;
+      for (const link of links)
+        data.planDependencies.push({
+          ...link,
+          ...base(),
+          predecessorId: copies.get(link.predecessorId)!,
+          successorId: copies.get(link.successorId)!,
+        });
+      entityId = frozen.id;
+      break;
     }
     case 'save_plan_revision': {
-      const plan = planFor(command.planId); checkWork(plan.workId);
+      const plan = planFor(command.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt || plan.baselineOf) throw new Error('Linha de base não aceita edição.');
       const reason = requireText(command.reason, 'Motivo da atualização');
-      if (planSnapshot(plan, data.planTasks, data.planDependencies) !== command.expectedSnapshot) throw new Error('Outra pessoa alterou o cronograma. Atualize a página antes de salvar novamente; nenhuma alteração foi gravada.');
-      if (!Array.isArray(command.tasks) || command.tasks.length > 3000 || !Array.isArray(command.links) || command.links.length > 10000) throw new Error('Revisão excede o limite de 3000 tarefas ou 10000 vínculos.');
+      if (planSnapshot(plan, data.planTasks, data.planDependencies) !== command.expectedSnapshot)
+        throw new Error('Outra pessoa alterou o cronograma. Atualize a página antes de salvar novamente; nenhuma alteração foi gravada.');
+      if (!Array.isArray(command.tasks) || command.tasks.length > 3000 || !Array.isArray(command.links) || command.links.length > 10000)
+        throw new Error('Revisão excede o limite de 3000 tarefas ou 10000 vínculos.');
       const before = data.planTasks.filter(t => t.planId === plan.id);
       const ids = new Set<string>();
       const tasks = command.tasks.map((input, index) => {
-        if (typeof input.id !== 'string' || !input.id || ids.has(input.id) || data.planTasks.some(t => t.id === input.id && t.planId !== plan.id)) throw new Error('Identificador de tarefa inválido ou repetido.');
+        if (
+          typeof input.id !== 'string' ||
+          !input.id ||
+          ids.has(input.id) ||
+          data.planTasks.some(t => t.id === input.id && t.planId !== plan.id)
+        )
+          throw new Error('Identificador de tarefa inválido ou repetido.');
         ids.add(input.id);
         const old = before.find(t => t.id === input.id);
+        // O histórico só chega carregado nos testes em memória: no banco ele fica fora do snapshot
+        // desde 01/10/2026, e os ids são UUIDs gerados no navegador, que não se repetem.
         if (!old && data.history.some(h => h.entityId === input.id)) throw new Error('Identificador de tarefa já utilizado.');
-        if (!Number.isFinite(input.progress) || input.progress < 0 || input.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
-        if (!Number.isInteger(input.level) || input.level < 0 || input.level > (index ? command.tasks[index-1].level + 1 : 0)) throw new Error('Hierarquia inválida.');
-        if (input.teamId && !data.teams.some(t => t.id === input.teamId && t.workId === plan.workId)) throw new Error('Equipe deve pertencer à obra.');
+        if (!Number.isFinite(input.progress) || input.progress < 0 || input.progress > 100)
+          throw new Error('Progresso deve ficar entre 0 e 100.');
+        if (!Number.isInteger(input.level) || input.level < 0 || input.level > (index ? command.tasks[index - 1].level + 1 : 0))
+          throw new Error('Hierarquia inválida.');
+        if (input.teamId && !data.teams.some(t => t.id === input.teamId && t.workId === plan.workId))
+          throw new Error('Equipe deve pertencer à obra.');
         validatePeriod(input.plannedStart, input.plannedEnd);
         if (input.anchorStart) validateDate(input.anchorStart);
-        const summary = command.tasks[index+1]?.level > input.level;
+        const summary = command.tasks[index + 1]?.level > input.level;
         if (summary && old && input.progress !== old.progress) throw new Error('Progresso de resumo é calculado.');
         if (input.actualStart) validateDate(input.actualStart);
         if (input.actualEnd) validateDate(input.actualEnd);
-        const row = `Linha ${index+1}`;
-        if (summary && (input.actualStart || input.actualEnd)) throw new Error(`${row}: tarefa-resumo não recebe início ou término real; informe nas subtarefas.`);
+        const row = `Linha ${index + 1}`;
+        if (summary && (input.actualStart || input.actualEnd))
+          throw new Error(`${row}: tarefa-resumo não recebe início ou término real; informe nas subtarefas.`);
         if (input.actualEnd && !input.actualStart) throw new Error(`${row}: término real exige início real.`);
-        if (input.actualStart && input.actualEnd && input.actualStart > input.actualEnd) throw new Error(`${row}: início real não pode ser depois do término real.`);
+        if (input.actualStart && input.actualEnd && input.actualStart > input.actualEnd)
+          throw new Error(`${row}: início real não pode ser depois do término real.`);
         if (input.actualEnd && input.progress !== 100) throw new Error(`${row}: tarefa com término real deve estar 100% concluída.`);
         if (!summary && input.progress > 0 && !input.actualStart) throw new Error(`${row}: tarefa com % concluído precisa de início real.`);
-        return { ...base(), ...old, id: input.id, planId: plan.id, name: requireText(input.name, 'Nome'),
-          plannedStart: input.plannedStart, plannedEnd: input.plannedEnd, progress: input.progress, level: input.level, order: index+1,
-          teamId: input.teamId || undefined, notes: typeof input.notes === 'string' ? input.notes : undefined,
-          duration: input.duration, anchorStart: input.anchorStart, actualStart: input.actualStart || undefined, actualEnd: input.actualEnd || undefined, version: (old?.version ?? 0) + 1, updatedAt: now };
+        return {
+          ...base(),
+          ...old,
+          id: input.id,
+          planId: plan.id,
+          name: requireText(input.name, 'Nome'),
+          plannedStart: input.plannedStart,
+          plannedEnd: input.plannedEnd,
+          progress: input.progress,
+          level: input.level,
+          order: index + 1,
+          teamId: input.teamId || undefined,
+          notes: typeof input.notes === 'string' ? input.notes : undefined,
+          duration: input.duration,
+          anchorStart: input.anchorStart,
+          actualStart: input.actualStart || undefined,
+          actualEnd: input.actualEnd || undefined,
+          version: (old?.version ?? 0) + 1,
+          updatedAt: now,
+        };
       });
       const linkIds = new Set<string>();
       const links = command.links.map(input => {
-        if (!input.id || linkIds.has(input.id) || data.planDependencies.some(l => l.id === input.id && !before.some(t => t.id === l.successorId))) throw new Error('Identificador de vínculo inválido.');
+        if (
+          !input.id ||
+          linkIds.has(input.id) ||
+          data.planDependencies.some(l => l.id === input.id && !before.some(t => t.id === l.successorId))
+        )
+          throw new Error('Identificador de vínculo inválido.');
         linkIds.add(input.id);
-        return { ...base(), id: input.id, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lagDays: input.lagDays, lagBusiness: input.lagBusiness !== false };
+        return {
+          ...base(),
+          id: input.id,
+          predecessorId: input.predecessorId,
+          successorId: input.successorId,
+          type: input.type,
+          lagDays: input.lagDays,
+          lagBusiness: input.lagBusiness !== false,
+        };
       });
       const calculated = scheduleTasks(tasks, links, command.calendar);
       for (const task of calculated) {
         const submitted = tasks.find(t => t.id === task.id)!;
-        if (submitted.plannedStart !== task.plannedStart || submitted.plannedEnd !== task.plannedEnd) throw new Error('Datas divergentes do cálculo. Revise o rascunho antes de salvar.');
+        if (submitted.plannedStart !== task.plannedStart || submitted.plannedEnd !== task.plannedEnd)
+          throw new Error('Datas divergentes do cálculo. Revise o rascunho antes de salvar.');
       }
       const revision = newId();
-      for (const id of new Set([...before.map(t=>t.id), ...calculated.map(t=>t.id)])) {
-        const old=before.find(t=>t.id===id), next=calculated.find(t=>t.id===id);
+      for (const id of new Set([...before.map(t => t.id), ...calculated.map(t => t.id)])) {
+        const old = before.find(t => t.id === id),
+          next = calculated.find(t => t.id === id);
         const changes: Record<string, unknown> = {};
-        for (const field of ['name','plannedStart','plannedEnd','duration','anchorStart','actualStart','actualEnd','teamId','notes','progress','level','order'] as const) {
-          if(JSON.stringify(old?.[field])!==JSON.stringify(next?.[field])) changes[field]={before:old?.[field]??null,after:next?.[field]??null};
+        for (const field of [
+          'name',
+          'plannedStart',
+          'plannedEnd',
+          'duration',
+          'anchorStart',
+          'actualStart',
+          'actualEnd',
+          'teamId',
+          'notes',
+          'progress',
+          'level',
+          'order',
+        ] as const) {
+          if (JSON.stringify(old?.[field]) !== JSON.stringify(next?.[field]))
+            changes[field] = { before: old?.[field] ?? null, after: next?.[field] ?? null };
         }
-        const oldLinks=data.planDependencies.filter(l=>l.successorId===id).map(({predecessorId,type,lagDays,lagBusiness})=>({predecessorId,type,lagDays,lagBusiness}));
-        const nextLinks=links.filter(l=>l.successorId===id).map(({predecessorId,type,lagDays,lagBusiness})=>({predecessorId,type,lagDays,lagBusiness}));
-        if(JSON.stringify(oldLinks)!==JSON.stringify(nextLinks)) changes.predecessors={before:oldLinks,after:nextLinks};
-        if(Object.keys(changes).length) data.history.push({id:newId(),entityId:id,entityType:'planning',action:'plan_task_revision',authorId:actorId,occurredAt:now,changes:{revision,planId:plan.id,reason,fields:changes}});
+        const oldLinks = data.planDependencies
+          .filter(l => l.successorId === id)
+          .map(({ predecessorId, type, lagDays, lagBusiness }) => ({ predecessorId, type, lagDays, lagBusiness }));
+        const nextLinks = links
+          .filter(l => l.successorId === id)
+          .map(({ predecessorId, type, lagDays, lagBusiness }) => ({ predecessorId, type, lagDays, lagBusiness }));
+        if (JSON.stringify(oldLinks) !== JSON.stringify(nextLinks)) changes.predecessors = { before: oldLinks, after: nextLinks };
+        if (Object.keys(changes).length)
+          data.history.push({
+            id: newId(),
+            entityId: id,
+            entityType: 'planning',
+            action: 'plan_task_revision',
+            authorId: actorId,
+            occurredAt: now,
+            changes: { revision, planId: plan.id, reason, fields: changes },
+          });
       }
-      const oldIds=new Set(before.map(t=>t.id));
-      data.planTasks=[...data.planTasks.filter(t=>t.planId!==plan.id),...calculated];
-      data.planDependencies=[...data.planDependencies.filter(l=>!oldIds.has(l.successorId)),...links];
-      data.history.push({id:revision,entityId:plan.id,entityType:'planning',action:'plan_revision',authorId:actorId,occurredAt:now,changes:{reason,calendar:{before:plan.calendar??DEFAULT_CALENDAR,after:command.calendar}}});
-      plan.calendar=structuredClone(command.calendar); plan.version=(plan.version??0)+1; touch(plan);
+      const oldIds = new Set(before.map(t => t.id));
+      data.planTasks = [...data.planTasks.filter(t => t.planId !== plan.id), ...calculated];
+      data.planDependencies = [...data.planDependencies.filter(l => !oldIds.has(l.successorId)), ...links];
+      data.history.push({
+        id: revision,
+        entityId: plan.id,
+        entityType: 'planning',
+        action: 'plan_revision',
+        authorId: actorId,
+        occurredAt: now,
+        changes: { reason, calendar: { before: plan.calendar ?? DEFAULT_CALENDAR, after: command.calendar } },
+      });
+      plan.calendar = structuredClone(command.calendar);
+      plan.version = (plan.version ?? 0) + 1;
+      touch(plan);
       return plan.id;
     }
-    case 'create_plan_task': case 'update_plan_task': {
+    case 'create_plan_task':
+    case 'update_plan_task': {
       const plan = command.type === 'create_plan_task' ? planFor(command.planId) : planFor(taskFor(command.taskId).planId);
-      const workId = plan.workId; checkWork(workId);
+      const workId = plan.workId;
+      checkWork(workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       const name = requireText(command.name, 'Nome da linha');
       validatePeriod(command.plannedStart, command.plannedEnd);
-      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId)) throw new Error('Equipe deve pertencer à obra.');
+      if (command.teamId && !data.teams.some(t => t.id === command.teamId && t.workId === workId))
+        throw new Error('Equipe deve pertencer à obra.');
       if (command.activityId) {
         const linked = data.activities.find(a => a.id === command.activityId);
         if (!linked || workOf(wagonFor(data, linked.wagonId)) !== workId) throw new Error('A atividade vinculada deve ser da mesma obra.');
       }
-      const fields = { name, plannedStart: command.plannedStart, plannedEnd: command.plannedEnd, teamId: command.teamId ?? undefined, activityId: command.activityId ?? undefined };
+      const fields = {
+        name,
+        plannedStart: command.plannedStart,
+        plannedEnd: command.plannedEnd,
+        teamId: command.teamId ?? undefined,
+        activityId: command.activityId ?? undefined,
+      };
       if (command.type === 'create_plan_task') {
         const siblings = data.planTasks.filter(t => t.planId === plan.id);
         const order = Math.max(0, ...siblings.map(t => t.order)) + 1;
         // A linha nova continua no recuo da última: quem está detalhando um item segue detalhando.
-        const last = siblings.slice().sort((a, b) => a.order - b.order).at(-1);
-        const asked = Number.isFinite(command.level) ? Math.max(0, Math.trunc(command.level as number)) : last?.level ?? 0;
+        const last = siblings
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .at(-1);
+        const asked = Number.isFinite(command.level) ? Math.max(0, Math.trunc(command.level as number)) : (last?.level ?? 0);
         const level = Math.min(asked, (last?.level ?? -1) + 1);
         const task = { ...base(), planId: plan.id, ...fields, progress: 0, order, level };
-        data.planTasks.push(task); entityId = task.id;
+        data.planTasks.push(task);
+        entityId = task.id;
       } else {
-        if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+        if (!Number.isFinite(command.progress) || command.progress < 0 || command.progress > 100)
+          throw new Error('Progresso deve ficar entre 0 e 100.');
         const task = taskFor(command.taskId);
-        Object.assign(task, fields, { progress: command.progress }); touch(task); entityId = task.id;
+        Object.assign(task, fields, { progress: command.progress });
+        touch(task);
+        entityId = task.id;
       }
       break;
     }
-    case 'indent_plan_task': case 'outdent_plan_task': {
-      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+    case 'indent_plan_task':
+    case 'outdent_plan_task': {
+      const task = taskFor(command.taskId);
+      const plan = planFor(task.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       const rows = ordered(data, plan.id);
       const at = rows.findIndex(t => t.id === task.id);
@@ -608,32 +1255,52 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       } else if (task.level === 0) throw new Error('Esta linha já está no nível mais alto.');
       // O recuo move a linha e tudo que está debaixo dela: subitem de subitem acompanha o pai.
       const shift = command.type === 'indent_plan_task' ? 1 : -1;
-      for (const member of family) { member.level += shift; touch(member); }
-      entityId = task.id; break;
+      for (const member of family) {
+        member.level += shift;
+        touch(member);
+      }
+      entityId = task.id;
+      break;
     }
     case 'delete_plan_task': {
-      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      const task = taskFor(command.taskId);
+      const plan = planFor(task.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       // Apagar um item apaga os subitens dele: deixá-los órfãos reescreveria a estrutura por conta.
       const rows = ordered(data, plan.id);
-      const removed = new Set(subtree(rows, rows.findIndex(t => t.id === task.id)).map(t => t.id));
+      const removed = new Set(
+        subtree(
+          rows,
+          rows.findIndex(t => t.id === task.id),
+        ).map(t => t.id),
+      );
       data.planDependencies = data.planDependencies.filter(d => !removed.has(d.predecessorId) && !removed.has(d.successorId));
       data.planTasks = data.planTasks.filter(t => !removed.has(t.id));
-      entityId = task.id; break;
+      entityId = task.id;
+      break;
     }
     case 'set_plan_task_note': {
-      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      const task = taskFor(command.taskId);
+      const plan = planFor(task.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       if (command.note.length > 2000) throw new Error('Anotação muito longa: use até 2000 caracteres.');
-      task.notes = command.note.trim() || undefined; touch(task); entityId = task.id; break;
+      task.notes = command.note.trim() || undefined;
+      touch(task);
+      entityId = task.id;
+      break;
     }
     case 'link_plan_tasks': {
-      const predecessor = taskFor(command.predecessorId), successor = taskFor(command.successorId);
+      const predecessor = taskFor(command.predecessorId),
+        successor = taskFor(command.successorId);
       if (predecessor.id === successor.id) throw new Error('Uma linha não pode depender de si mesma.');
       if (predecessor.planId !== successor.planId) throw new Error('As linhas ligadas devem ser do mesmo plano.');
-      const plan = planFor(successor.planId); checkWork(plan.workId);
+      const plan = planFor(successor.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
-      if (data.planDependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe. Edite a existente para trocar o tipo ou a defasagem.');
+      if (data.planDependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id))
+        throw new Error('Essa dependência já existe. Edite a existente para trocar o tipo ou a defasagem.');
       const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
         if (from === target) return true;
         if (seen.has(from)) return false;
@@ -645,32 +1312,63 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (!LINK_TYPES.includes(linkType)) throw new Error('Tipo de vínculo deve ser TI, II, TT ou IT.');
       const lagDays = command.lagDays ?? 0;
       if (!Number.isInteger(lagDays) || Math.abs(lagDays) > 365) throw new Error('A defasagem vai de -365 a 365 dias.');
-      const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id, type: linkType, lagDays, lagBusiness: command.lagBusiness !== false };
-      data.planDependencies.push(dependency); entityId = dependency.id; break;
+      const dependency = {
+        ...base(),
+        predecessorId: predecessor.id,
+        successorId: successor.id,
+        type: linkType,
+        lagDays,
+        lagBusiness: command.lagBusiness !== false,
+      };
+      data.planDependencies.push(dependency);
+      entityId = dependency.id;
+      break;
     }
     case 'replace_plan_predecessors': {
-      const task = taskFor(command.taskId); const plan = planFor(task.planId); checkWork(plan.workId);
+      const task = taskFor(command.taskId);
+      const plan = planFor(task.planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       if (!Array.isArray(command.links) || command.links.length > 100) throw new Error('Informe no máximo 100 predecessoras por operação.');
       // Valida em uma cópia: até uma chamada direta mantém o estado intacto em caso de erro.
       const draft = structuredClone(data);
       const before = data.planDependencies.filter(d => d.successorId === task.id);
       draft.planDependencies = draft.planDependencies.filter(d => d.successorId !== task.id);
-      for (const link of command.links) applyCommand(draft, {
-        type: 'link_plan_tasks', predecessorId: link.predecessorId, successorId: task.id,
-        linkType: link.linkType, lagDays: link.lagDays, lagBusiness: link.lagBusiness,
-      }, context);
+      for (const link of command.links)
+        applyCommand(
+          draft,
+          {
+            type: 'link_plan_tasks',
+            predecessorId: link.predecessorId,
+            successorId: task.id,
+            linkType: link.linkType,
+            lagDays: link.lagDays,
+            lagBusiness: link.lagBusiness,
+          },
+          context,
+        );
       data.planDependencies = draft.planDependencies;
-      data.history.push({ id: newId(), entityId: task.id, entityType: 'planning', action: 'plan_predecessors_changed', authorId: actorId, occurredAt: now,
-        changes: { before, after: data.planDependencies.filter(d => d.successorId === task.id) } });
-      entityId = task.id; break;
+      data.history.push({
+        id: newId(),
+        entityId: task.id,
+        entityType: 'planning',
+        action: 'plan_predecessors_changed',
+        authorId: actorId,
+        occurredAt: now,
+        changes: { before, after: data.planDependencies.filter(d => d.successorId === task.id) },
+      });
+      entityId = task.id;
+      break;
     }
     case 'unlink_plan_tasks': {
-      const dependency = data.planDependencies.find(d => d.id === command.dependencyId); if (!dependency) throw new Error('Dependência não encontrada.');
-      const plan = planFor(taskFor(dependency.successorId).planId); checkWork(plan.workId);
+      const dependency = data.planDependencies.find(d => d.id === command.dependencyId);
+      if (!dependency) throw new Error('Dependência não encontrada.');
+      const plan = planFor(taskFor(dependency.successorId).planId);
+      checkWork(plan.workId);
       if (plan.frozenAt) throw new Error('Linha de base é um retrato congelado e não aceita edição.');
       data.planDependencies = data.planDependencies.filter(d => d.id !== dependency.id);
-      entityId = dependency.id; break;
+      entityId = dependency.id;
+      break;
     }
     case 'link_activities': {
       const predecessor = data.activities.find(a => a.id === command.predecessorId);
@@ -679,7 +1377,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (predecessor.id === successor.id) throw new Error('Uma atividade não pode depender de si mesma.');
       const workOfActivity = (activity: Activity) => workOf(wagonFor(data, activity.wagonId));
       if (workOfActivity(predecessor) !== workOfActivity(successor)) throw new Error('As atividades ligadas devem ser da mesma obra.');
-      if (data.dependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id)) throw new Error('Essa dependência já existe.');
+      if (data.dependencies.some(d => d.predecessorId === predecessor.id && d.successorId === successor.id))
+        throw new Error('Essa dependência já existe.');
       // Se a predecessora já é alcançável a partir da sucessora, a ligação fecharia um laço.
       const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
         if (from === target) return true;
@@ -689,31 +1388,49 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       };
       if (reaches(successor.id, predecessor.id)) throw new Error('Essa ligação criaria um ciclo entre as atividades.');
       const dependency = { ...base(), predecessorId: predecessor.id, successorId: successor.id };
-      data.dependencies.push(dependency); entityId = dependency.id; wagonId = successor.wagonId; break;
+      data.dependencies.push(dependency);
+      entityId = dependency.id;
+      wagonId = successor.wagonId;
+      break;
     }
     case 'unlink_activities': {
-      const dependency = data.dependencies.find(d => d.id === command.dependencyId); if (!dependency) throw new Error('Dependência não encontrada.');
+      const dependency = data.dependencies.find(d => d.id === command.dependencyId);
+      if (!dependency) throw new Error('Dependência não encontrada.');
       const successor = data.activities.find(a => a.id === dependency.successorId);
-      if (successor) { workOf(wagonFor(data, successor.wagonId)); wagonId = successor.wagonId; }
+      if (successor) {
+        workOf(wagonFor(data, successor.wagonId));
+        wagonId = successor.wagonId;
+      }
       data.dependencies = data.dependencies.filter(d => d.id !== dependency.id);
-      entityId = dependency.id; break;
+      entityId = dependency.id;
+      break;
     }
     case 'set_activity_note': {
-      const activity = data.activities.find(a => a.id === command.activityId); if (!activity) throw new Error('Atividade não encontrada.');
-      const wagon = wagonFor(data, activity.wagonId); workOf(wagon);
+      const activity = data.activities.find(a => a.id === command.activityId);
+      if (!activity) throw new Error('Atividade não encontrada.');
+      const wagon = wagonFor(data, activity.wagonId);
+      workOf(wagon);
       if (typeof command.note !== 'string') throw new Error('Anotação inválida.');
       if (command.note.length > 2000) throw new Error('Anotação muito longa: use até 2000 caracteres.');
-      activity.notes = command.note.trim() || undefined; touch(activity);
-      entityId = activity.id; wagonId = wagon.id; break;
+      activity.notes = command.note.trim() || undefined;
+      touch(activity);
+      entityId = activity.id;
+      wagonId = wagon.id;
+      break;
     }
     case 'create_ifc_model': {
-      checkWork(command.workId); const name = requireText(command.name, 'Nome do modelo');
-      if (data.ifcModels.some(m => m.workId === command.workId && m.name.toLowerCase() === name.toLowerCase())) throw new Error('Modelo já cadastrado nesta obra.');
+      checkWork(command.workId);
+      const name = requireText(command.name, 'Nome do modelo');
+      if (data.ifcModels.some(m => m.workId === command.workId && m.name.toLowerCase() === name.toLowerCase()))
+        throw new Error('Modelo já cadastrado nesta obra.');
       const model = { ...base(), workId: command.workId, name, discipline: requireText(command.discipline, 'Disciplina') };
-      data.ifcModels.push(model); entityId = model.id; break;
+      data.ifcModels.push(model);
+      entityId = model.id;
+      break;
     }
     case 'add_ifc_version': {
-      const model = data.ifcModels.find(m => m.id === command.modelId); if (!model) throw new Error('Modelo não encontrado.');
+      const model = data.ifcModels.find(m => m.id === command.modelId);
+      if (!model) throw new Error('Modelo não encontrado.');
       checkWork(model.workId);
       const fileName = requireText(command.fileName, 'Nome do arquivo');
       if (!/\.ifc$/i.test(fileName)) throw new Error('O repositório armazena apenas modelos IFC.');
@@ -724,61 +1441,113 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       // Versões anteriores nunca são substituídas: cada envio empilha uma nova.
       const version = Math.max(0, ...data.ifcVersions.filter(v => v.modelId === model.id).map(v => v.version)) + 1;
       const storeys = [...new Set((command.storeys ?? []).filter(s => typeof s === 'string' && s.trim()).map(s => s.trim()))];
-      const record = { ...base(), modelId: model.id, version, fileName, fileSize: command.fileSize, storagePath, uploadedBy: actorId, storeys, elementCount: Number.isFinite(command.elementCount) ? command.elementCount : 0 };
-      data.ifcVersions.push(record); entityId = record.id; break;
+      const record = {
+        ...base(),
+        modelId: model.id,
+        version,
+        fileName,
+        fileSize: command.fileSize,
+        storagePath,
+        uploadedBy: actorId,
+        storeys,
+        elementCount: Number.isFinite(command.elementCount) ? command.elementCount : 0,
+      };
+      data.ifcVersions.push(record);
+      entityId = record.id;
+      break;
     }
     case 'create_link_rule': {
-      checkWork(command.workId); const serviceName = requireText(command.serviceName, 'Serviço');
+      checkWork(command.workId);
+      const serviceName = requireText(command.serviceName, 'Serviço');
       if (!Array.isArray(command.criteria) || !command.criteria.length) throw new Error('Informe ao menos um critério.');
       for (const criterion of command.criteria) {
-        if (criterion.property !== 'pavimento' && criterion.property !== 'tipo') throw new Error('Propriedade ainda não suportada nas regras.');
+        if (criterion.property !== 'pavimento' && criterion.property !== 'tipo')
+          throw new Error('Propriedade ainda não suportada nas regras.');
         if (criterion.operator !== 'igual' && criterion.operator !== 'contem') throw new Error('Operador inválido.');
         requireText(criterion.value, 'Valor do critério');
       }
       const order = Math.max(0, ...data.linkRules.filter(r => r.workId === command.workId).map(r => r.order)) + 1;
-      const rule = { ...base(), workId: command.workId, order, serviceName, criteria: command.criteria.map(c => ({ ...c, value: c.value.trim() })) };
-      data.linkRules.push(rule); entityId = rule.id; break;
+      const rule = {
+        ...base(),
+        workId: command.workId,
+        order,
+        serviceName,
+        criteria: command.criteria.map(c => ({ ...c, value: c.value.trim() })),
+      };
+      data.linkRules.push(rule);
+      entityId = rule.id;
+      break;
     }
     case 'delete_link_rule': {
-      const rule = data.linkRules.find(r => r.id === command.ruleId); if (!rule) throw new Error('Regra não encontrada.');
+      const rule = data.linkRules.find(r => r.id === command.ruleId);
+      if (!rule) throw new Error('Regra não encontrada.');
       checkWork(rule.workId);
-      data.linkRules = data.linkRules.filter(r => r.id !== rule.id); entityId = rule.id; break;
+      data.linkRules = data.linkRules.filter(r => r.id !== rule.id);
+      entityId = rule.id;
+      break;
     }
-    case 'grant_access': case 'revoke_access': {
+    case 'grant_access':
+    case 'revoke_access': {
       if (actor.role !== 'admin') throw new Error('Somente administradores podem gerenciar acessos.');
-      const target = data.users.find(u => u.id === command.userId); if (!target) throw new Error('Usuário não encontrado.');
+      const target = data.users.find(u => u.id === command.userId);
+      if (!target) throw new Error('Usuário não encontrado.');
       if (!data.works.some(w => w.id === command.workId)) throw new Error('Obra não encontrada.');
-      if (command.type === 'grant_access') { if (!target.workIds.includes(command.workId)) target.workIds.push(command.workId); }
-      else { target.workIds = target.workIds.filter(id => id !== command.workId); }
-      touch(target); entityId = target.id; break;
+      if (command.type === 'grant_access') {
+        if (!target.workIds.includes(command.workId)) target.workIds.push(command.workId);
+      } else {
+        target.workIds = target.workIds.filter(id => id !== command.workId);
+      }
+      touch(target);
+      entityId = target.id;
+      break;
     }
     case 'set_role': {
       if (actor.role !== 'admin') throw new Error('Somente administradores podem alterar papéis.');
-      const target = data.users.find(u => u.id === command.userId); if (!target) throw new Error('Usuário não encontrado.');
+      const target = data.users.find(u => u.id === command.userId);
+      if (!target) throw new Error('Usuário não encontrado.');
       if (target.id === actorId && command.role !== 'admin') throw new Error('Você não pode remover seu próprio acesso de administrador.');
-      target.role = command.role; touch(target); entityId = target.id; break;
+      target.role = command.role;
+      touch(target);
+      entityId = target.id;
+      break;
     }
     case 'set_takt': {
-      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      const sequence = data.sequences.find(s => s.id === command.sequenceId);
+      if (!sequence) throw new Error('Sequência não encontrada.');
       if (actor.role !== 'admin') checkWork(sequence.workId);
-      if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365) throw new Error('Takt deve ter entre 1 e 365 dias.');
-      sequence.defaultTaktDays = command.taktDays; touch(sequence); entityId = sequence.id; break;
+      if (!Number.isInteger(command.taktDays) || command.taktDays <= 0 || command.taktDays > 365)
+        throw new Error('Takt deve ter entre 1 e 365 dias.');
+      sequence.defaultTaktDays = command.taktDays;
+      touch(sequence);
+      entityId = sequence.id;
+      break;
     }
     case 'set_sequence_start': {
-      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
+      const sequence = data.sequences.find(s => s.id === command.sequenceId);
+      if (!sequence) throw new Error('Sequência não encontrada.');
       if (actor.role !== 'admin') checkWork(sequence.workId);
       if (command.startDate !== null) validateDate(command.startDate);
-      sequence.startDate = command.startDate ?? undefined; touch(sequence); entityId = sequence.id; break;
+      sequence.startDate = command.startDate ?? undefined;
+      touch(sequence);
+      entityId = sequence.id;
+      break;
     }
     case 'regenerate_sequence': {
-      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
-      const workId = sequence.workId; checkWork(workId); responsible(command.responsibleId, workId);
+      const sequence = data.sequences.find(s => s.id === command.sequenceId);
+      if (!sequence) throw new Error('Sequência não encontrada.');
+      const workId = sequence.workId;
+      checkWork(workId);
+      responsible(command.responsibleId, workId);
       const work = data.works.find(w => w.id === workId)!;
-      if (work.previsionProjectId && work.previsionProjectId !== command.projectId) throw new Error('A obra selecionada não corresponde ao vínculo com este projeto Prevision.');
+      if (work.previsionProjectId && work.previsionProjectId !== command.projectId)
+        throw new Error('A obra selecionada não corresponde ao vínculo com este projeto Prevision.');
       const plan = planSequenceRegeneration(data, command.sequenceId, command.projectId, command.rows, sequence.defaultTaktDays, today);
       if (plan.aborted) throw new Error(plan.reason);
-      const removedWagons = new Set(plan.removedWagonIds), removedActivities = new Set(plan.removedActivityIds);
-      const removedCriteria = new Set(plan.removedCriterionIds), removedPending = new Set(plan.removedPendingIds), removedRestrictions = new Set(plan.removedRestrictionIds);
+      const removedWagons = new Set(plan.removedWagonIds),
+        removedActivities = new Set(plan.removedActivityIds);
+      const removedCriteria = new Set(plan.removedCriterionIds),
+        removedPending = new Set(plan.removedPendingIds),
+        removedRestrictions = new Set(plan.removedRestrictionIds);
       data.wagons = data.wagons.filter(w => !removedWagons.has(w.id));
       data.activities = data.activities.filter(a => !removedActivities.has(a.id));
       data.criteria = data.criteria.filter(c => !removedCriteria.has(c.id));
@@ -790,84 +1559,232 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       data.progressEntries = data.progressEntries.filter(p => !removedActivities.has(p.activityId));
       // A linha da planilha é do planejador, não do cronograma: ressincronizar o Prevision
       // desfaz o vínculo com a atividade removida, mas não apaga o registro da semana.
-      for (const commitment of data.commitments) if (commitment.activityId && removedActivities.has(commitment.activityId)) { commitment.activityId = undefined; touch(commitment); }
-      for (const task of data.planTasks) if (task.activityId && removedActivities.has(task.activityId)) { task.activityId = undefined; touch(task); }
+      for (const commitment of data.commitments)
+        if (commitment.activityId && removedActivities.has(commitment.activityId)) {
+          commitment.activityId = undefined;
+          touch(commitment);
+        }
+      for (const task of data.planTasks)
+        if (task.activityId && removedActivities.has(task.activityId)) {
+          task.activityId = undefined;
+          touch(task);
+        }
       data.dependencies = data.dependencies.filter(d => !removedActivities.has(d.predecessorId) && !removedActivities.has(d.successorId));
-      if (!work.previsionProjectId) { work.previsionProjectId = command.projectId; touch(work); }
-      let predecessorId = plan.frozenWagonId; let number = plan.startNumber;
+      if (!work.previsionProjectId) {
+        work.previsionProjectId = command.projectId;
+        touch(work);
+      }
+      let predecessorId = plan.frozenWagonId;
+      let number = plan.startNumber;
       for (const window of plan.windows) {
         const taktDays = periodDays(window.plannedStart, window.plannedEnd, sequence.calendar === 'business_days');
         if (!taktDays) continue;
-        const wagon = { ...base(), sequenceId: sequence.id, number, predecessorId, plannedStart: window.plannedStart, plannedEnd: window.plannedEnd, taktDays, responsibleIds: [command.responsibleId] };
-        data.wagons.push(wagon); predecessorId = wagon.id; number++;
+        const wagon = {
+          ...base(),
+          sequenceId: sequence.id,
+          number,
+          predecessorId,
+          plannedStart: window.plannedStart,
+          plannedEnd: window.plannedEnd,
+          taktDays,
+          responsibleIds: [command.responsibleId],
+        };
+        data.wagons.push(wagon);
+        predecessorId = wagon.id;
+        number++;
         for (const member of window.members) {
           const externalId = `${command.projectId}:${member.externalId}`;
           let location = data.locations.find(l => l.workId === workId && l.name === member.location);
-          if (!location) { location = { ...base(), workId, name: member.location, code: '' }; data.locations.push(location); }
-          const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(member.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: member.plannedStart, plannedEnd: member.plannedEnd, progress: member.progress, status: member.progress === 100 ? 'completed' : member.progress > 0 ? 'in_progress' : 'not_started', weight: typeof member.weight === 'number' && member.weight > 0 ? member.weight : 1, mandatory: true, origin: 'prevision', previsionExternalId: externalId };
-          validateActivity(activity); data.activities.push(activity);
-          data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local da atividade importada', mandatory: true, fulfilled: false });
+          if (!location) {
+            location = { ...base(), workId, name: member.location, code: '' };
+            data.locations.push(location);
+          }
+          const activity: Activity = {
+            ...base(),
+            wagonId: wagon.id,
+            name: requireText(member.name, 'Atividade'),
+            locationId: location.id,
+            responsibleId: command.responsibleId,
+            plannedStart: member.plannedStart,
+            plannedEnd: member.plannedEnd,
+            progress: member.progress,
+            status: member.progress === 100 ? 'completed' : member.progress > 0 ? 'in_progress' : 'not_started',
+            weight: typeof member.weight === 'number' && member.weight > 0 ? member.weight : 1,
+            mandatory: true,
+            origin: 'prevision',
+            previsionExternalId: externalId,
+          };
+          validateActivity(activity);
+          data.activities.push(activity);
+          data.criteria.push({
+            ...base(),
+            activityId: activity.id,
+            description: 'Conferência local da atividade importada',
+            mandatory: true,
+            fulfilled: false,
+          });
         }
       }
       validateSequence(data.wagons);
-      entityId = sequence.id; break;
+      entityId = sequence.id;
+      break;
     }
     case 'sync_long_term_plan': {
-      const sequence = data.sequences.find(s => s.id === command.sequenceId); if (!sequence) throw new Error('Sequência não encontrada.');
-      const workId = sequence.workId; checkWork(workId); responsible(command.responsibleId, workId);
+      const sequence = data.sequences.find(s => s.id === command.sequenceId);
+      if (!sequence) throw new Error('Sequência não encontrada.');
+      const workId = sequence.workId;
+      checkWork(workId);
+      responsible(command.responsibleId, workId);
       if (!Array.isArray(command.slots) || command.slots.length > 100_000) throw new Error('Plano inválido.');
       for (const slot of command.slots) {
         if (typeof slot?.key !== 'string' || !slot.key.startsWith(LONG_TERM_PREFIX)) throw new Error('Plano inválido.');
-        requireText(slot.name, 'Serviço'); requireText(slot.location, 'Pavimento'); validatePeriod(slot.plannedStart, slot.plannedEnd);
+        requireText(slot.name, 'Serviço');
+        requireText(slot.location, 'Pavimento');
+        validatePeriod(slot.plannedStart, slot.plannedEnd);
       }
       const plan = planLongTermSync(data, sequence.id, command.slots, today);
       if (plan.aborted) throw new Error(plan.reason);
       if (!plan.wagons.length) throw new Error('O plano não tem serviço a partir da fronteira dos vagões liberados: nada a gerar.');
-      const removedWagons = new Set(plan.removedWagonIds), removedActivities = new Set(plan.removedActivityIds);
-      const removedRestrictions = new Set(plan.removedRestrictionIds), removedPending = new Set(plan.removedPendingIds);
-      const tail = data.wagons.filter(w => w.sequenceId === sequence.id && !removedWagons.has(w.id) && w.id !== plan.frozenWagonId && !data.releases.some(r => r.wagonId === w.id));
+      const removedWagons = new Set(plan.removedWagonIds),
+        removedActivities = new Set(plan.removedActivityIds);
+      const removedRestrictions = new Set(plan.removedRestrictionIds),
+        removedPending = new Set(plan.removedPendingIds);
+      const tail = data.wagons.filter(
+        w =>
+          w.sequenceId === sequence.id &&
+          !removedWagons.has(w.id) &&
+          w.id !== plan.frozenWagonId &&
+          !data.releases.some(r => r.wagonId === w.id),
+      );
       data.wagons = data.wagons.filter(w => !removedWagons.has(w.id));
       data.activities = data.activities.filter(a => !removedActivities.has(a.id));
       data.criteria = data.criteria.filter(c => !removedActivities.has(c.activityId));
       data.pendingItems = data.pendingItems.filter(p => !removedPending.has(p.id));
       data.restrictions = data.restrictions.filter(r => !removedRestrictions.has(r.id));
-      for (const item of [...data.pendingItems, ...data.restrictions]) if (item.activityId && removedActivities.has(item.activityId)) { item.activityId = undefined; touch(item); }
+      for (const item of [...data.pendingItems, ...data.restrictions])
+        if (item.activityId && removedActivities.has(item.activityId)) {
+          item.activityId = undefined;
+          touch(item);
+        }
       // Mesmos cuidados da regeneração pelo Prevision: o payload trafega inteiro, e filho de
       // atividade removida reinserido derrubaria a transação pela chave estrangeira.
       data.progressEntries = data.progressEntries.filter(p => !removedActivities.has(p.activityId));
-      for (const commitment of data.commitments) if (commitment.activityId && removedActivities.has(commitment.activityId)) { commitment.activityId = undefined; touch(commitment); }
-      for (const task of data.planTasks) if (task.activityId && removedActivities.has(task.activityId)) { task.activityId = undefined; touch(task); }
+      for (const commitment of data.commitments)
+        if (commitment.activityId && removedActivities.has(commitment.activityId)) {
+          commitment.activityId = undefined;
+          touch(commitment);
+        }
+      for (const task of data.planTasks)
+        if (task.activityId && removedActivities.has(task.activityId)) {
+          task.activityId = undefined;
+          touch(task);
+        }
       data.dependencies = data.dependencies.filter(d => !removedActivities.has(d.predecessorId) && !removedActivities.has(d.successorId));
       const teams = data.teams.filter(t => t.workId === workId);
-      const teamFor = (names: string[]) => names.map(n => teams.find(t => t.name.trim().toLowerCase() === n.trim().toLowerCase())).find(Boolean)?.id;
-      let predecessorId = plan.frozenWagonId; let number = plan.startNumber;
+      const teamFor = (names: string[]) =>
+        names.map(n => teams.find(t => t.name.trim().toLowerCase() === n.trim().toLowerCase())).find(Boolean)?.id;
+      let predecessorId = plan.frozenWagonId;
+      let number = plan.startNumber;
       // Numeração nova pode colidir no meio da troca com um vagão mantido: numera provisoriamente
       // fora da faixa e acerta no fim, antes da validação da sequência.
       for (const wagon of tail) wagon.number = -wagon.number - 1_000_000;
       for (const planned of plan.wagons) {
         let wagon = tail.find(w => w.plannedStart === planned.plannedStart);
-        if (wagon) Object.assign(wagon, { number, predecessorId, plannedEnd: planned.plannedEnd, taktDays: planned.taktDays, updatedAt: now });
-        else { wagon = { ...base(), sequenceId: sequence.id, number, predecessorId, plannedStart: planned.plannedStart, plannedEnd: planned.plannedEnd, taktDays: planned.taktDays, responsibleIds: [command.responsibleId] }; data.wagons.push(wagon); }
+        if (wagon)
+          Object.assign(wagon, { number, predecessorId, plannedEnd: planned.plannedEnd, taktDays: planned.taktDays, updatedAt: now });
+        else {
+          wagon = {
+            ...base(),
+            sequenceId: sequence.id,
+            number,
+            predecessorId,
+            plannedStart: planned.plannedStart,
+            plannedEnd: planned.plannedEnd,
+            taktDays: planned.taktDays,
+            responsibleIds: [command.responsibleId],
+          };
+          data.wagons.push(wagon);
+        }
         for (const item of planned.activities) {
           let location = data.locations.find(l => l.workId === workId && l.name === item.location);
-          if (!location) { location = { ...base(), workId, name: item.location, code: '' }; data.locations.push(location); }
+          if (!location) {
+            location = { ...base(), workId, name: item.location, code: '' };
+            data.locations.push(location);
+          }
           const existing = data.activities.find(a => a.previsionExternalId === item.externalId);
           if (existing) {
-            Object.assign(existing, { wagonId: wagon.id, name: requireText(item.name, 'Atividade'), locationId: location.id, plannedStart: item.plannedStart, plannedEnd: item.plannedEnd, weight: item.weight > 0 ? item.weight : 1, origin: 'long_term' as const, teamId: existing.teamId ?? teamFor(item.teamNames), updatedAt: now });
+            Object.assign(existing, {
+              wagonId: wagon.id,
+              name: requireText(item.name, 'Atividade'),
+              locationId: location.id,
+              plannedStart: item.plannedStart,
+              plannedEnd: item.plannedEnd,
+              weight: item.weight > 0 ? item.weight : 1,
+              origin: 'long_term' as const,
+              teamId: existing.teamId ?? teamFor(item.teamNames),
+              updatedAt: now,
+            });
             validateActivity(existing);
           } else {
-            const activity: Activity = { ...base(), wagonId: wagon.id, name: requireText(item.name, 'Atividade'), locationId: location.id, responsibleId: command.responsibleId, plannedStart: item.plannedStart, plannedEnd: item.plannedEnd, progress: 0, status: 'not_started', weight: item.weight > 0 ? item.weight : 1, mandatory: true, origin: 'long_term', previsionExternalId: item.externalId, teamId: teamFor(item.teamNames) };
-            validateActivity(activity); data.activities.push(activity);
-            data.criteria.push({ ...base(), activityId: activity.id, description: 'Conferência local do serviço no pavimento', mandatory: true, fulfilled: false });
+            const activity: Activity = {
+              ...base(),
+              wagonId: wagon.id,
+              name: requireText(item.name, 'Atividade'),
+              locationId: location.id,
+              responsibleId: command.responsibleId,
+              plannedStart: item.plannedStart,
+              plannedEnd: item.plannedEnd,
+              progress: 0,
+              status: 'not_started',
+              weight: item.weight > 0 ? item.weight : 1,
+              mandatory: true,
+              origin: 'long_term',
+              previsionExternalId: item.externalId,
+              teamId: teamFor(item.teamNames),
+            };
+            validateActivity(activity);
+            data.activities.push(activity);
+            data.criteria.push({
+              ...base(),
+              activityId: activity.id,
+              description: 'Conferência local do serviço no pavimento',
+              mandatory: true,
+              fulfilled: false,
+            });
           }
         }
-        predecessorId = wagon.id; number++;
+        predecessorId = wagon.id;
+        number++;
       }
       validateSequence(data.wagons);
-      entityId = sequence.id; break;
+      entityId = sequence.id;
+      break;
     }
   }
-  data.history.push({ id: newId(), entityId: wagonId ?? entityId, entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning', action: command.type, authorId: actorId, occurredAt: now, changes: { targetId: entityId, ...(command.type === 'sync_long_term_plan' ? { type: command.type, sequenceId: command.sequenceId, slots: command.slots.length } : command) } });
-  for (const id of beforeTerminal) if (!isTerminal(id, data)) data.history.push({ id: newId(), entityId: id, entityType: 'wagon', action: 'terminality_reopened', authorId: actorId, occurredAt: now, changes: { reason: 'reason' in command ? command.reason : undefined } });
+  data.history.push({
+    id: newId(),
+    entityId: wagonId ?? entityId,
+    entityType: wagonId ? 'wagon' : command.type === 'create_work' ? 'work' : 'planning',
+    action: command.type,
+    authorId: actorId,
+    occurredAt: now,
+    changes: {
+      targetId: entityId,
+      ...(command.type === 'sync_long_term_plan'
+        ? { type: command.type, sequenceId: command.sequenceId, slots: command.slots.length }
+        : command),
+    },
+  });
+  for (const id of beforeTerminal)
+    if (!isTerminal(id, data))
+      data.history.push({
+        id: newId(),
+        entityId: id,
+        entityType: 'wagon',
+        action: 'terminality_reopened',
+        authorId: actorId,
+        occurredAt: now,
+        changes: { reason: 'reason' in command ? command.reason : undefined },
+      });
   return entityId;
 }

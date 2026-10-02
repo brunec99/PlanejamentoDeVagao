@@ -16,12 +16,26 @@ const WORKER = '/fragments/worker.mjs';
 export class MissingGeometry extends Error {}
 
 export type FragmentsApi = typeof import('@thatopen/fragments');
-export interface LoadedModel { versionId: string; label: string; model: FragmentsModel }
-export interface Federation { api: FragmentsApi; fragments: FragmentsModels; models: LoadedModel[] }
+export interface LoadedModel {
+  versionId: string;
+  label: string;
+  model: FragmentsModel;
+}
+export interface Federation {
+  api: FragmentsApi;
+  fragments: FragmentsModels;
+  models: LoadedModel[];
+}
 
 /** Traz a geometria de cada versão para a cena. Em série: são megabytes por versão, e o worker
  * já paraleliza o processamento por dentro. */
-export async function loadFragments({ scene, camera, versions, signal, onProgress }: {
+export async function loadFragments({
+  scene,
+  camera,
+  versions,
+  signal,
+  onProgress,
+}: {
   scene: ThreeNS.Object3D;
   camera: ThreeNS.PerspectiveCamera;
   versions: { id: string; label: string }[];
@@ -64,7 +78,12 @@ export async function loadFragments({ scene, camera, versions, signal, onProgres
 }
 
 /** Enquadra a câmera no conjunto carregado, usando a caixa que os próprios modelos declaram. */
-export function frame(three: typeof ThreeNS, camera: ThreeNS.PerspectiveCamera, controls: { target: ThreeNS.Vector3; update: () => void }, models: LoadedModel[]) {
+export function frame(
+  three: typeof ThreeNS,
+  camera: ThreeNS.PerspectiveCamera,
+  controls: { target: ThreeNS.Vector3; update: () => void },
+  models: LoadedModel[],
+) {
   const bounds = new three.Box3();
   for (const { model } of models) if (!model.box.isEmpty()) bounds.union(model.box);
   if (bounds.isEmpty()) return;

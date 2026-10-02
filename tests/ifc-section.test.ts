@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Box3, Plane, Vector3 } from 'three';
-import { createSectionController, DEFAULT_SECTION_CUT, sectionBounds, sectionPlaneDefinition, type SectionCut } from '../src/modules/ifc/section-plane';
+import {
+  createSectionController,
+  DEFAULT_SECTION_CUT,
+  sectionBounds,
+  sectionPlaneDefinition,
+  type SectionCut,
+} from '../src/modules/ifc/section-plane';
 
 const bounds = { min: { x: -20, y: -4, z: 10 }, max: { x: 60, y: 12, z: 50 } };
 const cut = (changes: Partial<SectionCut> = {}): SectionCut => ({ ...DEFAULT_SECTION_CUT, enabled: true, ...changes });
@@ -21,8 +27,10 @@ test('seccionamento nos três eixos preserva o lado inferior e atravessa a posi�
     const plane = planeFor(cut({ axis, position: 25 }));
     const location = bounds.min[axis] + (bounds.max[axis] - bounds.min[axis]) / 4;
     const onPlane = new Vector3(7, 3, 23).setComponent({ x: 0, y: 1, z: 2 }[axis], location);
-    const below = onPlane.clone(); below[axis] -= 1;
-    const above = onPlane.clone(); above[axis] += 1;
+    const below = onPlane.clone();
+    below[axis] -= 1;
+    const above = onPlane.clone();
+    above[axis] += 1;
     assert.equal(plane.distanceToPoint(onPlane), 0);
     assert.ok(plane.distanceToPoint(below) > 0, `${axis}: lado inferior deve permanecer visível`);
     assert.ok(plane.distanceToPoint(above) < 0, `${axis}: lado superior deve ser recortado`);
@@ -76,7 +84,14 @@ test('a federação usa uma caixa global e envia o mesmo plano aos dois modelos'
   const callbacks = [first.getClippingPlanesEvent, second.getClippingPlanesEvent];
   const models = [{ model: first }, { model: second }];
   const renderer = { clippingPlanes: [] as Plane[] };
-  const controller = createSectionController({ three: { Plane, Vector3 }, renderer }, { models, fragments: { settings: { maxUpdateRate: 100 }, update: async () => {} } }, sectionBounds(models), cause => { throw cause; });
+  const controller = createSectionController(
+    { three: { Plane, Vector3 }, renderer },
+    { models, fragments: { settings: { maxUpdateRate: 100 }, update: async () => {} } },
+    sectionBounds(models),
+    cause => {
+      throw cause;
+    },
+  );
   controller.set(cut({ axis: 'x', position: 50 }));
   assert.equal(renderer.clippingPlanes.length, 1);
   const plane = renderer.clippingPlanes[0];
@@ -97,12 +112,25 @@ test('arraste rápido entrega a última posição ao worker e desmontagem cancel
   const renderer = { clippingPlanes: [] as Plane[] };
   const received: number[] = [];
   let finish: (() => void) | undefined;
-  const controller = createSectionController({ three: { Plane, Vector3 }, renderer }, {
-    models: [], fragments: { settings: { maxUpdateRate: 100 }, update: async () => {
-      received.push(renderer.clippingPlanes[0]?.constant ?? NaN);
-      await new Promise<void>(resolve => { finish = resolve; });
-    } },
-  }, bounds, cause => { throw cause; });
+  const controller = createSectionController(
+    { three: { Plane, Vector3 }, renderer },
+    {
+      models: [],
+      fragments: {
+        settings: { maxUpdateRate: 100 },
+        update: async () => {
+          received.push(renderer.clippingPlanes[0]?.constant ?? NaN);
+          await new Promise<void>(resolve => {
+            finish = resolve;
+          });
+        },
+      },
+    },
+    bounds,
+    cause => {
+      throw cause;
+    },
+  );
   controller.set(cut({ axis: 'x', position: 25 }));
   context.mock.timers.tick(50);
   controller.set(cut({ axis: 'x', position: 50 }));
@@ -114,12 +142,16 @@ test('arraste rápido entrega a última posição ao worker e desmontagem cancel
   controller.set(cut({ axis: 'x', position: 75 }));
   context.mock.timers.tick(101);
   assert.deepEqual(received, [20]);
-  finish!(); await Promise.resolve(); await Promise.resolve();
+  finish!();
+  await Promise.resolve();
+  await Promise.resolve();
   context.mock.timers.tick(101);
   assert.deepEqual(received, [20, 40]);
   controller.set(cut({ axis: 'x', position: 100 }));
   controller.dispose();
-  finish!(); await Promise.resolve(); await Promise.resolve();
+  finish!();
+  await Promise.resolve();
+  await Promise.resolve();
   context.mock.timers.tick(1000);
   assert.deepEqual(received, [20, 40]);
   assert.deepEqual(renderer.clippingPlanes, []);

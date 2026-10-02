@@ -53,8 +53,8 @@ A engrenagem no topo leva a **Configurações**, visível apenas para quem é **
 
 - **Consulta** — vê e não altera nada. É o papel de quem entra pela primeira vez.
 - **Planejador** — planeja: cria e edita vagões, atividades, planos e planilhas.
-- **Gestor** — tudo do planejador, mais três coisas que só ele pode: cadastrar obra, reabrir vagão já terminal (com justificativa registrada) e liberar excepcionalmente.
-- **Admin** — administra pessoas e acessos nesta tela. Atenção a um detalhe que costuma confundir: **Admin não é Gestor**. Ele libera acessos, mas cadastrar obra continua sendo do Gestor.
+- **Gestor** — tudo do planejador, mais três coisas: cadastrar obra, reabrir vagão já terminal (com justificativa registrada) e liberar excepcionalmente.
+- **Admin** — tudo o que o Gestor pode, mais administrar pessoas e acessos nesta tela. Até 01/10/2026 o Admin só administrava acessos e não cadastrava obra; o usuário decidiu que ele herda o Gestor, porque o perfil forte da instalação é o Admin e ninguém mais cadastrava obra. A regra está em `actsAsManager` (`src/domain/rules.ts`), usada pelo servidor e pela tela.
 
 **Convidar por e-mail.** O convite manda um e-mail e já cria o perfil com o papel escolhido, poupando o passo de esperar a pessoa entrar para então ajustá-la. Não é obrigatório: qualquer pessoa do domínio pode simplesmente entrar com a conta Google e aparecer na lista como Consulta. Depois do convite, ainda é preciso liberar as obras — o convite dá o papel, não o acesso.
 

@@ -2,9 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateFederation } from '../src/domain/ifc-federation';
 
-const models = [{ id: 'estrutura', workId: 'obra-a' }, { id: 'instalacoes', workId: 'obra-a' }, { id: 'outra', workId: 'obra-b' }];
-const versions = [{ id: 'estrutura-v1', modelId: 'estrutura' }, { id: 'estrutura-v2', modelId: 'estrutura' }, { id: 'instalacoes-v1', modelId: 'instalacoes' }, { id: 'outra-v1', modelId: 'outra' }];
-const validate = (versionIds: unknown, name: unknown = 'Coordenação') => validateFederation({ versionIds, name }, 'obra-a', models, versions);
+const models = [
+  { id: 'estrutura', workId: 'obra-a' },
+  { id: 'instalacoes', workId: 'obra-a' },
+  { id: 'outra', workId: 'obra-b' },
+];
+const versions = [
+  { id: 'estrutura-v1', modelId: 'estrutura' },
+  { id: 'estrutura-v2', modelId: 'estrutura' },
+  { id: 'instalacoes-v1', modelId: 'instalacoes' },
+  { id: 'outra-v1', modelId: 'outra' },
+];
+const validate = (versionIds: unknown, name: unknown = 'Coordenação') =>
+  validateFederation({ versionIds, name }, 'obra-a', models, versions);
 
 test('a composição mantém a revisão escolhida mesmo havendo revisão mais recente', () => {
   const source = ['estrutura-v1', 'instalacoes-v1'];

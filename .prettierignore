@@ -1,0 +1,10 @@
+.next
+node_modules
+public
+package-lock.json
+tsconfig.tsbuildinfo
+playwright-report
+test-results
+supabase/migrations
+*.md
+next-env.d.ts

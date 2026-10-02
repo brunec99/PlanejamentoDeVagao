@@ -11,13 +11,17 @@ export async function POST(request: NextRequest) {
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Somente administradores podem convidar usuários.' }, { status: 403 });
 
   let body: { email?: string; name?: string; role?: string; workIds?: string[] };
-  try { body = await request.json(); }
-  catch { return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 }); }
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
+  }
 
   const email = (body.email ?? '').trim().toLowerCase();
-  const role = ROLES.includes(body.role as typeof ROLES[number]) ? body.role as typeof ROLES[number] : 'viewer';
+  const role = ROLES.includes(body.role as (typeof ROLES)[number]) ? (body.role as (typeof ROLES)[number]) : 'viewer';
   const workIds = Array.isArray(body.workIds) ? body.workIds.filter(id => typeof id === 'string') : [];
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) return NextResponse.json({ error: `O convite só pode ser enviado para contas @${ALLOWED_DOMAIN}.` }, { status: 400 });
+  if (!email.endsWith(`@${ALLOWED_DOMAIN}`))
+    return NextResponse.json({ error: `O convite só pode ser enviado para contas @${ALLOWED_DOMAIN}.` }, { status: 400 });
 
   const service = getServiceClient();
   const origin = request.headers.get('origin') ?? request.nextUrl.origin;

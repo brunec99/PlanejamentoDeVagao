@@ -18,34 +18,54 @@ export async function GET(request: NextRequest) {
     const profile = await getRouteProfile();
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
     const { data, error } = await getServiceClient().from('work_settings').select('week_one_start').eq('work_id', workId).maybeSingle();
-    if (error) return missingTable(error.code)
-      ? NextResponse.json({ available: false, weekOneStart: null }, { headers })
-      : responseError('Não foi possível ler as configurações da obra.', 502);
+    if (error)
+      return missingTable(error.code)
+        ? NextResponse.json({ available: false, weekOneStart: null }, { headers })
+        : responseError('Não foi possível ler as configurações da obra.', 502);
     return NextResponse.json({ available: true, weekOneStart: data?.week_one_start ?? null }, { headers });
-  } catch { return responseError('Falha ao ler as configurações da obra.', 502); }
+  } catch {
+    return responseError('Falha ao ler as configurações da obra.', 502);
+  }
 }
 
 export async function PUT(request: NextRequest) {
   let body: { workId?: unknown; weekOneStart?: unknown };
-  try { body = await request.json(); } catch { return responseError('Corpo da requisição inválido.', 400); }
+  try {
+    body = await request.json();
+  } catch {
+    return responseError('Corpo da requisição inválido.', 400);
+  }
   const workId = typeof body.workId === 'string' ? body.workId : '';
   if (!workId) return responseError('Obra não informada.', 400);
   let weekOneStart: string | null = null;
   if (body.weekOneStart !== null) {
     if (typeof body.weekOneStart !== 'string') return responseError('Data da semana 1 inválida.', 400);
-    try { validateDate(body.weekOneStart); weekOneStart = normalizeWeekOne(body.weekOneStart); }
-    catch { return responseError('Data da semana 1 inválida.', 400); }
+    try {
+      validateDate(body.weekOneStart);
+      weekOneStart = normalizeWeekOne(body.weekOneStart);
+    } catch {
+      return responseError('Data da semana 1 inválida.', 400);
+    }
   }
   try {
     const profile = await getRouteProfile();
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
     if (profile.role === 'viewer') return responseError('Seu perfil permite apenas consulta.', 403);
     const { error } = await getServiceClient().from('work_settings').upsert({
-      work_id: workId, week_one_start: weekOneStart, updated_at: new Date().toISOString(), updated_by: profile.id,
+      work_id: workId,
+      week_one_start: weekOneStart,
+      updated_at: new Date().toISOString(),
+      updated_by: profile.id,
     });
-    if (error) return responseError(missingTable(error.code)
-      ? 'Aplique a migração 0025_work_settings.sql no Supabase para salvar a semana 1.'
-      : 'Não foi possível salvar as configurações da obra.', 502);
+    if (error)
+      return responseError(
+        missingTable(error.code)
+          ? 'Aplique a migração 0025_work_settings.sql no Supabase para salvar a semana 1.'
+          : 'Não foi possível salvar as configurações da obra.',
+        502,
+      );
     return NextResponse.json({ available: true, weekOneStart }, { headers });
-  } catch { return responseError('Falha ao salvar as configurações da obra.', 502); }
+  } catch {
+    return responseError('Falha ao salvar as configurações da obra.', 502);
+  }
 }

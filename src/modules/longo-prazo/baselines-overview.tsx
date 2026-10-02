@@ -1,7 +1,8 @@
 'use client';
 import { CommandForm, TextField, value } from '@/modules/planejamento/forms';
+import { HelpNote } from '@/modules/layout/help-note';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
-import { Callout, Empty, LoadState, Missing } from '@/modules/planejamento/ui';
+import { Empty, LoadState, Missing } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, formatTimestamp, wagonLabel } from '@/shared/format';
 
@@ -10,44 +11,93 @@ export function BaselinesOverview({ workId }: { workId: string }) {
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
-  if (!selected || !planning.data.users.find(u => u.id === context.actorId)?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
+  if (!selected || !planning.data.users.find(u => u.id === context.actorId)?.workIds.includes(workId))
+    return <Missing label="Obra não encontrada" />;
   const { data } = planning;
   const baselines = data.baselines.filter(b => b.workId === workId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const person = (id: string) => data.users.find(u => u.id === id)?.name ?? id;
 
-  return <>
-    <h2 className="mt-8 text-lg font-bold text-slate-900">Linhas de base</h2>
-    <p className="mt-1 text-sm text-slate-500">Fotografias imutáveis do cronograma, usadas na Linha de Balanço e na curva de avanço para comparar com o realizado.</p>
+  return (
+    <>
+      {/* O que é uma linha de base e por que ela nunca muda fica na ajuda; a tela mostra uma linha e a
+        ação à direita do título, que abre o formulário numa gaveta. */}
+      <div className="mt-8 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <h2 className="text-lg font-bold text-slate-900">Linhas de base</h2>
+            <HelpNote title="Como funciona: linhas de base" compact>
+              <p>
+                Uma linha de base é uma fotografia imutável do cronograma — vagões e atividades com as datas previstas naquele momento. A
+                Linha de Balanço e a curva de avanço a usam para comparar o planejamento atual e o realizado com o que foi prometido.
+              </p>
+              <p>
+                Cada acionamento de "Definir linha de base" cria um registro novo, sem substituir os anteriores. Reprogramar o planejamento
+                atual não altera nenhuma linha de base já salva: planejamento atual, linhas de base e realizado permanecem registros
+                distintos.
+              </p>
+            </HelpNote>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Fotografias imutáveis do cronograma, para comparar o planejado de então com o atual e o realizado.
+          </p>
+        </div>
+        <CommandForm
+          title="Definir linha de base"
+          submit="Definir linha de base"
+          tone="primary"
+          success="Linha de base definida."
+          description="Salva as datas atuais de vagões e atividades como referência."
+          command={d => ({ type: 'create_baseline', workId, name: value(d, 'name') })}
+        >
+          <TextField name="name" label="Nome da linha de base" />
+        </CommandForm>
+      </div>
 
-    <div className="my-5">
-      <CommandForm title="Definir linha de base" submit="Definir linha de base" command={d => ({ type: 'create_baseline', workId, name: value(d, 'name') })}>
-        <TextField name="name" label="Nome da linha de base" />
-      </CommandForm>
-    </div>
-
-    <section data-tour="longo-baselines" className="panel overflow-hidden">
-      <h3 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">Linhas de base salvas</h3>
-      {baselines.length === 0
-        ? <div className="p-5"><Empty>Nenhuma linha de base salva. Cada acionamento cria um registro novo, sem substituir os anteriores.</Empty></div>
-        : <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Linhas de base" tabIndex={0}>
+      <section data-tour="longo-baselines" className="panel mt-5 overflow-hidden">
+        <h3 className="border-b border-slate-100 px-5 py-3.5 text-sm font-bold text-slate-800">Linhas de base salvas</h3>
+        {baselines.length === 0 ? (
+          <div className="p-5">
+            <Empty>Nenhuma linha de base salva. Cada acionamento cria um registro novo, sem substituir os anteriores.</Empty>
+          </div>
+        ) : (
+          <div className="overflow-x-auto custom-scrollbar" role="region" aria-label="Linhas de base" tabIndex={0}>
             <table className="data-table min-w-[720px]">
-              <thead><tr>{['Linha de base', 'Salva em', 'Por', 'Vagões', 'Atividades', 'Período coberto'].map(l => <th scope="col" key={l}>{l}</th>)}</tr></thead>
-              <tbody>{baselines.map(baseline => {
-                const starts = baseline.wagons.map(w => w.plannedStart).sort();
-                const ends = baseline.wagons.map(w => w.plannedEnd).sort();
-                return <tr key={baseline.id}>
-                  <th scope="row">{baseline.name}</th>
-                  <td className="whitespace-nowrap">{formatTimestamp(baseline.createdAt)}</td>
-                  <td>{person(baseline.createdBy)}</td>
-                  <td className="tabular-nums">{baseline.wagons.length}<span className="block text-xs text-slate-400">{baseline.wagons.length > 0 ? `${wagonLabel(Math.min(...baseline.wagons.map(w => w.number)))} em diante` : ''}</span></td>
-                  <td className="tabular-nums">{baseline.activities.length}</td>
-                  <td className="whitespace-nowrap tabular-nums">{starts.length > 0 ? `${formatDate(starts[0])} a ${formatDate(ends[ends.length - 1])}` : '—'}</td>
-                </tr>;
-              })}</tbody>
+              <thead>
+                <tr>
+                  {['Linha de base', 'Salva em', 'Por', 'Vagões', 'Atividades', 'Período coberto'].map(l => (
+                    <th scope="col" key={l}>
+                      {l}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {baselines.map(baseline => {
+                  const starts = baseline.wagons.map(w => w.plannedStart).sort();
+                  const ends = baseline.wagons.map(w => w.plannedEnd).sort();
+                  return (
+                    <tr key={baseline.id}>
+                      <th scope="row">{baseline.name}</th>
+                      <td className="whitespace-nowrap">{formatTimestamp(baseline.createdAt)}</td>
+                      <td>{person(baseline.createdBy)}</td>
+                      <td className="tabular-nums">
+                        {baseline.wagons.length}
+                        <span className="block text-xs text-slate-400">
+                          {baseline.wagons.length > 0 ? `${wagonLabel(Math.min(...baseline.wagons.map(w => w.number)))} em diante` : ''}
+                        </span>
+                      </td>
+                      <td className="tabular-nums">{baseline.activities.length}</td>
+                      <td className="whitespace-nowrap tabular-nums">
+                        {starts.length > 0 ? `${formatDate(starts[0])} a ${formatDate(ends[ends.length - 1])}` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
-          </div>}
-    </section>
-
-    <div className="mt-5"><Callout tone="info">Reprogramar o planejamento atual não altera nenhuma linha de base já salva. O planejamento atual, as linhas de base e o realizado permanecem registros distintos.</Callout></div>
-  </>;
+          </div>
+        )}
+      </section>
+    </>
+  );
 }

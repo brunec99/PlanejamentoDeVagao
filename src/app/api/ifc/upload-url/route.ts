@@ -16,18 +16,25 @@ export async function POST(request: Request) {
   if (profile.role === 'viewer') return NextResponse.json({ error: 'Seu perfil permite apenas consulta.' }, { status: 403 });
 
   let body: { modelId?: unknown; fileName?: unknown };
-  try { body = await request.json(); }
-  catch { return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 }); }
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
+  }
   const modelId = typeof body?.modelId === 'string' ? body.modelId.trim() : '';
   const fileName = typeof body?.fileName === 'string' ? body.fileName.trim() : '';
   if (!modelId) return NextResponse.json({ error: 'Modelo não informado.' }, { status: 400 });
   // Dois tipos sobem por aqui: o .ifc original, que é opcional, e o .frag com a geometria
   // convertida, que é o que as telas 3D leem. Nada além disso entra no bucket.
-  if (!fileName || !/\.(ifc|frag)$/i.test(fileName)) return NextResponse.json({ error: 'O repositório aceita apenas arquivos .ifc e a geometria convertida .frag.' }, { status: 400 });
+  if (!fileName || !/\.(ifc|frag)$/i.test(fileName))
+    return NextResponse.json({ error: 'O repositório aceita apenas arquivos .ifc e a geometria convertida .frag.' }, { status: 400 });
 
   let model;
-  try { model = (await new SupabasePlanningRepository().getSnapshot()).ifcModels.find(m => m.id === modelId); }
-  catch { return NextResponse.json({ error: 'Falha ao consultar os modelos da obra.' }, { status: 502 }); }
+  try {
+    model = (await new SupabasePlanningRepository().getSnapshot({ workIds: profile.workIds })).ifcModels.find(m => m.id === modelId);
+  } catch {
+    return NextResponse.json({ error: 'Falha ao consultar os modelos da obra.' }, { status: 502 });
+  }
   if (!model) return NextResponse.json({ error: 'Modelo não encontrado.' }, { status: 400 });
   if (!profile.workIds.includes(model.workId)) return NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 });
 

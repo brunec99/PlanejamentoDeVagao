@@ -6,11 +6,37 @@ import type { IfcAPI } from 'web-ifc';
  * guarda a malha de verdade, e as duas metades se reencontram pelo GlobalId. O express id só é
  * único dentro do arquivo, então quem identifica o elemento entre versões é o GlobalId. */
 
-export interface ExtractedElement { expressId: number; globalId?: string; ifcClass: string; name?: string; objectType?: string; storey?: string; attributes: Record<string, string | number | boolean> }
-export interface ExtractedProperty { expressId: number; pset: string; name: string; valueText?: string; valueNumber?: number; unit?: string }
+export interface ExtractedElement {
+  expressId: number;
+  globalId?: string;
+  ifcClass: string;
+  name?: string;
+  objectType?: string;
+  storey?: string;
+  attributes: Record<string, string | number | boolean>;
+}
+export interface ExtractedProperty {
+  expressId: number;
+  pset: string;
+  name: string;
+  valueText?: string;
+  valueNumber?: number;
+  unit?: string;
+}
 export type QuantityKind = 'area' | 'volume' | 'length' | 'count' | 'weight' | 'time';
-export interface ExtractedQuantity { expressId: number; qset: string; name: string; kind: QuantityKind; value: number; unit?: string }
-export interface Extraction { elements: ExtractedElement[]; properties: ExtractedProperty[]; quantities: ExtractedQuantity[] }
+export interface ExtractedQuantity {
+  expressId: number;
+  qset: string;
+  name: string;
+  kind: QuantityKind;
+  value: number;
+  unit?: string;
+}
+export interface Extraction {
+  elements: ExtractedElement[];
+  properties: ExtractedProperty[];
+  quantities: ExtractedQuantity[];
+}
 
 type Line = Record<string, unknown>;
 const scalar = (value: unknown): string | number | boolean | undefined => {
@@ -19,9 +45,15 @@ const scalar = (value: unknown): string | number | boolean | undefined => {
   if (typeof value === 'object' && 'value' in (value as Line)) return scalar((value as Line).value);
   return undefined;
 };
-const text = (value: unknown) => { const raw = scalar(value); return typeof raw === 'string' ? raw : undefined; };
-const list = (value: unknown): Line[] => (Array.isArray(value) ? value as Line[] : value ? [value as Line] : []);
-const ref = (value: unknown): number | undefined => { const raw = scalar(value); return typeof raw === 'number' ? raw : undefined; };
+const text = (value: unknown) => {
+  const raw = scalar(value);
+  return typeof raw === 'string' ? raw : undefined;
+};
+const list = (value: unknown): Line[] => (Array.isArray(value) ? (value as Line[]) : value ? [value as Line] : []);
+const ref = (value: unknown): number | undefined => {
+  const raw = scalar(value);
+  return typeof raw === 'number' ? raw : undefined;
+};
 
 /** A quantidade guarda o valor num atributo com o nome do próprio tipo (AreaValue, VolumeValue…). */
 const QUANTITIES: { type: string; kind: QuantityKind; field: string }[] = [
@@ -49,7 +81,11 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
   for (const id of ids(api, modelID, schema.IFCRELAGGREGATES)) {
     const relation = api.GetLine(modelID, id) as Line;
     const parent = ref(relation.RelatingObject);
-    if (parent !== undefined) for (const child of list(relation.RelatedObjects)) { const childId = ref(child); if (childId !== undefined) parentOf.set(childId, parent); }
+    if (parent !== undefined)
+      for (const child of list(relation.RelatedObjects)) {
+        const childId = ref(child);
+        if (childId !== undefined) parentOf.set(childId, parent);
+      }
   }
   const storeyNameOf = new Map<number, string>();
   for (const id of ids(api, modelID, schema.IFCBUILDINGSTOREY)) {
@@ -70,7 +106,10 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
     const structure = ref(relation.RelatingStructure);
     const storey = structure === undefined ? undefined : storeyOfStructure(structure);
     if (!storey) continue;
-    for (const element of list(relation.RelatedElements)) { const elementId = ref(element); if (elementId !== undefined) storeyOf.set(elementId, storey); }
+    for (const element of list(relation.RelatedElements)) {
+      const elementId = ref(element);
+      if (elementId !== undefined) storeyOf.set(elementId, storey);
+    }
   }
 
   // Sem o terceiro argumento, IFCELEMENT não alcança IfcWall e a lista sai vazia.
@@ -85,8 +124,13 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
       if (raw !== undefined && key !== 'GlobalId' && key !== 'Name') attributes[key] = raw;
     }
     return {
-      expressId, globalId: text(line.GlobalId), ifcClass: className(expressId),
-      name: text(line.Name), objectType: text(line.ObjectType), storey: storeyOf.get(expressId), attributes,
+      expressId,
+      globalId: text(line.GlobalId),
+      ifcClass: className(expressId),
+      name: text(line.Name),
+      objectType: text(line.ObjectType),
+      storey: storeyOf.get(expressId),
+      attributes,
     };
   });
 
@@ -98,7 +142,9 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
     if (definitionId === undefined) continue;
     const definition = api.GetLine(modelID, definitionId) as Line;
     const setName = text(definition.Name) ?? 'Sem nome';
-    const targets = list(relation.RelatedObjects).map(ref).filter((value): value is number => value !== undefined && known.has(value));
+    const targets = list(relation.RelatedObjects)
+      .map(ref)
+      .filter((value): value is number => value !== undefined && known.has(value));
     if (!targets.length) continue;
 
     for (const property of list(definition.HasProperties)) {
@@ -108,12 +154,15 @@ export function extractFromModel(api: Api, modelID: number, schema: Record<strin
       const name = text(line.Name);
       const value = scalar(line.NominalValue);
       if (!name || value === undefined) continue;
-      for (const expressId of targets) properties.push({
-        expressId, pset: setName, name,
-        valueText: typeof value === 'number' ? undefined : String(value),
-        valueNumber: typeof value === 'number' ? value : undefined,
-        unit: text(line.Unit),
-      });
+      for (const expressId of targets)
+        properties.push({
+          expressId,
+          pset: setName,
+          name,
+          valueText: typeof value === 'number' ? undefined : String(value),
+          valueNumber: typeof value === 'number' ? value : undefined,
+          unit: text(line.Unit),
+        });
     }
 
     for (const quantity of list(definition.Quantities)) {
@@ -144,6 +193,11 @@ export async function extractIfc(file: File): Promise<Extraction> {
   } catch (cause) {
     throw new Error(`Não foi possível ler o IFC: ${cause instanceof Error ? cause.message : 'arquivo inválido.'}`);
   } finally {
-    if (modelID !== undefined) try { api.CloseModel(modelID); } catch { /* modelo já liberado */ }
+    if (modelID !== undefined)
+      try {
+        api.CloseModel(modelID);
+      } catch {
+        /* modelo já liberado */
+      }
   }
 }

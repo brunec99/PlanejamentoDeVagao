@@ -8,7 +8,8 @@ const BOOTSTRAP_ADMIN_EMAIL = 'bruno.engenharia@atrincorporadora.com.br';
 
 function loginError(request: NextRequest, message: string) {
   const url = request.nextUrl.clone();
-  url.pathname = '/login'; url.search = '';
+  url.pathname = '/login';
+  url.search = '';
   url.searchParams.set('error', message);
   return NextResponse.redirect(url);
 }
@@ -31,7 +32,9 @@ export async function GET(request: NextRequest) {
     return loginError(request, 'Login incompleto. Tente novamente.');
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user?.email || !user.email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
     await supabase.auth.signOut();
     return loginError(request, `Apenas contas @${ALLOWED_DOMAIN} podem acessar este sistema.`);
@@ -47,7 +50,9 @@ export async function GET(request: NextRequest) {
       const { data: works } = await service.from('works').select('id');
       workIds = works?.map(w => w.id) ?? [];
     }
-    const { error: insertError } = await service.from('profiles').insert({ id: user.id, name, role: isBootstrap ? 'admin' : 'viewer', work_ids: workIds });
+    const { error: insertError } = await service
+      .from('profiles')
+      .insert({ id: user.id, name, role: isBootstrap ? 'admin' : 'viewer', work_ids: workIds });
     if (insertError) return loginError(request, 'Não foi possível provisionar seu acesso. Contate um administrador.');
   }
 

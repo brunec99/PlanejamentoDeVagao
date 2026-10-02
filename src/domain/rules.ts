@@ -1,8 +1,29 @@
-import type { Activity, Baseline, Id, LinkRule, LinkType, LocalDate, NonFulfillmentCause, PlanDependency, PlanningData, PlanTask, ProgressEntry, Wagon, WagonStatus, WeeklyCommitment } from './entities';
+import type {
+  Activity,
+  Baseline,
+  Id,
+  LinkRule,
+  LinkType,
+  LocalDate,
+  NonFulfillmentCause,
+  PlanDependency,
+  PlanningData,
+  PlanTask,
+  ProgressEntry,
+  User,
+  Wagon,
+  WagonStatus,
+  WeeklyCommitment,
+} from './entities';
 import { addBusinessDays, addDays, periodDays } from './validation';
 
+/** O Admin herda tudo o que o Gestor pode — cadastrar obra, reabrir vagão terminal e liberar
+ * excepcionalmente — além de administrar acessos. Decisão do usuário em 01/10/2026: antes o Admin
+ * só liberava acessos, e numa instalação em que o único perfil forte é o Admin ninguém cadastrava obra. */
+export const actsAsManager = (role: User['role'] | undefined) => role === 'manager' || role === 'admin';
 export function validateActivity(activity: Activity): void {
-  if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100) throw new Error('Progresso deve ficar entre 0 e 100.');
+  if (!Number.isFinite(activity.progress) || activity.progress < 0 || activity.progress > 100)
+    throw new Error('Progresso deve ficar entre 0 e 100.');
   if (!Number.isFinite(activity.weight) || activity.weight <= 0) throw new Error('Peso deve ser positivo.');
   if (activity.plannedEnd < activity.plannedStart) throw new Error('Término deve ser igual ou posterior ao início.');
   if (activity.status === 'completed' && activity.progress !== 100) throw new Error('Atividade concluída exige progresso de 100%.');
@@ -15,16 +36,20 @@ export function weightedProgress(activities: Activity[]): number {
 export function isTerminal(wagonId: string, data: PlanningData): boolean {
   const required = data.activities.filter(a => a.wagonId === wagonId && a.mandatory);
   const activityIds = new Set(data.activities.filter(a => a.wagonId === wagonId).map(a => a.id));
-  return required.length > 0
-    && required.every(a => a.progress === 100 && a.status === 'completed')
-    && data.criteria.filter(c => activityIds.has(c.activityId) && c.mandatory).every(c => c.fulfilled)
-    && !data.pendingItems.some(p => p.wagonId === wagonId && p.status === 'open' && p.blocksTerminality)
-    && !data.restrictions.some(r => r.wagonId === wagonId && r.status === 'open' && r.blocksTerminality);
+  return (
+    required.length > 0 &&
+    required.every(a => a.progress === 100 && a.status === 'completed') &&
+    data.criteria.filter(c => activityIds.has(c.activityId) && c.mandatory).every(c => c.fulfilled) &&
+    !data.pendingItems.some(p => p.wagonId === wagonId && p.status === 'open' && p.blocksTerminality) &&
+    !data.restrictions.some(r => r.wagonId === wagonId && r.status === 'open' && r.blocksTerminality)
+  );
 }
 export function wagonStatus(wagon: Wagon, data: PlanningData): WagonStatus {
   if (isTerminal(wagon.id, data)) return 'terminal';
-  if (data.restrictions.some(r => r.wagonId === wagon.id && r.status === 'open' && (r.blocksExecution || r.blocksTerminality))) return 'restricted';
-  if (wagon.actualStart || data.activities.some(a => a.wagonId === wagon.id && (a.progress > 0 || a.status !== 'not_started'))) return 'in_production';
+  if (data.restrictions.some(r => r.wagonId === wagon.id && r.status === 'open' && (r.blocksExecution || r.blocksTerminality)))
+    return 'restricted';
+  if (wagon.actualStart || data.activities.some(a => a.wagonId === wagon.id && (a.progress > 0 || a.status !== 'not_started')))
+    return 'in_production';
   return 'not_started';
 }
 export function isOverdue(wagon: Wagon, data: PlanningData, today: string): boolean {
@@ -45,17 +70,25 @@ export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data:
   // linha do plano do mês. Contar só o cronograma dizia "dentro da capacidade" com o mês
   // estourado, justamente para quem planeja na grade nova.
   const activities = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
-  const tasks = data.planTasks.filter(t => t.teamId === teamId && t.plannedStart <= end && t.plannedEnd >= start
-    && !data.plans.find(p => p.id === t.planId)?.frozenAt);
+  const tasks = data.planTasks.filter(
+    t => t.teamId === teamId && t.plannedStart <= end && t.plannedEnd >= start && !data.plans.find(p => p.id === t.planId)?.frozenAt,
+  );
   const assigned = activities.length + tasks.length;
-  return { assigned, activities: activities.length, tasks: tasks.length, capacity: team?.weeklyCapacity ?? 0, overloaded: !!team && assigned > team.weeklyCapacity };
+  return {
+    assigned,
+    activities: activities.length,
+    tasks: tasks.length,
+    capacity: team?.weeklyCapacity ?? 0,
+    overloaded: !!team && assigned > team.weeklyCapacity,
+  };
 }
 /** Dependências cuja sucessora começa antes de a predecessora terminar. A data não é
  * corrigida sozinha — a reprogramação é manual —, então a incoerência é apontada. */
 export function dependencyConflicts(data: PlanningData) {
   const byId = new Map(data.activities.map(a => [a.id, a]));
   return data.dependencies.flatMap(dependency => {
-    const predecessor = byId.get(dependency.predecessorId), successor = byId.get(dependency.successorId);
+    const predecessor = byId.get(dependency.predecessorId),
+      successor = byId.get(dependency.successorId);
     return predecessor && successor && successor.plannedStart <= predecessor.plannedEnd ? [{ dependency, predecessor, successor }] : [];
   });
 }
@@ -65,16 +98,21 @@ export function leadTimeDeadline(plannedStart: LocalDate, leadTimeDays: number):
   return addDays(plannedStart, -leadTimeDays);
 }
 /** Propriedades de um elemento IFC que as regras desta versão sabem ler. */
-export interface ElementFacts { pavimento: string; tipo: string }
+export interface ElementFacts {
+  pavimento: string;
+  tipo: string;
+}
 // Pavimentos em IFC brasileiro vêm como "1º Pavimento", "Térreo"; o valor da regra é
 // digitado à mão. Sem ignorar acento e indicador ordinal, a regra falharia em silêncio.
-const norm = (value: string) => value
-  .normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .toLowerCase()
-  .replace(/(\d)\s*[ºª°]/g, '$1')
-  .replace(/(\d)\s*[oa](?!\p{L})/gu, '$1')
-  .replace(/\s+/g, ' ')
-  .trim();
+const norm = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/(\d)\s*[ºª°]/g, '$1')
+    .replace(/(\d)\s*[oa](?!\p{L})/gu, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 export function matchesRule(rule: LinkRule, element: ElementFacts): boolean {
   return rule.criteria.every(criterion => {
     const actual = norm(element[criterion.property] ?? '');
@@ -92,9 +130,15 @@ export function serviceForElement(rules: LinkRule[], element: ElementFacts): str
 /** Regras cujo critério de pavimento não encontra nenhum pavimento do modelo atual —
  * o vínculo precisa de revisão humana, sem presumir correspondência. */
 export function rulesNeedingReview(rules: LinkRule[], storeys: string[]): LinkRule[] {
-  return rules.filter(rule => rule.criteria.some(criterion =>
-    criterion.property === 'pavimento' && !storeys.some(storey =>
-      criterion.operator === 'igual' ? norm(storey) === norm(criterion.value) : norm(storey).includes(norm(criterion.value)))));
+  return rules.filter(rule =>
+    rule.criteria.some(
+      criterion =>
+        criterion.property === 'pavimento' &&
+        !storeys.some(storey =>
+          criterion.operator === 'igual' ? norm(storey) === norm(criterion.value) : norm(storey).includes(norm(criterion.value)),
+        ),
+    ),
+  );
 }
 export function validateSequence(wagons: Wagon[]): void {
   const byId = new Map(wagons.map(w => [w.id, w]));
@@ -129,7 +173,12 @@ export function validateSequence(wagons: Wagon[]): void {
  * edita o subitem esperaria o item acompanhar, e ele não acompanharia. Então o item é calculado
  * aqui, na leitura, a partir de quem está debaixo dele. */
 export interface PlanRollUp {
-  number: string; summary: boolean; leaves: number; plannedStart: LocalDate; plannedEnd: LocalDate; progress: number;
+  number: string;
+  summary: boolean;
+  leaves: number;
+  plannedStart: LocalDate;
+  plannedEnd: LocalDate;
+  progress: number;
   /** Resumo: o início real mais cedo entre os subitens que já começaram. */
   actualStart?: LocalDate;
   /** Resumo: o término real mais tarde, só quando todos os subitens terminaram. */
@@ -157,17 +206,35 @@ export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp & { milestone:
     const number = counters.slice(0, depth + 1).join('.');
 
     const leaves: PlanTask[] = [];
-    for (let below = at + 1; below < rows.length && rows[below].level > task.level; below++) if (!hasChildren(below)) leaves.push(rows[below]);
+    for (let below = at + 1; below < rows.length && rows[below].level > task.level; below++)
+      if (!hasChildren(below)) leaves.push(rows[below]);
     if (!leaves.length) {
-      result.set(task.id, { number, summary: false, leaves: 0, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, progress: task.progress, actualStart: task.actualStart, actualEnd: task.actualEnd, milestone: task.duration?.value === 0 });
+      result.set(task.id, {
+        number,
+        summary: false,
+        leaves: 0,
+        plannedStart: task.plannedStart,
+        plannedEnd: task.plannedEnd,
+        progress: task.progress,
+        actualStart: task.actualStart,
+        actualEnd: task.actualEnd,
+        milestone: task.duration?.value === 0,
+      });
       continue;
     }
     const total = leaves.reduce((sum, leaf) => sum + weight(leaf), 0);
-    const started = leaves.filter(leaf => leaf.actualStart).map(leaf => leaf.actualStart!).sort();
+    const started = leaves
+      .filter(leaf => leaf.actualStart)
+      .map(leaf => leaf.actualStart!)
+      .sort();
     const finished = leaves.every(leaf => leaf.actualEnd) ? leaves.map(leaf => leaf.actualEnd!).sort() : [];
     result.set(task.id, {
-      number, summary: true, leaves: leaves.length, milestone: false,
-      actualStart: started[0], actualEnd: finished.at(-1),
+      number,
+      summary: true,
+      leaves: leaves.length,
+      milestone: false,
+      actualStart: started[0],
+      actualEnd: finished.at(-1),
       plannedStart: leaves.reduce((min, leaf) => (leaf.plannedStart < min ? leaf.plannedStart : min), leaves[0].plannedStart),
       plannedEnd: leaves.reduce((max, leaf) => (leaf.plannedEnd > max ? leaf.plannedEnd : max), leaves[0].plannedEnd),
       progress: leaves.reduce((sum, leaf) => sum + leaf.progress * weight(leaf), 0) / total,
@@ -179,21 +246,32 @@ export function rollUpPlan(tasks: PlanTask[]): Map<Id, PlanRollUp & { milestone:
 /** O PPC de cada semana, da mais antiga para a mais recente. O valor de uma semana isolada diz
  * pouco: o que o Last Planner usa é a série — se o comprometimento está sendo aprendido ou se a
  * equipe promete a mesma coisa todo mês e falha pelo mesmo motivo. */
-export interface WeekPpc { weekStart: LocalDate; planned: number; fulfilled: number; pending: number; percent: number }
+export interface WeekPpc {
+  weekStart: LocalDate;
+  planned: number;
+  fulfilled: number;
+  pending: number;
+  percent: number;
+}
 export function ppcSeries(commitments: WeeklyCommitment[]): WeekPpc[] {
   const weeks = new Map<string, WeeklyCommitment[]>();
   for (const commitment of commitments) {
     const week = weeks.get(commitment.weekStart);
-    if (week) week.push(commitment); else weeks.set(commitment.weekStart, [commitment]);
+    if (week) week.push(commitment);
+    else weeks.set(commitment.weekStart, [commitment]);
   }
-  return [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b))
-    .map(([weekStart, rows]) => ({ weekStart, ...ppc(rows) }));
+  return [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([weekStart, rows]) => ({ weekStart, ...ppc(rows) }));
 }
 
 /** As causas do não cumprimento em ordem de peso, com o acumulado — o Pareto. A lista fechada de
  * 17 causas só serve para alguma coisa quando responde qual delas está custando a obra; coletar
  * sem ordenar é o que a planilha já fazia. */
-export interface CauseTally { cause: NonFulfillmentCause; total: number; share: number; accumulated: number }
+export interface CauseTally {
+  cause: NonFulfillmentCause;
+  total: number;
+  share: number;
+  accumulated: number;
+}
 export function causePareto(commitments: WeeklyCommitment[]): CauseTally[] {
   const totals = new Map<NonFulfillmentCause, number>();
   for (const commitment of commitments) {
@@ -205,8 +283,12 @@ export function causePareto(commitments: WeeklyCommitment[]): CauseTally[] {
   let running = 0;
   // Empate resolvido pelo nome: a ordem tem que ser a mesma a cada leitura, senão duas telas
   // iguais mostram Paretos diferentes.
-  return [...totals.entries()].sort(([nameA, a], [nameB, b]) => b - a || nameA.localeCompare(nameB, 'pt-BR'))
-    .map(([cause, total]) => { running += total; return { cause, total, share: (total / failures) * 100, accumulated: (running / failures) * 100 }; });
+  return [...totals.entries()]
+    .sort(([nameA, a], [nameB, b]) => b - a || nameA.localeCompare(nameB, 'pt-BR'))
+    .map(([cause, total]) => {
+      running += total;
+      return { cause, total, share: (total / failures) * 100, accumulated: (running / failures) * 100 };
+    });
 }
 
 /** Curva S: o avanço físico acumulado no tempo, planejado contra executado.
@@ -218,8 +300,16 @@ export function causePareto(commitments: WeeklyCommitment[]): CauseTally[] {
  *
  * A referência do planejado é uma linha de base quando houver: comparar o executado com o
  * planejamento atual, que foi reprogramado, é comparar a obra com a desculpa dela. */
-interface Planned { plannedStart: LocalDate; plannedEnd: LocalDate; weight: number }
-export interface CurvePoint { date: LocalDate; planned: number; executed: number }
+interface Planned {
+  plannedStart: LocalDate;
+  plannedEnd: LocalDate;
+  weight: number;
+}
+export interface CurvePoint {
+  date: LocalDate;
+  planned: number;
+  executed: number;
+}
 
 const share = (item: Planned, date: LocalDate) => {
   if (date < item.plannedStart) return 0;
@@ -241,17 +331,34 @@ export function executedAt(activities: Activity[], entries: ProgressEntry[], dat
   for (const entry of entries) {
     if (entry.recordedDate > date) continue;
     const list = byActivity.get(entry.activityId);
-    if (list) list.push(entry); else byActivity.set(entry.activityId, [entry]);
+    if (list) list.push(entry);
+    else byActivity.set(entry.activityId, [entry]);
   }
-  const at = (activity: Activity) => byActivity.get(activity.id)?.slice()
-    .sort((a, b) => a.recordedDate.localeCompare(b.recordedDate) || a.createdAt.localeCompare(b.createdAt)).at(-1)?.progress ?? 0;
+  const at = (activity: Activity) =>
+    byActivity
+      .get(activity.id)
+      ?.slice()
+      .sort((a, b) => a.recordedDate.localeCompare(b.recordedDate) || a.createdAt.localeCompare(b.createdAt))
+      .at(-1)?.progress ?? 0;
   return activities.reduce((sum, activity) => sum + at(activity) * activity.weight, 0) / total;
 }
 
 /** A curva amostrada semana a semana. `to` entra sempre, mesmo fora do passo, para a leitura não
  * terminar antes da data que interessa. */
-export function progressCurve({ activities, entries, baseline, from, to, step = 7 }: {
-  activities: Activity[]; entries: ProgressEntry[]; baseline?: Baseline; from: LocalDate; to: LocalDate; step?: number;
+export function progressCurve({
+  activities,
+  entries,
+  baseline,
+  from,
+  to,
+  step = 7,
+}: {
+  activities: Activity[];
+  entries: ProgressEntry[];
+  baseline?: Baseline;
+  from: LocalDate;
+  to: LocalDate;
+  step?: number;
 }): CurvePoint[] {
   if (from > to) return [];
   const reference: Planned[] = baseline ? baseline.activities : activities;
@@ -259,7 +366,8 @@ export function progressCurve({ activities, entries, baseline, from, to, step = 
   for (let date = from; date <= to; date = addDays(date, step)) {
     points.push({ date, planned: plannedAt(reference, date), executed: executedAt(activities, entries, date) });
   }
-  if (points.at(-1)?.date !== to) points.push({ date: to, planned: plannedAt(reference, to), executed: executedAt(activities, entries, to) });
+  if (points.at(-1)?.date !== to)
+    points.push({ date: to, planned: plannedAt(reference, to), executed: executedAt(activities, entries, to) });
   return points;
 }
 
@@ -271,7 +379,12 @@ export function progressCurve({ activities, entries, baseline, from, to, step = 
  * recuo, e a referência apontaria para outra linha. O tipo, quando omitido, é TI — é o vínculo
  * que 90% das obras usam e o padrão do Project. `d`/`dias` são dias úteis; `dd`/`dias corridos`,
  * corridos. Separe as predecessoras com `;` (como o Project) ou `,`. */
-export interface ParsedLink { number: number; type: LinkType; lagDays: number; lagBusiness: boolean }
+export interface ParsedLink {
+  number: number;
+  type: LinkType;
+  lagDays: number;
+  lagBusiness: boolean;
+}
 const LINK_TYPES: LinkType[] = ['TI', 'II', 'TT', 'IT'];
 // Sem espaços: `6 dias corridos` chega aqui como `6diascorridos`.
 const LINK_PATTERN = /^(\d+)(TI|II|TT|IT)?(?:([+-])(\d+)(dd|d|dias?(?:de)?corridos?|dias?)?)?$/i;
@@ -279,9 +392,15 @@ const LINK_PATTERN = /^(\d+)(TI|II|TT|IT)?(?:([+-])(\d+)(dd|d|dias?(?:de)?corrid
 export function parseLinks(raw: string): { links: ParsedLink[]; invalid: string[] } {
   const links: ParsedLink[] = [];
   const invalid: string[] = [];
-  for (const piece of raw.split(/[,;]/).map(part => part.trim()).filter(Boolean)) {
+  for (const piece of raw
+    .split(/[,;]/)
+    .map(part => part.trim())
+    .filter(Boolean)) {
     const match = LINK_PATTERN.exec(piece.replace(/\s+/g, ''));
-    if (!match) { invalid.push(piece); continue; }
+    if (!match) {
+      invalid.push(piece);
+      continue;
+    }
     const [, number, type, sign, amount, unit] = match;
     const lag = amount ? Number(amount) * (sign === '-' ? -1 : 1) : 0;
     const lower = (unit ?? 'd').toLowerCase();
@@ -301,7 +420,8 @@ export function parseLinks(raw: string): { links: ParsedLink[]; invalid: string[
 export function formatLink(number: number, dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>): string {
   const type = dependency.type === 'TI' ? '' : dependency.type;
   if (!dependency.lagDays) return `${number}${type}`;
-  const sign = dependency.lagDays > 0 ? '+' : '-', amount = Math.abs(dependency.lagDays);
+  const sign = dependency.lagDays > 0 ? '+' : '-',
+    amount = Math.abs(dependency.lagDays);
   const unit = (amount === 1 ? 'dia' : 'dias') + (dependency.lagBusiness ? '' : amount === 1 ? ' corrido' : ' corridos');
   return `${number}${type || 'TI'}${sign}${amount} ${unit}`;
 }
@@ -314,13 +434,21 @@ export function formatLinks(list: ParsedLink[]): string {
  *
  * TI prende o início um dia depois do término da predecessora — a sucessora não começa no mesmo
  * dia em que a outra acaba. Os demais prendem a ponta que o nome diz, sem esse dia de folga. */
-export function linkBoundary(dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>, predecessor: Pick<PlanTask, 'plannedStart' | 'plannedEnd'>) {
-  const shift = (date: LocalDate) => (dependency.lagBusiness ? addBusinessDays(date, dependency.lagDays) : addDays(date, dependency.lagDays));
+export function linkBoundary(
+  dependency: Pick<PlanDependency, 'type' | 'lagDays' | 'lagBusiness'>,
+  predecessor: Pick<PlanTask, 'plannedStart' | 'plannedEnd'>,
+) {
+  const shift = (date: LocalDate) =>
+    dependency.lagBusiness ? addBusinessDays(date, dependency.lagDays) : addDays(date, dependency.lagDays);
   switch (dependency.type) {
-    case 'II': return { edge: 'start' as const, earliest: shift(predecessor.plannedStart) };
-    case 'TT': return { edge: 'end' as const, earliest: shift(predecessor.plannedEnd) };
-    case 'IT': return { edge: 'end' as const, earliest: shift(predecessor.plannedStart) };
-    default: return { edge: 'start' as const, earliest: shift(addBusinessDays(predecessor.plannedEnd, 1)) };
+    case 'II':
+      return { edge: 'start' as const, earliest: shift(predecessor.plannedStart) };
+    case 'TT':
+      return { edge: 'end' as const, earliest: shift(predecessor.plannedEnd) };
+    case 'IT':
+      return { edge: 'end' as const, earliest: shift(predecessor.plannedStart) };
+    default:
+      return { edge: 'start' as const, earliest: shift(addBusinessDays(predecessor.plannedEnd, 1)) };
   }
 }
 
@@ -329,7 +457,8 @@ export function linkBoundary(dependency: Pick<PlanDependency, 'type' | 'lagDays'
 export function linkConflicts(tasks: PlanTask[], dependencies: PlanDependency[]) {
   const byId = new Map(tasks.map(task => [task.id, task]));
   return dependencies.flatMap(dependency => {
-    const predecessor = byId.get(dependency.predecessorId), successor = byId.get(dependency.successorId);
+    const predecessor = byId.get(dependency.predecessorId),
+      successor = byId.get(dependency.successorId);
     if (!predecessor || !successor) return [];
     const { edge, earliest } = linkBoundary(dependency, predecessor);
     const actual = edge === 'start' ? successor.plannedStart : successor.plannedEnd;

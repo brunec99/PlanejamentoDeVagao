@@ -350,3 +350,17 @@ A pedido do usuário, **Configurações da obra** ganhou o campo **Numeração d
 **Regras:** `src/domain/week-numbering.ts` (`normalizeWeekOne`, `weekNumberFrom`, `weekOneFromCurrent`), com testes em `tests/week-numbering.test.ts` (5). Semanas anteriores à semana 1 aparecem com número zero ou negativo.
 
 **Validação:** a rota respondeu "indisponível" com o banco atual e recusou data inválida. No navegador de teste, com a resposta simulada, a configuração mostrou a prévia "113 → 29/07/2024", e o curto prazo passou a mostrar "Semana atual: 113", com as semanas de 1 a 117. A gravação real depende da `0025`.
+
+## Revisão de operação e estética (01 e 02/10/2026)
+
+Registro completo em `docs/revisao-2026-10-01.md`. O que toca os três níveis:
+
+- **Bug corrigido:** a sincronização do Prevision (`POST /api/prevision/schedule`) usava a data fixa de demonstração 08/09/2026 como "hoje" ao regenerar a cauda dos vagões; passou a usar o relógio único das rotas (`src/infrastructure/clock.ts`), o mesmo da geração de vagões pelo plano e dos comandos.
+- **02/10/2026 — o usuário cancelou o BIM 4D.** As abas passam a ser quatro: longo prazo, vagões, médio prazo e curto prazo. O modelo federado e os arquivos IFC ficam no grupo Apoio.
+- **Snapshot por obra e histórico fora dele:** migração `0027_planning_snapshot.sql` (criada, não aplicada; sem ela a leitura continua por tabela). O histórico do vagão e o histórico da tarefa do plano do mês passam a vir de `GET /api/history`, pelo hook `useHistory`.
+- **Aba 3 em seções na URL** (`?secao=cronograma|janela|equipes|cobertura|historico|recursos|linha-de-base`), com um único cabeçalho e o alternador no padrão da aba 1.
+- **Aba 4 no celular:** cada linha da planilha vira um cartão abaixo de 1024 px, com as mesmas pílulas de Status e Causa; a tabela com os filtros de coluna continua no desktop.
+- **Em todas as abas:** cabeçalho único (`TabHeader` com ajuda "Como funciona"), prosa explicativa movida para a ajuda contextual, formulários em gaveta lateral (`CommandForm`), confirmações próprias no lugar do `window.confirm`, avisos por toast, paleta única dos gráficos (`src/shared/palette.ts`: planejado azul, executado verde, hoje âmbar, atrasado vermelho, linha de base cinza) e tipografia mínima de 12 px.
+- **Provider:** recarga ao voltar o foco e a cada dois minutos, dados antigos mantidos durante a recarga, faixa "Sem resposta do servidor" com tentar de novo.
+
+**Pendências desta revisão:** aplicar a 0027 (a 0025 já está aplicada, conferido em 02/10/2026); versão por obra na concorrência (hoje `planning_meta.version` é único); validar no navegador autenticado as telas reorganizadas.

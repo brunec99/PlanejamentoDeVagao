@@ -27,9 +27,12 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
-    if (request.nextUrl.pathname.startsWith('/api/')) return NextResponse.json({ error: 'Sessão expirada. Faça login novamente.' }, { status: 401 });
+    if (request.nextUrl.pathname.startsWith('/api/'))
+      return NextResponse.json({ error: 'Sessão expirada. Faça login novamente.' }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', request.nextUrl.pathname);
@@ -38,6 +41,12 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// `manifest.webmanifest` e `apple-icon` ficam fora porque o navegador os busca sem cookie de sessão;
+// sem isso o atalho na tela inicial recebia a página de login no lugar do manifest.
 // O `wasm` na lista é o binário do web-ifc: sem ele aqui, a sessão expirada devolveria
 // a página de login no lugar do módulo, e o visualizador falharia sem dizer por quê.
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)'] };
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
+  ],
+};

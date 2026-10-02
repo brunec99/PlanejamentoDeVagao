@@ -1,130 +1,485 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
+/* Tokens do sistema. Os componentes usam os papéis (primary, success, warning, danger), nunca o
+ * tom cru: trocar o azul da marca é trocar uma linha aqui. Os utilitários `bg-primary`,
+ * `text-primary-strong`, `border-primary-ring` etc. saem destas variáveis. */
 @theme {
   --color-background: #f1f5f9;
   --color-foreground: #0f172a;
-  --color-primary: #1e40af;
-  --color-primary-foreground: #ffffff;
   --color-card: #ffffff;
   --color-card-foreground: #0f172a;
   --color-border: #e2e8f0;
   --color-muted: #64748b;
-  --color-chart-1: #1d4ed8;
-  --color-chart-2: #059669;
-  --color-chart-3: #d97706;
-  --color-chart-4: #7c3aed;
-  --color-chart-5: #dc2626;
+
+  --color-primary: #1d4ed8;
+  --color-primary-strong: #1e40af;
+  --color-primary-ink: #1e3a8a;
+  --color-primary-soft: #eff6ff;
+  --color-primary-ring: #bfdbfe;
+  --color-primary-foreground: #ffffff;
+
+  --color-success: #047857;
+  --color-success-soft: #ecfdf5;
+  --color-success-ring: #a7f3d0;
+  --color-warning: #b45309;
+  --color-warning-soft: #fffbeb;
+  --color-warning-ring: #fde68a;
+  --color-danger: #be123c;
+  --color-danger-soft: #fff1f2;
+  --color-danger-ring: #fecdd3;
+
+  --color-chart-1: #2a78d6;
+  --color-chart-2: #eb6834;
+  --color-chart-3: #1baf7a;
+  --color-chart-4: #eda100;
+  --color-chart-5: #e87ba4;
+  --color-chart-6: #008300;
+  --color-chart-7: #4a3aa7;
+  --color-chart-8: #e34948;
 }
 
 @layer base {
+  html {
+    font-size: 100%;
+  }
+  /* Modo reunião: um degrau acima para o projetor. Tudo em rem acompanha. */
+  html[data-zoom='reuniao'] {
+    font-size: 112.5%;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans, "Inter"), "Segoe UI", Arial, Helvetica, sans-serif;
+    font-family: var(--font-sans, 'Inter'), 'Segoe UI', Arial, Helvetica, sans-serif;
   }
 }
 
 @layer components {
-  .panel { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
-  .eyebrow { @apply text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400; }
-  .page-title { @apply mt-1 text-2xl font-bold tracking-tight text-slate-900; }
-  .text-link { @apply font-semibold text-blue-700 hover:text-blue-900 hover:underline underline-offset-4; }
-  .field { @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100 focus-visible:outline-none; }
+  .panel {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500;
+  }
+  .page-title {
+    @apply mt-1 text-2xl font-bold tracking-tight text-slate-900;
+  }
+  .text-link {
+    @apply font-semibold text-primary hover:text-primary-ink hover:underline underline-offset-4;
+  }
+  .field {
+    @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-ring focus-visible:outline-none;
+  }
   /* Célula de planilha: a grade do plano mensal é editada direto, sem formulário em volta. */
-  .cell { @apply w-full min-w-0 border-0 bg-transparent px-1 py-0.5 text-xs text-slate-800 outline-none focus:rounded focus:bg-white focus:ring-2 focus:ring-blue-300 disabled:text-slate-500; }
-  .button { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-wait disabled:opacity-50; }
-  .button-ghost { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900; }
-  .command-box { @apply rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3; }
-  .data-table { @apply w-full text-left text-sm; }
-  .data-table thead th { @apply bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400; }
-  .data-table tbody th { @apply px-4 py-3 font-semibold text-slate-800 align-top; }
-  .data-table tbody td { @apply px-4 py-3 text-slate-600 align-top; }
-  .data-table tbody tr { @apply border-t border-slate-100; }
-  .data-table tbody tr:hover { @apply bg-slate-50/70; }
-  .callout { @apply rounded-lg border px-4 py-3 text-sm leading-6; }
-  .callout-info { @apply border-blue-200 bg-blue-50 text-blue-900; }
-  .callout-warning { @apply border-amber-200 bg-amber-50 text-amber-900; }
-  .callout-danger { @apply border-rose-200 bg-rose-50 text-rose-800; }
-  .callout-success { @apply border-emerald-200 bg-emerald-50 text-emerald-800; }
-  .badge-muted { @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600; }
-  .stat-card { @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm; }
-  .card-accent { @apply relative overflow-hidden rounded-2xl border shadow-sm bg-white; }
-  .card-accent-bar { @apply h-1 w-full bg-gradient-to-r; }
+  .cell {
+    @apply w-full min-w-0 border-0 bg-transparent px-1 py-0.5 text-xs text-slate-800 outline-none focus:rounded focus:bg-white focus:ring-2 focus:ring-primary-ring disabled:text-slate-500;
+  }
+  .button {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-strong disabled:cursor-wait disabled:opacity-50;
+  }
+  .button-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-primary-ring bg-primary-soft px-3 py-2 text-sm font-semibold text-primary transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .button-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-800 disabled:cursor-wait disabled:opacity-50;
+  }
+  .command-box {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3;
+  }
+  .data-table {
+    @apply w-full text-left text-sm;
+  }
+  .data-table thead th {
+    @apply bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500;
+  }
+  .data-table tbody th {
+    @apply px-4 py-3 font-semibold text-slate-800 align-top;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3 text-slate-600 align-top;
+  }
+  .data-table tbody tr {
+    @apply border-t border-slate-100;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-slate-50/70;
+  }
+  .callout {
+    @apply rounded-lg border px-4 py-3 text-sm leading-6;
+  }
+  .callout-info {
+    @apply border-primary-ring bg-primary-soft text-primary-ink;
+  }
+  .callout-warning {
+    @apply border-warning-ring bg-warning-soft text-amber-900;
+  }
+  .callout-danger {
+    @apply border-danger-ring bg-danger-soft text-rose-800;
+  }
+  .callout-success {
+    @apply border-success-ring bg-success-soft text-emerald-800;
+  }
+  .badge-muted {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600;
+  }
+  .stat-card {
+    @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+  .card-accent {
+    @apply relative overflow-hidden rounded-2xl border shadow-sm bg-white;
+  }
+  .card-accent-bar {
+    @apply h-1 w-full bg-gradient-to-r;
+  }
+  /* Esqueleto de carregamento: a tela mostra a forma do que vem, não um texto num painel vazio. */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200/80;
+  }
 }
 
-.command-box summary { @apply flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-700; }
-.command-box summary::-webkit-details-marker { display: none; }
-.command-box summary::before { content: "›"; @apply text-base leading-none text-slate-400 transition-transform; display: inline-block; }
-.command-box[open] summary::before { transform: rotate(90deg); }
+.command-box summary {
+  @apply flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-700;
+}
+.command-box summary::-webkit-details-marker {
+  display: none;
+}
+.command-box summary::before {
+  content: '›';
+  @apply text-base leading-none text-slate-400 transition-transform;
+  display: inline-block;
+}
+.command-box[open] summary::before {
+  transform: rotate(90deg);
+}
 
-.status { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold; }
-.status::before { content: ""; @apply h-1.5 w-1.5 shrink-0 rounded-full; }
-.terminal { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
-.terminal::before { @apply bg-emerald-500; }
-.in_production { @apply bg-blue-50 text-blue-700 border-blue-200; }
-.in_production::before { @apply bg-blue-600; }
-.restricted { @apply bg-amber-50 text-amber-700 border-amber-200; }
-.restricted::before { @apply bg-amber-500; }
-.not_started { @apply bg-slate-100 text-slate-500 border-slate-200; }
-.not_started::before { @apply bg-slate-400; }
+.status {
+  @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold;
+}
+.status::before {
+  content: '';
+  @apply h-1.5 w-1.5 shrink-0 rounded-full;
+}
+.terminal {
+  @apply bg-success-soft text-emerald-700 border-success-ring;
+}
+.terminal::before {
+  @apply bg-success;
+}
+.in_production {
+  @apply bg-primary-soft text-primary border-primary-ring;
+}
+.in_production::before {
+  @apply bg-primary;
+}
+.restricted {
+  @apply bg-warning-soft text-amber-700 border-warning-ring;
+}
+.restricted::before {
+  @apply bg-warning;
+}
+.not_started {
+  @apply bg-slate-100 text-slate-500 border-slate-200;
+}
+.not_started::before {
+  @apply bg-slate-400;
+}
 
-.skip-link { position: absolute; top: -100px; left: 1rem; z-index: 50; padding: 1rem; background: #fff; border-radius: .5rem; }
-.skip-link:focus { top: 1rem; }
-a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 50;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 0.5rem;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
-.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+/* Gaveta lateral: um <dialog> encostado à direita, altura inteira. No celular ocupa a tela. */
+dialog.drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(32rem, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-left: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0;
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+}
+dialog.drawer.drawer-lg {
+  width: min(44rem, 100vw);
+}
+dialog.drawer.drawer-left {
+  inset: 0 auto 0 0;
+  width: min(19rem, 88vw);
+  border-left: 0;
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 12px 0 32px rgba(15, 23, 42, 0.18);
+}
+dialog.drawer::backdrop {
+  background: rgba(15, 23, 42, 0.5);
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.drawer[open] {
+    animation: drawer-in 0.18s ease-out;
+  }
+  dialog.drawer.drawer-left[open] {
+    animation: drawer-in-left 0.18s ease-out;
+  }
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes drawer-in-left {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
 
 /* Federação: os estados desabilitados e os alvos de interação se limitam à área BIM. */
-.federation-page button:disabled { cursor: not-allowed; opacity: .45; }
-.federation-page select:disabled, .federation-page input:disabled { cursor: not-allowed; background-color: #f8fafc; color: #64748b; }
-.federation-page summary::marker { color: #64748b; }
+.federation-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.federation-page select:disabled,
+.federation-page input:disabled {
+  cursor: not-allowed;
+  background-color: #f8fafc;
+  color: #64748b;
+}
+.federation-page summary::marker {
+  color: #64748b;
+}
 
 /* Plano mensal: cada painel rola no próprio eixo horizontal e compartilha a posição vertical. */
-.plan-workspace { --plan-row-bg: #fff; }
-.plan-panes { display: grid; grid-template-columns: minmax(0, 1fr); }
-.plan-scroll { overflow: auto; height: clamp(240px, 48vh, 540px); scrollbar-gutter: stable; scrollbar-width: auto; }
-.plan-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
-.plan-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border: 2px solid #f1f5f9; border-radius: 8px; }
-.plan-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
-.plan-table-row { background: var(--plan-row-bg); border-bottom: 1px solid #e2e8f0; }
-.plan-table-row.is-summary { --plan-row-bg: #f1f5f9; }
-.plan-table-row:hover { --plan-row-bg: #f8fafc; }
-.plan-table-row.is-selected { --plan-row-bg: #eff6ff; box-shadow: inset 3px 0 #2563eb; }
-.plan-table-row.is-saving { --plan-row-bg: #fffbeb; }
-.plan-identity { display: flex; flex: none; align-items: center; align-self: stretch; background: var(--plan-row-bg); border-right: 2px solid #cbd5e1; }
-.plan-table-header .plan-identity { background: #f1f5f9; }
-.plan-workspace .cell { min-height: 28px; font-size: 12px; }
-.plan-workspace button:disabled, .plan-workspace select:disabled { cursor: not-allowed; opacity: .5; }
-.plan-tool { display: inline-flex; height: 34px; min-width: 34px; align-items: center; justify-content: center; border-radius: 6px; color: #475569; font-size: 12px; }
-.plan-tool:hover:not(:disabled) { background: #e2e8f0; }
+.plan-workspace {
+  --plan-row-bg: #fff;
+}
+.plan-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.plan-scroll {
+  overflow: auto;
+  height: clamp(240px, 48vh, 540px);
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+.plan-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.plan-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border: 2px solid #f1f5f9;
+  border-radius: 8px;
+}
+.plan-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.plan-table-row {
+  background: var(--plan-row-bg);
+  border-bottom: 1px solid #e2e8f0;
+}
+.plan-table-row.is-summary {
+  --plan-row-bg: #f1f5f9;
+}
+.plan-table-row:hover {
+  --plan-row-bg: #f8fafc;
+}
+.plan-table-row.is-selected {
+  --plan-row-bg: #eff6ff;
+  box-shadow: inset 3px 0 var(--color-primary);
+}
+.plan-table-row.is-saving {
+  --plan-row-bg: #fffbeb;
+}
+.plan-identity {
+  display: flex;
+  flex: none;
+  align-items: center;
+  align-self: stretch;
+  background: var(--plan-row-bg);
+  border-right: 2px solid #cbd5e1;
+}
+.plan-table-header .plan-identity {
+  background: #f1f5f9;
+}
+.plan-workspace .cell {
+  min-height: 28px;
+  font-size: 12px;
+}
+.plan-workspace button:disabled,
+.plan-workspace select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.plan-tool {
+  display: inline-flex;
+  height: 34px;
+  min-width: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 12px;
+}
+.plan-tool:hover:not(:disabled) {
+  background: #e2e8f0;
+}
 @media (min-width: 1024px) {
-  .plan-panes-split { grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); }
+  .plan-panes-split {
+    grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  }
 }
 @media (min-width: 1280px) {
-  .plan-identity { position: sticky; left: 0; z-index: 15; }
+  .plan-identity {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+  }
 }
 
 /* Grade de revisão do médio prazo. */
-.schedule-grid { table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; }
-.schedule-grid th, .schedule-grid td { height: 28px; padding: 3px 6px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.schedule-grid th { position: sticky; top: 0; z-index: 20; background: #f1f5f9; text-align: left; }
-.schedule-grid td { background: white; font-variant-numeric: tabular-nums; }
-.schedule-grid .schedule-name { position: sticky; left: 0; z-index: 10; }
-.schedule-grid th.schedule-name { z-index: 30; }
-.schedule-grid .schedule-selected { background: #eff6ff; }
-.schedule-grid .schedule-modified { box-shadow: inset 3px 0 #d97706; }
-.schedule-grid .schedule-done td { background: #f0fdf4; }
-.schedule-grid td:focus { outline: 2px solid #2563eb; outline-offset: -2px; }
-.schedule-grid input, .schedule-grid select { width: 100%; min-width: 0; background: white; outline: 2px solid #2563eb; }
-.schedule-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
-.schedule-resize:focus { outline: 2px solid #2563eb; }
-@media (pointer: coarse) { .schedule-grid th, .schedule-grid td { height: 36px; } }
+.schedule-grid {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.schedule-grid th,
+.schedule-grid td {
+  height: 28px;
+  padding: 3px 6px;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.schedule-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f1f5f9;
+  text-align: left;
+}
+.schedule-grid td {
+  background: white;
+  font-variant-numeric: tabular-nums;
+}
+.schedule-grid .schedule-name {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+.schedule-grid th.schedule-name {
+  z-index: 30;
+}
+.schedule-grid .schedule-selected {
+  background: #eff6ff;
+}
+.schedule-grid .schedule-modified {
+  box-shadow: inset 3px 0 #d97706;
+}
+.schedule-grid .schedule-done td {
+  background: #f0fdf4;
+}
+.schedule-grid td:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.schedule-grid input,
+.schedule-grid select {
+  width: 100%;
+  min-width: 0;
+  background: white;
+  outline: 2px solid var(--color-primary);
+}
+.schedule-resize {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.schedule-resize:focus {
+  outline: 2px solid var(--color-primary);
+}
+@media (pointer: coarse) {
+  .schedule-grid th,
+  .schedule-grid td {
+    height: 36px;
+  }
+}
 /* Grade do cronograma no layout do MS Project: cabeçalho em duas linhas e linha fixa, que o Gantt mede para se alinhar. */
-.project-grid th { height: 44px; white-space: normal; line-height: 1.15; vertical-align: bottom; font-size: 11px; }
-.project-grid td { height: 26px; padding: 2px 6px; }
-.project-grid input, .project-grid select { height: 20px; font-size: 12px; }
-.schedule-grid .project-plan-row td { background: #f8fafc; }
-.schedule-grid .project-row-selected td:not(.schedule-selected) { background: #f5f9ff; }
-@media (pointer: coarse) { .project-grid td { height: 34px; } }
+.project-grid th {
+  height: 44px;
+  white-space: normal;
+  line-height: 1.15;
+  vertical-align: bottom;
+  font-size: 11px;
+}
+.project-grid td {
+  height: 26px;
+  padding: 2px 6px;
+}
+.project-grid input,
+.project-grid select {
+  height: 20px;
+  font-size: 12px;
+}
+.schedule-grid .project-plan-row td {
+  background: #f8fafc;
+}
+.schedule-grid .project-row-selected td:not(.schedule-selected) {
+  background: #f5f9ff;
+}
+@media (pointer: coarse) {
+  .project-grid td {
+    height: 34px;
+  }
+}

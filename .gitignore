@@ -9,3 +9,5 @@ out/
 /AGENTS.md
 /CLAUDE.md
 .vercel
+test-results/
+playwright-report/

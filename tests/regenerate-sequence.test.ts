@@ -5,8 +5,14 @@ import { planSequenceRegeneration } from '../src/application/use-cases/regenerat
 import { diffDeletedIds } from '../src/infrastructure/repositories/supabase/mappers';
 import { applyCommand, type ImportedActivity } from '../src/application/use-cases/commands';
 
-const row = (externalId: string, start: string, end: string, progress = 0): ImportedActivity =>
-  ({ externalId, name: `Atividade ${externalId}`, location: 'Térreo', plannedStart: start, plannedEnd: end, progress });
+const row = (externalId: string, start: string, end: string, progress = 0): ImportedActivity => ({
+  externalId,
+  name: `Atividade ${externalId}`,
+  location: 'Térreo',
+  plannedStart: start,
+  plannedEnd: end,
+  progress,
+});
 
 test('regenera só a cauda não liberada, preservando o vagão liberado', () => {
   const d = createMockData();
@@ -36,8 +42,29 @@ test('aborta quando um vagão liberado vem depois de um não liberado', () => {
   const d = createMockData();
   // Força v3 (não liberado neste cenário) a ficar antes de v-extra (liberado), fora de ordem.
   d.releases = d.releases.filter(r => r.wagonId !== 'v3');
-  d.wagons.push({ ...d.wagons.find(w => w.id === 'v3')!, id: 'v3b', number: 4, predecessorId: 'v3', plannedStart: '2026-09-11', plannedEnd: '2026-09-15' });
-  d.releases.push({ id: 'lx', createdAt: DEMO_DATE, updatedAt: DEMO_DATE, wagonId: 'v3b', predecessorId: 'v3', type: 'exceptional', authorizedBy: 'user-1', releasedAt: DEMO_DATE, acceptedPendingIds: [], acknowledgedDebtIds: [], justification: 'x', regularizationResponsibleId: 'user-1', dueDate: '2026-09-20' });
+  d.wagons.push({
+    ...d.wagons.find(w => w.id === 'v3')!,
+    id: 'v3b',
+    number: 4,
+    predecessorId: 'v3',
+    plannedStart: '2026-09-11',
+    plannedEnd: '2026-09-15',
+  });
+  d.releases.push({
+    id: 'lx',
+    createdAt: DEMO_DATE,
+    updatedAt: DEMO_DATE,
+    wagonId: 'v3b',
+    predecessorId: 'v3',
+    type: 'exceptional',
+    authorizedBy: 'user-1',
+    releasedAt: DEMO_DATE,
+    acceptedPendingIds: [],
+    acknowledgedDebtIds: [],
+    justification: 'x',
+    regularizationResponsibleId: 'user-1',
+    dueDate: '2026-09-20',
+  });
   const plan = planSequenceRegeneration(d, 'seq-1', '99999', [], 5, DEMO_DATE);
   assert.equal(plan.aborted, true);
   assert.match(plan.reason!, /ordem inesperada/);
@@ -86,19 +113,59 @@ test('a regeneração tira do rascunho os filhos da atividade removida', () => {
   // atividades que vão desaparecer: se ficarem no rascunho, o upsert viola a chave estrangeira.
   const stamp = { createdAt: '2026-09-08T12:00:00Z', updatedAt: '2026-09-08T12:00:00Z' };
   d.progressEntries.push({ id: 'pe-1', ...stamp, activityId: 'a5', recordedDate: '2026-09-08', progress: 10, recordedBy: 'user-1' });
-  d.commitments.push({ id: 'wc-1', ...stamp, workId: 'obra-1', name: 'Semana da cauda', activityId: 'b5', weekStart: '2026-09-07', weekEnd: '2026-09-13', responsibleId: 'user-1', teamId: 'equipe-2', startDate: '2026-09-08', endDate: '2026-09-10', supplier: 'Construtora Alfa' });
+  d.commitments.push({
+    id: 'wc-1',
+    ...stamp,
+    workId: 'obra-1',
+    name: 'Semana da cauda',
+    activityId: 'b5',
+    weekStart: '2026-09-07',
+    weekEnd: '2026-09-13',
+    responsibleId: 'user-1',
+    teamId: 'equipe-2',
+    startDate: '2026-09-08',
+    endDate: '2026-09-10',
+    supplier: 'Construtora Alfa',
+  });
   d.dependencies.push({ id: 'dep-1', ...stamp, predecessorId: 'a4', successorId: 'a5' });
   d.dependencies.push({ id: 'dep-2', ...stamp, predecessorId: 'a1', successorId: 'a2' });
 
   const before = structuredClone(d);
-  applyCommand(d, { type: 'regenerate_sequence', sequenceId: 'seq-2', projectId: '99999', rows: [row('a', '2026-09-16', '2026-09-18')], responsibleId: 'user-1' },
-    { actorId: 'user-1', today: DEMO_DATE, now: '2026-09-08T12:00:00Z', newId: (() => { let n = 0; return () => `novo-${++n}`; })() });
+  applyCommand(
+    d,
+    {
+      type: 'regenerate_sequence',
+      sequenceId: 'seq-2',
+      projectId: '99999',
+      rows: [row('a', '2026-09-16', '2026-09-18')],
+      responsibleId: 'user-1',
+    },
+    {
+      actorId: 'user-1',
+      today: DEMO_DATE,
+      now: '2026-09-08T12:00:00Z',
+      newId: (() => {
+        let n = 0;
+        return () => `novo-${++n}`;
+      })(),
+    },
+  );
 
-  assert.deepEqual(d.progressEntries.map(p => p.id), []);
+  assert.deepEqual(
+    d.progressEntries.map(p => p.id),
+    [],
+  );
   // A linha da planilha é do planejador: perde o vínculo com a atividade removida e permanece.
-  assert.deepEqual(d.commitments.map(c => c.id), ['wc-1']);
+  assert.deepEqual(
+    d.commitments.map(c => c.id),
+    ['wc-1'],
+  );
   assert.equal(d.commitments[0].activityId, undefined);
-  assert.deepEqual(d.dependencies.map(x => x.id), ['dep-2'], 'dependência fora da cauda continua');
+  assert.deepEqual(
+    d.dependencies.map(x => x.id),
+    ['dep-2'],
+    'dependência fora da cauda continua',
+  );
   const deletes = diffDeletedIds(before, d);
   assert.deepEqual(deletes.activity_dependencies, ['dep-1']);
   assert.ok(deletes.activities.includes('a5'));

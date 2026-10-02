@@ -3,10 +3,12 @@ export function requireText(value: string, label: string): string {
   return value.trim();
 }
 export function validateDate(value: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw new Error('Data inválida.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)
+    throw new Error('Data inválida.');
 }
 export function validatePeriod(start: string, end: string): void {
-  validateDate(start); validateDate(end);
+  validateDate(start);
+  validateDate(end);
   if (end < start) throw new Error('Término deve ser igual ou posterior ao início.');
 }
 export function addDays(date: string, days: number): string {
@@ -34,7 +36,8 @@ export function periodDays(start: string, end: string, business: boolean): numbe
 export function addBusinessDays(date: string, days: number): string {
   if (!days) return date;
   const step = days > 0 ? 1 : -1;
-  let current = date, left = Math.abs(days);
+  let current = date,
+    left = Math.abs(days);
   while (left > 0) {
     current = addDays(current, step);
     const weekday = new Date(`${current}T00:00:00Z`).getUTCDay();

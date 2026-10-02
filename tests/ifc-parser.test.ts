@@ -21,8 +21,11 @@ async function openFixture() {
   const modelID = api.OpenModel(new Uint8Array(readFileSync(new URL('fixtures/minimo.ifc', import.meta.url))));
   return { WebIFC, api, modelID };
 }
-const names = (api: { GetLine: (m: number, id: number) => { Name?: { value: string } } }, modelID: number, ids: { size(): number; get(i: number): number }) =>
-  Array.from({ length: ids.size() }, (_, i) => api.GetLine(modelID, ids.get(i)).Name?.value);
+const names = (
+  api: { GetLine: (m: number, id: number) => { Name?: { value: string } } },
+  modelID: number,
+  ids: { size(): number; get(i: number): number },
+) => Array.from({ length: ids.size() }, (_, i) => api.GetLine(modelID, ids.get(i)).Name?.value);
 
 test('o IFC abre e entrega os pavimentos com nome e elevação', async () => {
   const { WebIFC, api, modelID } = await openFixture();
@@ -70,10 +73,20 @@ test('as regras casam com os pavimentos como eles saem do arquivo', async () => 
   api.CloseModel(modelID);
   const stamp = { createdAt: '2026-09-08T12:00:00Z', updatedAt: '2026-09-08T12:00:00Z' };
   // O arquivo traz "Terreo" e "1o Pavimento"; a regra é digitada "Térreo" e "1º pavimento".
-  const rule = (id: string, value: string): LinkRule => ({ id, ...stamp, workId: 'obra-1', order: 1, serviceName: 'Alvenaria', criteria: [{ property: 'pavimento', operator: 'igual', value }] });
+  const rule = (id: string, value: string): LinkRule => ({
+    id,
+    ...stamp,
+    workId: 'obra-1',
+    order: 1,
+    serviceName: 'Alvenaria',
+    criteria: [{ property: 'pavimento', operator: 'igual', value }],
+  });
   assert.equal(serviceForElement([rule('r1', 'Térreo')], { pavimento: storeys[0], tipo: 'IfcWall' }), 'Alvenaria');
   assert.equal(serviceForElement([rule('r2', '1º pavimento')], { pavimento: storeys[1], tipo: 'IfcWall' }), 'Alvenaria');
-  assert.deepEqual(rulesNeedingReview([rule('r3', 'Cobertura')], storeys).map(r => r.id), ['r3']);
+  assert.deepEqual(
+    rulesNeedingReview([rule('r3', 'Cobertura')], storeys).map(r => r.id),
+    ['r3'],
+  );
   assert.deepEqual(rulesNeedingReview([rule('r4', 'Térreo')], storeys), []);
 });
 
@@ -83,25 +96,36 @@ test('a transcrição do IFC entrega elementos, propriedades e quantidades', asy
   const { elements, properties, quantities } = extractFromModel(api, modelID, WebIFC as unknown as Record<string, number>);
   api.CloseModel(modelID);
 
-  assert.deepEqual(elements.map(e => [e.ifcClass, e.name, e.storey]), [
-    ['IfcWall', 'Parede do terreo', 'Terreo'],
-    ['IfcWall', 'Parede do primeiro', '1o Pavimento'],
-  ]);
+  assert.deepEqual(
+    elements.map(e => [e.ifcClass, e.name, e.storey]),
+    [
+      ['IfcWall', 'Parede do terreo', 'Terreo'],
+      ['IfcWall', 'Parede do primeiro', '1o Pavimento'],
+    ],
+  );
   assert.ok(elements[0].globalId, 'o GlobalId identifica o elemento entre versões');
 
   const wall = elements[0].expressId;
-  assert.deepEqual(properties.filter(p => p.expressId === wall).map(p => [p.pset, p.name, p.valueText ?? p.valueNumber]), [
-    ['Pset_Alvenaria', 'Material', 'Bloco ceramico 14'],
-    ['Pset_Alvenaria', 'Espessura', 0.14],
-  ]);
-  assert.deepEqual(quantities.filter(q => q.expressId === wall).map(q => [q.name, q.kind, q.value]), [
-    ['NetSideArea', 'area', 12.5],
-    ['NetVolume', 'volume', 1.75],
-  ]);
+  assert.deepEqual(
+    properties.filter(p => p.expressId === wall).map(p => [p.pset, p.name, p.valueText ?? p.valueNumber]),
+    [
+      ['Pset_Alvenaria', 'Material', 'Bloco ceramico 14'],
+      ['Pset_Alvenaria', 'Espessura', 0.14],
+    ],
+  );
+  assert.deepEqual(
+    quantities.filter(q => q.expressId === wall).map(q => [q.name, q.kind, q.value]),
+    [
+      ['NetSideArea', 'area', 12.5],
+      ['NetVolume', 'volume', 1.75],
+    ],
+  );
   // A segunda parede não tem conjunto de propriedades: a transcrição não inventa linhas.
-  assert.deepEqual(properties.filter(p => p.expressId === elements[1].expressId), []);
+  assert.deepEqual(
+    properties.filter(p => p.expressId === elements[1].expressId),
+    [],
+  );
 });
-
 
 test('a geometria do IFC converte para Fragments', async () => {
   // A conversão é a parte do produto que depende de duas libs de terceiro conversando entre si

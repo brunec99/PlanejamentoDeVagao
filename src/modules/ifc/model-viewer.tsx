@@ -7,8 +7,10 @@ import type { FragmentsModel, MaterialDefinition } from '@thatopen/fragments';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, StatCard } from '@/modules/planejamento/ui';
+import { HelpNote } from '@/modules/layout/help-note';
 import { formatTimestamp } from '@/shared/format';
-import { readElementMap, type MapRow } from './element-map';
+import { CHART, seriesColor } from '@/shared/palette';
+import { NO_CLASS, NO_STOREY, readElementMap, type MapRow } from './element-map';
 import { MissingGeometry, frame, loadFragments, type Federation, type FragmentsApi } from './fragments-stage';
 import { SectionControls } from './section-controls';
 import { useSectionPlane } from './use-section-plane';
@@ -20,37 +22,80 @@ const HIGHLIGHT = '#f59e0b';
 const count = (value: number) => value.toLocaleString('pt-BR');
 const byText = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
 
-/** A cor sai de um hash do próprio nome: o mesmo pavimento (ou a mesma classe) mantém a cor
- * entre versões, recargas e sessões, sem nenhuma tabela de cores para manter. */
-function hueOf(name: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < name.length; i++) { hash ^= name.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-  return (hash >>> 0) % 360;
+/** A cor de cada grupo vem da série única do sistema — a mesma da Linha de Balanço e do Gantt,
+ * validada para contraste e daltonismo — pela posição do grupo na legenda (o maior primeiro).
+ * Da nona posição em diante a série recomeça: a identidade fica garantida pelo nome escrito ao
+ * lado, na legenda e no clique. Grupo sem dado (sem pavimento, sem classe) fica no cinza de
+ * ausência, para não disputar cor com um pavimento de verdade. */
+const NO_DATA = new Set<string>([NO_STOREY, NO_CLASS]);
+function paletteFor(groups: Tally[]) {
+  const colors = new Map<string, string>();
+  let index = 0;
+  for (const group of groups) colors.set(group.name, NO_DATA.has(group.name) ? CHART.inkFaint : seriesColor(index++));
+  return colors;
 }
-const cssColor = (name: string) => `hsl(${hueOf(name)} 58% 52%)`;
-const groupColor = (three: Three, name: string) => new three.Color().setHSL(hueOf(name) / 360, 0.58, 0.52, three.SRGBColorSpace);
+const colorOf = (colors: Map<string, string>, name: string) => colors.get(name) ?? CHART.inkFaint;
 /** Na geometria convertida não existe cor por instância para mexer: o que se pinta é um conjunto
  * de ids recebendo um material. `TWO` desenha as duas faces, senão a parede vista de dentro
  * desaparece no recorte por pavimento. */
-const material = (api: FragmentsApi, color: ThreeNS.Color): MaterialDefinition => ({ color, opacity: 1, transparent: false, renderedFaces: api.RenderedFaces.TWO });
+const material = (api: FragmentsApi, color: ThreeNS.Color): MaterialDefinition => ({
+  color,
+  opacity: 1,
+  transparent: false,
+  renderedFaces: api.RenderedFaces.TWO,
+});
 
-interface Stage { three: Three; renderer: ThreeNS.WebGLRenderer; scene: ThreeNS.Scene; camera: ThreeNS.PerspectiveCamera; controls: OrbitControls }
+interface Stage {
+  three: Three;
+  renderer: ThreeNS.WebGLRenderer;
+  scene: ThreeNS.Scene;
+  camera: ThreeNS.PerspectiveCamera;
+  controls: OrbitControls;
+}
 /** A federação carregada mais o mapa que liga a malha aos dados: `byLocal` responde ao clique,
  * os agrupamentos respondem à cor e ao recorte. */
-interface Loaded extends Federation { model: FragmentsModel; byLocal: Map<number, MapRow>; byStorey: Map<string, number[]>; byClass: Map<string, number[]> }
-interface Job { versionId: string; label: string; version: number; fileName: string; createdAt: string }
-interface Tally { name: string; total: number }
-interface Report { elements: number; declared: number; orphans: number; storeys: Tally[]; classes: Tally[] }
-interface Picked { localId: number; row?: MapRow }
+interface Loaded extends Federation {
+  model: FragmentsModel;
+  byLocal: Map<number, MapRow>;
+  byStorey: Map<string, number[]>;
+  byClass: Map<string, number[]>;
+}
+interface Job {
+  versionId: string;
+  label: string;
+  version: number;
+  fileName: string;
+  createdAt: string;
+}
+interface Tally {
+  name: string;
+  total: number;
+}
+interface Report {
+  elements: number;
+  declared: number;
+  orphans: number;
+  storeys: Tally[];
+  classes: Tally[];
+}
+interface Picked {
+  localId: number;
+  row?: MapRow;
+}
 /** `geometry` diz de qual metade veio a falha: só a da malha permite oferecer a reconversão. */
 /** `pending` é a versão que nunca foi convertida — dado em tabela sem malha. Isso não é falha,
  * é uma metade que falta, e só nesse caso reenviar o modelo resolve; erro de rede na mesma metade
  * não pede reenvio nenhum. Quem distingue os dois é o tipo do erro, não o texto da mensagem. */
-interface Failure { message: string; pending: boolean }
+interface Failure {
+  message: string;
+  pending: boolean;
+}
 
-const tally = (groups: Map<string, number[]>) => [...groups.entries()]
-  .map(([name, ids]) => ({ name, total: ids.length }))
-  .sort((a, b) => b.total - a.total || byText(a.name, b.name));
+const tally = (groups: Map<string, number[]>) =>
+  [...groups.entries()].map(([name, ids]) => ({ name, total: ids.length })).sort((a, b) => b.total - a.total || byText(a.name, b.name));
+/** A pintura da cena e a legenda nascem da mesma ordenação, então a cor de um grupo é a mesma
+ * nos dois lugares — e volta igual quando o elemento selecionado é devolvido ao seu grupo. */
+const groupColors = (load: Loaded, paint: Paint) => paletteFor(tally(paint === 'classe' ? load.byClass : load.byStorey));
 
 /** Sai da cena antes de morrer: o dispose é assíncrono e o modelo velho não pode ficar aparecendo
  * junto do novo nem deixar o worker pendurado. */
@@ -91,8 +136,12 @@ export function ModelViewer({ workId }: { workId: string }) {
       const width = () => box.clientWidth || 1;
       const height = () => box.clientHeight || 1;
       let renderer: ThreeNS.WebGLRenderer;
-      try { renderer = new three.WebGLRenderer({ canvas, antialias: true }); }
-      catch { setWebgl(false); return; }
+      try {
+        renderer = new three.WebGLRenderer({ canvas, antialias: true });
+      } catch {
+        setWebgl(false);
+        return;
+      }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width(), height(), false);
       const scene = new three.Scene();
@@ -110,7 +159,10 @@ export function ModelViewer({ workId }: { workId: string }) {
       orbit.enableDamping = true;
       orbit.dampingFactor = 0.08;
       stageRef.current = { three, renderer, scene, camera, controls: orbit };
-      renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
+      renderer.setAnimationLoop(() => {
+        orbit.update();
+        renderer.render(scene, camera);
+      });
 
       // A malha convertida é servida em tiles: o que está na cena depende de onde a câmera está, e
       // quem troca os tiles é o `update`. Uma chamada por vez, porque o damping dispara `change` a
@@ -120,7 +172,12 @@ export function ModelViewer({ workId }: { workId: string }) {
         const load = loadRef.current;
         if (!load || refreshing) return;
         refreshing = true;
-        load.fragments.update().catch(() => undefined).finally(() => { refreshing = false; });
+        load.fragments
+          .update()
+          .catch(() => undefined)
+          .finally(() => {
+            refreshing = false;
+          });
       };
       orbit.addEventListener('change', refresh);
 
@@ -131,8 +188,12 @@ export function ModelViewer({ workId }: { workId: string }) {
       });
       observer.observe(box);
 
-      let downX = 0, downY = 0;
-      const onDown = (event: PointerEvent) => { downX = event.clientX; downY = event.clientY; };
+      let downX = 0,
+        downY = 0;
+      const onDown = (event: PointerEvent) => {
+        downX = event.clientX;
+        downY = event.clientY;
+      };
       const onUp = async (event: PointerEvent) => {
         if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return; // arrastar orbita, não seleciona
         const load = loadRef.current;
@@ -165,7 +226,11 @@ export function ModelViewer({ workId }: { workId: string }) {
     };
     build();
 
-    return () => { dropped = true; setReady(false); teardown?.(); };
+    return () => {
+      dropped = true;
+      setReady(false);
+      teardown?.();
+    };
   }, [box, canvas]);
 
   useEffect(() => {
@@ -176,45 +241,82 @@ export function ModelViewer({ workId }: { workId: string }) {
     let cancelled = false;
 
     const run = async () => {
-      setFailure(undefined); setReport(undefined); setPicked(undefined); setStorey('');
+      setFailure(undefined);
+      setReport(undefined);
+      setPicked(undefined);
+      setStorey('');
       let federation: Federation | undefined;
       let failed: Failure | undefined;
       const fail = (cause: unknown, geometry: boolean): never => {
-        const fallback = geometry ? 'Não foi possível abrir a geometria convertida desta versão.' : 'Não foi possível ler os elementos transcritos desta versão.';
-        failed ??= { message: cause instanceof Error && cause.message ? cause.message : fallback, pending: cause instanceof MissingGeometry };
+        const fallback = geometry
+          ? 'Não foi possível abrir a geometria convertida desta versão.'
+          : 'Não foi possível ler os elementos transcritos desta versão.';
+        failed ??= {
+          message: cause instanceof Error && cause.message ? cause.message : fallback,
+          pending: cause instanceof MissingGeometry,
+        };
         throw cause;
       };
       try {
         let geometry = 'Abrindo a geometria convertida…';
         let table = 'lendo os elementos transcritos…';
-        const show = () => { if (!cancelled) setStep(`${geometry} · ${table}`); };
+        const show = () => {
+          if (!cancelled) setStep(`${geometry} · ${table}`);
+        };
         show();
         // As duas metades da versão vêm juntas: a malha do Storage e a tabela do banco. Nenhuma
         // depende da outra até a hora de casar os GlobalIds, então esperar em série era só espera.
         const [loaded, map] = await Promise.all([
           loadFragments({
-            scene: stage.scene, camera: stage.camera, signal: controller.signal,
+            scene: stage.scene,
+            camera: stage.camera,
+            signal: controller.signal,
             versions: [{ id: job.versionId, label: job.label }],
-            onProgress: message => { geometry = message; show(); },
-          }).then(result => { federation = result; geometry = 'Geometria convertida aberta'; show(); return result; }, cause => fail(cause, true)),
+            onProgress: message => {
+              geometry = message;
+              show();
+            },
+          }).then(
+            result => {
+              federation = result;
+              geometry = 'Geometria convertida aberta';
+              show();
+              return result;
+            },
+            cause => fail(cause, true),
+          ),
           readElementMap([job.versionId], controller.signal, (read, declared) => {
             table = declared > 0 ? `lendo ${count(read)} de ${count(declared)} elementos transcritos…` : 'lendo os elementos transcritos…';
             show();
-          }).then(result => { table = 'elementos transcritos lidos'; show(); return result; }, cause => fail(cause, false)),
+          }).then(
+            result => {
+              table = 'elementos transcritos lidos';
+              show();
+              return result;
+            },
+            cause => fail(cause, false),
+          ),
         ]);
-        if (cancelled) { discard(loaded); return; }
+        if (cancelled) {
+          discard(loaded);
+          return;
+        }
         const model = loaded.models[0]?.model;
         if (!model) throw new Error('A geometria convertida desta versão voltou vazia.');
 
         setStep(`Casando ${count(map.rows.length)} elementos transcritos com a geometria…`);
         const locals = await model.getLocalIdsByGuids(map.rows.map(row => row.globalId));
-        if (cancelled) { discard(loaded); return; }
+        if (cancelled) {
+          discard(loaded);
+          return;
+        }
         const byLocal = new Map<number, MapRow>();
         const byStorey = new Map<string, number[]>();
         const byClass = new Map<string, number[]>();
         const push = (index: Map<string, number[]>, key: string, localId: number) => {
           const list = index.get(key);
-          if (list) list.push(localId); else index.set(key, [localId]);
+          if (list) list.push(localId);
+          else index.set(key, [localId]);
         };
         for (const [index, localId] of locals.entries()) {
           const row = map.rows[index];
@@ -227,13 +329,24 @@ export function ModelViewer({ workId }: { workId: string }) {
         }
         loadRef.current = { ...loaded, model, byLocal, byStorey, byClass };
         frame(stage.three, stage.camera, stage.controls, loaded.models);
-        setReport({ elements: byLocal.size, declared: map.declared, orphans: map.rows.length - byLocal.size, storeys: tally(byStorey), classes: tally(byClass) });
+        setReport({
+          elements: byLocal.size,
+          declared: map.declared,
+          orphans: map.rows.length - byLocal.size,
+          storeys: tally(byStorey),
+          classes: tally(byClass),
+        });
         setStep('');
       } catch (cause) {
         discard(federation);
         if (cancelled || controller.signal.aborted) return;
         controller.abort(); // a outra metade ainda pode estar em voo
-        setFailure(failed ?? { message: cause instanceof Error && cause.message ? cause.message : 'Não foi possível desenhar esta versão.', pending: cause instanceof MissingGeometry });
+        setFailure(
+          failed ?? {
+            message: cause instanceof Error && cause.message ? cause.message : 'Não foi possível desenhar esta versão.',
+            pending: cause instanceof MissingGeometry,
+          },
+        );
         setStep('');
       }
     };
@@ -254,12 +367,13 @@ export function ModelViewer({ workId }: { workId: string }) {
     let stale = false;
     const apply = async () => {
       const groups = paint === 'classe' ? load.byClass : load.byStorey;
+      const colors = groupColors(load, paint);
       // Um resetHighlight antes: sem ele, a pintura do critério anterior fica nos ids que o novo
       // critério não alcança.
       await load.model.resetHighlight();
       for (const [name, ids] of groups) {
         if (stale) return;
-        await load.model.highlight(ids, material(load.api, groupColor(stage.three, name)));
+        await load.model.highlight(ids, material(load.api, new stage.three.Color(colorOf(colors, name))));
       }
       const chosen = pickedRef.current;
       if (chosen) await load.model.highlight([chosen.localId], material(load.api, new stage.three.Color(HIGHLIGHT)));
@@ -273,7 +387,9 @@ export function ModelViewer({ workId }: { workId: string }) {
       await load.fragments.update(true);
     };
     apply().catch(() => undefined);
-    return () => { stale = true; };
+    return () => {
+      stale = true;
+    };
   }, [report, paint, storey]);
 
   useEffect(() => {
@@ -287,7 +403,11 @@ export function ModelViewer({ workId }: { workId: string }) {
       // embora a pintura por pavimento ou classe.
       if (previous) {
         const row = load.byLocal.get(previous.localId);
-        if (row) await load.model.highlight([previous.localId], material(load.api, groupColor(stage.three, paint === 'classe' ? row.ifcClass : row.storey)));
+        if (row)
+          await load.model.highlight(
+            [previous.localId],
+            material(load.api, new stage.three.Color(colorOf(groupColors(load, paint), paint === 'classe' ? row.ifcClass : row.storey))),
+          );
         else await load.model.resetHighlight([previous.localId]);
       }
       if (picked) await load.model.highlight([picked.localId], material(load.api, new stage.three.Color(HIGHLIGHT)));
@@ -303,135 +423,321 @@ export function ModelViewer({ workId }: { workId: string }) {
   if (!selected || !actor?.workIds.includes(workId)) return null;
   const { data } = planning;
 
-  const models = data.ifcModels.filter(m => m.workId === workId).slice().sort((a, b) => byText(a.name, b.name));
-  const options = models.flatMap(model => data.ifcVersions.filter(v => v.modelId === model.id).slice().sort((a, b) => b.version - a.version)
-    .map(version => ({ id: version.id, label: `${model.name} · v${version.version} · ${version.fileName}`, version })));
+  const models = data.ifcModels
+    .filter(m => m.workId === workId)
+    .slice()
+    .sort((a, b) => byText(a.name, b.name));
+  const options = models.flatMap(model =>
+    data.ifcVersions
+      .filter(v => v.modelId === model.id)
+      .slice()
+      .sort((a, b) => b.version - a.version)
+      .map(version => ({ id: version.id, label: `${model.name} · v${version.version} · ${version.fileName}`, version })),
+  );
   const chosen = options.find(option => option.id === versionId) ?? options[0];
   const storeys = (report?.storeys ?? []).map(item => item.name).sort(byText);
   // Trocar de versão pode tirar de cena o pavimento escolhido; aí o recorte volta a "todos".
   const activeStorey = storeys.includes(storey) ? storey : '';
-  const legend = paint === 'classe' ? report?.classes ?? [] : report?.storeys ?? [];
-  const label = job && report
-    ? `Geometria convertida do modelo ${job.label} com ${count(report.elements)} elementos, colorida por ${paint === 'classe' ? 'classe IFC' : 'pavimento'}. Os números, a legenda e a seleção abaixo trazem a mesma informação em texto.`
-    : 'Nenhuma geometria carregada. Escolha uma versão e use o botão Carregar geometria.';
+  const legend = paint === 'classe' ? (report?.classes ?? []) : (report?.storeys ?? []);
+  const legendColors = paletteFor(legend);
+  const label =
+    job && report
+      ? `Geometria convertida do modelo ${job.label} com ${count(report.elements)} elementos, colorida por ${paint === 'classe' ? 'classe IFC' : 'pavimento'}. Os números, a legenda e a seleção abaixo trazem a mesma informação em texto.`
+      : 'Nenhuma geometria carregada. Escolha uma versão e use o botão Carregar geometria.';
 
-  return <section data-tour="ifc-viewer" className="panel mt-8 overflow-hidden">
-    <div className="border-b border-slate-100 px-5 py-3.5">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Boxes size={15} className="text-blue-600" />Visualizador</h2>
-      <p className="mt-0.5 text-xs text-slate-500">Desenha a geometria convertida da versão, guardada no Storage e apontada pelo banco no envio; a classe, o nome e o pavimento de cada elemento vêm das tabelas transcritas e reencontram a malha pelo GlobalId. O arquivo IFC não é baixado nem lido no navegador.</p>
-    </div>
+  return (
+    <section data-tour="ifc-viewer" className="panel mt-6 overflow-hidden" aria-labelledby="visualizador-title">
+      <div className="border-b border-slate-100 px-5 py-3.5">
+        <h2 id="visualizador-title" className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <Boxes size={15} className="text-primary" aria-hidden />
+          Visualizador
+        </h2>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-xs text-slate-500">
+            Desenha a geometria convertida de uma versão; classe, nome e pavimento de cada elemento vêm das tabelas transcritas.
+          </p>
+          <HelpNote compact title="Como funciona: visualizador">
+            <p>
+              O visualizador abre a geometria convertida no envio (Fragments), guardada no Storage e apontada pelo banco. O arquivo IFC não
+              é baixado nem lido no navegador — é o que faz o modelo abrir em qualquer tamanho, e só quando você pede.
+            </p>
+            <p>
+              A classe IFC, o nome e o pavimento de cada elemento vêm das tabelas transcritas e reencontram a malha pelo GlobalId. Elemento
+              transcrito sem par na malha (espaços, anotações, agrupamentos) fica fora da cena e é contado, não tratado como erro.
+            </p>
+            <p>
+              O contorno é a malha do elemento como a conversão a gravou, não uma caixa envolvente. Dá para colorir por pavimento ou por
+              classe, isolar um pavimento, seccionar nos eixos X, Y e Z e clicar num elemento para ver os dados que a transcrição guarda.
+            </p>
+          </HelpNote>
+        </div>
+      </div>
 
-    {options.length === 0
-      ? <div className="p-5"><Empty>Nenhuma versão armazenada nesta obra. Envie um arquivo IFC em um dos modelos acima e ele aparecerá aqui para visualização.</Empty></div>
-      : <div className="p-5">
+      {options.length === 0 ? (
+        <div className="p-5">
+          <Empty>
+            Nenhuma versão armazenada nesta obra. Envie um arquivo IFC em um dos modelos acima e ele aparecerá aqui para visualização.
+          </Empty>
+        </div>
+      ) : (
+        <div className="p-5">
           <div className="flex flex-wrap items-end gap-4">
-            <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Versão do modelo</span>
-              <select className="field w-full sm:w-96" aria-label="Versão do modelo a desenhar" value={chosen?.id ?? ''} disabled={busy} onChange={event => setVersionId(event.target.value)}>
-                {options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+            <label className="block text-xs font-semibold text-slate-600">
+              <span className="mb-1.5 block">Versão do modelo</span>
+              <select
+                className="field w-full sm:w-96"
+                aria-label="Versão do modelo a desenhar"
+                value={chosen?.id ?? ''}
+                disabled={busy}
+                onChange={event => setVersionId(event.target.value)}
+              >
+                {options.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Recorte por pavimento</span>
-              <select className="field w-52" aria-label="Recorte por pavimento" value={activeStorey} disabled={busy || storeys.length === 0} onChange={event => setStorey(event.target.value)}>
+            <label className="block text-xs font-semibold text-slate-600">
+              <span className="mb-1.5 block">Recorte por pavimento</span>
+              <select
+                className="field w-52"
+                aria-label="Recorte por pavimento"
+                value={activeStorey}
+                disabled={busy || storeys.length === 0}
+                onChange={event => setStorey(event.target.value)}
+              >
                 <option value="">Todos os pavimentos</option>
-                {storeys.map(name => <option key={name} value={name}>{name}</option>)}
+                {storeys.map(name => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-600"><span className="mb-1.5 block">Cor dos elementos</span>
-              <select className="field w-44" aria-label="Critério de cor dos elementos" value={paint} disabled={busy} onChange={event => setPaint(event.target.value === 'classe' ? 'classe' : 'pavimento')}>
+            <label className="block text-xs font-semibold text-slate-600">
+              <span className="mb-1.5 block">Cor dos elementos</span>
+              <select
+                className="field w-44"
+                aria-label="Critério de cor dos elementos"
+                value={paint}
+                disabled={busy}
+                onChange={event => setPaint(event.target.value === 'classe' ? 'classe' : 'pavimento')}
+              >
                 <option value="pavimento">Por pavimento</option>
                 <option value="classe">Por classe IFC</option>
               </select>
             </label>
             {/* Sem cena montada não há para onde carregar: clicar antes do `three` chegar deixaria o
                 progresso ligado esperando um estágio que pode nem existir, se o WebGL faltar. */}
-            <button type="button" className="button" disabled={busy || !webgl || !ready || !chosen}
+            <button
+              type="button"
+              className="button"
+              disabled={busy || !webgl || !ready || !chosen}
               onClick={() => {
                 if (!chosen) return;
-                setStep('Abrindo a geometria convertida…'); setFailure(undefined);
-                setJob({ versionId: chosen.id, label: chosen.label, version: chosen.version.version, fileName: chosen.version.fileName, createdAt: chosen.version.createdAt });
-              }}>
-              <Play size={15} />{job ? 'Recarregar geometria' : 'Carregar geometria'}
+                setStep('Abrindo a geometria convertida…');
+                setFailure(undefined);
+                setJob({
+                  versionId: chosen.id,
+                  label: chosen.label,
+                  version: chosen.version.version,
+                  fileName: chosen.version.fileName,
+                  createdAt: chosen.version.createdAt,
+                });
+              }}
+            >
+              <Play size={15} />
+              {job ? 'Recarregar geometria' : 'Carregar geometria'}
             </button>
           </div>
 
-          <div className="mt-4"><SectionControls value={section.value} disabled={busy || !report || !section.available} error={section.error} onChange={value => { section.setValue(value); setPicked(undefined); }} /></div>
-          {busy && <p role="status" className="mt-3 text-xs font-semibold text-blue-700">{step}</p>}
-          {failure && <div className="mt-3 space-y-2">
-            <Callout tone="danger" role="alert">{failure.message}</Callout>
-            {failure.pending && <Callout tone="info">Os dados transcritos desta versão continuam valendo para as propriedades e o quantitativo; o que falta aqui é a geometria 3D — reenviar o modelo em Modelos IFC gera a conversão.</Callout>}
-          </div>}
-          {report?.declared === 0 && <div className="mt-3"><Callout tone="info" role="status">
-            A geometria desta versão abriu, mas ela não tem nenhum elemento transcrito: sem a tabela não há classe, nome nem pavimento para colorir, recortar ou mostrar no clique. Transcreva o IFC na tela de modelos e volte aqui.
-          </Callout></div>}
-          {report && report.declared > 0 && report.elements === 0 && <div className="mt-3"><Callout tone="warning" role="status">
-            Nenhum dos {count(report.declared)} elementos transcritos foi encontrado na geometria convertida — os dois lados não compartilham GlobalId, sinal de que a transcrição e a conversão saíram de arquivos diferentes. Reenvie o modelo em Modelos IFC para refazer as duas metades a partir do mesmo IFC.
-          </Callout></div>}
-
-          {job && report && <>
-            <div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Elementos desenhados" value={count(report.elements)} tone={report.elements === 0 ? 'warning' : 'default'} />
-              <StatCard label="Pavimentos" value={report.storeys.length} />
-              <StatCard label="Classes IFC distintas" value={report.classes.length} />
-              <StatCard label="Versão" value={<span className="block text-sm leading-5 break-all">v{job.version}
-                <span className="mt-0.5 block text-xs font-normal text-slate-500">{job.fileName} · enviada em {formatTimestamp(job.createdAt)}</span></span>} />
-            </div>
-            <p className="mb-4 text-xs text-slate-500">
-              O contorno é a malha do elemento como a conversão a gravou, não uma caixa envolvente: é o mesmo modelo do roteiro 4D, e é por isso que os dois concordam.
-              {report.orphans > 0 && ` ${count(report.orphans)} ${report.orphans === 1 ? 'elemento transcrito não tem par na geometria convertida e ficou fora da cena' : 'elementos transcritos não têm par na geometria convertida e ficaram fora da cena'} — espaços, anotações e agrupamentos existem na tabela sem nada para desenhar.`}
+          <div className="mt-4">
+            <SectionControls
+              value={section.value}
+              disabled={busy || !report || !section.available}
+              error={section.error}
+              onChange={value => {
+                section.setValue(value);
+                setPicked(undefined);
+              }}
+            />
+          </div>
+          {busy && (
+            <p role="status" className="mt-3 text-xs font-semibold text-primary">
+              {step}
             </p>
-          </>}
+          )}
+          {failure && (
+            <div className="mt-3 space-y-2">
+              <Callout tone="danger" role="alert">
+                {failure.message}
+              </Callout>
+              {failure.pending && (
+                <Callout tone="info">
+                  Os dados transcritos desta versão continuam valendo para as propriedades e o quantitativo; o que falta aqui é a geometria
+                  3D — reenviar a versão no painel de modelos acima gera a conversão.
+                </Callout>
+              )}
+            </div>
+          )}
+          {report?.declared === 0 && (
+            <div className="mt-3">
+              <Callout tone="info" role="status">
+                A geometria desta versão abriu, mas ela não tem nenhum elemento transcrito: sem a tabela não há classe, nome nem pavimento
+                para colorir, recortar ou mostrar no clique. Reenvie o IFC no painel de modelos acima e volte aqui.
+              </Callout>
+            </div>
+          )}
+          {report && report.declared > 0 && report.elements === 0 && (
+            <div className="mt-3">
+              <Callout tone="warning" role="status">
+                Nenhum dos {count(report.declared)} elementos transcritos foi encontrado na geometria convertida — os dois lados não
+                compartilham GlobalId, sinal de que a transcrição e a conversão saíram de arquivos diferentes. Reenvie o modelo no painel de
+                modelos acima para refazer as duas metades a partir do mesmo IFC.
+              </Callout>
+            </div>
+          )}
+
+          {job && report && (
+            <>
+              <div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Elementos desenhados"
+                  value={count(report.elements)}
+                  tone={report.elements === 0 ? 'warning' : 'default'}
+                />
+                <StatCard label="Pavimentos" value={report.storeys.length} />
+                <StatCard label="Classes IFC distintas" value={report.classes.length} />
+                <StatCard
+                  label="Versão"
+                  value={
+                    <span className="block text-sm leading-5 break-all">
+                      v{job.version}
+                      <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                        {job.fileName} · enviada em {formatTimestamp(job.createdAt)}
+                      </span>
+                    </span>
+                  }
+                />
+              </div>
+              {/* Só o número fica na tela; o porquê dos órfãos está na ajuda do painel. */}
+              {report.orphans > 0 && (
+                <p className="mb-4 text-xs text-slate-500">
+                  {count(report.orphans)}{' '}
+                  {report.orphans === 1
+                    ? 'elemento transcrito não tem par na geometria convertida e ficou fora da cena'
+                    : 'elementos transcritos não têm par na geometria convertida e ficaram fora da cena'}
+                  .
+                </p>
+              )}
+            </>
+          )}
 
           <div ref={setBox} className="relative h-[600px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
             <canvas ref={setCanvas} role="img" aria-label={label} className="block h-full w-full" />
-            {!webgl && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
-              Este navegador não tem WebGL disponível, então o modelo 3D não pode ser desenhado. Os pavimentos e a contagem de elementos de cada versão continuam na tabela de modelos acima.
-            </p>}
-            {webgl && busy && <p role="status" className="absolute inset-x-0 top-0 border-b border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-900">{step}</p>}
-            {webgl && !busy && failure && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">{failure.message}</p>}
-            {webgl && !busy && !failure && !job && <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-500">
-              Nenhuma geometria carregada. Escolha uma versão e use &quot;Carregar geometria&quot; — são megabytes de malha convertida, baixados só quando você pede.
-            </p>}
+            {!webgl && (
+              <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
+                Este navegador não tem WebGL disponível, então o modelo 3D não pode ser desenhado. Os pavimentos e a contagem de elementos
+                de cada versão continuam na tabela de modelos acima.
+              </p>
+            )}
+            {webgl && busy && (
+              <p
+                role="status"
+                className="absolute inset-x-0 top-0 border-b border-primary-ring bg-primary-soft px-4 py-2.5 text-sm font-medium text-primary-ink"
+              >
+                {step}
+              </p>
+            )}
+            {webgl && !busy && failure && (
+              <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
+                {failure.message}
+              </p>
+            )}
+            {webgl && !busy && !failure && !job && (
+              <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-500">
+                Nenhuma geometria carregada. Escolha uma versão e use &quot;Carregar geometria&quot; — são megabytes de malha convertida,
+                baixados só quando você pede.
+              </p>
+            )}
           </div>
 
-          {legend.length > 0 && <div className="mt-4">
-            <p className="eyebrow">Legenda · {paint === 'classe' ? 'classe IFC' : 'pavimento'}</p>
-            <ul className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto custom-scrollbar">
-              {legend.map(item => <li key={item.name} className="badge-muted">
-                <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cssColor(item.name) }} />
-                {item.name}
-                <span className="font-normal tabular-nums text-slate-500">{count(item.total)}</span>
-              </li>)}
-            </ul>
-          </div>}
+          {legend.length > 0 && (
+            <div className="mt-4">
+              <p className="eyebrow">Legenda · {paint === 'classe' ? 'classe IFC' : 'pavimento'}</p>
+              <ul className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto custom-scrollbar">
+                {legend.map(item => (
+                  <li key={item.name} className="badge-muted">
+                    <span
+                      aria-hidden
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: colorOf(legendColors, item.name) }}
+                    />
+                    {item.name}
+                    <span className="font-normal tabular-nums text-slate-500">{count(item.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-4">
-            {picked
-              ? <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="eyebrow">Elemento selecionado</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">{picked.row?.ifcClass ?? 'Item sem linha transcrita'}</p>
-                    </div>
-                    <button type="button" className="button-ghost" aria-label="Limpar a seleção do elemento" onClick={() => setPicked(undefined)}><Eraser size={15} />Limpar seleção</button>
+            {picked ? (
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="eyebrow">Elemento selecionado</p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">{picked.row?.ifcClass ?? 'Item sem linha transcrita'}</p>
                   </div>
-                  {picked.row
-                    ? <>
-                        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                          {[['Name', picked.row.name, 'sem Name na transcrição'], ['GlobalId', picked.row.globalId, ''], ['Pavimento', picked.row.storey, '']].map(([field, value, missing]) =>
-                            <div key={field}>
-                              <dt className="text-xs font-medium text-slate-500">{field}</dt>
-                              <dd className={`text-sm break-all ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{value || missing}</dd>
-                            </div>)}
-                        </dl>
-                        <p className="mt-3 text-xs text-slate-500">A malha em destaque é a forma convertida deste elemento; a classe IFC, o Name e o pavimento vêm da linha transcrita que o GlobalId alcança.</p>
-                      </>
-                    : <p className="mt-3 text-xs text-slate-500">Esta peça está na geometria convertida mas não tem linha na transcrição desta versão (id local #{picked.localId}), então não há classe IFC, Name nem pavimento para mostrar.</p>}
+                  <button
+                    type="button"
+                    className="button-ghost"
+                    aria-label="Limpar a seleção do elemento"
+                    onClick={() => setPicked(undefined)}
+                  >
+                    <Eraser size={15} />
+                    Limpar seleção
+                  </button>
                 </div>
-              : <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
-                  <MousePointerClick size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                  Arraste para orbitar, use a roda para aproximar e clique num elemento para ver a classe IFC, o Name, o GlobalId e o pavimento que a transcrição guarda.
-                </p>}
+                {picked.row ? (
+                  <>
+                    <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                      {[
+                        ['Name', picked.row.name, 'sem Name na transcrição'],
+                        ['GlobalId', picked.row.globalId, ''],
+                        ['Pavimento', picked.row.storey, ''],
+                      ].map(([field, value, missing]) => (
+                        <div key={field}>
+                          <dt className="text-xs font-medium text-slate-500">{field}</dt>
+                          <dd className={`text-sm break-all ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>
+                            {value || missing}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p className="mt-3 text-xs text-slate-500">
+                      A malha em destaque é a forma convertida deste elemento; a classe IFC, o Name e o pavimento vêm da linha transcrita
+                      que o GlobalId alcança.
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Esta peça está na geometria convertida mas não tem linha na transcrição desta versão (id local #{picked.localId}), então
+                    não há classe IFC, Name nem pavimento para mostrar.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+                <MousePointerClick size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                Arraste para orbitar, use a roda para aproximar e clique num elemento para ver a classe IFC, o Name, o GlobalId e o
+                pavimento que a transcrição guarda.
+              </p>
+            )}
           </div>
-        </div>}
-  </section>;
+        </div>
+      )}
+    </section>
+  );
 }

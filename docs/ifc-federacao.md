@@ -2,7 +2,14 @@
 
 ## Direção acordada
 
-Priorizar a montagem e a exploração do modelo federado. No redesenho de 23/09/2026, o BIM 4D (aba 6) ganhou a simulação animada do cronograma de longo prazo (ver a seção "Simulação 4D" abaixo). A tela **ainda não consome as composições salvas** da federação, o que continua como próxima etapa.
+**02/10/2026 — BIM 4D cancelado.** O usuário decidiu concentrar o sistema nos quatro níveis de planejamento (longo prazo, vagões, médio e curto prazo). Consequências:
+
+- A tela `/obras/{obraId}/quatro-d`, o módulo `src/modules/quatro-d/` (visualizador, simulação) e `tests/four-d-simulation.test.ts` foram removidos. A seção "Simulação 4D" abaixo fica como histórico do que existiu.
+- O **Modelo federado** deixa de ser a aba 5 e passa ao grupo **Apoio** da lateral, ao lado de Arquivos IFC. Continua funcionando como ferramenta de análise virtual dos projetos; nenhuma migração ou rota mudou.
+- A **vinculação por regras** (`src/modules/ifc/link-rules.tsx`) saiu da tela de Arquivos IFC, porque só alimentava o 4D. A entidade `LinkRule`, os comandos `create_link_rule`/`delete_link_rule`, as regras puras (`matchesRule`, `serviceForElement`, `rulesNeedingReview`) e a tabela `link_rules` continuam no domínio, nos testes e no banco. Nenhuma migração remove a tabela.
+- As telas de IFC e federação receberam o cabeçalho de Apoio, ajuda contextual ("Como funciona"), formulários em gaveta, avisos por toast e a paleta única (`src/shared/palette.ts`). Ver `docs/revisao-2026-10-01.md`.
+
+Antes disso, a direção era priorizar a montagem e a exploração do modelo federado, com o 4D para depois. No redesenho de 23/09/2026, o BIM 4D (então aba 6) ganhou a simulação animada do cronograma de longo prazo (ver a seção "Simulação 4D" abaixo), que nunca chegou a consumir as composições salvas.
 
 Este documento é o ponto de continuidade entre os modelos de IA que trabalham no repositório. Em cada alteração de IFC/federação, atualizar aqui: comportamento entregue, decisões, arquivos envolvidos, migrações, validação e pendências. Não descrever intenção como funcionalidade pronta. Preservar alterações locais de outro trabalho. A mesma orientação foi acrescentada ao `AGENTS.md` local, que atualmente é ignorado pelo Git; este documento e o README mantêm a orientação em arquivos versionáveis.
 

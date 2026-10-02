@@ -39,9 +39,15 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     available: steps.length > 0,
     steps,
     stepIndex,
-    start: () => { setStepIndex(0); setActive(true); },
+    start: () => {
+      setStepIndex(0);
+      setActive(true);
+    },
     stop: () => setActive(false),
-    next: () => { if (stepIndex + 1 < steps.length) setStepIndex(stepIndex + 1); else setActive(false); },
+    next: () => {
+      if (stepIndex + 1 < steps.length) setStepIndex(stepIndex + 1);
+      else setActive(false);
+    },
     back: () => setStepIndex(i => Math.max(0, i - 1)),
   };
 

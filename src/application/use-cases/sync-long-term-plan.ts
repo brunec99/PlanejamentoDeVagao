@@ -4,9 +4,29 @@ import { addBusinessDays, addDays, periodDays } from '../../domain/validation';
 import { sliceActivity } from './slice-activity';
 
 /** Serviço × pavimento do plano de longo prazo, a unidade que vira atividade de vagão. */
-export interface LongTermSlot { key: string; name: string; location: string; plannedStart: string; plannedEnd: string; teamNames: string[] }
-export interface PlannedActivity { externalId: string; name: string; location: string; plannedStart: string; plannedEnd: string; weight: number; teamNames: string[] }
-export interface PlannedWagon { plannedStart: string; plannedEnd: string; taktDays: number; activities: PlannedActivity[] }
+export interface LongTermSlot {
+  key: string;
+  name: string;
+  location: string;
+  plannedStart: string;
+  plannedEnd: string;
+  teamNames: string[];
+}
+export interface PlannedActivity {
+  externalId: string;
+  name: string;
+  location: string;
+  plannedStart: string;
+  plannedEnd: string;
+  weight: number;
+  teamNames: string[];
+}
+export interface PlannedWagon {
+  plannedStart: string;
+  plannedEnd: string;
+  taktDays: number;
+  activities: PlannedActivity[];
+}
 export interface LongTermSyncPlan {
   aborted: boolean;
   reason?: string;
@@ -36,14 +56,16 @@ export const LONG_TERM_PREFIX = 'plano:';
 
 /** Todo serviço do plano, visível ou não: ocultar é só leitura do gráfico, não tira a frente da obra. */
 export function longTermSlots(document: LongTermPlanDocument): LongTermSlot[] {
-  return document.activities.flatMap(activity => floorSchedule(activity).map(slot => ({
-    key: `${LONG_TERM_PREFIX}${activity.id}:${slot.floor}`,
-    name: activity.name,
-    location: floorLabel(document, slot.floor),
-    plannedStart: slot.start,
-    plannedEnd: slot.finish,
-    teamNames: activity.teams.map(t => t.name),
-  })));
+  return document.activities.flatMap(activity =>
+    floorSchedule(activity).map(slot => ({
+      key: `${LONG_TERM_PREFIX}${activity.id}:${slot.floor}`,
+      name: activity.name,
+      location: floorLabel(document, slot.floor),
+      plannedStart: slot.start,
+      plannedEnd: slot.finish,
+      teamNames: activity.teams.map(t => t.name),
+    })),
+  );
 }
 
 /** Cadeia de vagões da sequência, do primeiro ao último, ou o motivo de não conseguir montá-la. */
@@ -55,14 +77,18 @@ function chain(data: PlanningData, sequenceId: string): Wagon[] | string {
   let cursor = wagons.find(w => !w.predecessorId || !byId.has(w.predecessorId));
   while (cursor) {
     if (seen.has(cursor.id)) return 'Ciclo na sequência de vagões.';
-    seen.add(cursor.id); ordered.push(cursor);
+    seen.add(cursor.id);
+    ordered.push(cursor);
     const current: Wagon = cursor;
     cursor = wagons.find(w => w.predecessorId === current.id);
   }
   return ordered.length === wagons.length ? ordered : 'Sequência com vagões fora da cadeia principal.';
 }
 
-const nextBusinessDay = (date: string) => { const d = new Date(`${date}T00:00:00Z`).getUTCDay(); return d === 6 ? addDays(date, 2) : d === 0 ? addDays(date, 1) : date; };
+const nextBusinessDay = (date: string) => {
+  const d = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return d === 6 ? addDays(date, 2) : d === 0 ? addDays(date, 1) : date;
+};
 
 /**
  * Recalcula os vagões da sequência a partir do plano de longo prazo, que passa a ser o
@@ -80,7 +106,19 @@ const nextBusinessDay = (date: string) => { const d = new Date(`${date}T00:00:00
  */
 export function planLongTermSync(data: PlanningData, sequenceId: string, slots: LongTermSlot[], today: string): LongTermSyncPlan {
   const sequence = data.sequences.find(s => s.id === sequenceId);
-  const empty = { startNumber: 1, frontier: today, wagons: [], removedWagonIds: [], removedActivityIds: [], removedRestrictionIds: [], removedPendingIds: [], removedWithProgress: 0, skippedPast: 0, keptWagons: 0, keptActivities: 0 };
+  const empty = {
+    startNumber: 1,
+    frontier: today,
+    wagons: [],
+    removedWagonIds: [],
+    removedActivityIds: [],
+    removedRestrictionIds: [],
+    removedPendingIds: [],
+    removedWithProgress: 0,
+    skippedPast: 0,
+    keptWagons: 0,
+    keptActivities: 0,
+  };
   if (!sequence) return { aborted: true, reason: 'Sequência não encontrada.', ...empty };
   const ordered = chain(data, sequenceId);
   if (typeof ordered === 'string') return { aborted: true, reason: `${ordered} Geração abortada.`, ...empty };
@@ -88,7 +126,12 @@ export function planLongTermSync(data: PlanningData, sequenceId: string, slots: 
   let frozen = -1;
   while (frozen + 1 < ordered.length && released.has(ordered[frozen + 1].id)) frozen++;
   const tail = ordered.slice(frozen + 1);
-  if (tail.some(w => released.has(w.id))) return { aborted: true, reason: 'Há vagão liberado depois de um não liberado. Geração abortada para não mexer em vagão liberado.', ...empty };
+  if (tail.some(w => released.has(w.id)))
+    return {
+      aborted: true,
+      reason: 'Há vagão liberado depois de um não liberado. Geração abortada para não mexer em vagão liberado.',
+      ...empty,
+    };
   const frozenWagon = frozen >= 0 ? ordered[frozen] : undefined;
 
   const floor = frozenWagon ? addDays(frozenWagon.plannedEnd, 1) : (sequence.startDate ?? today);
@@ -105,24 +148,46 @@ export function planLongTermSync(data: PlanningData, sequenceId: string, slots: 
     const last = live.reduce((max, s) => (s.plannedEnd > max ? s.plannedEnd : max), live[0].plannedEnd);
     let start = first > frontier ? first : frontier;
     while (start <= last && grid.length < 2000) {
-      const end = business ? addDays(addBusinessDays(nextBusinessDay(start), sequence.defaultTaktDays), -1) : addDays(start, sequence.defaultTaktDays - 1);
+      const end = business
+        ? addDays(addBusinessDays(nextBusinessDay(start), sequence.defaultTaktDays), -1)
+        : addDays(start, sequence.defaultTaktDays - 1);
       grid.push({ id: String(grid.length), plannedStart: start, plannedEnd: end });
       start = addDays(end, 1);
     }
   }
   const buckets = grid.map(w => ({ ...w, activities: [] as PlannedActivity[] }));
   for (const slot of live) {
-    const row = { externalId: slot.key, name: slot.name, location: slot.location, plannedStart: slot.plannedStart, plannedEnd: slot.plannedEnd, progress: 0 };
+    const row = {
+      externalId: slot.key,
+      name: slot.name,
+      location: slot.location,
+      plannedStart: slot.plannedStart,
+      plannedEnd: slot.plannedEnd,
+      progress: 0,
+    };
     for (const slice of sliceActivity(row, grid)) {
       const bucket = buckets[Number(slice.wagonId)];
       // A chave leva o início do vagão: sem isso, a fatia "#1" de um vagão já liberado e a "#1"
       // da cauda teriam o mesmo id externo, que é único no banco.
-      bucket.activities.push({ externalId: `${slice.row.externalId}@${bucket.plannedStart}`, name: slice.row.name, location: slot.location, plannedStart: slice.row.plannedStart, plannedEnd: slice.row.plannedEnd, weight: slice.row.weight ?? 1, teamNames: slot.teamNames });
+      bucket.activities.push({
+        externalId: `${slice.row.externalId}@${bucket.plannedStart}`,
+        name: slice.row.name,
+        location: slot.location,
+        plannedStart: slice.row.plannedStart,
+        plannedEnd: slice.row.plannedEnd,
+        weight: slice.row.weight ?? 1,
+        teamNames: slot.teamNames,
+      });
     }
   }
-  const wagons: PlannedWagon[] = buckets.filter(b => b.activities.length).map(b => ({
-    plannedStart: b.plannedStart, plannedEnd: b.plannedEnd, taktDays: periodDays(b.plannedStart, b.plannedEnd, business) || 1, activities: b.activities,
-  }));
+  const wagons: PlannedWagon[] = buckets
+    .filter(b => b.activities.length)
+    .map(b => ({
+      plannedStart: b.plannedStart,
+      plannedEnd: b.plannedEnd,
+      taktDays: periodDays(b.plannedStart, b.plannedEnd, business) || 1,
+      activities: b.activities,
+    }));
 
   const keptWagonIds = new Set(tail.filter(w => wagons.some(p => p.plannedStart === w.plannedStart)).map(w => w.id));
   const tailIds = new Set(tail.map(w => w.id));
@@ -135,17 +200,27 @@ export function planLongTermSync(data: PlanningData, sequenceId: string, slots: 
     return a.plannedStart >= wagon.plannedStart && a.plannedEnd <= wagon.plannedEnd;
   };
   const tailActivities = data.activities.filter(a => tailIds.has(a.wagonId));
-  const removedActivities = tailActivities.filter(a => !(a.previsionExternalId && wanted.has(a.previsionExternalId)) && !survivingManual(a));
+  const removedActivities = tailActivities.filter(
+    a => !(a.previsionExternalId && wanted.has(a.previsionExternalId)) && !survivingManual(a),
+  );
   const removedActivityIds = removedActivities.map(a => a.id);
   const removedWagonIds = tail.filter(w => !keptWagonIds.has(w.id)).map(w => w.id);
   const removedWagonSet = new Set(removedWagonIds);
   return {
-    aborted: false, frozenWagonId: frozenWagon?.id, startNumber: (frozenWagon?.number ?? 0) + 1, frontier, wagons,
-    removedWagonIds, removedActivityIds,
+    aborted: false,
+    frozenWagonId: frozenWagon?.id,
+    startNumber: (frozenWagon?.number ?? 0) + 1,
+    frontier,
+    wagons,
+    removedWagonIds,
+    removedActivityIds,
     // Restrição e pendência saem só com o vagão; se sai apenas a atividade, elas ficam e perdem o vínculo.
     removedRestrictionIds: data.restrictions.filter(r => removedWagonSet.has(r.wagonId)).map(r => r.id),
     removedPendingIds: data.pendingItems.filter(p => removedWagonSet.has(p.wagonId)).map(p => p.id),
-    removedWithProgress: removedActivities.filter(a => a.progress > 0 || data.criteria.some(c => c.activityId === a.id && c.fulfilled)).length,
-    skippedPast, keptWagons: keptWagonIds.size, keptActivities: tailActivities.length - removedActivities.length,
+    removedWithProgress: removedActivities.filter(a => a.progress > 0 || data.criteria.some(c => c.activityId === a.id && c.fulfilled))
+      .length,
+    skippedPast,
+    keptWagons: keptWagonIds.size,
+    keptActivities: tailActivities.length - removedActivities.length,
   };
 }

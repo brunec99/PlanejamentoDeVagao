@@ -9,7 +9,11 @@ interface PlanRowOptions {
   folded: ReadonlySet<string>;
 }
 
-const normalized = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+const normalized = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
 
 /** Recebe a ordem integral do plano. A busca muda somente a leitura: não renumera,
  * reordena nem altera tarefas. Os ancestrais contextualizam os resultados mesmo
@@ -27,9 +31,10 @@ export function filterPlanRows(tasks: PlanTask[], { query, filter, conflictTaskI
       if (!ancestors.some(parent => folded.has(tasks[parent].id))) included.add(index);
     } else {
       const summary = !!tasks[index + 1] && tasks[index + 1].level > task.level;
-      const matchesFilter = filter === 'all'
-        || (filter === 'incomplete' && !summary && task.progress < 100)
-        || (filter === 'conflicts' && conflictTaskIds.has(task.id));
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'incomplete' && !summary && task.progress < 100) ||
+        (filter === 'conflicts' && conflictTaskIds.has(task.id));
       const name = normalized(task.name);
       if (matchesFilter && tokens.every(token => name.includes(token))) {
         included.add(index);

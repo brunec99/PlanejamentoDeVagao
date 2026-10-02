@@ -4,10 +4,27 @@ import type { PlanTask } from '../src/domain/entities';
 import { dependencyAnchors, filterPlanRows, type PlanRowFilter } from '../src/modules/medio-prazo/plan-view';
 
 function task(id: string, level: number, name = id, progress = 0, order = 0): PlanTask {
-  return { id, level, name, progress, order, planId: 'plan', plannedStart: '2026-09-01', plannedEnd: '2026-09-30', createdAt: '', updatedAt: '' };
+  return {
+    id,
+    level,
+    name,
+    progress,
+    order,
+    planId: 'plan',
+    plannedStart: '2026-09-01',
+    plannedEnd: '2026-09-30',
+    createdAt: '',
+    updatedAt: '',
+  };
 }
-const options = (overrides: Partial<{ query: string; filter: PlanRowFilter; conflictTaskIds: ReadonlySet<string>; folded: ReadonlySet<string> }> = {}) => ({
-  query: '', filter: 'all' as PlanRowFilter, conflictTaskIds: new Set<string>(), folded: new Set<string>(), ...overrides,
+const options = (
+  overrides: Partial<{ query: string; filter: PlanRowFilter; conflictTaskIds: ReadonlySet<string>; folded: ReadonlySet<string> }> = {},
+) => ({
+  query: '',
+  filter: 'all' as PlanRowFilter,
+  conflictTaskIds: new Set<string>(),
+  folded: new Set<string>(),
+  ...overrides,
 });
 const ids = (tasks: PlanTask[]) => tasks.map(row => row.id);
 
@@ -36,12 +53,23 @@ test('hierarquia considera o nível menor anterior mesmo quando há saltos nos n
 });
 
 test('incompletas usa apenas progresso das folhas, nunca valor persistido de resumo', () => {
-  const rows = [task('a', 0, 'Resumo concluído', 0), task('b', 1, 'Concluída', 100), task('c', 0, 'Resumo pendente', 100), task('d', 1, 'Pendente', 40), task('e', 1, 'Concluída', 100)];
+  const rows = [
+    task('a', 0, 'Resumo concluído', 0),
+    task('b', 1, 'Concluída', 100),
+    task('c', 0, 'Resumo pendente', 100),
+    task('d', 1, 'Pendente', 40),
+    task('e', 1, 'Concluída', 100),
+  ];
   assert.deepEqual(ids(filterPlanRows(rows, options({ filter: 'incomplete', folded: new Set(['c']) }))), ['c', 'd']);
 });
 
 test('busca e filtro são interseção; ancestrais só precisam contextualizar a folha encontrada', () => {
-  const rows = [task('a', 0, 'Bloco A'), task('b', 1, 'Pintura interna', 50), task('c', 1, 'Pintura externa', 100), task('d', 0, 'Fundação', 10)];
+  const rows = [
+    task('a', 0, 'Bloco A'),
+    task('b', 1, 'Pintura interna', 50),
+    task('c', 1, 'Pintura externa', 100),
+    task('d', 0, 'Fundação', 10),
+  ];
   assert.deepEqual(ids(filterPlanRows(rows, options({ query: 'pintura', filter: 'incomplete' }))), ['a', 'b']);
   assert.deepEqual(ids(filterPlanRows(rows, options({ query: 'externa', filter: 'incomplete' }))), []);
 });

@@ -13,8 +13,11 @@ export async function createServerSupabase() {
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: cookiesToSet => {
-        try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
-        catch { /* called from a Server Component render; middleware already refreshes the session */ }
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        } catch {
+          /* called from a Server Component render; middleware already refreshes the session */
+        }
       },
     },
   });

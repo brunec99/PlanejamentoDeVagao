@@ -4,16 +4,14 @@ Gestão de projetos e obras da ATR Incorporadora. O nome "Obra 360" aparece na l
 
 Aplicação em Next.js, TypeScript, Tailwind CSS e App Router. O vagão é um **período temporal**, sem pavimento ou local próprio. Os locais pertencem às atividades.
 
-A interface de cada obra é organizada em **seis abas numeradas**, do planejamento macro para a semana e depois para o modelo:
+A interface de cada obra é organizada em **quatro abas numeradas**, do planejamento macro para a semana:
 
-1. **Cronograma de longo prazo** — planejador próprio (fluxograma de serviços que se expande em Linha de Balanço) e, na visão do Prevision, Linha de Balanço importada e módulo de restrições (mais curva de avanço e linhas de base).
+1. **Cronograma de longo prazo** — planejador próprio (fluxograma de serviços que se expande em Linha de Balanço) e, na visão dos vagões, Linha de Balanço das atividades e módulo de restrições (mais curva de avanço e linhas de base).
 2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
-3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt lado a lado, agendamento automático, datas reais), alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos.
-4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento.
-5. **Modelo federado** — os IFCs da obra numa mesma cena, para análise virtual dos projetos.
-6. **BIM 4D** — o cronograma de longo prazo ligado ao modelo federado, com simulação animada.
+3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt lado a lado, agendamento automático, datas reais), alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos. As seções da aba ficam na URL (`?secao=`).
+4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento; no celular, cada linha vira um cartão.
 
-Abaixo das abas, o grupo **Apoio** reúne Arquivos IFC, Dívidas, Integrações e Configurações da obra. Veja [Níveis de planejamento](#níveis-de-planejamento).
+Abaixo das abas, o grupo **Apoio** reúne Modelo federado, Arquivos IFC, Dívidas, Integrações e Configurações da obra. **O módulo BIM 4D foi cancelado em 02/10/2026** por decisão do usuário: o sistema se concentra nos quatro níveis de planejamento; o modelo federado continua como ferramenta de análise dos projetos. Veja [Níveis de planejamento](#níveis-de-planejamento) e a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md).
 
 ## Executar
 
@@ -24,13 +22,19 @@ npm ci
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Login é obrigatório e feito só por Google Workspace (domínio `atrincorporadora.com.br`) — configure o Supabase e o provedor Google antes de testar, veja as seções [Supabase](#supabase) e [Login com Google](#login-com-google) abaixo. Depois acesse http://127.0.0.1:3000/login. O ambiente de validação usa a data fixa **08/09/2026**, indicada na interface. Os dados persistem no Postgres do Supabase, não mais em memória do navegador.
+Login é obrigatório e feito só por Google Workspace (domínio `atrincorporadora.com.br`) — configure o Supabase e o provedor Google antes de testar, veja as seções [Supabase](#supabase) e [Login com Google](#login-com-google) abaixo. Depois acesse http://127.0.0.1:3000/login. Para testar sem o Google só no `next dev`, use `DEV_AUTH_BYPASS_PROFILE_ID` (ver `.env.example`). A data de "hoje" é a real, no fuso de São Paulo (`src/infrastructure/clock.ts`), em todas as rotas; a data fixa de demonstração só existe nos testes em memória. Os dados persistem no Postgres do Supabase.
 
 ```sh
-npm test
-npm run typecheck
+npm run typecheck          # tipos
+npm run lint               # ESLint (eslint-config-next)
+npm run format:check       # Prettier; `npm run format` corrige
+npm test                   # testes de domínio e aplicação (node:test)
+npm run validate:migrations # replica as migrações num PostgreSQL em memória (PGlite)
 npm run build
+npm run test:e2e           # fumaça no Chromium sobre `next start` (não precisa de Supabase)
 ```
+
+O mesmo conjunto roda no GitHub Actions a cada push e PR (`.github/workflows/ci.yml`).
 
 ## Funcionalidades
 
@@ -49,13 +53,12 @@ npm run build
 - Dívidas próprias e herdadas, sem duplicação; filtros de abertas, vencidas e resolvidas.
 - Reabertura de terminalidade exige gestor e justificativa, preserva liberações e alerta sucessores.
 - Login real via Google Workspace (domínio restrito), com papéis de gestor, planejador, consulta e admin; autorização por obra aplicada no servidor a cada comando.
-- Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/configuracoes`, sem mexer em planejamento. O passo a passo de entrar, liberar acesso e resolver cada mensagem de erro está em [Como entrar com a conta Google](docs/login-google.md).
+- Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/configuracoes` e, desde 01/10/2026, também podem tudo o que o gestor pode (cadastrar obra, reabrir vagão terminal, liberar excepcionalmente). O passo a passo de entrar, liberar acesso e resolver cada mensagem de erro está em [Como entrar com a conta Google](docs/login-google.md).
 - Repositório de modelos IFC por obra: cada envio transcreve o arquivo em tabelas e converte a geometria para Fragments, com histórico de versões.
 - Quantitativo do modelo: quantidades somadas por tipo, distribuição por classe IFC e por pavimento, consulta elemento a elemento e exportação em CSV.
-- Vinculação de elementos IFC a serviços por regras de propriedade, com marcação das regras que precisam de revisão.
-- Modelo federado independente do 4D: composições salvas com versões fixas, visibilidade por modelo, cores por modelo/classe/pavimento e consulta de elementos.
-- BIM 4D: modelo federado, consulta por data, recorte por pavimento e comparação com a linha de base escolhida.
+- Modelo federado: composições salvas com versões fixas, visibilidade por modelo, cores por modelo/classe/pavimento e consulta de elementos.
 - Consulta de obras/atividades e importação revisada do Prevision.
+- Estado do banco em Configurações (quais migrações estão aplicadas), avisos por toast, confirmações próprias, formulários em gaveta lateral, ajuda contextual em cada tela, menu completo no celular e modo reunião (texto maior).
 
 A liberação excepcional cria a autorização e as dívidas na mesma transação. Falhas descartam todo o rascunho. Dívidas herdadas mantêm o prazo original, e uma nova autorização registra seu reconhecimento. Resolver a pendência encerra a dívida sem apagar sua origem. Restrições impeditivas não podem ser contornadas por liberação excepcional. Correções que reduzam progresso exigem justificativa.
 
@@ -65,7 +68,7 @@ Datas são datas civis ISO. O calendário de dias úteis considera segunda a sex
 
 **Continuidade:** o estado dos três níveis, as decisões tomadas e as pendências ficam em [Planejamento em três níveis](docs/planejamento-tres-niveis.md), que acompanha cada alteração de longo, médio ou curto prazo — o equivalente ao que [IFC e modelo federado](docs/ifc-federacao.md) faz para o BIM.
 
-A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`), que deduz a obra pela URL e mostra o nome dela, as seis abas numeradas (`WORK_TABS`, cada uma com título e resumo) e o grupo Apoio. No celular a lateral some e as seis abas viram uma faixa rolável sob o cabeçalho (`WorkTabsMobile`). Cada aba abre com o mesmo cabeçalho (`src/modules/layout/tab-header.tsx`): número da aba, código e nome da obra, título e o que a aba responde. Abrir uma obra leva à aba 1. Fora de uma obra, a lateral não mostra essas seções.
+A navegação da obra fica na barra lateral (`src/modules/layout/work-nav.tsx`), que deduz a obra pela URL e mostra o nome dela, as quatro abas numeradas (`WORK_TABS`, cada uma com título e resumo) e o grupo Apoio. No celular a lateral vira a gaveta do menu (`MobileDrawer`, com abas, Apoio, perfil e saída) e as quatro abas também ficam numa faixa rolável sob o cabeçalho (`WorkTabsMobile`). Cada aba abre com o mesmo cabeçalho (`src/modules/layout/tab-header.tsx`): número da aba, código e nome da obra, título, uma linha do que a aba responde e o botão de ajuda "Como funciona", onde fica a explicação longa. Abrir uma obra leva à aba 1. Fora de uma obra, a lateral não mostra essas seções.
 
 **Longo prazo** (`/obras/{obraId}/longo-prazo`, aba 1): a aba tem duas visões. O **Planejador** (padrão) é onde o cronograma de longo prazo é preenchido. Ele reproduz a ferramenta "Planejamento de Longo Prazo" do antigo App-ATR: um fluxograma de serviços (diagrama de rede, cada coluna é um nível de precedência) em que cada cartão se expande nos seus pavimentos, e a obra inteira se expande em Linha de Balanço. Cada serviço tem uma faixa de pavimentos, a duração por pavimento, o ritmo, as predecessoras (por cruzamento automático ou por pavimento específico, com espera), as equipes e a unidade de medição. As datas de cada pavimento saem daí, e arrastar um serviço na Linha de Balanço empurra as sucessoras. O Planejador também tem linhas de base, medições, alocação de equipes e exportação e importação em JSON; a importação aceita o arquivo da ferramenta antiga. O plano é um documento por obra (`long_term_plans`, migração 0024, fora do snapshot), salvo automaticamente e com trava de revisão contra sobrescrita. **O plano é o responsável pelas atividades dos vagões:** "Gerar vagões" transforma cada serviço × pavimento em atividades, fatiadas nos vagões da cauda não liberada de uma sequência, com prévia do que muda. Vagões liberados nunca mudam, e gerar de novo sem mudar o plano mantém vagões, avanço e restrições. A sincronização do Prevision deixa de regenerar as sequências geradas pelo plano. Detalhes, decisões e as correções em relação ao original estão em [Planejamento em três níveis](docs/planejamento-tres-niveis.md). A visão **Vagões e restrições** (`?visao=prevision`) mostra as atividades dos vagões, só para leitura, para apoiar a criação e o acompanhamento das restrições. Ela abre com a Linha de Balanço, seguida do módulo de restrições, da curva de avanço e das linhas de base. Define e lista as linhas de base da obra. Cada acionamento cria um registro novo, que copia o número e as datas planejadas dos vagões e as datas, o local e o peso das atividades. Reprogramar o planejamento atual nunca altera uma linha de base já salva — planejamento atual, linha de base e realizado permanecem registros distintos. A mesma tela traz o gráfico de Linha de Balanço: cada serviço é uma linha avançando pelos locais ao longo do tempo, com marcação de hoje, alternância para visão de tabela e sobreposição pontilhada da linha de base escolhida para comparação.
 
@@ -107,9 +110,9 @@ A semana é sempre normalizada para a segunda-feira, e o período da linha tem d
 
 O PPC da semana conta compromissos cumpridos sobre compromissos assumidos — nunca é a média dos percentuais executados. A planilha é editável célula a célula, Status incluído: corrigir um apontamento é trocar a célula, não excluir a linha.
 
-## Modelos IFC e BIM 4D
+## Modelos IFC e modelo federado
 
-**Direção atual:** priorizar a montagem e a exploração do modelo federado; a evolução do BIM 4D fica para depois. O estado da implementação, decisões, migrações e próximas etapas estão em [IFC e modelo federado](docs/ifc-federacao.md). Esse documento deve acompanhar cada alteração para manter continuidade entre os dois modelos de IA que trabalham no projeto.
+**Direção atual:** o BIM 4D foi **cancelado em 02/10/2026**; o modelo federado continua como ferramenta de análise virtual dos projetos, no grupo Apoio. O estado da implementação, decisões, migrações e próximas etapas estão em [IFC e modelo federado](docs/ifc-federacao.md). Esse documento deve acompanhar cada alteração para manter continuidade entre os dois modelos de IA que trabalham no projeto.
 
 **Modelo federado** (`/obras/{obraId}/federacao`): área própria para escolher uma versão de cada modelo, carregar o conjunto e salvar composições nomeadas. Cada salvamento cria uma cópia com versões fixas; novos uploads não alteram conjuntos já salvos. A página usa lista lateral com busca por modelo/disciplina, caixas de inclusão separadas das versões e seleção em lote dos modelos disponíveis. O visualizador permite ocultar/isolar modelos, colorir por modelo, pavimento ou classe IFC, recortar por pavimento e consultar elementos pelo clique ou pela busca de nome/classe/GlobalId. O painel de inspeção mostra a origem e os dados do elemento selecionado. Alterar a seleção não muda a cena até acionar o carregamento. O salvamento requer a migração `0021_ifc_federations.sql`, confirmada no ambiente remoto em 19/09/2026. Sistemas internos do IFC, padronização entre arquivos e ajustes de coordenadas são próximas etapas. A tela BIM 4D existente ainda não consome essas composições.
 
@@ -127,15 +130,11 @@ Nada disso entra no snapshot do planejamento. Um modelo real tem centenas de mil
 
 **Quantitativo** (mesma tela): as quantidades declaradas no modelo somadas por nome e tipo, a distribuição dos elementos por classe IFC e por pavimento, e a consulta elemento a elemento com filtros e exportação em CSV. A soma é feita no banco pela função `ifc_version_summary`, sobre o modelo inteiro — contar no navegador receberia só as primeiras mil linhas que a API REST devolve, uma amostra com cara de total.
 
-**Vinculação por regras** (mesma tela): as regras ligam elementos a um serviço por propriedade, em vez de seleção manual elemento por elemento. Entre as regras que casam, vale a de menor ordem. A tela mostra quais regras precisam de revisão — aquelas cujo pavimento não existe em nenhum modelo atual — e tem um teste local de regra, que responde qual serviço seria vinculado a um pavimento e tipo informados, sem gravar nada.
-
-Os vínculos elemento a elemento **não são armazenados**: só as regras são. Cada comando trafega o snapshot inteiro do planejamento, e materializar dezenas de milhares de elementos tornaria toda gravação proporcional ao tamanho do modelo. O vínculo é resolvido na visualização, a partir das regras.
-
-**BIM 4D** (`/obras/{obraId}/quatro-d`, aba 6): anima o cronograma de longo prazo sobre o modelo, com reproduzir/pausar, passo de dia, semana ou mês e três modos (Planejado, Executado e Planejado × executado) — detalhes em [IFC e modelo federado](docs/ifc-federacao.md). Reúne as versões escolhidas num modelo federado — a mesma geometria convertida do visualizador —, colore os elementos pelo serviço vinculado por regra e responde a uma data. O executado até a data vem do histórico datado (o último lançamento de cada atividade até aquele dia), e uma linha de base pode ser escolhida para comparação. Há recorte por pavimento e uma tabela serviço × vagão com a mesma informação do 3D, para a tela seguir utilizável sem WebGL. O modelo só é carregado por ação explícita.
+**Vinculação por regras:** a entidade `LinkRule`, os comandos `create_link_rule`/`delete_link_rule` e a tabela `link_rules` continuam no domínio e no banco, mas **sem tela** desde 02/10/2026: ela só alimentava o BIM 4D, que foi cancelado. Nenhuma migração remove a tabela; os dados existentes ficam preservados.
 
 ### O que ainda não existe
 
-As telas dos três níveis estão na primeira versão: registram e mostram o que está descrito acima, sem curva S e sem comparação automática entre linha de base e realizado (no longo prazo e no 4D a comparação é visual). As regras cobrem pavimento e tipo de elemento; as demais propriedades IFC e as regras avançadas seguem para uma etapa posterior. A federação é a soma dos modelos numa mesma cena, sem detecção de interferência. O relógio de produção continua fixo em 08/09/2026.
+A federação é a soma dos modelos numa mesma cena, sem detecção de interferência, sem normalização de pavimentos entre arquivos e sem extração dos sistemas internos do IFC. A concorrência entre usuários ainda usa uma versão única para todas as obras (ver [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md)).
 
 ## Prevision
 
@@ -154,12 +153,12 @@ Datas, local e progresso vêm do Prevision. Responsável local é escolhido na r
 
 Consultas têm timeout, mensagens sem credenciais, cache local de um minuto e intervalo mínimo de 11 segundos entre chamadas externas. Não há sincronização automática nem escrita no Prevision.
 
-**A rota com credencial do Prevision continua bloqueada em produção**, independente do login — esse bloqueio antecede a autenticação real e não foi revisto nesta etapa. O login agora é real (Supabase Auth, veja a seção [Supabase](#supabase)), mas essa rota específica mantém o 403 em produção até essa decisão ser revisitada. Não publique o protótipo como sistema multiusuário com dados reais sem revisar esse ponto.
+Desde 02/10/2026 a rota `GET /api/prevision` é liberada **por papel**, não por endereço: planejador, gestor e admin consultam; o perfil de consulta recebe 403. Até então ela só respondia no localhost, decisão anterior ao login real, e a tela Integrações ficava morta em produção.
 
 ## Supabase
 
 1. Crie um projeto em https://supabase.com/dashboard.
-2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` `0007_teams_progress_baselines.sql`, `0008_ifc_repository.sql`, `0009_restriction_lead_time.sql` e `0010_activity_network.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas. A `0008` cria `ifc_models`, `ifc_model_versions` e `link_rules`, o bucket privado `ifc` no Storage, e reescreve `commit_planning` de novo. A `0009` adiciona `restrictions.lead_time_days`. A `0010` cria `activity_dependencies` e `activities.notes`. A `0011` reformata `weekly_commitments` para a planilha de produção. A `0012` leva a empresa para o cadastro de equipes, liga o compromisso à equipe e libera exclusão de equipe e de linha. A `0013` cria `medium_term_plans`, `plan_tasks` e `plan_dependencies` para o plano do mês. A `0014` deixa a linha da planilha ser escrita do zero (`work_id`, `name`, atividade opcional). A `0015` cria `ifc_elements`, `ifc_properties` e `ifc_quantities` — é a primeira que **não** reescreve `commit_planning`, porque as tabelas transcritas ficam fora do snapshot de propósito. A `0016` acrescenta as colunas de caixa envolvente em `ifc_elements`, hoje sem uso: elas são de uma tentativa anterior de guardar geometria como seis números por elemento, substituída pela conversão para Fragments. A `0017` solta o `not null` de `ifc_model_versions.storage_path`, que é o que torna o arquivo original opcional. A `0018` cria a função `ifc_version_summary`, que soma o quantitativo no banco. A `0019` cria `ifc_fragments`, o ponteiro para a geometria convertida. A `0020` acrescenta `plan_tasks.level` (item e subitem) e `weekly_commitments.supplier`, solta o `not null` de `weekly_commitments.team_id`, remove `weekly_commitments.weekdays` e reescreve `commit_planning` por causa das três. A `0021` cria `ifc_federations`, que guarda composições fora do snapshot; sua ausência bloqueia salvar/abrir composições, mas não o restante do planejamento. A `0022` acrescenta tipo e defasagem ao vínculo do plano do mês (`link_type`, `lag_days`, `lag_business`) e reescreve `commit_planning`; sem ela, tipo e defasagem são descartados em silêncio a cada gravação. A `0025` cria `work_settings`, com as configurações da obra que ficam fora do snapshot (por ora, a semana 1 da numeração do curto prazo). Ela **não** reescreve `commit_planning`: sem ela a planilha usa a numeração automática, e só o salvamento da semana 1 pede a migração. A `0023` acrescenta `schedule_meta` (jsonb) a `medium_term_plans` e `plan_tasks` — calendário, duração, âncora, versão e `sourceTaskId` do plano do mês —, torna a linha de base congelada e o histórico imutáveis por gatilho e reescreve `commit_planning`; foi aplicada no Supabase remoto em 23/09/2026 e **não é reexecutável** (cria funções e gatilhos sem `or replace`). A `0024` cria `long_term_plans`, o documento do Planejador de longo prazo, um por obra e fora do snapshot; não reescreve `commit_planning`, pode ser rodada de novo e, sem ela, só o Planejador fica sem carregar e salvar — aplicada em 25/09/2026. A `0026` acrescenta a `long_term_plans` o registro da última geração de vagões e aceita a origem `long_term` em `activities` — aplicada em 25/09/2026. A validação isolada roda com `node scripts/validate-plan-database.mjs`, num PGlite local, sem tocar no banco remoto. Cada migração do snapshot é obrigatória antes de subir o código correspondente: o snapshot lê todas as tabelas em cada requisição, então uma tabela ausente derruba qualquer tela, não só as novas.
+2. Rode as migrações de `supabase/migrations/`, nessa ordem, no SQL Editor do projeto (ou `supabase db push` pela CLI): `0001_init.sql`, `0002_commit_planning_profiles.sql`, `0003_admin_role.sql`, `0004_prevision_schedule.sql`, `0005_commit_planning_delete.sql`, `0006_sequence_start_date.sql` `0007_teams_progress_baselines.sql`, `0008_ifc_repository.sql`, `0009_restriction_lead_time.sql` e `0010_activity_network.sql`. A `0007` cria as tabelas `teams`, `progress_entries`, `weekly_commitments` e `baselines`, adiciona `activities.team_id` e `restrictions.board_status` e reescreve a função `commit_planning` para cobrir as tabelas novas. A `0008` cria `ifc_models`, `ifc_model_versions` e `link_rules`, o bucket privado `ifc` no Storage, e reescreve `commit_planning` de novo. A `0009` adiciona `restrictions.lead_time_days`. A `0010` cria `activity_dependencies` e `activities.notes`. A `0011` reformata `weekly_commitments` para a planilha de produção. A `0012` leva a empresa para o cadastro de equipes, liga o compromisso à equipe e libera exclusão de equipe e de linha. A `0013` cria `medium_term_plans`, `plan_tasks` e `plan_dependencies` para o plano do mês. A `0014` deixa a linha da planilha ser escrita do zero (`work_id`, `name`, atividade opcional). A `0015` cria `ifc_elements`, `ifc_properties` e `ifc_quantities` — é a primeira que **não** reescreve `commit_planning`, porque as tabelas transcritas ficam fora do snapshot de propósito. A `0016` acrescenta as colunas de caixa envolvente em `ifc_elements`, hoje sem uso: elas são de uma tentativa anterior de guardar geometria como seis números por elemento, substituída pela conversão para Fragments. A `0017` solta o `not null` de `ifc_model_versions.storage_path`, que é o que torna o arquivo original opcional. A `0018` cria a função `ifc_version_summary`, que soma o quantitativo no banco. A `0019` cria `ifc_fragments`, o ponteiro para a geometria convertida. A `0020` acrescenta `plan_tasks.level` (item e subitem) e `weekly_commitments.supplier`, solta o `not null` de `weekly_commitments.team_id`, remove `weekly_commitments.weekdays` e reescreve `commit_planning` por causa das três. A `0021` cria `ifc_federations`, que guarda composições fora do snapshot; sua ausência bloqueia salvar/abrir composições, mas não o restante do planejamento. A `0022` acrescenta tipo e defasagem ao vínculo do plano do mês (`link_type`, `lag_days`, `lag_business`) e reescreve `commit_planning`; sem ela, tipo e defasagem são descartados em silêncio a cada gravação. A `0025` cria `work_settings`, com as configurações da obra que ficam fora do snapshot (por ora, a semana 1 da numeração do curto prazo). Ela **não** reescreve `commit_planning`: sem ela a planilha usa a numeração automática, e só o salvamento da semana 1 pede a migração. A `0023` acrescenta `schedule_meta` (jsonb) a `medium_term_plans` e `plan_tasks` — calendário, duração, âncora, versão e `sourceTaskId` do plano do mês —, torna a linha de base congelada e o histórico imutáveis por gatilho e reescreve `commit_planning`; foi aplicada no Supabase remoto em 23/09/2026 e **não é reexecutável** (cria funções e gatilhos sem `or replace`). A `0024` cria `long_term_plans`, o documento do Planejador de longo prazo, um por obra e fora do snapshot; não reescreve `commit_planning`, pode ser rodada de novo e, sem ela, só o Planejador fica sem carregar e salvar — aplicada em 25/09/2026. A `0026` acrescenta a `long_term_plans` o registro da última geração de vagões e aceita a origem `long_term` em `activities` — aplicada em 25/09/2026. A `0027` cria a função `planning_snapshot`, que lê o planejamento recortado por obra numa ida só; **não** reescreve `commit_planning`, é reexecutável e, sem ela, o repositório volta à leitura por tabela — criada em 02/10/2026 e ainda não aplicada. A validação isolada roda com `npm run validate:migrations`, num PGlite local, sem tocar no banco remoto. Cada migração do snapshot é obrigatória antes de subir o código correspondente: o snapshot lê todas as tabelas em cada requisição, então uma tabela ausente derruba qualquer tela, não só as novas. A tela Configurações (admin) mostra quais migrações o banco já tem.
 3. Em Project Settings → API, copie a URL e as chaves `anon` e `service_role` para `.env.local` (a partir de `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 4. Configure o login com Google — veja [Login com Google](#login-com-google) abaixo. Não há mais login por senha nem script de seed com usuários fictícios: o primeiro acesso via Google já provisiona o usuário.
 5. `npm run dev` e acesse `/login`.
@@ -188,16 +187,18 @@ Contas fora do domínio configurado são barradas e deslogadas no próprio callb
 - `src/infrastructure/repositories/supabase`: adaptador Postgres real (Supabase) usado pela aplicação em execução — `getSnapshot`/`transaction` sobre a mesma interface `PlanningRepository`.
 - `src/infrastructure/auth`: sessão do Supabase Auth no servidor (usuário autenticado, perfil, papel).
 - `src/infrastructure/integrations/prevision`: cliente HTTP no servidor e normalização testável.
-- `src/modules`: interface por funcionalidade — `planejamento` (vagões, dívidas, formulários e componentes reaproveitados), `longo-prazo`, `medio-prazo`, `curto-prazo`, `ifc`, `quatro-d`, `layout` (sub-navegação da obra), `integracoes`, `obras`, `configuracoes` e `tour`.
-- `src/app`: App Router, login e rotas intermediárias (`/api/planning`, `/api/planning/commands`, `/api/prevision`, `/api/ifc/upload-url`, `/api/ifc/download-url`, `/api/ifc/elements`, `/api/ifc/fragments`, `/api/ifc/status`).
+- `src/infrastructure/clock.ts`, `log.ts` e `repositories/supabase/migrations.ts`: relógio único das rotas, registro estruturado de erros e sondagem das migrações aplicadas.
+- `src/modules`: interface por funcionalidade — `planejamento` (vagões, dívidas, formulários, componentes reaproveitados e o hook de histórico), `longo-prazo`, `medio-prazo`, `curto-prazo`, `ifc`, `federacao`, `layout` (navegação da obra, menu do celular, gaveta, toast, confirmação, ajuda contextual, modo reunião), `integracoes`, `obras`, `configuracoes` e `tour`.
+- `src/shared/palette.ts`: a paleta única dos gráficos e dos estados.
+- `src/app`: App Router, login, páginas de erro e rotas intermediárias (`/api/planning`, `/api/planning/commands`, `/api/history`, `/api/health`, `/api/prevision`, `/api/ifc/*`, `/api/long-term-plan`, `/api/work-settings`).
 
 As entidades novas do domínio são `Team` (capacidade em atividades simultâneas por semana), `ProgressEntry` (percentual executado com data), `WeeklyCommitment` (compromisso semanal, com `weekStart` sempre na segunda-feira e cumprimento indefinido enquanto não apurado), `Baseline` (cópia imutável das datas planejadas), `IfcModel`/`IfcModelVersion` (modelo e histórico de versões, com o arquivo original opcional no Storage) e `LinkRule` (regra de vínculo por propriedade). As regras `ppc`, `teamLoad`, `matchesRule`, `serviceForElement` e `rulesNeedingReview` ficam em `src/domain/rules.ts`, junto das demais regras puras.
 
-O snapshot pagina as tabelas com ordenação explícita por `id`. Sem isso a paginação não é determinística: cada comando regrava a tabela inteira e muda a ordem física das linhas, então uma escrita entre duas páginas faria o snapshot repetir ou perder registros — o que passou a importar quando as obras reais cruzaram as mil atividades.
+O snapshot é lido **por obra** pela função `planning_snapshot` (migração 0027), numa ida só ao banco; sem a função, o repositório volta à leitura por tabela, paginada com ordenação explícita por `id` (sem isso a paginação não é determinística: cada comando regrava a tabela inteira e muda a ordem física das linhas). O histórico (`history_events`) fica fora do snapshot e é lido por `/api/history`, por entidade. Detalhes em [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md).
 
 Dois ativos de terceiro são buscados por URL pelo navegador: `public/wasm/web-ifc.wasm`, que lê o STEP, e `public/fragments/worker.mjs`, que processa a geometria fora da thread principal. Os dois são **versionados no repositório** de propósito: depender de um passo de build para copiá-los já falhou em produção sem aviso — o arquivo não aparecia no deploy e o visualizador abria sem conseguir carregar modelo. Servi-los de CDN tem o problema oposto: a versão mudaria sem aviso, e ela tem que casar com a do `package.json`. O script `copy-assets` (ganchos `predev` e `prebuild`) re-sincroniza os dois; rode-o e commite o resultado ao subir a versão de `web-ifc` ou de `@thatopen/fragments`. O `buildCommand` do `vercel.json` chama `copy-assets` explicitamente porque ele invoca `next build` direto, e aí o gancho `prebuild` do npm não dispara: renomear o script sem atualizar o `vercel.json` derruba o deploy — já aconteceu.
 
-Persistência em PostgreSQL/Supabase e autenticação real já estão implementadas: comandos rodam no servidor autenticados pela sessão, e a função `commit_planning` aplica cada transação de forma atômica com controle de concorrência otimista (versão em `planning_meta`). Hospedagem na Vercel e o relógio de produção (hoje fixo em 08/09/2026) permanecem como próximos passos.
+Persistência em PostgreSQL/Supabase e autenticação real já estão implementadas: comandos rodam no servidor autenticados pela sessão, e a função `commit_planning` aplica cada transação de forma atômica com controle de concorrência otimista (versão única em `planning_meta`; a versão por obra é a próxima etapa). O sistema roda na Vercel em `https://obra360-atr.vercel.app`.
 
 ## Rotas e cenários
 
@@ -210,13 +211,28 @@ Persistência em PostgreSQL/Supabase e autenticação real já estão implementa
 - `/obras/obra-1/vagoes/v3`: restrição e dívida herdada.
 - `/obras/obra-1/vagoes/v5`: não iniciado, aguardando liberação.
 - `/obras/obra-1/vagoes/v6`: 100% de progresso aguardando critério.
-- `/obras/obra-1/ifc`: modelos IFC, versões e regras de vínculo.
-- `/obras/obra-1/quatro-d`: modelo federado e comparação na data escolhida.
+- `/obras/obra-1/ifc`: modelos IFC, versões, quantitativo e visualizador.
+- `/obras/obra-1/federacao`: modelo federado e composições salvas.
 - `/obras/obra-1/dividas`: gestão das dívidas.
 - `/obras/obra-1/importar`: Prevision.
 
 Validação: testes de terminalidade, permissões, rollback, importação, normalização, vínculos, datas, dívidas e reabertura. A conectividade real foi verificada com a consulta de obras e de atividades de uma obra, sem alterar o Prevision.
 
-## Estado da implantação de 19/09/2026
+## Estado da implantação
 
-Build de produção, TypeScript e 129 testes aprovados. O esquema das migrações `0020` e `0021` foi confirmado no Supabase, e a prévia Vercel foi concluída com sucesso antes da promoção para produção. Veja o [registro de implantação](docs/implantacao-2026-09-19.md) e a sequência de atualização do banco e publicação.
+- **19/09/2026:** build de produção, TypeScript e 129 testes aprovados; migrações `0020` e `0021` confirmadas no Supabase. Veja o [registro de implantação](docs/implantacao-2026-09-19.md).
+- **02/10/2026:** revisão geral de operação e estética e cancelamento do BIM 4D, ainda **não publicada**. A migração `0027` está criada e não aplicada; o sistema funciona sem ela. Veja a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md), que lista o que precisa do usuário antes de publicar.
+
+### Migrações: estado conhecido
+
+A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o estado real. O que a documentação registra:
+
+| Migração | Cria | Reescreve `commit_planning` | Estado documentado |
+| --- | --- | --- | --- |
+| 0001 a 0014 | planejamento, perfis, equipes, IFC, rede, planilha, plano do mês | sim (várias) | aplicadas |
+| 0015 a 0019 | IFC como dado, geometria, resumo, fragments | não | aplicadas |
+| 0020, 0022, 0023 | item/subitem, tipos de vínculo, revisões | sim | aplicadas (0023 não é reexecutável) |
+| 0021 | composições do modelo federado | não | aplicada em 19/09/2026 |
+| 0024, 0026 | planejador de longo prazo e geração de vagões | não | aplicadas em 25/09/2026 |
+| 0025 | configurações da obra (semana 1) | não | aplicada (confirmada pela sondagem de 02/10/2026) |
+| 0027 | leitura do planejamento por obra | não | **criada em 02/10/2026, não aplicada** |

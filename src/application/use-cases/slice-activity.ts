@@ -1,7 +1,17 @@
 import type { ImportedActivity } from './commands';
 
-export interface WagonWindow { id: string; plannedStart: string; plannedEnd: string }
-export interface ActivitySlice { wagonId: string; percent: number; part: number; parts: number; row: ImportedActivity }
+export interface WagonWindow {
+  id: string;
+  plannedStart: string;
+  plannedEnd: string;
+}
+export interface ActivitySlice {
+  wagonId: string;
+  percent: number;
+  part: number;
+  parts: number;
+  row: ImportedActivity;
+}
 
 const MS = 86400000;
 const parse = (value: string) => Date.parse(`${value}T00:00:00Z`);
