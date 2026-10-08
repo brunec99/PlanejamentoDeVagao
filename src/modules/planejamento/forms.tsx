@@ -195,7 +195,7 @@ export function TextField({
 export function Check({ name, label, defaultChecked = false }: { name: string; label: string; defaultChecked?: boolean }) {
   return (
     <label className="flex items-center gap-2 text-sm text-slate-700">
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="accent-blue-700" />
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="accent-primary" />
       {label}
     </label>
   );

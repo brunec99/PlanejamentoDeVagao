@@ -145,7 +145,7 @@ export function ModelViewer({ workId }: { workId: string }) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width(), height(), false);
       const scene = new three.Scene();
-      scene.background = new three.Color('#eef2f6');
+      scene.background = new three.Color('#f4f7f9');
       const camera = new three.PerspectiveCamera(55, width() / height(), 0.1, 5000);
       camera.position.set(30, 24, 30);
       scene.add(new three.AmbientLight('#ffffff', 2.1));

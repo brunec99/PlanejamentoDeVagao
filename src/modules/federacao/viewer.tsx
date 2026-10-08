@@ -111,7 +111,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
       }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       const scene = new three.Scene();
-      scene.background = new three.Color('#eef2f6');
+      scene.background = new three.Color('#f4f7f9');
       scene.add(new three.AmbientLight('#ffffff', 2.1));
       const sun = new three.DirectionalLight('#ffffff', 1.5);
       sun.position.set(1, 2, 1.5);

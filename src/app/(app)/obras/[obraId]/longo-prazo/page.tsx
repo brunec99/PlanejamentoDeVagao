@@ -64,14 +64,14 @@ export default async function Page({
         <nav
           data-tour="longo-visoes"
           aria-label="Visões do longo prazo"
-          className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+          className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1"
         >
           {VIEWS.map(v => (
             <Link
               key={v.id}
               href={v.id === 'planejador' ? base : `${base}?visao=${v.id}`}
               aria-current={view === v.id ? 'page' : undefined}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === v.id ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === v.id ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : 'text-slate-600 hover:text-slate-900'}`}
             >
               {v.label}
             </Link>

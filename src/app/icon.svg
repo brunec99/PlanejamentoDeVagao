@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="7" fill="#1d4ed8"/>
-  <path d="M4.5 19.5a11.5 4.5 0 0 1 23 0" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#135a82"/>
+      <stop offset="1" stop-color="#0a364d"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+  <path d="M4.5 19.5a11.5 4.5 0 0 1 23 0" stroke="#8cc6e4" stroke-width="1.8" stroke-linecap="round"/>
   <rect x="11" y="6" width="10" height="17" rx="1" fill="#fff"/>
-  <path d="M13 9h2v2h-2zM17 9h2v2h-2zM13 13h2v2h-2zM17 13h2v2h-2zM13 17h2v2h-2zM17 17h2v2h-2z" fill="#1d4ed8"/>
+  <path d="M13 9h2v2h-2zM17 9h2v2h-2zM13 13h2v2h-2zM17 13h2v2h-2zM13 17h2v2h-2zM17 17h2v2h-2z" fill="#0e4666"/>
   <path d="M27.5 19.5a11.5 4.5 0 0 1-21.2 2.4" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M4.3 19.6l2.6 3.9 1.6-3.6z" fill="#fbbf24"/>
 </svg>

@@ -238,6 +238,12 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
 
   Faltam a troca das variáveis na Vercel e a importação do Sheets. Veja o [roteiro do go-live](docs/go-live-curto-prazo.md).
 
+- **08/10/2026 — revisão visual com base no Takt Hub (não publicada):**
+  - a marca passou ao azul-petróleo da Takt e os neutros ganharam um tom desse azul;
+  - lateral azul profunda, com cabeçalho fixo e trilha;
+  - login no desenho do Takt Hub.
+
+  Sem mudança de regra, rota ou banco. Veja a [revisão visual de 08/10/2026](docs/revisao-visual-2026-10-08.md).
 - **19/09/2026:** build de produção, TypeScript e 129 testes aprovados; migrações `0020` e `0021` confirmadas no Supabase. Veja o [registro de implantação](docs/implantacao-2026-09-19.md).
 - **02/10/2026:** revisão geral de operação e estética e cancelamento do BIM 4D, ainda **não publicada**. A migração `0027` foi aplicada pelo usuário no mesmo dia e confirmada pela sondagem (22 de 22). Veja a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md), que lista o que precisa do usuário antes de publicar.
 

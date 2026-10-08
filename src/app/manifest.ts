@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Gestão de projetos e obras da ATR Incorporadora.',
     start_url: '/obras',
     display: 'standalone',
-    background_color: '#f1f5f9',
-    theme_color: '#1d4ed8',
+    background_color: '#f4f7f9',
+    theme_color: '#0a364d',
     lang: 'pt-BR',
     icons: [
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },

@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
+/** Lateral do desktop, no azul-petróleo da marca (o mesmo do painel de entrada do Takt Hub): é a
+ * maior área de cor da tela e separa a navegação do trabalho, que fica no fundo claro. */
 export function SidebarWrapper({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
@@ -17,29 +19,29 @@ export function SidebarWrapper({ children }: { children: React.ReactNode }) {
   };
   return (
     <aside
-      className={`${collapsed ? 'w-14' : 'w-64'} hidden shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-[width] duration-200 md:flex`}
+      className={`${collapsed ? 'w-14' : 'w-64'} nav-dark relative hidden shrink-0 flex-col overflow-hidden transition-[width] duration-200 md:flex`}
     >
       {collapsed ? (
         <div className="flex flex-col items-center gap-2 pt-4">
           <button
             onClick={toggle}
             title="Expandir menu"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Expandir menu"
+            className="rounded-lg p-2 text-brand-200 transition-colors hover:bg-white/10 hover:text-white"
           >
             <PanelLeftOpen size={18} />
           </button>
         </div>
       ) : (
-        <div className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">
-          <div className="flex justify-end px-2 pt-2.5">
-            <button
-              onClick={toggle}
-              title="Recolher menu"
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              <PanelLeftClose size={15} />
-            </button>
-          </div>
+        <div className="nav-scroll flex flex-1 flex-col overflow-y-auto">
+          <button
+            onClick={toggle}
+            title="Recolher menu"
+            aria-label="Recolher menu"
+            className="absolute top-2.5 right-2 z-10 rounded-lg p-1.5 text-brand-300 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <PanelLeftClose size={15} />
+          </button>
           {children}
         </div>
       )}

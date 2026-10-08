@@ -33,7 +33,7 @@ export function ZoomToggle({ variant = 'full' }: { variant?: 'full' | 'icon' }) 
         aria-pressed={on}
         aria-label="Modo reunião"
         title="Modo reunião: texto maior para projetar"
-        className={on ? 'text-primary' : 'text-slate-500'}
+        className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${on ? 'bg-primary-soft text-primary ring-1 ring-primary-ring' : 'text-slate-500 hover:bg-brand-50 hover:text-primary'}`}
       >
         <Presentation size={18} />
       </button>

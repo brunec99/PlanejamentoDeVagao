@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { Boxes, Layers, Wallet, RefreshCw, Settings2 } from 'lucide-react';
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
@@ -17,7 +18,7 @@ export const WORK_TABS = [
 ] as const;
 
 /** Telas de apoio: alimentam as abas, mas não são um nível de planejamento. */
-const SUPPORT = [
+export const SUPPORT = [
   { section: 'federacao', label: 'Modelo federado', Icon: Layers },
   { section: 'ifc', label: 'Arquivos IFC', Icon: Boxes },
   { section: 'dividas', label: 'Dívidas', Icon: Wallet },
@@ -48,7 +49,7 @@ export function WorkNav() {
   if (!workId) return null;
   return (
     <div data-tour="work-nav">
-      <p className="eyebrow mb-1 mt-5 truncate px-3" title={work?.name}>
+      <p className="nav-label mb-1.5 mt-6 truncate px-3" title={work?.name}>
         {work ? work.name : 'Obra'}
       </p>
       <ol className="space-y-0.5">
@@ -59,26 +60,26 @@ export function WorkNav() {
               <Link
                 href={workPath(workId, section)}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-start gap-3 rounded-lg px-3 py-2 transition-all ${active ? 'bg-primary-soft' : 'hover:bg-slate-50'}`}
+                // O item aceso ganha o fundo claro e um traço na borda do menu, como no Takt Hub: dá
+                // para achar "onde estou" de relance.
+                className={`relative flex items-start gap-3 rounded-lg px-3 py-2 transition-colors ${active ? 'bg-white/12 shadow-sm ring-1 ring-white/10 before:absolute before:top-1/2 before:-left-3 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-brand-300' : 'hover:bg-white/6'}`}
               >
                 <span
                   aria-hidden
-                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md text-xs font-bold ${active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}
+                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md text-xs font-bold ${active ? 'bg-brand-300 text-brand-950' : 'bg-white/10 text-brand-200'}`}
                 >
                   {number}
                 </span>
                 <span className="min-w-0">
-                  <span className={`block text-sm font-semibold leading-snug ${active ? 'text-primary-ink' : 'text-slate-700'}`}>
-                    {label}
-                  </span>
-                  <span className="block truncate text-xs leading-4 text-slate-500">{hint}</span>
+                  <span className={`block text-sm font-semibold leading-snug ${active ? 'text-white' : 'text-brand-50/90'}`}>{label}</span>
+                  <span className={`block truncate text-xs leading-4 ${active ? 'text-brand-200' : 'text-brand-300/75'}`}>{hint}</span>
                 </span>
               </Link>
             </li>
           );
         })}
       </ol>
-      <p className="eyebrow mb-1 mt-5 px-3">Apoio</p>
+      <p className="nav-label mb-1.5 mt-6 px-3">Apoio</p>
       <div className="space-y-0.5">
         {support.map(({ section, label, Icon }) => {
           const active = isActive(section);
@@ -87,9 +88,9 @@ export function WorkNav() {
               key={section}
               href={workPath(workId, section)}
               aria-current={active ? 'page' : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${active ? 'bg-primary-soft text-primary' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+              className={`relative flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${active ? 'bg-white/12 text-white before:absolute before:top-1/2 before:-left-3 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-brand-300' : 'text-brand-100/80 hover:bg-white/6 hover:text-white'}`}
             >
-              <Icon size={15} className={`shrink-0 ${active ? 'text-primary' : 'text-slate-400'}`} />
+              <Icon size={15} className={`shrink-0 ${active ? 'text-brand-300' : 'text-brand-300/70'}`} />
               {label}
             </Link>
           );
@@ -103,11 +104,20 @@ export function WorkNav() {
  * o cabeçalho, para a troca de nível não exigir abrir o menu. */
 export function WorkTabsMobile() {
   const { workId, isActive, tabs } = useWork();
+  const strip = useRef<HTMLElement>(null);
+  const pathname = usePathname();
+  // A aba aberta rola para a vista: no celular o curto prazo, a única liberada em produção, ficava
+  // fora da tela à direita e a faixa parecia não marcar onde se está.
+  useEffect(() => {
+    const active = strip.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active && strip.current) strip.current.scrollLeft = active.offsetLeft - 12;
+  }, [pathname]);
   if (!workId) return null;
   return (
     <nav
+      ref={strip}
       aria-label="Abas da obra"
-      className="custom-scrollbar flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden"
+      className="custom-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white/90 px-3 py-2 backdrop-blur md:hidden"
     >
       {tabs.map(({ section, short, number }) => {
         const active = isActive(section);
@@ -116,7 +126,7 @@ export function WorkTabsMobile() {
             key={section}
             href={workPath(workId, section)}
             aria-current={active ? 'page' : undefined}
-            className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${active ? 'bg-primary-soft text-primary-ink' : 'text-slate-600'}`}
+            className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${active ? 'bg-primary-soft text-primary-ink ring-1 ring-primary-ring' : 'text-slate-600'}`}
           >
             <span
               aria-hidden

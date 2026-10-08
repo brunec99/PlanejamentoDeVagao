@@ -97,14 +97,14 @@ export default async function Page({
           <nav
             data-tour="medio-secoes"
             aria-label="Seções do médio prazo"
-            className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+            className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1"
           >
             {SECTIONS.map(s => (
               <Link
                 key={s.id}
                 href={s.id === 'cronograma' ? base : `${base}?secao=${s.id}`}
                 aria-current={section === s.id ? 'page' : undefined}
-                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${section === s.id ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${section === s.id ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 {s.label}
               </Link>

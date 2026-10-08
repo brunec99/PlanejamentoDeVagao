@@ -85,7 +85,7 @@ export function TourOverlay() {
             left: rect.left - PAD,
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
-            boxShadow: '0 0 0 9999px rgba(15,23,42,0.55)',
+            boxShadow: '0 0 0 9999px rgba(13,31,43,0.55)',
             pointerEvents: 'none',
           }}
         />

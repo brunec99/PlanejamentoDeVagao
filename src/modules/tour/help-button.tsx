@@ -7,7 +7,13 @@ export function HelpButton({ variant = 'full' }: { variant?: 'full' | 'icon' }) 
   if (!available) return null;
   if (variant === 'icon') {
     return (
-      <button type="button" onClick={start} aria-label="Como usar esta tela" className="text-slate-500 hover:text-primary">
+      <button
+        type="button"
+        onClick={start}
+        aria-label="Como usar esta tela"
+        title="Como usar esta tela"
+        className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-brand-50 hover:text-primary"
+      >
         <HelpCircle size={18} />
       </button>
     );

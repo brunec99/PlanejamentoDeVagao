@@ -29,8 +29,11 @@ export function Progress({ value, label }: { value: number; label: string }) {
 export function Panel({ title, tourId, actions, children }: { title: string; tourId?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <section data-tour={tourId} className="panel">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
-        <h2 className="text-sm font-bold text-slate-800">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-brand-50/80 to-transparent px-5 py-3.5">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-primary-ink">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-gradient-to-b from-brand-400 to-brand-700" />
+          {title}
+        </h2>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
       <div className="p-5">{children}</div>

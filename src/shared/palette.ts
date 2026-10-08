@@ -12,25 +12,28 @@ export const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87b
 export const seriesColor = (index: number) => SERIES_COLORS[((index % SERIES_COLORS.length) + SERIES_COLORS.length) % SERIES_COLORS.length];
 
 /** Papéis semânticos. "planejado" e "executado" aparecem juntos em quase todo gráfico, por isso
- * são o azul e o verde da série; "hoje" é sempre âmbar, "atrasado" é sempre o vermelho de estado. */
+ * são o azul e o verde da série; "hoje" é sempre âmbar, "atrasado" é sempre o vermelho de estado.
+ * Os neutros (grade, eixo, textos, superfícies e linha de base) seguem a escala `slate` com tom
+ * petróleo de `globals.css`, na mesma posição da escala, e o vínculo usa o azul da marca
+ * (`primary`, #1a719f), alinhados ao Takt Hub. A série categórica e os estados não mudam. */
 export const CHART = {
   planned: '#2a78d6',
   executed: '#008300',
-  baseline: '#94a3b8',
+  baseline: '#8ea4b7',
   today: '#b45309',
   late: '#be123c',
   ahead: '#2a78d6',
   onTime: '#1baf7a',
-  link: '#2563eb',
-  grid: '#e2e8f0',
-  gridStrong: '#cbd5e1',
-  axis: '#94a3b8',
-  ink: '#334155',
-  inkMuted: '#64748b',
-  inkFaint: '#94a3b8',
+  link: '#1a719f',
+  grid: '#dce6ee',
+  gridStrong: '#c4d3df',
+  axis: '#8ea4b7',
+  ink: '#2f4a61',
+  inkMuted: '#59738a',
+  inkFaint: '#8ea4b7',
   surface: '#ffffff',
-  surfaceMuted: '#f8fafc',
-  surfaceAlt: '#f1f5f9',
+  surfaceMuted: '#f5f8fb',
+  surfaceAlt: '#ebf1f6',
 } as const;
 
 /** Estados, sempre acompanhados de ícone ou texto: cor sozinha não carrega informação. */

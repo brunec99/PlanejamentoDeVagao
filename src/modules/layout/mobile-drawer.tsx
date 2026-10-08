@@ -25,7 +25,7 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
         onClick={() => setOpen(true)}
         aria-label="Abrir menu"
         aria-haspopup="dialog"
-        className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+        className="-ml-1 rounded-lg p-2 text-slate-600 hover:bg-brand-50 hover:text-primary md:hidden"
       >
         <Menu size={20} />
       </button>
@@ -37,7 +37,7 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
         }}
         onClose={() => setOpen(false)}
         aria-label="Menu"
-        className="drawer drawer-left md:hidden"
+        className="drawer drawer-left nav-dark md:hidden"
       >
         {open && (
           <div className="flex h-full flex-col">
@@ -46,12 +46,12 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Fechar menu"
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-2 text-brand-200 hover:bg-white/10 hover:text-white"
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="custom-scrollbar flex flex-1 flex-col overflow-y-auto">{children}</div>
+            <div className="nav-scroll flex flex-1 flex-col overflow-y-auto">{children}</div>
           </div>
         )}
       </dialog>

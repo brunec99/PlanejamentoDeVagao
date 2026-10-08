@@ -942,14 +942,14 @@ export function PlanCanvas({
           <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="Visualização" className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div role="group" aria-label="Visualização" className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1">
             {(['flow', 'lob'] as const).map(m => (
               <button
                 key={m}
                 type="button"
                 aria-pressed={mode === m}
                 onClick={() => onModeChange(m)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${mode === m ? 'bg-white text-primary-ink shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${mode === m ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 {m === 'flow' ? 'Fluxograma' : 'Linha de Balanço'}
               </button>

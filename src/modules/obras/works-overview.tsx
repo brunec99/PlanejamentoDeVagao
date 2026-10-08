@@ -13,9 +13,9 @@ type Tone = 'default' | 'success' | 'warning' | 'danger';
 
 /* A cor nunca anda sozinha: cada tom tem o texto que o nomeia, para quem não distingue cores e
  * para quem lê a tela em preto e branco numa impressão de reunião. */
-const TEXT: Record<Tone, string> = { default: 'text-slate-900', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
+const TEXT: Record<Tone, string> = { default: 'text-primary-ink', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
 const BAR: Record<Tone, string> = {
-  default: 'from-slate-400 to-slate-300',
+  default: 'from-brand-600 to-brand-300',
   success: 'from-success to-emerald-400',
   warning: 'from-warning to-amber-400',
   danger: 'from-danger to-rose-400',
@@ -27,7 +27,7 @@ const BORDER: Record<Tone, string> = {
   danger: 'border-danger-ring',
 };
 const PILL: Record<Tone, string> = {
-  default: 'border-slate-200 bg-slate-50 text-slate-600',
+  default: 'border-primary-ring bg-primary-soft text-primary-ink',
   success: 'border-success-ring bg-success-soft text-success',
   warning: 'border-warning-ring bg-warning-soft text-warning',
   danger: 'border-danger-ring bg-danger-soft text-danger',
@@ -119,13 +119,19 @@ export function WorksOverview() {
               <Link
                 href={workPath(work.id, landing)}
                 key={work.id}
-                className={`card-accent group transition-shadow hover:shadow-md ${BORDER[tone]}`}
+                className={`card-accent group transition-[box-shadow,transform,border-color] hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-card-hover ${BORDER[tone]}`}
               >
                 <div className={`card-accent-bar ${BAR[tone]}`} />
                 <div className="flex items-start justify-between gap-3 p-5">
-                  <div className="min-w-0">
+                  <span
+                    aria-hidden
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100"
+                  >
+                    <Building2 size={19} />
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <p className="eyebrow">{work.code}</p>
-                    <h2 className="mt-1.5 truncate text-base font-bold text-slate-900">{work.name}</h2>
+                    <h2 className="mt-1 text-base font-bold leading-snug text-slate-900">{work.name}</h2>
                   </div>
                   <span
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${PILL[tone]}`}
@@ -134,7 +140,7 @@ export function WorksOverview() {
                     {LABEL[tone]}
                   </span>
                 </div>
-                <dl className="mx-5 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4">
+                <dl className="mx-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-100">
                   <Indicator
                     label="PPC da semana"
                     tone={ppcState}
@@ -171,7 +177,7 @@ export function WorksOverview() {
                       aria-valuemax={100}
                     >
                       <div
-                        className="h-full rounded-full bg-primary transition-all"
+                        className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-700 transition-all"
                         style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                       />
                     </div>
