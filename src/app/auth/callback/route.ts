@@ -27,10 +27,7 @@ export async function GET(request: NextRequest) {
   const oauthError = request.nextUrl.searchParams.get('error');
   if (oauthError) {
     const reason = `${request.nextUrl.searchParams.get('error_code') ?? ''} ${request.nextUrl.searchParams.get('error_description') ?? ''}`;
-    return loginError(
-      request,
-      /signup/i.test(reason) ? NOT_REGISTERED : 'Falha ao entrar com Google. Tente novamente.',
-    );
+    return loginError(request, /signup/i.test(reason) ? NOT_REGISTERED : 'Falha ao entrar com Google. Tente novamente.');
   }
 
   if (code) {

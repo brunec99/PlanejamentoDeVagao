@@ -15,26 +15,26 @@ export default function PrivacyPage() {
 
       <section className="mt-6 space-y-3 text-sm leading-relaxed">
         <p>
-          Os sistemas internos da ATR Incorporadora (Obra 360, Takt Hub e BI da ATR) permitem entrar com uma conta Google. Esta
-          página explica o que o Google compartilha nesse login e como esses dados são usados.
+          Os sistemas internos da ATR Incorporadora (Obra 360, Takt Hub e BI da ATR) permitem entrar com uma conta Google. Esta página
+          explica o que o Google compartilha nesse login e como esses dados são usados.
         </p>
 
         <h2 className="pt-2 text-base font-semibold text-slate-900">O que recebemos do Google</h2>
         <p>
-          Somente o nome, o endereço de e-mail e a foto do perfil da conta Google escolhida. Não pedimos acesso a e-mails,
-          arquivos, agenda nem a qualquer outro dado da conta.
+          Somente o nome, o endereço de e-mail e a foto do perfil da conta Google escolhida. Não pedimos acesso a e-mails, arquivos, agenda
+          nem a qualquer outro dado da conta.
         </p>
 
         <h2 className="pt-2 text-base font-semibold text-slate-900">Para que usamos</h2>
         <p>
-          Para identificar quem está entrando, conferir se a pessoa tem acesso cadastrado e registrar a autoria das alterações
-          feitas nos sistemas. Os dados não são vendidos nem compartilhados com terceiros para outros fins.
+          Para identificar quem está entrando, conferir se a pessoa tem acesso cadastrado e registrar a autoria das alterações feitas nos
+          sistemas. Os dados não são vendidos nem compartilhados com terceiros para outros fins.
         </p>
 
         <h2 className="pt-2 text-base font-semibold text-slate-900">Onde ficam</h2>
         <p>
-          Nos provedores que hospedam os sistemas: Supabase (banco de dados e autenticação) e Vercel (aplicação). O acesso aos
-          dados é restrito às pessoas autorizadas pela ATR.
+          Nos provedores que hospedam os sistemas: Supabase (banco de dados e autenticação) e Vercel (aplicação). O acesso aos dados é
+          restrito às pessoas autorizadas pela ATR.
         </p>
 
         <h2 className="pt-2 text-base font-semibold text-slate-900">Seus direitos</h2>

@@ -179,8 +179,8 @@ function InviteForm({ onDone }: { onDone: () => void }) {
         Cadastrar usuário
       </h3>
       <p className="mt-1 text-sm text-slate-500">
-        Só entra quem foi cadastrado aqui. A pessoa entra com a conta Google do mesmo e-mail; nenhum e-mail é enviado. O
-        acesso às obras é liberado abaixo.
+        Só entra quem foi cadastrado aqui. A pessoa entra com a conta Google do mesmo e-mail; nenhum e-mail é enviado. O acesso às obras é
+        liberado abaixo.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block text-xs font-semibold text-slate-600">
@@ -239,7 +239,8 @@ function DeleteUserButton({ userId, name, onDone }: { userId: string; name: stri
           // O diálogo do sistema no lugar do `window.confirm`: mesmo visual, foco preso, Esc cancela.
           const ok = await confirm({
             title: `Excluir ${name}?`,
-            description: 'A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo. A conta de login continua valendo nos outros sistemas da ATR.',
+            description:
+              'A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo. A conta de login continua valendo nos outros sistemas da ATR.',
             confirmLabel: 'Excluir usuário',
             tone: 'danger',
           });
