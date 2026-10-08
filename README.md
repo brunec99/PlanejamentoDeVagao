@@ -4,12 +4,17 @@ Gestão de projetos e obras da ATR Incorporadora. O nome "Obra 360" aparece na l
 
 Aplicação em Next.js, TypeScript, Tailwind CSS e App Router. O vagão é um **período temporal**, sem pavimento ou local próprio. Os locais pertencem às atividades.
 
-A interface de cada obra é organizada em **quatro abas numeradas**, do planejamento macro para a semana:
+A interface de cada obra é organizada em **cinco abas numeradas**: os quatro níveis, do planejamento macro para a semana, e a terminalidade.
 
 1. **Cronograma de longo prazo** — planejador próprio (fluxograma de serviços que se expande em Linha de Balanço) e, na visão dos vagões, Linha de Balanço das atividades e módulo de restrições (mais curva de avanço e linhas de base).
 2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
 3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt lado a lado, agendamento automático, datas reais), alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos. As seções da aba ficam na URL (`?secao=`).
 4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento; no celular, cada linha vira um cartão.
+5. **Terminalidade** (08/10/2026): lista de pendências por pavimento, apartamento e empreiteiro, no formato da planilha "Lista de pendências".
+   - Fotos do problema e da correção, comprimidas no navegador.
+   - Resolver exige a foto da correção e a data.
+   - Fica fora do snapshot (migração 0028) e é aberta a todos.
+   - Veja [docs/terminalidade.md](docs/terminalidade.md).
 
 Abaixo das abas, o grupo **Apoio** reúne Modelo federado, Arquivos IFC, Dívidas, Integrações e Configurações da obra. **O módulo BIM 4D foi cancelado em 02/10/2026** por decisão do usuário: o sistema se concentra nos quatro níveis de planejamento; o modelo federado continua como ferramenta de análise dos projetos. Veja [Níveis de planejamento](#níveis-de-planejamento) e a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md).
 
@@ -260,3 +265,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0024, 0026 | planejador de longo prazo e geração de vagões | não | aplicadas em 25/09/2026 |
 | 0025 | configurações da obra (semana 1) | não | aplicada (confirmada pela sondagem de 02/10/2026) |
 | 0027 | leitura do planejamento por obra | não | aplicada pelo usuário em 02/10/2026 |
+| 0028 | terminalidade (pendências por apartamento, fotos, bucket `terminalidade`) | não | **criada, não aplicada** no `takt-hub` |

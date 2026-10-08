@@ -172,6 +172,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'Sem ela as telas carregam pelo caminho antigo, mais lento.',
     critical: false,
   },
+  {
+    migration: '0028_terminality',
+    label: 'Terminalidade: pendências por apartamento, com fotos',
+    probe: { kind: 'table', table: 'terminality_photos' },
+    effect: 'A aba 5 (Terminalidade) não carrega nem grava; as demais seguem normais.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

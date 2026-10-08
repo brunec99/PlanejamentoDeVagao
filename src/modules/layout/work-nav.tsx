@@ -7,14 +7,18 @@ import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provi
 import { RESTRICTED_SECTIONS } from '@/application/module-access';
 import { workPath } from '@/shared/format';
 
-/** As quatro abas do sistema, na ordem em que o planejamento desce do macro para a semana. O número
- * faz parte do nome: é assim que a equipe se refere a elas. Em 02/10/2026 o usuário cancelou o BIM 4D
- * e concentrou o sistema nestes quatro níveis; o modelo federado e os arquivos IFC seguem como apoio. */
+/** As abas do sistema: os quatro níveis, na ordem em que o planejamento desce do macro para a semana,
+ * e a terminalidade (aba 5, 08/10/2026), que fecha a obra apartamento por apartamento. O número faz
+ * parte do nome: é assim que a equipe se refere a elas. Em 02/10/2026 o usuário cancelou o BIM 4D; o
+ * modelo federado e os arquivos IFC seguem como apoio. */
 export const WORK_TABS = [
   { section: 'longo-prazo', short: 'Longo prazo', label: 'Cronograma de longo prazo', hint: 'Fluxograma · Linha de balanço · Restrições' },
   { section: 'vagoes', short: 'Vagões', label: 'Planejamento por vagões', hint: 'Períodos de takt · Terminalidade' },
   { section: 'medio-prazo', short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
   { section: 'curto-prazo', short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },
+  // 08/10/2026: a "Lista de pendências" de terminalidade por pavimento, apartamento e empreiteiro,
+  // com fotos. Aberta a todos desde o primeiro dia, como o curto prazo (não está em RESTRICTED_SECTIONS).
+  { section: 'terminalidade', short: 'Terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento · Fotos' },
 ] as const;
 
 /** Telas de apoio: alimentam as abas, mas não são um nível de planejamento. */

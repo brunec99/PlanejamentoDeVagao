@@ -4,9 +4,9 @@
 -- Devolve uma tabela única, uma linha por item, com situação OK / FALTA / ATENÇÃO, e uma última
 -- linha de resumo. Num banco recém-montado, todas as linhas devem sair OK.
 --
--- Itens: as 22 tabelas do snapshot do planejamento, as 10 tabelas fora dele, as colunas que a tela
+-- Itens: as 22 tabelas do snapshot do planejamento, as 10 tabelas fora dele, as 6 da terminalidade, as colunas que a tela
 -- de saúde do banco (/api/health) sonda, RLS ligada em cada tabela, as funções e seus privilégios,
--- os gatilhos de imutabilidade, o bucket 'ifc' do Storage e a versão em planning_meta.
+-- os gatilhos de imutabilidade, os buckets ifc e terminalidade do Storage e a versão em planning_meta.
 with
 tabelas(ordem, nome, grupo) as (
   values
@@ -41,7 +41,13 @@ tabelas(ordem, nome, grupo) as (
     (207, 'ifc_fragments', 'Tabela fora do snapshot'),
     (208, 'ifc_federations', 'Tabela fora do snapshot'),
     (209, 'long_term_plans', 'Tabela fora do snapshot'),
-    (210, 'work_settings', 'Tabela fora do snapshot')
+    (210, 'work_settings', 'Tabela fora do snapshot'),
+    (211, 'terminality_floors', 'Terminalidade (0028)'),
+    (212, 'terminality_units', 'Terminalidade (0028)'),
+    (213, 'terminality_types', 'Terminalidade (0028)'),
+    (214, 'terminality_people', 'Terminalidade (0028)'),
+    (215, 'terminality_items', 'Terminalidade (0028)'),
+    (216, 'terminality_photos', 'Terminalidade (0028)')
 ),
 colunas(ordem, tabela, coluna, migracao) as (
   values
@@ -130,6 +136,14 @@ itens(ordem, grupo, item, ok, detalhe) as (
       else 'PÚBLICO — deveria ser privado'
     end
   from storage.buckets b where b.id = 'ifc'
+  union all
+  select 602, 'Storage', 'bucket terminalidade (privado, fotos da 0028)', count(*) = 1,
+    case
+      when count(*) = 0 then 'bucket ausente'
+      when bool_and(not b.public) then 'privado'
+      else 'PÚBLICO — deveria ser privado'
+    end
+  from storage.buckets b where b.id = 'terminalidade'
   union all
   -- query_to_xml lê a tabela por SQL dinâmico, para a conferência não quebrar se ela não existir.
   select 701, 'Dados', 'planning_meta (linha única de versão)', m.versao is not null,

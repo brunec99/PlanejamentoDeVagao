@@ -88,7 +88,8 @@ try {
   const tables = (
     await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where nspname='public' and relkind='r'")
   ).rows.map(r => r.relname);
-  assert.equal(tables.length, 32, `esperava 32 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
+  // 32 do planejamento + 6 da terminalidade (0028).
+  assert.equal(tables.length, 38, `esperava 38 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
   const overloads = (await db.query("select count(*)::int n from pg_proc where proname='commit_planning'")).rows[0].n;
   assert.equal(overloads, 1, 'commit_planning deveria ter só a assinatura de três parâmetros');
 
@@ -142,6 +143,22 @@ try {
   await db.query("insert into work_settings (work_id, week_one_start, updated_by) values ('w', '2026-10-05', 'tester')");
   await assert.rejects(db.query("update work_settings set week_one_start = '2026-10-06' where work_id = 'w'"), /check constraint/);
   steps.push('work_settings (0025): grava segunda-feira, recusa outro dia: OK');
+
+  // 0028: terminalidade fora do snapshot; resolvida exige data da correção; fotos caem com a pendência.
+  await db.exec(`
+    insert into terminality_floors (id, work_id, name, order_index) values ('f4', 'w', '4° pavto', 4);
+    insert into terminality_units (id, work_id, floor_id, name) values ('u401', 'w', 'f4', '401');
+    insert into terminality_types (id, work_id, name) values ('t-ac', 'w', 'A/C');
+    insert into terminality_items (id, work_id, floor_id, unit_id, description, type_id, observed_on, contractor, created_by)
+      values ('i1', 'w', 'f4', 'u401', 'Ponto de ar condicionado recortado', 't-ac', '2026-10-07', 'MZ CLIMATIZAÇÃO', 'tester');
+    insert into terminality_photos (id, item_id, work_id, kind, storage_path, thumb_path, created_by)
+      values ('p1', 'i1', 'w', 'issue', 'w/i1/p1.jpg', 'w/i1/p1-thumb.jpg', 'tester');`);
+  await assert.rejects(db.query("update terminality_items set status = 'resolved' where id = 'i1'"), /check constraint/);
+  await db.query("update terminality_items set status = 'resolved', corrected_on = '2026-10-08' where id = 'i1'");
+  await db.query("delete from terminality_items where id = 'i1'");
+  assert.equal((await db.query('select count(*)::int n from terminality_photos')).rows[0].n, 0);
+  assert.equal(Object.keys((await db.query('select planning_snapshot($1::text[]) as s', [['w']])).rows[0].s).length, 23);
+  steps.push('terminalidade (0028): status coerente com a data da correção, fotos em cascata, fora do snapshot: OK');
 
   // Sondagens da tela de saúde do banco, com o papel do servidor.
   const { MIGRATION_CHECKS, interpretProbe, summarizeMigrations } = await tsImport(
