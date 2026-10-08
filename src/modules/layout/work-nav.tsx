@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Boxes, Layers, Wallet, RefreshCw, Settings2 } from 'lucide-react';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
+import { RESTRICTED_SECTIONS } from '@/application/module-access';
 import { workPath } from '@/shared/format';
 
 /** As quatro abas do sistema, na ordem em que o planejamento desce do macro para a semana. O número
@@ -24,20 +25,26 @@ const SUPPORT = [
   { section: 'configuracoes', label: 'Configurações da obra', Icon: Settings2 },
 ];
 
+const restricted = new Set<string>(RESTRICTED_SECTIONS);
+
 function useWork() {
   const pathname = usePathname();
   const context = usePlanning();
+  const developer = useDeveloper();
+  // Fora do desenvolvimento, só as seções abertas no go-live; o número segue o da aba.
+  const tabs = WORK_TABS.map((tab, index) => ({ ...tab, number: index + 1 })).filter(t => developer || !restricted.has(t.section));
+  const support = SUPPORT.filter(s => developer || !restricted.has(s.section));
   const workId = pathname.match(/^\/obras\/([^/]+)/)?.[1];
   const work = workId && context.state === 'ready' ? context.planning.data.works.find(w => w.id === decodeURIComponent(workId)) : undefined;
   const isActive = (section: string) => {
     const href = workPath(workId ?? '', section);
     return pathname === href || pathname.startsWith(`${href}/`);
   };
-  return { workId, work, isActive };
+  return { workId, work, isActive, tabs, support };
 }
 
 export function WorkNav() {
-  const { workId, work, isActive } = useWork();
+  const { workId, work, isActive, tabs, support } = useWork();
   if (!workId) return null;
   return (
     <div data-tour="work-nav">
@@ -45,7 +52,7 @@ export function WorkNav() {
         {work ? work.name : 'Obra'}
       </p>
       <ol className="space-y-0.5">
-        {WORK_TABS.map(({ section, label, hint }, index) => {
+        {tabs.map(({ section, label, hint, number }) => {
           const active = isActive(section);
           return (
             <li key={section}>
@@ -58,7 +65,7 @@ export function WorkNav() {
                   aria-hidden
                   className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md text-xs font-bold ${active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}
                 >
-                  {index + 1}
+                  {number}
                 </span>
                 <span className="min-w-0">
                   <span className={`block text-sm font-semibold leading-snug ${active ? 'text-primary-ink' : 'text-slate-700'}`}>
@@ -73,7 +80,7 @@ export function WorkNav() {
       </ol>
       <p className="eyebrow mb-1 mt-5 px-3">Apoio</p>
       <div className="space-y-0.5">
-        {SUPPORT.map(({ section, label, Icon }) => {
+        {support.map(({ section, label, Icon }) => {
           const active = isActive(section);
           return (
             <Link
@@ -95,14 +102,14 @@ export function WorkNav() {
 /** No celular a lateral vira a gaveta do menu; as quatro abas também ficam numa faixa rolável sob
  * o cabeçalho, para a troca de nível não exigir abrir o menu. */
 export function WorkTabsMobile() {
-  const { workId, isActive } = useWork();
+  const { workId, isActive, tabs } = useWork();
   if (!workId) return null;
   return (
     <nav
       aria-label="Abas da obra"
       className="custom-scrollbar flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden"
     >
-      {WORK_TABS.map(({ section, short }, index) => {
+      {tabs.map(({ section, short, number }) => {
         const active = isActive(section);
         return (
           <Link
@@ -115,7 +122,7 @@ export function WorkTabsMobile() {
               aria-hidden
               className={`grid h-5 w-5 place-items-center rounded-md text-xs ${active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}
             >
-              {index + 1}
+              {number}
             </span>
             {short}
           </Link>

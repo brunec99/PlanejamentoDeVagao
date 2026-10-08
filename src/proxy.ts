@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
+import { isDeveloperEmail, isRestrictedApi, restrictedPageRedirect, RESTRICTED_MODULE_MESSAGE } from '@/application/module-access';
 
 export async function proxy(request: NextRequest) {
   // Quando o endereço de retorno não está na lista do Supabase, ele devolve o código do login para
@@ -38,6 +39,22 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
+  // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve. O acesso local
+  // sem login já saiu acima e conta como desenvolvedor. As rotas repetem a conferência dos comandos.
+  if (!isDeveloperEmail(user.email, process.env.DEVELOPER_EMAILS)) {
+    const { pathname } = request.nextUrl;
+    if (isRestrictedApi(pathname)) return NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403 });
+    const target = restrictedPageRedirect(pathname);
+    if (target) {
+      const url = request.nextUrl.clone();
+      url.pathname = target;
+      url.search = '';
+      const redirect = NextResponse.redirect(url);
+      // A sessão renovada nesta requisição segue junto com o desvio.
+      response.cookies.getAll().forEach(cookie => redirect.cookies.set(cookie));
+      return redirect;
+    }
+  }
   return response;
 }
 
@@ -47,6 +64,6 @@ export async function proxy(request: NextRequest) {
 // a página de login no lugar do módulo, e o visualizador falharia sem dizer por quê.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|privacidade|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
   ],
 };

@@ -4,6 +4,7 @@ import type { User as AuthUser } from '@supabase/supabase-js';
 import type { User } from '../../domain/entities';
 import { getServiceClient } from '../repositories/supabase/client';
 import { devBypassProfileId } from './dev-bypass';
+import { isDeveloperEmail } from '../../application/module-access';
 
 /** SSR client bound to the request's cookies. Only for auth (getUser/signIn/signOut) — never for querying
  * planning tables, since RLS denies the anon/authenticated role by design (see 0001_init.sql). */
@@ -36,11 +37,19 @@ async function loadProfile(id: string): Promise<User | null> {
   return { id: data.id, createdAt: data.created_at, updatedAt: data.updated_at, name: data.name, role: data.role, workIds: data.work_ids };
 }
 
+export type RouteAccess = { profile: User | null; developer: boolean };
+
+/** Perfil de quem está logado e se essa pessoa desenvolve o sistema (`DEVELOPER_EMAILS`), com uma só
+ * leitura da sessão. O acesso local sem login conta como desenvolvedor. */
+export async function getRouteAccess(): Promise<RouteAccess> {
+  const bypass = devBypassProfileId();
+  if (bypass) return { profile: await loadProfile(bypass), developer: true };
+  const authUser = await getAuthUser();
+  if (!authUser) return { profile: null, developer: false };
+  return { profile: await loadProfile(authUser.id), developer: isDeveloperEmail(authUser.email, process.env.DEVELOPER_EMAILS) };
+}
+
 /** For Route Handlers: returns the signed-in user's profile, or null if unauthenticated / not provisioned. */
 export async function getRouteProfile(): Promise<User | null> {
-  const bypass = devBypassProfileId();
-  if (bypass) return loadProfile(bypass);
-  const authUser = await getAuthUser();
-  if (!authUser) return null;
-  return loadProfile(authUser.id);
+  return (await getRouteAccess()).profile;
 }

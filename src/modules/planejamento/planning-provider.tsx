@@ -19,6 +19,9 @@ type Ready = {
 type PlanningState = { state: 'loading' } | { state: 'error'; message: string; retry: () => void } | Ready;
 type Loaded = { planning: Planning; actorId: string };
 const Context = createContext<PlanningState>({ state: 'loading' });
+/** Quem desenvolve o sistema vê todos os módulos; os demais, só o curto prazo (go-live). Vem do
+ * layout, que lê a sessão no servidor. Só esconde atalhos: a proteção é do proxy e das rotas. */
+const DeveloperContext = createContext(false);
 
 /** Recarga ao voltar para a aba, se os dados têm mais que isto. */
 const FOCUS_AFTER = 30_000;
@@ -35,7 +38,7 @@ async function fetchPlanning(): Promise<Loaded> {
   return { planning, actorId };
 }
 
-export function PlanningProvider({ children }: { children: ReactNode }) {
+export function PlanningProvider({ children, developer = false }: { children: ReactNode; developer?: boolean }) {
   const [loaded, setLoaded] = useState<Loaded>();
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -130,8 +133,15 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     if (error) return { state: 'error', message: error, retry };
     return { state: 'loading' };
   }, [loaded, error, execute, refresh, refreshing, updatedAt, stale, retry]);
-  return <Context.Provider value={value}>{children}</Context.Provider>;
+  return (
+    <DeveloperContext.Provider value={developer}>
+      <Context.Provider value={value}>{children}</Context.Provider>
+    </DeveloperContext.Provider>
+  );
 }
 export function usePlanning() {
   return useContext(Context);
+}
+export function useDeveloper() {
+  return useContext(DeveloperContext);
 }

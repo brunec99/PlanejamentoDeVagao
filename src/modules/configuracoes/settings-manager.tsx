@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Database, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
@@ -157,18 +157,18 @@ function InviteForm({ onDone }: { onDone: () => void }) {
             body: JSON.stringify({ email, name, role }),
           });
           const body = await res.json();
-          if (!res.ok) throw new Error(body.error ?? 'Não foi possível convidar.');
+          if (!res.ok) throw new Error(body.error ?? 'Não foi possível cadastrar.');
           // Sucesso vai para o toast: o formulário limpa e o aviso não fica preso embaixo dele.
           toast({
-            title: `Convite enviado para ${body.email}.`,
-            description: 'A pessoa também pode entrar direto com a conta Google.',
+            title: `${body.email} cadastrado.`,
+            description: 'Avise a pessoa para entrar com a conta Google desse e-mail; nenhum e-mail é enviado.',
             tone: 'success',
           });
           setEmail('');
           setName('');
           onDone();
         } catch (cause) {
-          setError(cause instanceof Error ? cause.message : 'Não foi possível convidar.');
+          setError(cause instanceof Error ? cause.message : 'Não foi possível cadastrar.');
         } finally {
           setBusy(false);
         }
@@ -176,10 +176,11 @@ function InviteForm({ onDone }: { onDone: () => void }) {
     >
       <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
         <UserPlus size={16} className="text-primary" aria-hidden />
-        Convidar usuário
+        Cadastrar usuário
       </h3>
       <p className="mt-1 text-sm text-slate-500">
-        Envia um convite por e-mail e já cria o perfil com o papel escolhido. O acesso às obras é liberado abaixo.
+        Só entra quem foi cadastrado aqui. A pessoa entra com a conta Google do mesmo e-mail; nenhum e-mail é enviado. O
+        acesso às obras é liberado abaixo.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block text-xs font-semibold text-slate-600">
@@ -209,7 +210,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
         </label>
         <button className="button" type="submit" disabled={busy}>
           <Mail size={15} aria-hidden />
-          {busy ? 'Enviando…' : 'Enviar convite'}
+          {busy ? 'Cadastrando…' : 'Cadastrar'}
         </button>
       </div>
       {error && (
@@ -238,7 +239,7 @@ function DeleteUserButton({ userId, name, onDone }: { userId: string; name: stri
           // O diálogo do sistema no lugar do `window.confirm`: mesmo visual, foco preso, Esc cancela.
           const ok = await confirm({
             title: `Excluir ${name}?`,
-            description: 'Essa ação não pode ser desfeita — a pessoa perde o acesso e precisa ser convidada de novo.',
+            description: 'A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo. A conta de login continua valendo nos outros sistemas da ATR.',
             confirmLabel: 'Excluir usuário',
             tone: 'danger',
           });
@@ -432,6 +433,8 @@ export function SettingsManager() {
   }, []);
 
   const c = usePlanning();
+  // Takt e início da sequência são dos vagões, ainda em desenvolvimento; usuários e acessos ficam abertos.
+  const developer = useDeveloper();
   if (c.state !== 'ready') return <LoadState error={c.state === 'error'} />;
   const { data } = c.planning;
   const actor = data.users.find(u => u.id === c.actorId);
@@ -444,44 +447,46 @@ export function SettingsManager() {
 
   return (
     <div className="space-y-8">
-      <section aria-labelledby="takt-title">
-        <h2 id="takt-title" className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-          <Timer size={16} className="text-primary" aria-hidden />
-          Takt por obra
-        </h2>
-        <div data-tour="config-takt" className="panel divide-y divide-slate-100">
-          {data.works.length === 0 && (
-            <div className="p-5">
-              <Empty>Nenhuma obra cadastrada.</Empty>
-            </div>
-          )}
-          {data.works.map(work => {
-            const sequences = data.sequences.filter(s => s.workId === work.id);
-            return (
-              <div key={work.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{work.name}</p>
-                  <p className="text-xs text-slate-400">{work.code}</p>
-                </div>
-                <div className="space-y-2">
-                  {sequences.length === 0 ? (
-                    <p className="text-xs text-slate-400">Nenhuma sequência cadastrada</p>
-                  ) : (
-                    sequences.map(s => (
-                      <div key={s.id} className="flex flex-wrap items-center gap-3">
-                        <span className="text-xs text-slate-500">{s.name}</span>
-                        <TaktField sequenceId={s.id} taktDays={s.defaultTaktDays} />
-                        <span className="text-xs text-slate-400">início do 1º vagão (até liberar)</span>
-                        <StartDateField sequenceId={s.id} startDate={s.startDate} />
-                      </div>
-                    ))
-                  )}
-                </div>
+      {developer && (
+        <section aria-labelledby="takt-title">
+          <h2 id="takt-title" className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
+            <Timer size={16} className="text-primary" aria-hidden />
+            Takt por obra
+          </h2>
+          <div data-tour="config-takt" className="panel divide-y divide-slate-100">
+            {data.works.length === 0 && (
+              <div className="p-5">
+                <Empty>Nenhuma obra cadastrada.</Empty>
               </div>
-            );
-          })}
-        </div>
-      </section>
+            )}
+            {data.works.map(work => {
+              const sequences = data.sequences.filter(s => s.workId === work.id);
+              return (
+                <div key={work.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{work.name}</p>
+                    <p className="text-xs text-slate-400">{work.code}</p>
+                  </div>
+                  <div className="space-y-2">
+                    {sequences.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhuma sequência cadastrada</p>
+                    ) : (
+                      sequences.map(s => (
+                        <div key={s.id} className="flex flex-wrap items-center gap-3">
+                          <span className="text-xs text-slate-500">{s.name}</span>
+                          <TaktField sequenceId={s.id} taktDays={s.defaultTaktDays} />
+                          <span className="text-xs text-slate-400">início do 1º vagão (até liberar)</span>
+                          <StartDateField sequenceId={s.id} startDate={s.startDate} />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="users-title">
         <h2 id="users-title" className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">

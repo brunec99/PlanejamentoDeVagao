@@ -6,7 +6,7 @@ import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { NON_FULFILLMENT_CAUSES, type Activity, type Wagon, type WeeklyCommitment } from '@/domain/entities';
 import { causePareto, leadTimeDeadline, ppc, ppcSeries, type WeekPpc } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Field } from '@/modules/planejamento/forms';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import { TabHeader } from '@/modules/layout/tab-header';
@@ -42,6 +42,8 @@ const NEW_TEAM_CAPACITY = 3;
 
 export function CommitmentsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
+  // A restrição vai para o quadro do longo prazo, que ainda está em desenvolvimento.
+  const developer = useDeveloper();
   const { toast } = useToast();
   const confirm = useConfirm();
   const [chosen, setChosen] = useState('');
@@ -483,15 +485,17 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
             >
               {alreadyCarried(row) ? 'Levar de novo' : 'Levar p/ próxima'}
             </button>
-            <button
-              type="button"
-              className="button-ghost justify-start px-2 py-1 text-xs"
-              aria-haspopup="dialog"
-              aria-label={`Gerar restrição a partir de ${row.name}`}
-              onClick={() => setPendencyFor(row.id)}
-            >
-              Gerar restrição
-            </button>
+            {developer && (
+              <button
+                type="button"
+                className="button-ghost justify-start px-2 py-1 text-xs"
+                aria-haspopup="dialog"
+                aria-label={`Gerar restrição a partir de ${row.name}`}
+                onClick={() => setPendencyFor(row.id)}
+              >
+                Gerar restrição
+              </button>
+            )}
           </>
         ) : null,
       deleteButton: readOnly ? null : (
@@ -534,8 +538,8 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
             </p>
             <p>
               Ao encerrar a semana, registre Sim ou Não em cada linha. O Não só é gravado depois que a causa é escolhida na lista: é dela
-              que saem o PPC e o Pareto. Do não cumprido, leve a linha para a próxima semana ou gere uma restrição no longo prazo; a linha
-              original fica como registro do que aconteceu.
+              que saem o PPC e o Pareto. Do não cumprido, leve a linha para a próxima semana
+              {developer ? ' ou gere uma restrição no longo prazo' : ''}; a linha original fica como registro do que aconteceu.
             </p>
             <p>
               A semana 1 vem das configurações da obra; sem ela, é a primeira semana com linha na planilha. O número de cada semana é
@@ -789,7 +793,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         </div>
       </section>
 
-      {pendencyRow && (
+      {developer && pendencyRow && (
         <PendencyDialog
           row={pendencyRow}
           wagons={selected.wagons}

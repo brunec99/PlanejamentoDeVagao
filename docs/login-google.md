@@ -6,6 +6,8 @@ O Planejamento Vagão não tem senha própria. Quem decide se você entra é o G
 
 Uma conta **@atrincorporadora.com.br**. Conta Gmail pessoal não serve, mesmo que seja a sua e mesmo que você use o mesmo computador: o sistema recusa qualquer endereço fora desse domínio.
 
+Desde 08/10/2026 você também precisa **ter sido cadastrado** por um administrador. O sistema passou a dividir o banco e o login com o Takt Hub, e o cadastro aberto fica desligado. Ter conta da ATR não basta mais: se o seu e-mail não estiver cadastrado, o login é recusado com uma mensagem dizendo isso.
+
 ## Entrar, passo a passo
 
 1. Abra o endereço do sistema. Se você não estiver logado, ele leva direto para a tela **Acesso ao sistema**.
@@ -17,7 +19,7 @@ Não é preciso repetir isso todo dia: a sessão fica guardada no navegador. Ela
 
 ## No primeiro acesso você não vê obra nenhuma — e está certo
 
-Entrar e ver acesso são coisas diferentes. No primeiro login, o sistema cria o seu perfil automaticamente como **Consulta**, **sem nenhuma obra liberada**. A tela de obras aparece vazia.
+Entrar e ver acesso são coisas diferentes. O cadastro dá o papel, e as obras são liberadas à parte. Se o administrador ainda não liberou nenhuma, a tela de obras aparece vazia.
 
 Isso não é erro nem falha de configuração: é a regra. Ser da ATR garante que você entra; **quem libera obra é um administrador**. Fale com quem administra o sistema e diga quais obras você precisa ver. É um clique do lado dele.
 
@@ -30,7 +32,8 @@ A tela de login mostra o motivo em vermelho. O que cada um quer dizer:
 | **Apenas contas @atrincorporadora.com.br podem acessar este sistema** | Você entrou com uma conta pessoal ou de outro domínio | Clique em Entrar com Google de novo e escolha a conta da ATR. Se o Google não perguntar, saia da conta pessoal ou use uma janela anônima |
 | **Falha ao entrar com Google. Tente novamente** | A volta do Google não completou — normalmente rede instável ou a janela ficou aberta tempo demais | Tente de novo. Se insistir, feche a aba e abra o endereço outra vez |
 | **Login incompleto. Tente novamente** | O endereço de retorno foi aberto direto, sem passar pelo Google | Comece pela tela de login, clicando no botão |
-| **Convite inválido ou expirado** | O link do convite por e-mail venceu ou já foi usado | Ignore o link e entre normalmente com a conta Google. O convite não é obrigatório |
+| **Seu e-mail ainda não foi cadastrado no Obra 360** | O e-mail não tem cadastro, ou o seu perfil foi excluído | Peça o cadastro a um administrador e entre de novo com o Google |
+| **Convite inválido ou expirado** | Link de um convite antigo por e-mail (até 07/10/2026) | Ignore o link e entre com a conta Google, se já estiver cadastrado |
 | **Não foi possível provisionar seu acesso. Contate um administrador** | O Google aprovou, mas o sistema não conseguiu criar o seu perfil | Avise um administrador: é problema do sistema, não seu |
 | **Perfil não provisionado. Contate o gestor** | Sua sessão existe, mas o perfil não | Mesmo caso acima: avise o administrador |
 | **Sessão expirada. Faça login novamente** | Você ficou muito tempo parado | Entre de novo; o sistema devolve você para a mesma página |
@@ -56,11 +59,13 @@ A engrenagem no topo leva a **Configurações**, visível apenas para quem é **
 - **Gestor** — tudo do planejador, mais três coisas: cadastrar obra, reabrir vagão já terminal (com justificativa registrada) e liberar excepcionalmente.
 - **Admin** — tudo o que o Gestor pode, mais administrar pessoas e acessos nesta tela. Até 01/10/2026 o Admin só administrava acessos e não cadastrava obra; o usuário decidiu que ele herda o Gestor, porque o perfil forte da instalação é o Admin e ninguém mais cadastrava obra. A regra está em `actsAsManager` (`src/domain/rules.ts`), usada pelo servidor e pela tela.
 
-**Convidar por e-mail.** O convite manda um e-mail e já cria o perfil com o papel escolhido, poupando o passo de esperar a pessoa entrar para então ajustá-la. Não é obrigatório: qualquer pessoa do domínio pode simplesmente entrar com a conta Google e aparecer na lista como Consulta. Depois do convite, ainda é preciso liberar as obras — o convite dá o papel, não o acesso.
+**Cadastrar usuário** (desde 08/10/2026, no lugar de "Convidar por e-mail"). O cadastro é **obrigatório**: só entra quem foi cadastrado. Ele cria o perfil com o papel escolhido e **não envia e-mail**, porque o modelo de e-mail do projeto é o do Takt Hub. Avise a pessoa para entrar com a conta Google do mesmo e-mail. Se ela já tem conta no Takt, a mesma conta é reaproveitada. Depois do cadastro, ainda é preciso liberar as obras: o cadastro dá o papel, não o acesso.
+
+**Excluir usuário** tira apenas o acesso ao Obra 360. A conta de login continua valendo no Takt Hub. Para voltar, a pessoa precisa ser cadastrada de novo.
 
 ## O primeiro administrador
 
-Numa instalação nova não existe ninguém para liberar o primeiro acesso. Por isso há uma exceção, uma única: o primeiro login de **bruno.engenharia@atrincorporadora.com.br** cria o perfil já como **Admin**, com acesso a todas as obras cadastradas. Qualquer outra conta do domínio entra como Consulta, sem obra. Essa exceção vale só para o primeiro login dessa conta; ela não reabre nem se repete depois.
+Numa instalação nova não existe ninguém para liberar o primeiro acesso. Por isso há uma exceção, uma única: o primeiro login de **bruno.engenharia@atrincorporadora.com.br** cria o perfil já como **Admin**, com acesso a todas as obras cadastradas. Qualquer outra conta precisa do cadastro feito por um admin. Essa exceção vale só para o primeiro login dessa conta; ela não reabre nem se repete depois.
 
 ## O que o sistema não faz
 

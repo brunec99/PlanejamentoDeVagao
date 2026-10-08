@@ -24,6 +24,8 @@ export async function signInWithGoogle(formData: FormData) {
 
 export async function signOut() {
   const supabase = await createServerSupabase();
-  await supabase.auth.signOut();
+  // Só este navegador: o Auth é dividido com o Takt Hub, e o escopo padrão (global) encerraria
+  // também as sessões da mesma pessoa no Takt.
+  await supabase.auth.signOut({ scope: 'local' });
   redirect('/login');
 }

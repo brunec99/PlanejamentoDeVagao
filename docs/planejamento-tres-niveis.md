@@ -364,3 +364,7 @@ Registro completo em `docs/revisao-2026-10-01.md`. O que toca os três níveis:
 - **Provider:** recarga ao voltar o foco e a cada dois minutos, dados antigos mantidos durante a recarga, faixa "Sem resposta do servidor" com tentar de novo.
 
 **Pendências desta revisão:** 0027 e 0025 aplicadas (conferido em 02/10/2026); versão por obra na concorrência (hoje `planning_meta.version` é único); validar no navegador autenticado as telas reorganizadas.
+
+## Go-live do curto prazo (07/10/2026)
+
+O curto prazo entra sozinho em produção num Supabase novo da ATR. Os outros níveis (longo prazo, vagões e médio prazo) e o grupo Apoio continuam no código, mas ficam restritos a quem está em `DEVELOPER_EMAILS` até serem liberados, um de cada vez. O histórico semanal do Sheets entra pelo importador `scripts/import-curto-prazo.ts`. Detalhes, validação e pendências estão em [go-live-curto-prazo.md](go-live-curto-prazo.md).

@@ -309,8 +309,8 @@ export const tours: Record<TourKey, TourStep[]> = {
     },
     {
       target: 'config-invite',
-      title: 'Convidar usuário',
-      body: 'Envia um convite por e-mail com um papel já definido (consulta, planejador, gestor ou administrador). O acesso a cada obra é liberado à parte, na lista abaixo.',
+      title: 'Cadastrar usuário',
+      body: 'Cadastra o e-mail com um papel já definido (consulta, planejador, gestor ou administrador); a pessoa entra com a conta Google desse e-mail. O acesso a cada obra é liberado à parte, na lista abaixo.',
     },
     {
       target: 'config-users',

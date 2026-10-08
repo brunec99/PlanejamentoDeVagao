@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowRight, Building2, CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { WorkActions } from '@/modules/planejamento/planning-actions';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, workPath } from '@/shared/format';
@@ -58,6 +58,8 @@ function Indicator({ label, value, state, tone }: { label: string; value: ReactN
 
 export function WorksOverview() {
   const context = usePlanning();
+  // Fora do desenvolvimento a obra abre no curto prazo, o único módulo em produção.
+  const landing = useDeveloper() ? 'longo-prazo' : 'curto-prazo';
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const { data, today } = planning;
@@ -115,7 +117,7 @@ export function WorksOverview() {
             const Icon = ICON[tone];
             return (
               <Link
-                href={workPath(work.id, 'longo-prazo')}
+                href={workPath(work.id, landing)}
                 key={work.id}
                 className={`card-accent group transition-shadow hover:shadow-md ${BORDER[tone]}`}
               >

@@ -1,0 +1,7 @@
+obra;empresa;semana;inicio;termino;atividade;equipe;status;causa;justificativa
+Residencial Horizonte;SM Martins;2026-08-03;2026-08-03;2026-08-05;Reboco interno 2º pavimento;Revestimentos;Sim;;
+Residencial Horizonte;ATR ENG;2026-08-03;2026-08-04;2026-08-07;Eletrodutos 3º pavimento;Elétrica;Não;Falta de material;Cabo 4mm não entregue
+Residencial Horizonte;Construtora Alfa;2026-08-05;;;Diário de obra;;Sim;;
+Residencial Horizonte;Hidro Sul;2026-08-10;2026-08-10;2026-08-12;Prumadas de água fria;Hidráulica;Nao;intemperies;Chuva forte na terça e quarta
+Residencial Horizonte;SM Martins;2026-08-10;2026-08-11;2026-08-14;"Contrapiso; 1º e 2º pavimentos";Revestimentos;;;
+Residencial Horizonte;ATR ENG;2026-08-10;2026-08-13;2026-08-13;Visita técnica da concessionária;;;;

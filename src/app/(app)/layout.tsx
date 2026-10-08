@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Building2, Settings, LogOut } from 'lucide-react';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
 import { MobileDrawer } from '@/modules/layout/mobile-drawer';
@@ -26,7 +26,7 @@ function initials(name: string) {
 }
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const profile = await getRouteProfile();
+  const { profile, developer } = await getRouteAccess();
   // O mesmo conteúdo serve a lateral do desktop e a gaveta do celular: abas, Apoio, perfil e saída.
   const navigation = (
     <>
@@ -102,7 +102,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     <TourProvider>
       <ToastProvider>
         <ConfirmProvider>
-          <PlanningProvider>
+          <PlanningProvider developer={developer}>
             <div className="flex h-screen overflow-hidden bg-slate-100">
               <a className="skip-link" href="#main">
                 Ir para o conteúdo
