@@ -102,7 +102,7 @@ Todos os comandos passam por `POST /api/terminalidade/commands`. Antes de execut
 
 ## Pendências
 
-- **Aplicar a 0028 no `takt-hub`:** colar a migração no SQL Editor **antes** de publicar a aba. Sem ela, a aba mostra o aviso de migração ausente, e as demais seguem normais.
+- **0028 aplicada no `takt-hub` em 08/10/2026.** As 6 tabelas respondem, e o bucket `terminalidade` é privado, com limite de 2 MB e só JPEG. Falta testar a aba logado, no celular.
 - **Fotos órfãs:** se o navegador fechar entre o envio e o `add_photo`, o arquivo fica sem pendência. Ainda não há limpeza automática.
 - **Edição simultânea:** não há trava de versão. Se duas pessoas editarem a mesma pendência ao mesmo tempo, vale a última gravação.
 - **Importação:** a lista atual do Sheets ainda não foi importada. O primeiro passo é cadastrar os locais.
