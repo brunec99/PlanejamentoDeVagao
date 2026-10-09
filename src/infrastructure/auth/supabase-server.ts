@@ -4,7 +4,7 @@ import type { User as AuthUser } from '@supabase/supabase-js';
 import type { User } from '../../domain/entities';
 import { getServiceClient } from '../repositories/supabase/client';
 import { devBypassProfileId } from './dev-bypass';
-import { isDeveloperEmail } from '../../application/module-access';
+import { hasDeveloperAccess } from '../../application/module-access';
 
 /** SSR client bound to the request's cookies. Only for auth (getUser/signIn/signOut) — never for querying
  * planning tables, since RLS denies the anon/authenticated role by design (see 0001_init.sql). */
@@ -46,7 +46,8 @@ export async function getRouteAccess(): Promise<RouteAccess> {
   if (bypass) return { profile: await loadProfile(bypass), developer: true };
   const authUser = await getAuthUser();
   if (!authUser) return { profile: null, developer: false };
-  return { profile: await loadProfile(authUser.id), developer: isDeveloperEmail(authUser.email, process.env.DEVELOPER_EMAILS) };
+  const profile = await loadProfile(authUser.id);
+  return { profile, developer: hasDeveloperAccess({ email: authUser.email, role: profile?.role }, process.env.DEVELOPER_EMAILS) };
 }
 
 /** For Route Handlers: returns the signed-in user's profile, or null if unauthenticated / not provisioned. */

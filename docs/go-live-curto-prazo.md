@@ -142,3 +142,34 @@ O Takt Hub (repositório `~/Applications/App-Takt`) foi desenhado desde a primei
 **Do desenvolvimento:**
 - Converter cada planilha para o CSV normalizado, montar o mapa de causas e rodar a simulação e depois a importação no banco novo.
 - Como o banco novo é ao mesmo tempo produção e desenvolvimento, toda migração nova do médio/longo prazo precisa ser aplicada **antes** do deploy, porque o snapshot lê todas as tabelas. Depois, regenerar o bootstrap com `npm run bootstrap:sql`.
+
+## Admins acessam os módulos em teste (08/10/2026)
+
+A pedido do usuário, a condição de desenvolvedor passou a valer também para **todo perfil com papel admin**, além dos e-mails de `DEVELOPER_EMAILS`. A regra fica em `hasDeveloperAccess` (`src/application/module-access.ts`) e é usada em dois lugares:
+
+- **Servidor:** `getRouteAccess` usa o papel do perfil já carregado.
+- **Proxy:** conhece só o e-mail da sessão. Ele lê o papel em `profiles`, com a chave de serviço, **apenas** quando o e-mail não está na lista **e** o endereço é restrito. As demais requisições não fazem consulta extra. Se a leitura falhar, o endereço continua fechado.
+
+Isso funciona porque o proxy roda em Node.js no Next 16.
+
+## Importação do histórico da Blentt (08/10/2026)
+
+**Origem:** `~/Downloads/PCP-BLT.xlsx`. Por decisão do usuário, entrou **só a aba "Curto prazo"**. As listas de pendências (geral e de personalização) e as demais abas, como plotagens, desperdício, SST e lista mestra, ficaram de fora.
+
+**Conversão:** o .xlsx foi lido sem dependências, abrindo o zip e lendo o XML das células. Ele foi convertido para o CSV normalizado e gravado com `scripts/import-curto-prazo.ts`, em 6 lotes de 20 semanas, com `--env-file` apontando para o `.env.local` do App-Takt (projeto `takt-hub`).
+
+**Resultado conferido no banco:**
+- 5.993 compromissos, nas semanas 1 a 116 (29/07/2024 a 12/10/2026): 4.081 Sim, 1.456 Não e 456 não apurados;
+- 205 equipes criadas;
+- semana 1 da obra definida em 29/07/2024 (`work_settings`), para os números baterem com a planilha.
+
+**Decisões do usuário sobre as causas:**
+- "Mudança de Planejamento" e "Mudança do método executivo" **entraram na lista oficial** (`NON_FULFILLMENT_CAUSES`).
+- "Documentação Empreiteiro pendente" virou "Falta de documentação".
+- Os 386 "Não" sem causa entraram com a nova causa "Causa não informada", sem inventar uma causa.
+
+**Ajustes automáticos nas datas:**
+- 157 linhas sem data entraram na segunda-feira da semana.
+- 37 linhas com data fora da semana indicada, ou com término antes do início, mantiveram a semana da linha, e a data foi trazida para dentro dela.
+
+**Reexecução:** a mesma importação acusa "2 atualizadas". São pares de linhas idênticas na mesma semana, com resultados diferentes, que o pareamento pela chave natural pode trocar. As contagens totais batem, então **não reaplicar**.

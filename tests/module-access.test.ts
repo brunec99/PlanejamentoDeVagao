@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BOOTSTRAP_ADMIN_EMAIL,
   developerEmails,
+  hasDeveloperAccess,
   isCommandAllowedForNonDeveloper,
   isDeveloperEmail,
   isRestrictedApi,
@@ -26,6 +27,15 @@ test('DEVELOPER_EMAILS aceita lista com espaços e sem diferença de maiúsculas
   assert.equal(isDeveloperEmail(BOOTSTRAP_ADMIN_EMAIL, env), false);
   assert.equal(isDeveloperEmail(undefined, env), false);
   assert.equal(isDeveloperEmail('', env), false);
+});
+
+test('Admins também acessam os módulos em desenvolvimento, sem estar na lista', () => {
+  const env = 'ana@atrincorporadora.com.br';
+  assert.equal(hasDeveloperAccess({ email: 'carlos@atrincorporadora.com.br', role: 'admin' }, env), true);
+  assert.equal(hasDeveloperAccess({ email: 'carlos@atrincorporadora.com.br', role: 'manager' }, env), false);
+  assert.equal(hasDeveloperAccess({ email: 'carlos@atrincorporadora.com.br', role: null }, env), false);
+  assert.equal(hasDeveloperAccess({ email: 'ana@atrincorporadora.com.br', role: 'viewer' }, env), true);
+  assert.equal(hasDeveloperAccess({ email: undefined, role: undefined }, env), false);
 });
 
 test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da administração', () => {

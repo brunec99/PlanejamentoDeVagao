@@ -46,6 +46,13 @@ export function isDeveloperEmail(email: string | null | undefined, envValue: str
   return developerEmails(envValue).includes(email.trim().toLowerCase());
 }
 
+/** Quem vê os módulos em desenvolvimento: os e-mails de `DEVELOPER_EMAILS` e, desde 08/10/2026 a pedido
+ * do usuário, todo perfil com papel admin. O proxy só conhece o e-mail da sessão e busca o papel apenas
+ * quando o e-mail não basta e a página é restrita. */
+export function hasDeveloperAccess(user: { email?: string | null; role?: string | null }, envValue: string | undefined): boolean {
+  return isDeveloperEmail(user.email, envValue) || user.role === 'admin';
+}
+
 export function isCommandAllowedForNonDeveloper(type: unknown): boolean {
   return typeof type === 'string' && NON_DEVELOPER_COMMANDS.has(type as Command['type']);
 }

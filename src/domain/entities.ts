@@ -207,6 +207,12 @@ export const NON_FULFILLMENT_CAUSES = [
   'Superestimação da produtividade',
   'Demanda extra',
   'Falta de documentação',
+  // 08/10/2026, na importação do histórico da Blentt: causas que a planilha da obra usava e a lista
+  // não tinha. "Causa não informada" registra o "Não" que ficou sem causa na planilha, em vez de
+  // inventar uma; não deve ser a escolha de quem preenche a semana agora.
+  'Mudança de Planejamento',
+  'Mudança do método executivo',
+  'Causa não informada',
 ] as const;
 export type NonFulfillmentCause = (typeof NON_FULFILLMENT_CAUSES)[number];
 /** Compromisso semanal do Last Planner, na forma da planilha de produção: empresa e equipe (do

@@ -1,7 +1,19 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
-import { isDeveloperEmail, isRestrictedApi, restrictedPageRedirect, RESTRICTED_MODULE_MESSAGE } from '@/application/module-access';
+import { hasDeveloperAccess, isDeveloperEmail, isRestrictedApi, restrictedPageRedirect, RESTRICTED_MODULE_MESSAGE } from '@/application/module-access';
+import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
+
+/** Papel do perfil, lido pelo servidor (a chave anônima não lê `profiles`). Falha conta como "sem
+ * papel": na dúvida, o endereço restrito continua fechado. O proxy roda em Node.js no Next 16. */
+async function roleOf(userId: string): Promise<string | null> {
+  try {
+    const { data } = await getServiceClient().from('profiles').select('role').eq('id', userId).maybeSingle();
+    return (data?.role as string | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export async function proxy(request: NextRequest) {
   // Quando o endereço de retorno não está na lista do Supabase, ele devolve o código do login para
@@ -39,12 +51,19 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
-  // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve. O acesso local
-  // sem login já saiu acima e conta como desenvolvedor. As rotas repetem a conferência dos comandos.
-  if (!isDeveloperEmail(user.email, process.env.DEVELOPER_EMAILS)) {
-    const { pathname } = request.nextUrl;
-    if (isRestrictedApi(pathname)) return NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403 });
-    const target = restrictedPageRedirect(pathname);
+  // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve (DEVELOPER_EMAILS)
+  // e com os admins. O acesso local sem login já saiu acima e conta como desenvolvedor. As rotas
+  // repetem a conferência dos comandos. O papel só é lido do banco quando o e-mail não basta e o
+  // endereço é restrito, para as demais requisições não pagarem uma consulta a mais.
+  const { pathname } = request.nextUrl;
+  const restrictedApi = isRestrictedApi(pathname);
+  const target = restrictedPageRedirect(pathname);
+  if (
+    (restrictedApi || target) &&
+    !isDeveloperEmail(user.email, process.env.DEVELOPER_EMAILS) &&
+    !hasDeveloperAccess({ email: user.email, role: await roleOf(user.id) }, process.env.DEVELOPER_EMAILS)
+  ) {
+    if (restrictedApi) return NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403 });
     if (target) {
       const url = request.nextUrl.clone();
       url.pathname = target;
