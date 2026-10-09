@@ -1,7 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
-import { hasDeveloperAccess, isDeveloperEmail, isRestrictedApi, restrictedPageRedirect, RESTRICTED_MODULE_MESSAGE } from '@/application/module-access';
+import {
+  hasDeveloperAccess,
+  isDeveloperEmail,
+  isRestrictedApi,
+  restrictedPageRedirect,
+  RESTRICTED_MODULE_MESSAGE,
+} from '@/application/module-access';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 
 /** Papel do perfil, lido pelo servidor (a chave anônima não lê `profiles`). Falha conta como "sem
