@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { emptyPlanDocument, isPlanError, validatePlanDocument, type LongTermPlan } from '@/domain/long-term-plan';
 
@@ -41,7 +41,9 @@ export async function GET(request: NextRequest) {
   try {
     const workId = request.nextUrl.searchParams.get('workId') ?? '';
     if (!workId) return responseError('Obra não informada.', 400);
-    const profile = await getRouteProfile();
+    const gate = await requireDeveloperAccess();
+    if (gate.error) return gate.error;
+    const { profile } = gate.access;
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
     const { data, error } = await getServiceClient().from('long_term_plans').select('*').eq('work_id', workId).maybeSingle();
     if (error) return databaseError(error.code);
@@ -65,7 +67,9 @@ export async function PUT(request: NextRequest) {
   if (typeof workId !== 'string' || !workId) return responseError('Obra não informada.', 400);
   if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) return responseError('Revisão inválida.', 400);
   try {
-    const profile = await getRouteProfile();
+    const gate = await requireDeveloperAccess();
+    if (gate.error) return gate.error;
+    const { profile } = gate.access;
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
     if (profile.role === 'viewer') return responseError('Seu perfil permite apenas consulta.', 403);
     let valid: LongTermPlan['document'];

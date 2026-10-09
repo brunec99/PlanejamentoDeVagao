@@ -15,6 +15,7 @@ import { useTerminality } from './api';
 import { ItemDialog } from './item-dialog';
 import { ResolveDialog } from './resolve-dialog';
 import { PhotoViewer } from './photo-viewer';
+import { refreshPhotos } from './photo-refresh';
 import {
   DEFAULT_FILTERS,
   NONE,
@@ -617,7 +618,9 @@ export function TerminalityOverview({ workId }: { workId: string }) {
       {dialog?.kind === 'resolve' && editing && !readOnly && (
         <ResolveDialog workId={workId} item={editing} data={data} today={today} execute={execute} onClose={closeDialog} />
       )}
-      {viewer && <PhotoViewer photos={viewer.photos} startIndex={viewer.start} onClose={() => setViewer(undefined)} />}
+      {viewer && (
+        <PhotoViewer photos={refreshPhotos(viewer.photos, data.photos)} startIndex={viewer.start} onClose={() => setViewer(undefined)} />
+      )}
     </>
   );
 }

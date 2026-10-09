@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { listActivities, PrevisionError } from '@/infrastructure/integrations/prevision/client';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { applyCommand, type ImportedActivity } from '@/application/use-cases/commands';
@@ -34,7 +34,9 @@ const toActivity = (r: Row): ImportedActivity & { baselineStart?: string; baseli
 async function authorize(request: NextRequest) {
   const workId = request.nextUrl.searchParams.get('workId');
   if (!workId) return { error: NextResponse.json({ error: 'Obra não informada.' }, { status: 400 }) };
-  const profile = await getRouteProfile();
+  const gate = await requireDeveloperAccess();
+  if (gate.error) return { error: gate.error };
+  const { profile } = gate.access;
   if (!profile) return { error: NextResponse.json({ error: 'Perfil não provisionado.' }, { status: 403 }) };
   if (!profile.workIds.includes(workId))
     return { error: NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 }) };

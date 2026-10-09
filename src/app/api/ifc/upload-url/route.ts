@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 
@@ -11,7 +11,9 @@ const MAX_NAME = 80;
  * o navegador envia o arquivo direto ao Storage com a URL assinada devolvida aqui, e só
  * depois registra a versão pelo /api/planning/commands. A chave de serviço nunca sai do servidor. */
 export async function POST(request: Request) {
-  const profile = await getRouteProfile();
+  const gate = await requireDeveloperAccess();
+  if (gate.error) return gate.error;
+  const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });
   if (profile.role === 'viewer') return NextResponse.json({ error: 'Seu perfil permite apenas consulta.' }, { status: 403 });
 

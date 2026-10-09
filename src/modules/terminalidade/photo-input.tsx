@@ -4,7 +4,7 @@ import { Camera, ImageOff, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-rea
 import type { TerminalityCommand, TerminalityPhoto, TerminalityPhotoKind } from '@/domain/terminality';
 import { Callout } from '@/modules/planejamento/ui';
 import { compressImage, PhotoError } from './compress-image';
-import { uploadTerminalityPhoto } from './api';
+import { reportExpiredPhoto, uploadTerminalityPhoto } from './api';
 
 /** Foto escolhida e já comprimida no navegador, ainda não enviada. */
 export interface PendingPhoto {
@@ -192,7 +192,8 @@ function BlobImage({ blob, alt, className }: { blob: Blob; alt: string; classNam
 }
 
 /** Grade das fotos já enviadas (miniaturas por URL assinada). Toque abre a foto grande; a lixeira,
- * quando há `onDelete`, pede confirmação a quem chama. */
+ * quando há `onDelete`, pede confirmação a quem chama. Miniatura que falha (link vencido) pede
+ * releitura à aba e volta sozinha quando a URL nova chega; até lá mostra o espaço vazio. */
 export function PhotoGrid({
   photos,
   label,
@@ -206,38 +207,46 @@ export function PhotoGrid({
   onDelete?: (photo: TerminalityPhoto) => void;
   disabled?: boolean;
 }) {
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const fail = (src: string) => {
+    setFailed(current => (current.has(src) ? current : new Set(current).add(src)));
+    reportExpiredPhoto(src);
+  };
   return (
     <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-label={label}>
-      {photos.map((photo, index) => (
-        <li key={photo.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-          <button
-            type="button"
-            onClick={() => onOpen(index)}
-            aria-label={`Ampliar ${label.toLowerCase()} ${index + 1}`}
-            className="block h-full w-full focus-visible:ring-2 focus-visible:ring-primary-ring focus-visible:outline-none"
-          >
-            {photo.thumbUrl || photo.url ? (
-              // eslint-disable-next-line @next/next/no-img-element -- URL assinada do Storage, de vida curta
-              <img src={photo.thumbUrl ?? photo.url} alt="" loading="lazy" className="h-full w-full object-cover" />
-            ) : (
-              <span className="grid h-full w-full place-items-center text-slate-400">
-                <ImageOff size={22} aria-hidden />
-              </span>
-            )}
-          </button>
-          {onDelete && (
+      {photos.map((photo, index) => {
+        const src = photo.thumbUrl ?? photo.url;
+        return (
+          <li key={photo.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
             <button
               type="button"
-              disabled={disabled}
-              onClick={() => onDelete(photo)}
-              aria-label={`Excluir ${label.toLowerCase()} ${index + 1}`}
-              className="absolute top-1 right-1 grid h-9 w-9 place-items-center rounded-full bg-slate-900/65 text-white shadow transition-colors hover:bg-rose-700 disabled:opacity-50"
+              onClick={() => onOpen(index)}
+              aria-label={`Ampliar ${label.toLowerCase()} ${index + 1}`}
+              className="block h-full w-full focus-visible:ring-2 focus-visible:ring-primary-ring focus-visible:outline-none"
             >
-              <Trash2 size={16} aria-hidden />
+              {src && !failed.has(src) ? (
+                // eslint-disable-next-line @next/next/no-img-element -- URL assinada do Storage, de vida curta
+                <img key={src} src={src} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => fail(src)} />
+              ) : (
+                <span className="grid h-full w-full place-items-center text-slate-400">
+                  <ImageOff size={22} aria-hidden />
+                </span>
+              )}
             </button>
-          )}
-        </li>
-      ))}
+            {onDelete && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onDelete(photo)}
+                aria-label={`Excluir ${label.toLowerCase()} ${index + 1}`}
+                className="absolute top-1 right-1 grid h-9 w-9 place-items-center rounded-full bg-slate-900/65 text-white shadow transition-colors hover:bg-rose-700 disabled:opacity-50"
+              >
+                <Trash2 size={16} aria-hidden />
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

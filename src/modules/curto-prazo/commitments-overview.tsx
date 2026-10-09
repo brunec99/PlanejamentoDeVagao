@@ -21,7 +21,7 @@ import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/cu
 import { PrintDialog } from '@/modules/curto-prazo/print-dialog';
 import type { PrintKind } from '@/modules/curto-prazo/print-sheet';
 import { weekNumberFrom } from '@/domain/week-numbering';
-import { isWeekLocked, weekLockLastDay } from '@/domain/week-lock';
+import { canEditWeek, isWeekLocked, weekLockLastDay } from '@/domain/week-lock';
 import {
   applySheetView,
   companyOptions,
@@ -105,6 +105,9 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const wide = useWideScreen();
   const sheetPanel = useRef<HTMLDivElement | null>(null);
   const autoFitted = useRef(false);
+  /** Fila das gravações: cada uma espera a anterior terminar. Antes, sair de uma célula enquanto
+   * outra linha gravava descartava a edição em silêncio. */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   /** Ordem das linhas da semana como estão na tela. Linha nova entra no fim e linha editada não muda de
    * lugar, como no Sheets (pedido da obra, 09/10/2026): reordenar a cada gravação atrapalhava escrever o
    * planejamento. Volta à ordem por empresa ao trocar de semana, recarregar ou pedir "Organizar". */
@@ -147,20 +150,26 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
     setError(message);
     toast({ title, description: message === title ? undefined : message, tone: 'danger' });
   };
-  const run = async (command: Command, key: string) => {
-    if (busy) return false;
-    setBusy(key);
-    setError('');
-    try {
-      await context.execute(command);
-      return true;
-    } catch (cause) {
-      fail(cause);
-      return false;
-    } finally {
-      setBusy('');
-    }
+  /** Põe uma gravação na fila. `busy` é a chave da linha gravando naquele momento (realce âmbar);
+   * resolve `true` só quando a tarefa inteira terminou sem erro. */
+  const enqueue = (key: string, task: () => Promise<unknown>) => {
+    const turn = queue.current.then(async () => {
+      setBusy(key);
+      setError('');
+      try {
+        await task();
+        return true;
+      } catch (cause) {
+        fail(cause);
+        return false;
+      } finally {
+        setBusy('');
+      }
+    });
+    queue.current = turn;
+    return turn;
   };
+  const run = (command: Command, key: string) => enqueue(key, () => context.execute(command));
   const save = (
     row: WeeklyCommitment,
     patch: Partial<Pick<WeeklyCommitment, 'name' | 'supplier' | 'teamId' | 'weekStart' | 'startDate' | 'endDate'>>,
@@ -258,9 +267,10 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   );
   const teamsOfCompany = (company: string) => (company.trim() ? teams.filter(t => textKey(t.company) === textKey(company)) : []);
   // "Não" escolhido e ainda sem causa não é gravado: o comando exige a causa, e inventar uma
-  // poluiria o Pareto. A linha fica marcada até a causa ser escolhida.
+  // poluiria o Pareto. A linha fica marcada até a causa ser escolhida, inclusive quando corrige um
+  // Sim já gravado — antes a marca só valia para linha sem Status, e o Sim não tinha volta.
   const statusOf = (row: WeeklyCommitment) =>
-    row.fulfilled === undefined ? (awaitingCause.includes(row.id) ? 'Não' : '') : row.fulfilled ? 'Sim' : 'Não';
+    awaitingCause.includes(row.id) ? 'Não' : row.fulfilled === undefined ? '' : row.fulfilled ? 'Sim' : 'Não';
   const weekLabel = (start: string) => `${weekNumber(start)} · ${dayMonth(start)}`;
 
   const accessors: Record<string, Accessor<WeeklyCommitment>> = {
@@ -296,9 +306,21 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const position = new Map(orderIds.map((id, i) => [id, i]));
   const byPin = (a: WeeklyCommitment, b: WeeklyCommitment) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0);
   const byCompanyNow = orderIds.every((id, i) => id === companyIds[i]);
-  const rows = applySheetView([...weekRows], accessors, filters, sort, byPin, sortKeys);
+  // Classificar pelo funil é uma ação de uma vez, como no Sheets: reescreve a ordem presa e pronto.
+  // Classificação contínua reordenava a linha a cada apontamento (Status A→Z levava a linha recém
+  // marcada para junto das outras "Sim"), e foi isso que a obra viu como "a tarefa sobe" (09/10/2026).
+  // `sort` fica só como indicador no cabeçalho; as linhas novas continuam entrando embaixo.
+  const sortOnce = (column: string, dir: 'asc' | 'desc' | undefined) => {
+    setSort(dir ? { column, dir } : undefined);
+    setPinned(
+      dir
+        ? { week, ids: applySheetView([...weekRows], accessors, {}, { column, dir }, byPin, sortKeys).map(r => r.id) }
+        : { week: '', ids: [] },
+    );
+  };
+  const rows = applySheetView([...weekRows], accessors, filters, undefined, byPin, sortKeys);
   const filtered = Object.values(filters).some(Boolean) || !!sort;
-  const waiting = weekRows.filter(r => r.fulfilled === undefined && awaitingCause.includes(r.id)).length;
+  const waiting = weekRows.filter(r => awaitingCause.includes(r.id)).length;
 
   const resizeHandle = (column: string, label: string) => (
     <ColumnResizeHandle
@@ -318,7 +340,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         selected={filters[column]}
         onChange={next => setFilters(current => ({ ...current, [column]: next }))}
         sort={sort?.column === column ? sort.dir : undefined}
-        onSort={dir => setSort(dir ? { column, dir } : undefined)}
+        onSort={dir => sortOnce(column, dir)}
       />
     </th>
   );
@@ -339,10 +361,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
       toast({ title: 'Escolha a empresa da linha antes de criar uma equipe.', tone: 'info' });
       return;
     }
-    if (busy) return;
-    setBusy(row.id);
-    setError('');
-    try {
+    return enqueue(row.id, async () => {
       const teamId = await context.execute({ type: 'create_team', workId, company, name: name.trim(), weeklyCapacity: NEW_TEAM_CAPACITY });
       await context.execute({
         type: 'update_commitment',
@@ -355,34 +374,34 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         endDate: row.endDate,
       });
       teamCreated(name.trim(), company);
-    } catch (cause) {
-      fail(cause);
-    } finally {
-      setBusy('');
-    }
+    });
   };
   /** Trocar a empresa desfaz a equipe de outra empresa: a equipe pertence a uma empresa só. */
   const assignCompany = (row: WeeklyCommitment, company: string) => {
     const team = teamOf(row);
     return save(row, { supplier: company, teamId: team && textKey(team.company) !== textKey(company) ? undefined : row.teamId });
   };
-  const setStatus = (row: WeeklyCommitment, value: string) => {
+  /** A marca "aguarda causa" só sai depois que o servidor gravou: se a gravação falhar, a linha
+   * continua marcada em vez de voltar calada ao Status anterior. */
+  const settled = (row: WeeklyCommitment) => setAwaitingCause(ids => ids.filter(id => id !== row.id));
+  const setStatus = async (row: WeeklyCommitment, value: string) => {
     if (value === 'Sim') {
-      setAwaitingCause(ids => ids.filter(id => id !== row.id));
-      return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: row.justification }, row.id);
+      // Sim já gravado: desistir do Não pendente não precisa de ida ao servidor.
+      if (row.fulfilled === true) return settled(row);
+      if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: row.justification }, row.id))
+        settled(row);
+      return;
     }
     if (value === 'Não' && row.fulfilled !== false) setAwaitingCause(ids => (ids.includes(row.id) ? ids : [...ids, row.id]));
   };
-  const setCause = (row: WeeklyCommitment, cause: string) => {
+  const setCause = async (row: WeeklyCommitment, cause: string) => {
     if (!cause) return;
-    setAwaitingCause(ids => ids.filter(id => id !== row.id));
-    return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: row.justification }, row.id);
+    if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: row.justification }, row.id))
+      settled(row);
   };
-  const createRow = async (draft: Draft) => {
-    if (busy) return;
-    setBusy('nova');
-    setError('');
-    try {
+  /** Resolve `true` só com a linha criada: é o sinal para a linha em branco limpar o rascunho. */
+  const createRow = (draft: Draft) =>
+    enqueue('nova', async () => {
       const company = draft.supplier.trim();
       let teamId: string | undefined;
       let created = '';
@@ -411,12 +430,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         endDate: draft.endDate || undefined,
       });
       if (created) teamCreated(created, company);
-    } catch (cause) {
-      fail(cause);
-    } finally {
-      setBusy('');
-    }
-  };
+    });
 
   /** Os controles de uma linha são os mesmos na tabela (telas largas) e no cartão (celular): só a
    * disposição muda, a gravação é uma. Os campos de texto recebem a classe de quem os monta,
@@ -427,6 +441,10 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
     const missingCause = status === 'Não' && !row.cause;
     const company = companyOf(row);
     const nextWeek = weekNumber(addDays(row.weekStart, 7));
+    // Levar para a próxima só mexe na semana seguinte, e é ela que o servidor confere: a linha de
+    // uma semana encerrada pode ser levada por quem não é admin, desde que a próxima esteja aberta.
+    const canCarry = !viewer && canEditWeek(addDays(row.weekStart, 7), planning.today, actor.role);
+    // As listas travam só na linha que está gravando; as demais seguem editáveis, a fila guarda a ordem.
     return {
       saving,
       missingCause,
@@ -434,7 +452,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <PillCombo
           value={company}
           options={companies}
-          disabled={readOnly || !!busy}
+          disabled={readOnly || saving}
           ariaLabel={`Empresa da linha ${index + 1}`}
           placeholder="Empresa"
           onCommit={value => assignCompany(row, value)}
@@ -443,15 +461,19 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
       week: (
         <PillSelect
           value={row.weekStart}
-          disabled={readOnly || !!busy}
+          disabled={readOnly || saving}
           ariaLabel={`Semana da linha ${index + 1}`}
           title={`${dayMonth(row.weekStart)} a ${dayMonth(addDays(row.weekStart, 5))}`}
           options={weeks.map(w => ({ value: w, label: weekLabel(w) }))}
           onChange={value => moveWeek(row, value)}
         />
       ),
+      // Campos de texto não controlados, com a chave no próprio valor: quando a atualização silenciosa
+      // muda a linha, o campo é remontado com o valor novo em vez de mostrar o antigo (o mesmo
+      // padrão do editor de atividades do vagão). Só grava o que mudou de fato.
       start: (className = 'cell tabular-nums') => (
         <input
+          key={row.startDate}
           className={className}
           type="date"
           defaultValue={row.startDate}
@@ -460,12 +482,13 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           max={row.weekEnd}
           aria-label={`Início da linha ${index + 1}`}
           onBlur={e => {
-            if (e.target.value) saveStart(row, e.target.value);
+            if (e.target.value && e.target.value !== row.startDate) saveStart(row, e.target.value);
           }}
         />
       ),
       end: (className = 'cell tabular-nums') => (
         <input
+          key={row.endDate}
           className={className}
           type="date"
           defaultValue={row.endDate}
@@ -474,17 +497,23 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           max={row.weekEnd}
           aria-label={`Término da linha ${index + 1}`}
           onBlur={e => {
-            if (e.target.value) save(row, { endDate: e.target.value });
+            if (e.target.value && e.target.value !== row.endDate) save(row, { endDate: e.target.value });
           }}
         />
       ),
       name: (className = 'cell') => (
         <input
+          key={row.name}
           className={className}
           defaultValue={row.name}
           disabled={readOnly}
           aria-label={`Atividade da linha ${index + 1}`}
-          onBlur={e => save(row, { name: e.target.value })}
+          onBlur={e => {
+            const name = e.target.value.trim();
+            // Linha sem atividade não existe: apagar o nome só devolve o que estava.
+            if (!name) e.target.value = row.name;
+            else if (name !== row.name) save(row, { name });
+          }}
           onKeyDown={e => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
@@ -494,7 +523,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <PillCombo
           value={teamOf(row)?.name ?? ''}
           options={teamsOfCompany(company).map(t => t.name)}
-          disabled={readOnly || !!busy}
+          disabled={readOnly || saving}
           allowCreate={!!company}
           emptyHint={company ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
           createLabel={text => `Criar equipe “${text}” em ${company}`}
@@ -508,7 +537,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           value={status}
           tone={status === 'Sim' ? 'success' : status === 'Não' ? 'danger' : 'neutral'}
           // Realizado, causa e justificativa ficam abertos mesmo na semana encerrada (09/10/2026).
-          disabled={viewer || !!busy}
+          disabled={viewer || saving}
           ariaLabel={`Status da linha ${index + 1}`}
           options={[
             { value: 'Sim', label: 'Sim' },
@@ -521,7 +550,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <PillSelect
           value={row.cause ?? ''}
           tone={missingCause ? 'required' : 'neutral'}
-          disabled={viewer || !!busy || status !== 'Não'}
+          disabled={viewer || saving || status !== 'Não'}
           ariaLabel={`Causa da linha ${index + 1}`}
           placeholder={missingCause ? 'Escolha a causa' : ''}
           title={status !== 'Não' ? 'A causa só é pedida quando o Status é Não.' : undefined}
@@ -531,6 +560,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
       ),
       justification: (className = 'cell') => (
         <input
+          key={row.justification ?? ''}
           className={className}
           defaultValue={row.justification ?? ''}
           disabled={viewer || row.fulfilled === undefined}
@@ -551,7 +581,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         />
       ),
       followUp:
-        row.fulfilled === false && !readOnly ? (
+        row.fulfilled === false && canCarry ? (
           <>
             <button
               type="button"
@@ -743,7 +773,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
             className="text-link"
             onClick={() => {
               setFilters({});
-              setSort(undefined);
+              sortOnce('', undefined);
             }}
           >
             Limpar filtros e classificação
@@ -751,15 +781,17 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         </div>
       )}
 
-      {!sort && weekRows.length > 1 && (
+      {weekRows.length > 1 && (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
           <span>
-            {byCompanyNow
-              ? 'Linhas organizadas por empresa; as novas entram embaixo.'
-              : 'Linhas na ordem em que foram incluídas; a nova entra embaixo.'}
+            {sort
+              ? 'Linhas classificadas uma vez pelo funil; marcar Status ou editar não as move, e as novas entram embaixo.'
+              : byCompanyNow
+                ? 'Linhas organizadas por empresa; as novas entram embaixo.'
+                : 'Linhas na ordem em que foram incluídas; a nova entra embaixo.'}
           </span>
-          {byCompanyNow ? (
-            <button type="button" className="text-link" onClick={() => setPinned({ week: '', ids: [] })}>
+          {sort || byCompanyNow ? (
+            <button type="button" className="text-link" onClick={() => sortOnce('', undefined)}>
               Voltar à ordem de inclusão
             </button>
           ) : (
@@ -864,7 +896,6 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
                     weekNumber={weekNumber(week)}
                     companies={companies}
                     teamNames={company => teamsOfCompany(company).map(t => t.name)}
-                    busy={busy === 'nova'}
                     onCreate={createRow}
                   />
                 )}
@@ -928,7 +959,6 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
                 weekNumber={weekNumber(week)}
                 companies={companies}
                 teamNames={company => teamsOfCompany(company).map(t => t.name)}
-                busy={busy === 'nova'}
                 onCreate={createRow}
               />
             )}
@@ -955,7 +985,8 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         </p>
         <div className="mt-5 grid gap-5 xl:grid-cols-2">
           <PpcSeries series={series} week={week} label={weekNumber} />
-          <CausesPareto all={commitments} weekRows={rows} weekLabel={weekNumber(week)} />
+          {/* A semana inteira, não as linhas filtradas: o filtro de coluna é da planilha, não do Pareto. */}
+          <CausesPareto all={commitments} weekRows={weekRows} weekLabel={weekNumber(week)} />
         </div>
       </section>
 
@@ -1510,29 +1541,46 @@ type BlankProps = {
   weekNumber: number;
   companies: string[];
   teamNames: (company: string) => string[];
-  busy: boolean;
-  onCreate: (draft: Draft) => Promise<void>;
+  /** Resolve `true` só com a linha criada; `false` é erro já avisado, e o rascunho fica. */
+  onCreate: (draft: Draft) => Promise<boolean>;
 };
 
 /** O rascunho da linha nova, o mesmo na tabela e no cartão. Trocar a empresa derruba a equipe que
  * não é dela, porque a equipe pertence a uma empresa só. */
-function useDraft(busy: boolean, onCreate: (draft: Draft) => Promise<void>, teamNames: (company: string) => string[]) {
+function useDraft(onCreate: (draft: Draft) => Promise<boolean>, teamNames: (company: string) => string[]) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [creating, setCreating] = useState(false);
+  // Ref, e não só estado: dois Enter seguidos chegam antes de a tela mostrar "Criando…".
+  const pending = useRef(false);
+  const nameInput = useRef<HTMLInputElement>(null);
   const change = (patch: Partial<Draft>) => setDraft(current => ({ ...current, ...patch }));
   const setCompany = (supplier: string) =>
     change({ supplier, teamName: teamNames(supplier).some(name => textKey(name) === textKey(draft.teamName)) ? draft.teamName : '' });
-  const create = async (next: Draft) => {
-    if (!next.name.trim() || busy) return;
-    setDraft(EMPTY_DRAFT);
-    await onCreate(next);
+  /** O rascunho só é limpo depois que a linha existe: antes era apagado antes de gravar, e se a
+   * gravação não acontecia (outra linha gravando, erro do servidor) a atividade escrita sumia.
+   * `refocus` devolve o foco à atividade para escrever a linha seguinte sem clicar; não vale quando
+   * a criação veio de sair da linha, senão roubaria o foco da célula que a pessoa clicou. */
+  const create = async (next: Draft, refocus = false) => {
+    if (!next.name.trim() || pending.current) return;
+    pending.current = true;
+    setCreating(true);
+    try {
+      if (await onCreate(next)) {
+        setDraft(EMPTY_DRAFT);
+        if (refocus) nameInput.current?.focus();
+      }
+    } finally {
+      pending.current = false;
+      setCreating(false);
+    }
   };
-  return { draft, change, setCompany, create };
+  return { draft, creating, nameInput, change, setCompany, create };
 }
 
 /** Linha em branco no fim: escreveu a atividade, a linha existe. Empresa, equipe e datas podem
  * ficar em branco — sem período, a linha nasce no primeiro dia da semana e se ajusta na planilha. */
-function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCreate }: BlankProps) {
-  const { draft, change, setCompany, create } = useDraft(busy, onCreate, teamNames);
+function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate }: BlankProps) {
+  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames);
   /** Só cria quando o foco deixa a linha em branco: andar de célula em célula — inclusive abrir a
    * lista suspensa de empresa ou equipe — é continuar preenchendo a mesma linha. */
   const leave = (event: FocusEvent<HTMLElement>) => {
@@ -1545,7 +1593,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
         <PillCombo
           value={draft.supplier}
           options={companies}
-          disabled={busy}
+          disabled={creating}
           ariaLabel="Empresa da nova linha"
           placeholder="Empresa"
           onCommit={setCompany}
@@ -1557,7 +1605,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
           className="cell tabular-nums"
           type="date"
           value={draft.startDate}
-          disabled={busy}
+          disabled={creating}
           min={week}
           max={weekEnd}
           aria-label="Início da nova linha"
@@ -1569,7 +1617,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
           className="cell tabular-nums"
           type="date"
           value={draft.endDate}
-          disabled={busy}
+          disabled={creating}
           min={draft.startDate || week}
           max={weekEnd}
           aria-label="Término da nova linha"
@@ -1577,17 +1625,20 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
         />
       </td>
       <td className="px-1 py-1">
+        {/* `readOnly`, não `disabled`, enquanto cria: o campo desabilitado perde o foco, e a pessoa
+          quer emendar a linha seguinte. */}
         <input
+          ref={nameInput}
           className="cell"
           value={draft.name}
-          disabled={busy}
+          readOnly={creating}
           aria-label="Atividade da nova linha"
-          placeholder={busy ? 'Criando…' : 'Escreva a atividade e tecle Enter'}
+          placeholder={creating ? 'Criando…' : 'Escreva a atividade e tecle Enter'}
           onChange={e => change({ name: e.target.value })}
           onKeyDown={e => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              create(draft);
+              create(draft, true);
             }
           }}
         />
@@ -1596,7 +1647,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
         <PillCombo
           value={draft.teamName}
           options={teamNames(draft.supplier)}
-          disabled={busy}
+          disabled={creating}
           allowCreate={!!draft.supplier.trim()}
           emptyHint={draft.supplier.trim() ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
           createLabel={text => `Criar equipe “${text}” em ${draft.supplier}`}
@@ -1614,24 +1665,25 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, busy, onCre
 
 /** A linha em branco no celular: sem a tabela, é um cartão com botão explícito — no toque, sair
  * do campo não é gesto claro o bastante para criar a linha. */
-function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCreate }: BlankProps) {
-  const { draft, change, setCompany, create } = useDraft(busy, onCreate, teamNames);
+function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }: BlankProps) {
+  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames);
   return (
     <form
       className="rounded-xl border border-dashed border-primary-ring bg-primary-soft/40 p-3"
       aria-label="Nova linha"
       onSubmit={event => {
         event.preventDefault();
-        create(draft);
+        create(draft, true);
       }}
     >
       <p className="text-xs font-semibold text-slate-600">Nova linha · semana {weekNumber}</p>
       <input
+        ref={nameInput}
         className="field mt-2 py-1.5"
         value={draft.name}
-        disabled={busy}
+        readOnly={creating}
         aria-label="Atividade da nova linha"
-        placeholder={busy ? 'Criando…' : 'Atividade'}
+        placeholder={creating ? 'Criando…' : 'Atividade'}
         onChange={e => change({ name: e.target.value })}
       />
       <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1639,7 +1691,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCr
           <PillCombo
             value={draft.supplier}
             options={companies}
-            disabled={busy}
+            disabled={creating}
             ariaLabel="Empresa da nova linha"
             placeholder="Empresa"
             onCommit={setCompany}
@@ -1649,7 +1701,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCr
           <PillCombo
             value={draft.teamName}
             options={teamNames(draft.supplier)}
-            disabled={busy}
+            disabled={creating}
             allowCreate={!!draft.supplier.trim()}
             emptyHint={draft.supplier.trim() ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
             createLabel={text => `Criar equipe “${text}” em ${draft.supplier}`}
@@ -1665,7 +1717,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCr
             className="field py-1.5 text-xs tabular-nums"
             type="date"
             value={draft.startDate}
-            disabled={busy}
+            disabled={creating}
             min={week}
             max={weekEnd}
             aria-label="Início da nova linha"
@@ -1677,7 +1729,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCr
             className="field py-1.5 text-xs tabular-nums"
             type="date"
             value={draft.endDate}
-            disabled={busy}
+            disabled={creating}
             min={draft.startDate || week}
             max={weekEnd}
             aria-label="Término da nova linha"
@@ -1685,8 +1737,8 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, busy, onCr
           />
         </CardField>
       </div>
-      <button type="submit" className="button mt-3 w-full" disabled={busy || !draft.name.trim()}>
-        {busy ? 'Criando…' : 'Adicionar'}
+      <button type="submit" className="button mt-3 w-full" disabled={creating || !draft.name.trim()}>
+        {creating ? 'Criando…' : 'Adicionar'}
       </button>
     </form>
   );

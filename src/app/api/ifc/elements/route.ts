@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 
@@ -16,7 +16,9 @@ const CHUNK = 1000;
  * centenas de milhares de linhas, e o snapshot trafega inteiro a cada comando. Elas são
  * escritas em lote por aqui e lidas paginadas, com a soma feita no banco. */
 async function versionAccess(versionId: string) {
-  const profile = await getRouteProfile();
+  const gate = await requireDeveloperAccess();
+  if (gate.error) return { error: gate.error };
+  const { profile } = gate.access;
   if (!profile) return { error: NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 }) };
   const snapshot = await new SupabasePlanningRepository().getSnapshot({ workIds: profile.workIds });
   const version = snapshot.ifcVersions.find(v => v.id === versionId);

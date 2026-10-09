@@ -11,6 +11,7 @@ import {
   applyMutation,
   findWorkIdForEntity,
   loadTerminality,
+  photoFilesExist,
   TerminalityConflictError,
   TerminalityUnavailableError,
   withSignedUrls,
@@ -54,6 +55,11 @@ export async function POST(request: Request) {
     }
     // Defesa extra: o planejador só enxerga a obra carregada, mas a gravação não pode sair dela.
     if (mutation.workId !== workId) return responseError('Você não tem acesso a esta obra.', 403);
+    // O planejador não enxerga o Storage: a foto só entra no banco se os dois arquivos já subiram.
+    if (command.type === 'add_photo') {
+      const photo = mutation.insert.photos[0];
+      if (!photo || !(await photoFilesExist(photo))) return responseError('Envie a foto antes de registrá-la.', 400);
+    }
     await applyMutation(mutation);
     const fresh = await withSignedUrls(await loadTerminality(workId));
     return NextResponse.json({ available: true, ...fresh }, { headers });

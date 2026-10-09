@@ -10,6 +10,7 @@ import {
   restrictedPageRedirect,
   RESTRICTED_SECTIONS,
 } from '../src/application/module-access';
+import { workPath } from '../src/shared/format';
 
 test('Sem DEVELOPER_EMAILS, o desenvolvedor é o admin inicial', () => {
   assert.deepEqual(developerEmails(undefined), [BOOTSTRAP_ADMIN_EMAIL]);
@@ -74,6 +75,14 @@ test('Páginas restritas da obra desviam para o curto prazo da mesma obra', () =
   assert.equal(restrictedPageRedirect('/obras/obra%201/vagoes/vagao-9'), '/obras/obra%201/curto-prazo');
   for (const open of ['/obras', '/obras/obra-1/curto-prazo', '/obras/obra-1/configuracoes', '/configuracoes', '/obras/obra-1/vagoes-extra'])
     assert.equal(restrictedPageRedirect(open), null, open);
+});
+
+test('O desvio das páginas restritas (servidor) coincide com o do proxy, mesmo com id a codificar', () => {
+  // As páginas montam o destino a partir do `obraId` já decodificado; o proxy, a partir do caminho
+  // bruto. Os dois precisam cair no mesmo endereço, senão o proxy e a página divergiriam.
+  for (const workId of ['obra-1', 'obra 2', 'ç/ã'])
+    for (const section of RESTRICTED_SECTIONS)
+      assert.equal(restrictedPageRedirect(workPath(workId, section)), workPath(workId, 'curto-prazo'), `${workId}/${section}`);
 });
 
 test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {

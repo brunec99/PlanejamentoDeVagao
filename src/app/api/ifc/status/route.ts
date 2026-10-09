@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,9 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   const workId = request.nextUrl.searchParams.get('workId') ?? '';
   if (!workId) return NextResponse.json({ error: 'Obra não informada.' }, { status: 400 });
-  const profile = await getRouteProfile();
+  const gate = await requireDeveloperAccess();
+  if (gate.error) return gate.error;
+  const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });
   if (!profile.workIds.includes(workId)) return NextResponse.json({ error: 'Você não tem acesso a esta obra.' }, { status: 403 });
 

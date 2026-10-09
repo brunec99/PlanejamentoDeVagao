@@ -21,9 +21,11 @@
  * - justificativa: texto livre, opcional.
  *
  * Idempotência: a linha é identificada pela chave natural (obra, semana, início, término,
- * atividade normalizada, empresa normalizada, equipe). A k-ésima ocorrência de uma chave no CSV
- * corresponde ao k-ésimo compromisso já gravado com a mesma chave; se existe, não é recriado —
- * só tem o apontamento atualizado quando o CSV traz um status diferente do gravado. */
+ * atividade normalizada, empresa normalizada, equipe). Entre linhas de mesma chave, cada uma casa
+ * primeiro com o compromisso gravado de mesmo apontamento; as que sobram casam pela ordem de
+ * ocorrência (CSV × createdAt). O que casa não é recriado — só tem o apontamento atualizado
+ * quando o CSV traz um status diferente do gravado. Compromissos criados recebem createdAt
+ * distintos, na ordem do CSV. */
 import type { LocalDate, NonFulfillmentCause, PlanningData, Team, WeeklyCommitment } from '../../domain/entities';
 import { NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { ppcSeries, type WeekPpc } from '../../domain/rules';
@@ -463,7 +465,11 @@ export function importGroup(draft: PlanningData, group: ImportGroup, options: Im
   }
   result.teamsReused = reused.size;
 
-  // 3. Os compromissos, casando pela chave natural e pela ordem de ocorrência.
+  // 3. Os compromissos, casando pela chave natural. Dentro de uma chave, primeiro cada linha
+  // casa com o compromisso de mesmo apontamento (Realizado, causa, justificativa); o que sobra
+  // casa pela ordem (CSV × createdAt, id). Casar só pela ordem trocava apontamentos entre linhas
+  // iguais: compromissos de uma mesma importação nasciam com o mesmo createdAt e ficavam
+  // ordenados pelo id aleatório, e a reimportação "atualizava" as duas linhas cruzadas.
   const existing = new Map<string, WeeklyCommitment[]>();
   const sorted = draft.commitments
     .filter(c => c.workId === workId)
@@ -472,7 +478,29 @@ export function importGroup(draft: PlanningData, group: ImportGroup, options: Im
     const key = commitmentKey(c, c.teamId);
     existing.set(key, [...(existing.get(key) ?? []), c]);
   }
-  const occurrences = new Map<string, number>();
+  const sameRecord = (c: WeeklyCommitment, row: ImportRow) =>
+    (c.fulfilled ?? undefined) === row.fulfilled &&
+    (c.cause ?? undefined) === (row.fulfilled ? undefined : row.cause) &&
+    (c.justification ?? '') === (row.justification ?? '');
+  const rowsByKey = new Map<string, ImportRow[]>();
+  for (const row of group.rows) {
+    if (failed.has(row)) continue;
+    const key = commitmentKey(row, teamIdOf.get(row));
+    rowsByKey.set(key, [...(rowsByKey.get(key) ?? []), row]);
+  }
+  const pairedWith = new Map<ImportRow, WeeklyCommitment>();
+  for (const [key, rows] of rowsByKey) {
+    const free = [...(existing.get(key) ?? [])];
+    const rest: ImportRow[] = [];
+    for (const row of rows) {
+      const at = free.findIndex(c => sameRecord(c, row));
+      if (at >= 0) pairedWith.set(row, free.splice(at, 1)[0]);
+      else rest.push(row);
+    }
+    rest.forEach((row, i) => {
+      if (free[i]) pairedWith.set(row, free[i]);
+    });
+  }
   const matched = new Set<string>();
   const touched: WeeklyCommitment[] = [];
   const record = (row: ImportRow, commitmentId: string) => {
@@ -483,18 +511,11 @@ export function importGroup(draft: PlanningData, group: ImportGroup, options: Im
   for (const row of group.rows) {
     if (failed.has(row)) continue;
     const teamId = teamIdOf.get(row);
-    const key = commitmentKey(row, teamId);
-    const occurrence = occurrences.get(key) ?? 0;
-    occurrences.set(key, occurrence + 1);
-    const current = existing.get(key)?.[occurrence];
+    const current = pairedWith.get(row);
     try {
       if (current) {
         matched.add(current.id);
-        const differs =
-          row.fulfilled !== undefined &&
-          (current.fulfilled !== row.fulfilled ||
-            (current.cause ?? undefined) !== (row.fulfilled ? undefined : row.cause) ||
-            (current.justification ?? '') !== (row.justification ?? ''));
+        const differs = row.fulfilled !== undefined && !sameRecord(current, row);
         if (differs) {
           record(row, current.id);
           result.updated++;
@@ -520,8 +541,14 @@ export function importGroup(draft: PlanningData, group: ImportGroup, options: Im
           endDate: row.endDate,
         });
         if (row.fulfilled !== undefined) record(row, id);
+        const commitment = draft.commitments.find(c => c.id === id)!;
+        // createdAt distinto e na ordem do CSV (1 ms por linha criada): o comando carimba todas
+        // as linhas da transação com o mesmo `now`, e a ordem de inclusão (planilha e reimportação)
+        // ficaria pelo id aleatório.
+        commitment.createdAt = new Date(Date.parse(context.now) + result.created).toISOString();
+        if (commitment.updatedAt < commitment.createdAt) commitment.updatedAt = commitment.createdAt;
         result.created++;
-        touched.push(draft.commitments.find(c => c.id === id)!);
+        touched.push(commitment);
       }
     } catch (error) {
       result.errors.push({ line: row.line, message: (error as Error).message });

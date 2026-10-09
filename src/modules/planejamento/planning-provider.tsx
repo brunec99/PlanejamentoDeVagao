@@ -84,8 +84,11 @@ export function PlanningProvider({ children, developer = false }: { children: Re
         })
         .catch(cause => {
           // Com dados na tela, a falha só marca que eles podem estar velhos; sem dados, é erro.
+          // O aviso diz de quando são os dados: a hora da última resposta boa, mesmo que ela tenha
+          // sido igual à anterior e não tenha mudado estado nenhum.
           staleNow.current = true;
           setStale(true);
+          setUpdatedAt(latest.current);
           if (!silent) setError(cause instanceof Error ? cause.message : 'Falha ao carregar o planejamento.');
           throw cause;
         })
@@ -138,6 +141,9 @@ export function PlanningProvider({ children, developer = false }: { children: Re
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Falha ao aplicar o comando.');
+        // Uma recarga que saiu antes da gravação (timer, volta à aba) ainda traz o estado antigo, e
+        // `load` entregaria essa mesma promessa: espera-se ela acabar e pede-se outra, já com o comando.
+        if (inFlight.current) await inFlight.current.catch(() => {});
         // O comando já foi gravado: se a recarga falhar, a tela fica marcada como desatualizada, mas
         // quem chamou recebe o id e não vê um erro de algo que deu certo.
         await load(true).catch(() => {});

@@ -14,6 +14,7 @@ import { formatDate } from '@/shared/format';
 import { useToast } from '@/modules/layout/toast';
 import { PhotoGrid, PhotoInput, uploadPendingPhotos, type PendingPhoto } from './photo-input';
 import { PhotoViewer } from './photo-viewer';
+import { refreshPhotos } from './photo-refresh';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const errorText = (cause: unknown, fallback: string) => (cause instanceof Error && cause.message ? cause.message : fallback);
@@ -259,7 +260,9 @@ export function ResolveDialog(props: {
           </form>
         )}
       </div>
-      {viewer && <PhotoViewer photos={viewer.photos} startIndex={viewer.index} onClose={() => setViewer(undefined)} />}
+      {viewer && (
+        <PhotoViewer photos={refreshPhotos(viewer.photos, data.photos)} startIndex={viewer.index} onClose={() => setViewer(undefined)} />
+      )}
     </dialog>
   );
 }

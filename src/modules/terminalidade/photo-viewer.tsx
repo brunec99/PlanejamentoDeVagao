@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
 import type { TerminalityPhoto } from '@/domain/terminality';
 import { formatTimestamp } from '@/shared/format';
+import { reportExpiredPhoto } from './api';
 
 const KIND_LABELS = { issue: 'Problema', correction: 'Correção' } as const;
 /** Deslocamento horizontal mínimo, em px, para o arrasto do dedo virar troca de foto. */
@@ -10,7 +11,8 @@ const SWIPE = 50;
 
 /** Visualizador de fotos da pendência em tela cheia. É um `<dialog>` modal: o resto da página fica
  * inerte (o foco não sai dele) e o Esc fecha. Setas do teclado, botões e arrasto lateral no celular
- * trocam a foto; o rótulo diz se é a foto do problema ou a da correção. */
+ * trocam a foto; o rótulo diz se é a foto do problema ou a da correção. Quem o abre passa as fotos
+ * já atualizadas (`refreshPhotos`): uma imagem com link vencido pede releitura e volta com URL nova. */
 export function PhotoViewer({ photos, startIndex, onClose }: { photos: TerminalityPhoto[]; startIndex: number; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -90,12 +92,17 @@ export function PhotoViewer({ photos, startIndex, onClose }: { photos: Terminali
               alt={`Foto ${index + 1} de ${count}: ${photo ? KIND_LABELS[photo.kind].toLowerCase() : ''}`}
               className="max-h-full max-w-full rounded-lg object-contain"
               draggable={false}
-              onError={() => setFailed(src)}
+              onError={() => {
+                setFailed(src);
+                reportExpiredPhoto(src);
+              }}
             />
           ) : (
             <p className="flex flex-col items-center gap-2 text-sm text-slate-300">
               <ImageOff size={32} aria-hidden />
-              {count ? 'Não foi possível abrir a foto. O link pode ter expirado: feche e recarregue a página.' : 'Nenhuma foto.'}
+              {count
+                ? 'Não foi possível abrir a foto. Se o link venceu, ela volta em instantes; senão, recarregue a página.'
+                : 'Nenhuma foto.'}
             </p>
           )}
           {count > 1 && (

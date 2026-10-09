@@ -32,6 +32,12 @@ export async function POST(request: NextRequest) {
   const userId = created.data.user?.id ?? (await findUserIdByEmail(email));
   if (!userId) return NextResponse.json({ error: created.error?.message ?? 'Não foi possível cadastrar.' }, { status: 400 });
 
+  // Quem já tem perfil no Obra 360 se edita na lista: recadastrar sobrescreveria nome, papel e obras
+  // (um gestor voltaria a consulta sem obra nenhuma). A conta só do Takt, sem perfil, segue adiante.
+  const { data: existing, error: existingError } = await service.from('profiles').select('id').eq('id', userId).maybeSingle();
+  if (existingError) return NextResponse.json({ error: `Não foi possível conferir o cadastro: ${existingError.message}` }, { status: 500 });
+  if (existing) return NextResponse.json({ error: 'Usuário já cadastrado. Altere o papel e as obras na lista abaixo.' }, { status: 409 });
+
   // O perfil já nasce com papel e obras definidos.
   const name = (body.name ?? '').trim() || email.split('@')[0].replace(/[._]/g, ' ');
   const { error: profileError } = await service.from('profiles').upsert({ id: userId, name, role, work_ids: workIds });

@@ -361,3 +361,31 @@ export async function createPhotoUploadUrls(paths: { storagePath: string; thumbP
     thumb: { path: thumb.data.path, signedUrl: thumb.data.signedUrl },
   };
 }
+
+type PhotoPaths = { storagePath: string; thumbPath: string };
+const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+/** A imagem e a miniatura estão entre os nomes listados na pasta da pendência. Puro, para teste. */
+export const hasPhotoFiles = (names: string[], paths: PhotoPaths) =>
+  names.includes(baseName(paths.storagePath)) && names.includes(baseName(paths.thumbPath));
+
+/** Confere no Storage se os dois arquivos já subiram: `add_photo` não pode registrar foto sem
+ * arquivo (senão uma "foto da correção" fantasma fecharia a pendência). Uma listagem só, filtrada
+ * pelo id da foto, que é o prefixo dos dois nomes. */
+export async function photoFilesExist(paths: PhotoPaths): Promise<boolean> {
+  const dir = paths.storagePath.slice(0, paths.storagePath.lastIndexOf('/'));
+  const search = baseName(paths.storagePath).replace(/\.jpg$/, '');
+  const { data, error } = await getServiceClient().storage.from(TERMINALITY_BUCKET).list(dir, { search, limit: 10 });
+  if (error) throw new Error(`Falha ao conferir os arquivos da foto: ${error.message}`);
+  return hasPhotoFiles(
+    (data ?? []).map(entry => entry.name),
+    paths,
+  );
+}
+
+/** Apaga os arquivos de um envio que não chegou a virar `add_photo` (a rota já conferiu que não há
+ * linha para a foto). Falha do Storage vira erro: a rota responde e o cliente só registra. */
+export async function removeUploadedPhotoFiles(paths: PhotoPaths): Promise<void> {
+  const { error } = await getServiceClient().storage.from(TERMINALITY_BUCKET).remove([paths.storagePath, paths.thumbPath]);
+  if (error) throw new Error(`Falha ao descartar os arquivos da foto: ${error.message}`);
+}

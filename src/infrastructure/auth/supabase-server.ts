@@ -1,10 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import type { User } from '../../domain/entities';
 import { getServiceClient } from '../repositories/supabase/client';
 import { devBypassProfileId } from './dev-bypass';
-import { hasDeveloperAccess } from '../../application/module-access';
+import { hasDeveloperAccess, RESTRICTED_MODULE_MESSAGE } from '../../application/module-access';
 
 /** SSR client bound to the request's cookies. Only for auth (getUser/signIn/signOut) — never for querying
  * planning tables, since RLS denies the anon/authenticated role by design (see 0001_init.sql). */
@@ -48,6 +49,18 @@ export async function getRouteAccess(): Promise<RouteAccess> {
   if (!authUser) return { profile: null, developer: false };
   const profile = await loadProfile(authUser.id);
   return { profile, developer: hasDeveloperAccess({ email: authUser.email, role: profile?.role }, process.env.DEVELOPER_EMAILS) };
+}
+
+/** Rotas dos módulos em desenvolvimento (`RESTRICTED_API_PREFIXES`): o proxy já barra quem não
+ * desenvolve, e cada handler repete a conferência na mesma leitura de sessão que lhe dá o perfil,
+ * para a proteção não depender de uma camada só. `error` é a resposta 403 pronta. */
+export async function requireDeveloperAccess(): Promise<
+  { access: RouteAccess; error?: undefined } | { access?: undefined; error: NextResponse }
+> {
+  const access = await getRouteAccess();
+  if (!access.developer)
+    return { error: NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403, headers: { 'Cache-Control': 'no-store' } }) };
+  return { access };
 }
 
 /** For Route Handlers: returns the signed-in user's profile, or null if unauthenticated / not provisioned. */

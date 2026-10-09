@@ -173,3 +173,9 @@ Isso funciona porque o proxy roda em Node.js no Next 16.
 - 37 linhas com data fora da semana indicada, ou com término antes do início, mantiveram a semana da linha, e a data foi trazida para dentro dela.
 
 **Reexecução:** a mesma importação acusa "2 atualizadas". São pares de linhas idênticas na mesma semana, com resultados diferentes, que o pareamento pela chave natural pode trocar. As contagens totais batem, então **não reaplicar**.
+
+## Varredura de segurança e robustez (09/10/2026)
+
+- **Cadastrar usuário já cadastrado** sobrescrevia nome, papel e obras (um gestor voltaria a consulta sem obra). Agora responde 409 "Usuário já cadastrado. Altere o papel e as obras na lista abaixo." A conta que só existe no Takt, sem perfil, continua sendo cadastrada.
+- **Segunda camada de bloqueio dos módulos:** além do proxy, cada página restrita (`longo-prazo`, `vagoes`, `medio-prazo`, `federacao`, `ifc`, `dividas`, `importar`) desvia para o curto prazo, e cada rota restrita (`/api/long-term-plan`, `/api/prevision`, `/api/ifc/*`, `/api/history`) responde 403 pelo `requireDeveloperAccess()`, na mesma leitura de sessão que dá o perfil.
+- **Importador:** linhas de chave igual e apontamentos diferentes podiam trocar de apontamento numa reexecução (os "2 atualizadas" da Blentt). Agora casam primeiro pelo apontamento idêntico, e as linhas criadas recebem `createdAt` distinto, na ordem do CSV. Nenhuma reexecução foi feita em produção.

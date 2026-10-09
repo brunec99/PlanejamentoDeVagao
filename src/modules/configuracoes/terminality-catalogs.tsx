@@ -22,7 +22,7 @@ import {
   type TerminalityFloor,
   type TerminalityUnit,
 } from '@/domain/terminality';
-import { useTerminality } from '@/modules/terminalidade/api';
+import { isTerminalityConflict, useTerminality } from '@/modules/terminalidade/api';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty } from '@/modules/planejamento/ui';
 import { HelpNote } from '@/modules/layout/help-note';
@@ -45,7 +45,13 @@ const MAX_NAME = TERMINALITY_LIMITS.maxName;
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const byName = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
-const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : 'Tente de novo em instantes.');
+/** No 409 a lista já é recarregada aqui, então a mensagem não manda recarregar a página. */
+const messageOf = (cause: unknown) =>
+  isTerminalityConflict(cause)
+    ? 'Os dados mudaram enquanto você editava; a lista foi atualizada. Confira e tente de novo.'
+    : cause instanceof Error
+      ? cause.message
+      : 'Tente de novo em instantes.';
 const tooLong = (names: string[]) => names.find(name => name.length > MAX_NAME);
 
 type Messages = { success?: string; failure: string };
@@ -79,6 +85,7 @@ export function TerminalityCatalogs({ workId }: { workId: string }) {
       return true;
     } catch (cause) {
       toast({ title: failure, description: messageOf(cause), tone: 'danger' });
+      if (isTerminalityConflict(cause)) await reload();
       return false;
     } finally {
       setBusy(false);
@@ -97,6 +104,7 @@ export function TerminalityCatalogs({ workId }: { workId: string }) {
         } catch (cause) {
           const saved = done ? ` Os ${done} anteriores já foram salvos.` : '';
           toast({ title: failure, description: `Parou em ${step.label}: ${messageOf(cause)}${saved}`, tone: 'danger' });
+          if (isTerminalityConflict(cause)) await reload();
           return done;
         }
       }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { listActivities, listProjects, PrevisionError } from '@/infrastructure/integrations/prevision/client';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
 export const runtime = 'nodejs';
 // A consulta ao Prevision é liberada por papel, não por endereço: até 01/10/2026 a rota só
 // respondia no localhost, decisão anterior ao login real, e a tela Integrações ficava morta em
@@ -10,7 +10,9 @@ const cache = new Map<string, { expires: number; value: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
 let lastRequest = 0;
 export async function GET(request: NextRequest) {
-  const profile = await getRouteProfile();
+  const gate = await requireDeveloperAccess();
+  if (gate.error) return gate.error;
+  const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });
   if (profile.role === 'viewer')
     return NextResponse.json(

@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Users } from 'lucide-react';
+import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { TabHeader } from '@/modules/layout/tab-header';
 import { ScheduleSheet } from '@/modules/medio-prazo/schedule-sheet';
 import { LookAheadOverview, type LookAheadSection } from '@/modules/medio-prazo/look-ahead-overview';
@@ -61,6 +63,9 @@ export default async function Page({
   searchParams: Promise<{ secao?: string }>;
 }) {
   const { obraId } = await params;
+  // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
+  const { developer } = await getRouteAccess();
+  if (!developer) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { secao } = await searchParams;
   const section: Section = isSection(secao) ? secao : 'cronograma';
   const base = workPath(obraId, 'medio-prazo');

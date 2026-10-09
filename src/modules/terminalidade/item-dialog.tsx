@@ -15,6 +15,7 @@ import { useToast } from '@/modules/layout/toast';
 import { formatDate } from '@/shared/format';
 import { PhotoGrid, PhotoInput, uploadPendingPhotos, type PendingPhoto } from './photo-input';
 import { PhotoViewer } from './photo-viewer';
+import { refreshPhotos } from './photo-refresh';
 
 /** Campos editáveis de uma pendência, como estão no formulário (vazio = não informado). */
 interface FormState {
@@ -579,7 +580,9 @@ export function ItemDialog(props: {
           </form>
         )}
       </div>
-      {viewer && <PhotoViewer photos={viewer.photos} startIndex={viewer.index} onClose={() => setViewer(undefined)} />}
+      {viewer && (
+        <PhotoViewer photos={refreshPhotos(viewer.photos, data.photos)} startIndex={viewer.index} onClose={() => setViewer(undefined)} />
+      )}
     </dialog>
   );
 }

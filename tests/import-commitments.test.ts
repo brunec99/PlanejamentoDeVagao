@@ -204,6 +204,42 @@ test('linhas repetidas na mesma semana viram compromissos distintos e continuam 
   assert.equal((await repository.getSnapshot()).commitments.length, 2);
 });
 
+test('linhas iguais com apontamentos diferentes casam pelo apontamento, não pela ordem do id', async () => {
+  const text = csv(
+    'Residencial Horizonte;Emp;2026-08-03;;;Limpeza;;Sim;;',
+    'Residencial Horizonte;Emp;2026-08-03;;;Limpeza;;Não;Falta de Material;Faltou saco',
+  );
+  const repository = new MockPlanningRepository(createMockData());
+  const [first] = await runImport(repository, text);
+  assert.equal(first.created, 2);
+  const created = (await repository.getSnapshot()).commitments;
+  const sim = created.find(c => c.fulfilled === true)!,
+    nao = created.find(c => c.fulfilled === false)!;
+  // createdAt distinto e na ordem do CSV, embora os dois comandos partilhem o mesmo `now`.
+  assert.equal(sim.createdAt, '2026-09-08T12:00:00.000Z');
+  assert.equal(nao.createdAt, '2026-09-08T12:00:00.001Z');
+  assert.ok(sim.updatedAt >= sim.createdAt && nao.updatedAt >= nao.createdAt);
+
+  // O caso cruzado de produção: mesmo createdAt e o id do "Não" ordenado antes do "Sim".
+  const crossed = await repository.getSnapshot();
+  for (const c of crossed.commitments) {
+    c.createdAt = '2026-09-01T12:00:00.000Z';
+    c.id = c.fulfilled ? 'z-sim' : 'a-nao';
+  }
+  const again = new MockPlanningRepository(crossed);
+  const [rerun] = await runImport(again, text);
+  assert.deepEqual([rerun.created, rerun.updated, rerun.unchanged], [0, 0, 2]);
+  const after = (await again.getSnapshot()).commitments;
+  assert.equal(after.find(c => c.id === 'z-sim')!.fulfilled, true);
+  assert.equal(after.find(c => c.id === 'a-nao')!.justification, 'Faltou saco');
+  assert.equal(after.length, 2);
+
+  // Mudar só a segunda linha atualiza só o compromisso que sobrou sem par idêntico.
+  const [changed] = await runImport(again, text.replace('Não;Falta de Material;Faltou saco', 'Sim;;'));
+  assert.deepEqual([changed.created, changed.updated, changed.unchanged], [0, 1, 1]);
+  assert.ok((await again.getSnapshot()).commitments.every(c => c.fulfilled === true));
+});
+
 test('obra inexistente: erro sem --create-works; criada com ele e reaproveitada na segunda vez', async () => {
   const text = csv('Obra Nova Ágata;Fornecedor X;2026-07-06;;;Fundação;Bate-estaca;Sim;;');
   const data = createMockData();

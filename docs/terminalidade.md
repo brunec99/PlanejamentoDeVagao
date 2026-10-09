@@ -106,3 +106,10 @@ Todos os comandos passam por `POST /api/terminalidade/commands`. Antes de execut
 - **Fotos órfãs:** se o navegador fechar entre o envio e o `add_photo`, o arquivo fica sem pendência. Ainda não há limpeza automática.
 - **Edição simultânea:** não há trava de versão. Se duas pessoas editarem a mesma pendência ao mesmo tempo, vale a última gravação.
 - **Importação:** a lista atual do Sheets ainda não foi importada. O primeiro passo é cadastrar os locais.
+
+## Correções de 09/10/2026
+
+- `add_photo` só grava se os dois arquivos (imagem e miniatura) já estiverem no bucket; antes, uma pendência podia ser resolvida com uma "foto" inexistente.
+- As URLs assinadas das fotos valem 1 h: a aba recarrega em silêncio ao voltar ao foco depois de 45 min e refaz a URL uma vez quando uma imagem falha (`photo-refresh.ts`).
+- Os cadastros recarregam sozinhos ao receber 409 (dados alterados por outra pessoa).
+- Envio de foto: o PUT que falha é repetido uma vez com o mesmo ticket; se falhar de novo, `DELETE /api/terminalidade/upload-url` apaga o que subiu (só sem linha registrada). Ainda falta uma limpeza periódica de arquivos órfãos.

@@ -33,8 +33,9 @@
  *
  * Idempotência: rodar o mesmo CSV de novo não duplica. Cada linha é casada com o compromisso já
  * gravado de mesma chave (obra, semana, início, término, atividade, empresa, equipe — texto sem
- * acento/caixa), na ordem de ocorrência; o que já existe só tem o apontamento atualizado quando o
- * CSV traz status diferente. Nada é apagado.
+ * acento/caixa): entre linhas iguais, primeiro com o de mesmo apontamento, depois na ordem de
+ * ocorrência; o que já existe só tem o apontamento atualizado quando o CSV traz status diferente.
+ * Linhas criadas recebem createdAt distintos, na ordem do CSV. Nada é apagado.
  *
  * O apontamento importado (record_fulfillment) é datado no sábado da semana, ao meio-dia de São
  * Paulo (recordedAt), com recordedBy = --actor. O responsável das linhas é o --actor, que precisa

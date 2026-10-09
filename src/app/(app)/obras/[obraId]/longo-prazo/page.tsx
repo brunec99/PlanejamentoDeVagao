@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { BaselinesOverview } from '@/modules/longo-prazo/baselines-overview';
 import { LineOfBalance } from '@/modules/longo-prazo/line-of-balance';
 import { SCurve } from '@/modules/longo-prazo/s-curve';
@@ -22,6 +24,9 @@ export default async function Page({
   searchParams: Promise<{ visao?: string }>;
 }) {
   const { obraId } = await params;
+  // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
+  const { developer } = await getRouteAccess();
+  if (!developer) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { visao } = await searchParams;
   const view = visao === 'prevision' ? 'prevision' : 'planejador';
   const base = workPath(obraId, 'longo-prazo');
