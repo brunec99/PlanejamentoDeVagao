@@ -432,3 +432,8 @@ O Daniel (planejador da Blentt) testou em produção e mandou observações. O q
   - medido com o Playwright numa tela de 1.366×768, contra os dados reais e com o perfil de planejador;
   - a página ficou com 1.366 px, sem rolagem lateral, e o cabeçalho continua fixo ao rolar.
   - A ordem estável não foi exercitada criando linhas em produção, para não deixar histórico de teste. A lógica fica em `commitments-overview.tsx` (`pinned`).
+- **Ordem de inclusão como padrão (09/10/2026, segundo retorno):** o usuário pediu que a tarefa adicionada não suba na lista e fique embaixo, para uma experiência linear. A ordem presa só durante a sessão não bastava, porque ao recarregar a planilha voltava a ordenar por empresa. Agora:
+  - a ordem padrão é `createdAt`: a nova entra embaixo e fica embaixo, mesmo depois de recarregar;
+  - no histórico importado, as linhas de uma semana têm o mesmo `createdAt`, e o desempate é o da planilha de origem (empresa, depois início);
+  - acima da planilha, "Organizar por empresa" agrupa por empresa durante a sessão (as novas continuam entrando embaixo), e "Voltar à ordem de inclusão" desfaz;
+  - testado com o Playwright interceptando a gravação, sem escrever em produção: a linha nova ficou em 117 de 117, depois de incluir e depois de recarregar.

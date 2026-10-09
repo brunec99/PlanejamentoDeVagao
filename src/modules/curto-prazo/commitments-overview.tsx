@@ -277,12 +277,17 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   };
   const sortKeys: Record<string, Accessor<WeeklyCommitment>> = { inicio: r => r.startDate, termino: r => r.endDate };
   // Ordem da planilha de origem: as linhas de cada empresa juntas, e dentro dela pela data de início.
-  const defaultOrder = (a: WeeklyCommitment, b: WeeklyCommitment) => {
+  const byCompany = (a: WeeklyCommitment, b: WeeklyCommitment) => {
     const [x, y] = [companyOf(a), companyOf(b)];
     if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
     return compareText(x, y) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt);
   };
+  // Ordem padrão = ordem de inclusão (09/10/2026, pedido da obra): linha nova entra embaixo e fica
+  // embaixo, inclusive depois de recarregar, como numa planilha. O histórico importado tem o mesmo
+  // horário de inclusão por lote, e aí o desempate é o da planilha de origem (empresa, início).
+  const defaultOrder = (a: WeeklyCommitment, b: WeeklyCommitment) => a.createdAt.localeCompare(b.createdAt) || byCompany(a, b);
   const defaultIds = [...weekRows].sort(defaultOrder).map(r => r.id);
+  const companyIds = [...weekRows].sort(byCompany).map(r => r.id);
   const known = new Set(defaultIds);
   const orderIds =
     pinned.week === week ? [...pinned.ids.filter(id => known.has(id)), ...defaultIds.filter(id => !pinned.ids.includes(id))] : defaultIds;
@@ -290,7 +295,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
     setPinned({ week, ids: orderIds });
   const position = new Map(orderIds.map((id, i) => [id, i]));
   const byPin = (a: WeeklyCommitment, b: WeeklyCommitment) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0);
-  const outOfOrder = orderIds.some((id, i) => id !== defaultIds[i]);
+  const byCompanyNow = orderIds.every((id, i) => id === companyIds[i]);
   const rows = applySheetView([...weekRows], accessors, filters, sort, byPin, sortKeys);
   const filtered = Object.values(filters).some(Boolean) || !!sort;
   const waiting = weekRows.filter(r => r.fulfilled === undefined && awaitingCause.includes(r.id)).length;
@@ -745,12 +750,22 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         </div>
       )}
 
-      {outOfOrder && !sort && (
+      {!sort && weekRows.length > 1 && (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-          <span>Linhas novas ou editadas ficam onde estão até você organizar.</span>
-          <button type="button" className="text-link" onClick={() => setPinned({ week: '', ids: [] })}>
-            Organizar por empresa
-          </button>
+          <span>
+            {byCompanyNow
+              ? 'Linhas organizadas por empresa; as novas entram embaixo.'
+              : 'Linhas na ordem em que foram incluídas; a nova entra embaixo.'}
+          </span>
+          {byCompanyNow ? (
+            <button type="button" className="text-link" onClick={() => setPinned({ week: '', ids: [] })}>
+              Voltar à ordem de inclusão
+            </button>
+          ) : (
+            <button type="button" className="text-link" onClick={() => setPinned({ week, ids: companyIds })}>
+              Organizar por empresa
+            </button>
+          )}
         </div>
       )}
 
