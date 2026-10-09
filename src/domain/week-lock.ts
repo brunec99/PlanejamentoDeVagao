@@ -1,9 +1,10 @@
 import { addDays, startOfWeek } from './validation';
 
 /** Semana encerrada do curto prazo (decisão do usuário, 08/10/2026): depois que a semana fica para trás,
- * os dados congelam e só admins alteram. A equipe tem até a terça-feira seguinte, inclusive, para lançar o
- * fechamento (Sim/Não, causa, justificativa); a partir da quarta, só admins. "Hoje" é a data civil de São
- * Paulo (`todayInSaoPaulo`), a mesma que o servidor usa nos comandos. */
+ * as linhas congelam e só admins incluem, editam ou excluem. Desde 09/10/2026 o apontamento (Realizado,
+ * causa, justificativa) fica livre em qualquer semana, para quem pode editar a obra. As linhas ficam
+ * abertas até a terça-feira seguinte, inclusive; a partir da quarta, só admins. "Hoje" é a data civil de
+ * São Paulo (`todayInSaoPaulo`), a mesma que o servidor usa nos comandos. */
 export const WEEK_LOCK_GRACE_DAYS = 8;
 
 /** Último dia em que a semana ainda aceita edição de quem não é admin: a terça-feira seguinte. */

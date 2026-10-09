@@ -507,7 +507,8 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <PillSelect
           value={status}
           tone={status === 'Sim' ? 'success' : status === 'Não' ? 'danger' : 'neutral'}
-          disabled={readOnly || !!busy}
+          // Realizado, causa e justificativa ficam abertos mesmo na semana encerrada (09/10/2026).
+          disabled={viewer || !!busy}
           ariaLabel={`Status da linha ${index + 1}`}
           options={[
             { value: 'Sim', label: 'Sim' },
@@ -520,7 +521,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <PillSelect
           value={row.cause ?? ''}
           tone={missingCause ? 'required' : 'neutral'}
-          disabled={readOnly || !!busy || status !== 'Não'}
+          disabled={viewer || !!busy || status !== 'Não'}
           ariaLabel={`Causa da linha ${index + 1}`}
           placeholder={missingCause ? 'Escolha a causa' : ''}
           title={status !== 'Não' ? 'A causa só é pedida quando o Status é Não.' : undefined}
@@ -532,7 +533,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <input
           className={className}
           defaultValue={row.justification ?? ''}
-          disabled={readOnly || row.fulfilled === undefined}
+          disabled={viewer || row.fulfilled === undefined}
           aria-label={`Justificativa da linha ${index + 1}`}
           onBlur={e => {
             if (row.fulfilled !== undefined && e.target.value !== (row.justification ?? ''))
@@ -623,8 +624,8 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
               {developer ? ' ou gere uma restrição no longo prazo' : ''}; a linha original fica como registro do que aconteceu.
             </p>
             <p>
-              A semana fica aberta até a terça-feira seguinte, para lançar o fechamento. Depois disso ela é encerrada: só administradores
-              alteram, e os demais a veem para consulta e para os PDFs.
+              A semana fica aberta até a terça-feira seguinte. Depois disso ela é encerrada: incluir, editar ou excluir linhas, só
+              administradores. Realizado, causa e justificativa podem ser lançados ou corrigidos a qualquer momento.
             </p>
             <p>
               A semana 1 vem das configurações da obra; sem ela, é a primeira semana com linha na planilha. O número de cada semana é
@@ -712,7 +713,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         <div className="mt-3">
           <Callout tone={readOnly ? 'warning' : 'info'} role="status">
             {readOnly
-              ? `Semana encerrada em ${formatDate(weekLockLastDay(week))}: só administradores podem alterar. A planilha fica para consulta e para os PDFs.`
+              ? `Semana encerrada em ${formatDate(weekLockLastDay(week))}: Realizado, causa e justificativa continuam abertos; incluir, editar ou excluir linhas, só administradores.`
               : `Semana encerrada em ${formatDate(weekLockLastDay(week))}: você está alterando como administrador.`}
           </Callout>
         </div>

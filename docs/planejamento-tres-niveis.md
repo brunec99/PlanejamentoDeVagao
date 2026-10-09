@@ -437,3 +437,10 @@ O Daniel (planejador da Blentt) testou em produção e mandou observações. O q
   - no histórico importado, as linhas de uma semana têm o mesmo `createdAt`, e o desempate é o da planilha de origem (empresa, depois início);
   - acima da planilha, "Organizar por empresa" agrupa por empresa durante a sessão (as novas continuam entrando embaixo), e "Voltar à ordem de inclusão" desfaz;
   - testado com o Playwright interceptando a gravação, sem escrever em produção: a linha nova ficou em 117 de 117, depois de incluir e depois de recarregar.
+- **Apontamento livre (09/10/2026):**
+  - o usuário pediu para liberar desde já o preenchimento do Realizado e das causas;
+  - na semana atual isso já era livre, então a decisão foi tirar a trava de semana encerrada do **apontamento**;
+  - `record_fulfillment` (Realizado, causa, justificativa) não confere mais a semana: quem pode editar a obra lança ou corrige o apontamento em qualquer semana;
+  - criar, editar e excluir linhas de semana encerrada continua só para admins;
+  - na planilha, os campos de Status, Causa e Justificativa ficam habilitados na semana encerrada (só o perfil de consulta não edita), e o aviso e a ajuda explicam a regra;
+  - testes em `tests/week-lock-commands.test.ts`.

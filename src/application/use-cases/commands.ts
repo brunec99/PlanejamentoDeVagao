@@ -332,7 +332,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     checkWork(sequence.workId);
     return sequence.workId;
   };
-  /** Semana encerrada do curto prazo: depois da terça-feira seguinte, só admin altera (`week-lock.ts`). */
+  /** Semana encerrada do curto prazo: depois da terça-feira seguinte, só admin inclui, edita ou exclui
+   * linhas (`week-lock.ts`). O apontamento (Realizado, causa, justificativa) fica livre. */
   const guardWeek = (weekStart: string) => {
     if (canEditWeek(weekStart, today, actor.role)) return;
     const start = startOfWeek(weekStart);
@@ -911,7 +912,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const commitment = data.commitments.find(c => c.id === command.commitmentId);
       if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
-      guardWeek(commitment.weekStart);
+      // Sem trava de semana encerrada: o Realizado, a causa e a justificativa podem ser lançados ou
+      // corrigidos a qualquer momento (decisão do usuário, 09/10/2026). A trava vale para as linhas.
       // A planilha é editável: corrigir o apontamento é trocar a célula, não excluir a linha.
       let cause: NonFulfillmentCause | undefined;
       if (!command.fulfilled) {
