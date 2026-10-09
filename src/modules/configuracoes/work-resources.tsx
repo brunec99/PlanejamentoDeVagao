@@ -33,7 +33,9 @@ export function WorkSettingsHeader({ workId }: { workId: string }) {
         </p>
         <h1 className="page-title">Configurações da obra</h1>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-sm text-slate-500">Quem executa nesta obra, qual é a semana 1 do curto prazo e os cadastros da terminalidade.</p>
+          <p className="text-sm text-slate-500">
+            Quem executa nesta obra, qual é a semana 1 do curto prazo e os cadastros da terminalidade.
+          </p>
           <HelpNote title="Como funciona: configurações da obra" compact>
             <p>
               <strong>Empreiteiros e equipes</strong> é o cadastro de quem executa. As mesmas equipes aparecem como recurso no cronograma de

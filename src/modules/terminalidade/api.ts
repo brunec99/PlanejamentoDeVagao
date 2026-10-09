@@ -13,10 +13,7 @@ import {
  * POST /api/terminalidade/upload-url seguido do envio direto ao Storage (como no IFC). */
 
 export type TerminalityState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'unavailable' }
-  | { status: 'ready'; data: TerminalityData };
+  { status: 'loading' } | { status: 'error'; message: string } | { status: 'unavailable' } | { status: 'ready'; data: TerminalityData };
 
 async function readJson(res: Response) {
   const body = await res.json().catch(() => ({}));

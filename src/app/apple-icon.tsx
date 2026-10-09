@@ -6,7 +6,16 @@ export const contentType = 'image/png';
 /** Ícone para a tela inicial do iPhone, gerado no build a partir do mesmo desenho do icon.svg. */
 export default function AppleIcon() {
   return new ImageResponse(
-    <div style={{ width: 180, height: 180, background: 'linear-gradient(135deg, #135a82 0%, #0a364d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div
+      style={{
+        width: 180,
+        height: 180,
+        background: 'linear-gradient(135deg, #135a82 0%, #0a364d 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <svg width="150" height="150" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M4.5 19.5a11.5 4.5 0 0 1 23 0" stroke="#8cc6e4" strokeWidth="1.8" strokeLinecap="round" />
         <rect x="11" y="6" width="10" height="17" rx="1" fill="#fff" />
