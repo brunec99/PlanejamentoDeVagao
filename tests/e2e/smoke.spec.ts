@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('a tela de login abre com o acesso pelo Google', async ({ page }) => {
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: 'Acesso ao sistema' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entrar no Obra 360' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Continuar com o Google/ })).toBeVisible();
 });
 
