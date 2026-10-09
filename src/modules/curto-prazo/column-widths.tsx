@@ -1,54 +1,116 @@
 'use client';
-import { useCallback, useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 
 /** Largura das colunas da planilha, ajustável arrastando a borda do cabeçalho, como no Sheets. Fica
  * guardada no navegador de cada pessoa (localStorage): é preferência de quem lê, não dado da obra.
- * Sem o armazenamento (janela anônima, bloqueio), a planilha abre com as larguras padrão. */
+ * Sem o armazenamento (janela anônima, bloqueio), a planilha abre ajustada à tela. */
 export const MIN_COLUMN_WIDTH = 40;
 
-export function useColumnWidths(storageKey: string, defaults: Record<string, number>) {
+/** Cabe na largura disponível: reduz (ou amplia) proporcionalmente as larguras-base, sem descer do
+ * mínimo de cada coluna. Se nem os mínimos cabem, fica nos mínimos e a planilha rola de lado. */
+export function fitWidths(base: Record<string, number>, minimums: Record<string, number>, available: number): Record<string, number> {
+  const keys = Object.keys(base);
+  const result = { ...base };
+  let flexible = keys;
+  let room = available;
+  // Algumas passadas: quem bate no mínimo sai da conta e o resto divide o espaço que sobra.
+  for (let pass = 0; pass < keys.length && flexible.length; pass++) {
+    const total = flexible.reduce((sum, k) => sum + base[k], 0);
+    const scale = room / total;
+    const clamped = flexible.filter(k => base[k] * scale < (minimums[k] ?? MIN_COLUMN_WIDTH));
+    if (!clamped.length) {
+      flexible.forEach(k => (result[k] = Math.floor(base[k] * scale)));
+      return result;
+    }
+    clamped.forEach(k => {
+      result[k] = minimums[k] ?? MIN_COLUMN_WIDTH;
+      room -= result[k];
+    });
+    flexible = flexible.filter(k => !clamped.includes(k));
+    if (room <= 0) break;
+  }
+  flexible.forEach(k => (result[k] = minimums[k] ?? MIN_COLUMN_WIDTH));
+  return result;
+}
+
+export function useColumnWidths(storageKey: string, defaults: Record<string, number>, minimums: Record<string, number> = {}) {
   const [widths, setWidths] = useState<Record<string, number>>(defaults);
+  /** A pessoa já escolheu larguras (arrastando ou ajustando): não se ajusta mais sozinho. */
+  const [saved, setSaved] = useState(false);
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, unknown>;
+      const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, unknown>;
       const valid = Object.fromEntries(
-        Object.entries(saved).filter(([key, value]) => key in defaults && typeof value === 'number' && value >= MIN_COLUMN_WIDTH),
+        Object.entries(stored).filter(([key, value]) => key in defaults && typeof value === 'number' && value >= MIN_COLUMN_WIDTH),
       ) as Record<string, number>;
       // Carrega depois da montagem: no servidor não há localStorage, e ler na renderização desalinharia a hidratação.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (Object.keys(valid).length) setWidths(current => ({ ...current, ...valid }));
+      if (Object.keys(valid).length) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setWidths(current => ({ ...current, ...valid }));
+        setSaved(true);
+      }
     } catch {}
     // As larguras padrão são constantes de quem chama; só a chave decide quando reler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
   const persist = useCallback(
-    (next: Record<string, number>) => {
+    (next: Record<string, number> | null) => {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
+        if (next) localStorage.setItem(storageKey, JSON.stringify(next));
+        else localStorage.removeItem(storageKey);
       } catch {}
     },
     [storageKey],
   );
   const resize = useCallback(
-    (column: string, width: number) =>
+    (column: string, width: number) => {
+      setSaved(true);
       setWidths(current => {
-        const next = { ...current, [column]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)) };
+        const next = { ...current, [column]: Math.max(minimums[column] ?? MIN_COLUMN_WIDTH, Math.round(width)) };
         persist(next);
         return next;
-      }),
-    [persist],
+      });
+    },
+    [minimums, persist],
+  );
+  /** Ajusta à largura visível. `remember` grava como preferência (botão); o ajuste automático não grava. */
+  const fit = useCallback(
+    (available: number, remember: boolean) => {
+      if (available <= 0) return;
+      const next = fitWidths(defaults, minimums, available);
+      setWidths(next);
+      if (remember) {
+        setSaved(true);
+        persist(next);
+      }
+    },
+    [defaults, minimums, persist],
   );
   const reset = useCallback(
-    (column?: string) =>
+    (column: string) =>
       setWidths(current => {
-        const next = column ? { ...current, [column]: defaults[column] } : { ...defaults };
+        const next = { ...current, [column]: defaults[column] };
         persist(next);
         return next;
       }),
     [defaults, persist],
   );
   const total = Object.values(widths).reduce((sum, w) => sum + w, 0);
-  return { widths, resize, reset, total };
+  return { widths, resize, fit, reset, total, saved };
+}
+
+/** Telas largas (lg, 1024 px) desenham a tabela; as estreitas, os cartões. Desenhar as duas e esconder
+ * uma com CSS dobrava a página (46 mil elementos numa semana de 120 linhas, 09/10/2026). */
+export function useWideScreen(): boolean {
+  return useSyncExternalStore(
+    notify => {
+      const query = window.matchMedia('(min-width: 1024px)');
+      query.addEventListener('change', notify);
+      return () => query.removeEventListener('change', notify);
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => true,
+  );
 }
 
 /** Alça na borda direita do cabeçalho. Arrastar muda a largura; duplo clique volta ao padrão. O

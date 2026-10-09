@@ -411,3 +411,24 @@ O usuário disse que a planilha estava ruim de usar e pediu duas coisas: colunas
   - a semana 114 da Blentt apareceu encerrada e só para leitura;
   - uma edição que regravava os mesmos valores foi recusada pelo servidor com 400;
   - o PDF de fechamento sem ATR ENG e por data de início saiu com 105 linhas e nenhuma do ATR ENG.
+
+## Curto prazo: retorno da implantação (09/10/2026)
+
+O Daniel (planejador da Blentt) testou em produção e mandou observações. O que foi achado e corrigido:
+
+- **"Painel ruim" / tela deslocada:**
+  - a página chegava a 2.473 px numa tela de 1.366;
+  - a causa eram os ícones das células (`position: absolute`, 582 deles), que escapavam do quadro da planilha porque o quadro não era posicionado e alargavam a página inteira;
+  - o quadro passou a `relative`, com altura limitada (`max-h-[calc(100dvh-12rem)]`) e rolagem própria nos dois sentidos, e o cabeçalho ficou fixo (`sticky`). A barra de rolagem lateral, que antes só aparecia depois de 148 linhas, fica à vista.
+- **"Travando":**
+  - a semana tinha 46 mil elementos, porque a tabela e os cartões do celular eram desenhados juntos e um deles ficava escondido por CSS. Agora `useWideScreen` desenha só um dos dois, e a página caiu para 22 mil;
+  - a recarga automática (a cada 2 min e ao voltar à aba) baixa os ~3 MB da obra e redesenhava tudo, até duas vezes por recarga. Agora uma resposta idêntica à anterior não muda estado nenhum, e o "Recarregando…" só aparece quando há aviso de conexão.
+- **"Larguras padrão" não fazia nada:** sem larguras mexidas, voltar ao padrão não muda nada visível. Ele virou **"Ajustar à tela"** (`fitWidths`, testado em `tests/column-widths.test.ts`), que reduz as colunas proporcionalmente até o mínimo legível de cada uma (`COLUMN_MIN`). Sem preferência gravada, a planilha já abre ajustada. Duplo clique na borda continua voltando a coluna ao padrão.
+- **Linha nova pulava para a ordem alfabética:**
+  - a ordem das linhas fica presa enquanto se edita: linha nova entra no fim, e linha editada não muda de lugar, como no Sheets;
+  - "Organizar por empresa" aparece quando a ordem diverge e volta à ordem padrão. Trocar de semana ou recarregar também volta;
+  - classificar por uma coluna, no funil, continua valendo por cima.
+- **Validação:**
+  - medido com o Playwright numa tela de 1.366×768, contra os dados reais e com o perfil de planejador;
+  - a página ficou com 1.366 px, sem rolagem lateral, e o cabeçalho continua fixo ao rolar.
+  - A ordem estável não foi exercitada criando linhas em produção, para não deixar histórico de teste. A lógica fica em `commitments-overview.tsx` (`pinned`).

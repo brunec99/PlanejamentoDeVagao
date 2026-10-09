@@ -28,15 +28,18 @@ const FOCUS_AFTER = 30_000;
 /** Recarga periódica enquanto a aba está visível: numa reunião, dois planejadores veem o mesmo. */
 const EVERY = 120_000;
 
-async function fetchPlanning(): Promise<Loaded> {
+async function fetchPlanning(): Promise<{ text: string }> {
   const res = await fetch('/api/planning', { cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body.error === 'string' ? body.error : 'Falha ao carregar o planejamento.');
   }
-  const { actorId, ...planning } = (await res.json()) as Planning & { actorId: string };
-  return { planning, actorId };
+  return { text: await res.text() };
 }
+const parsePlanning = (text: string): Loaded => {
+  const { actorId, ...planning } = JSON.parse(text) as Planning & { actorId: string };
+  return { planning, actorId };
+};
 
 export function PlanningProvider({ children, developer = false }: { children: ReactNode; developer?: boolean }) {
   const [loaded, setLoaded] = useState<Loaded>();
@@ -47,29 +50,48 @@ export function PlanningProvider({ children, developer = false }: { children: Re
   const inFlight = useRef<Promise<Loaded> | undefined>(undefined);
   const mutating = useRef(0);
   const latest = useRef(0);
+  /** A última resposta, como texto. Uma obra com anos de curto prazo passa de 3 MB, e redesenhar a
+   * planilha inteira a cada recarga automática travava a tela por meio segundo (09/10/2026): resposta
+   * igual à anterior não muda estado nenhum. */
+  const lastText = useRef('');
+  const current = useRef<Loaded | undefined>(undefined);
+  const staleNow = useRef(false);
 
   /** Uma única requisição por vez: quem pedir enquanto outra corre recebe a mesma promessa. */
   const load = useCallback(async (silent: boolean) => {
     if (!inFlight.current) {
-      if (silent) setRefreshing(true);
+      // O "Recarregando…" só aparece no aviso de conexão; fora dele, ligar e desligar redesenharia tudo.
+      if (silent && staleNow.current) setRefreshing(true);
       inFlight.current = fetchPlanning()
-        .then(result => {
+        .then(({ text }) => {
+          latest.current = Date.now();
+          if (text === lastText.current && current.current) {
+            if (staleNow.current) {
+              staleNow.current = false;
+              setStale(false);
+            }
+            return current.current;
+          }
+          const result = parsePlanning(text);
+          lastText.current = text;
+          current.current = result;
+          staleNow.current = false;
           setLoaded(result);
           setError('');
           setStale(false);
           setUpdatedAt(Date.now());
-          latest.current = Date.now();
           return result;
         })
         .catch(cause => {
           // Com dados na tela, a falha só marca que eles podem estar velhos; sem dados, é erro.
+          staleNow.current = true;
           setStale(true);
           if (!silent) setError(cause instanceof Error ? cause.message : 'Falha ao carregar o planejamento.');
           throw cause;
         })
         .finally(() => {
           inFlight.current = undefined;
-          setRefreshing(false);
+          setRefreshing(current => (current ? false : current));
         });
     }
     return inFlight.current;

@@ -17,7 +17,7 @@ import { CHART } from '@/shared/palette';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
 import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
-import { ColumnResizeHandle, useColumnWidths } from '@/modules/curto-prazo/column-widths';
+import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/curto-prazo/column-widths';
 import { PrintDialog } from '@/modules/curto-prazo/print-dialog';
 import type { PrintKind } from '@/modules/curto-prazo/print-sheet';
 import { weekNumberFrom } from '@/domain/week-numbering';
@@ -65,6 +65,26 @@ const COLUMN_DEFAULTS: Record<string, number> = {
   excluir: 36,
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
+/** O mínimo legível de cada coluna no "Ajustar à tela": abaixo disso a lista de empresa ou a data cortam. */
+const COLUMN_MIN: Record<string, number> = {
+  empresa: 110,
+  semana: 84,
+  inicio: 108,
+  termino: 108,
+  atividade: 200,
+  equipe: 100,
+  d1: 40,
+  d2: 40,
+  d3: 40,
+  d4: 40,
+  d5: 40,
+  d6: 40,
+  status: 76,
+  causas: 130,
+  justificativa: 130,
+  seguimento: 120,
+  excluir: 32,
+};
 
 export function CommitmentsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -81,7 +101,14 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
   const [printing, setPrinting] = useState<PrintKind>();
   const { weekOneStart } = useWorkSettings(workId);
-  const columnWidths = useColumnWidths('obra360.curto-prazo.colunas', COLUMN_DEFAULTS);
+  const columnWidths = useColumnWidths('obra360.curto-prazo.colunas', COLUMN_DEFAULTS, COLUMN_MIN);
+  const wide = useWideScreen();
+  const sheetPanel = useRef<HTMLDivElement | null>(null);
+  const autoFitted = useRef(false);
+  /** Ordem das linhas da semana como estão na tela. Linha nova entra no fim e linha editada não muda de
+   * lugar, como no Sheets (pedido da obra, 09/10/2026): reordenar a cada gravação atrapalhava escrever o
+   * planejamento. Volta à ordem por empresa ao trocar de semana, recarregar ou pedir "Organizar". */
+  const [pinned, setPinned] = useState<{ week: string; ids: string[] }>({ week: '', ids: [] });
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
@@ -255,7 +282,16 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
     if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
     return compareText(x, y) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt);
   };
-  const rows = applySheetView([...weekRows], accessors, filters, sort, defaultOrder, sortKeys);
+  const defaultIds = [...weekRows].sort(defaultOrder).map(r => r.id);
+  const known = new Set(defaultIds);
+  const orderIds =
+    pinned.week === week ? [...pinned.ids.filter(id => known.has(id)), ...defaultIds.filter(id => !pinned.ids.includes(id))] : defaultIds;
+  if (pinned.week !== week || orderIds.length !== pinned.ids.length || orderIds.some((id, i) => id !== pinned.ids[i]))
+    setPinned({ week, ids: orderIds });
+  const position = new Map(orderIds.map((id, i) => [id, i]));
+  const byPin = (a: WeeklyCommitment, b: WeeklyCommitment) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0);
+  const outOfOrder = orderIds.some((id, i) => id !== defaultIds[i]);
+  const rows = applySheetView([...weekRows], accessors, filters, sort, byPin, sortKeys);
   const filtered = Object.values(filters).some(Boolean) || !!sort;
   const waiting = weekRows.filter(r => r.fulfilled === undefined && awaitingCause.includes(r.id)).length;
 
@@ -654,9 +690,16 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           <button type="button" className="button-secondary" onClick={() => setPrinting('fechamento')}>
             PDF do fechamento
           </button>
-          <button type="button" className="text-link hidden lg:inline" onClick={() => columnWidths.reset()}>
-            Larguras padrão
-          </button>
+          {wide && (
+            <button
+              type="button"
+              className="text-link"
+              title="Reduz as colunas para a planilha caber na largura da tela"
+              onClick={() => columnWidths.fit(sheetPanel.current?.clientWidth ?? 0, true)}
+            >
+              Ajustar à tela
+            </button>
+          )}
         </span>
       </div>
 
@@ -702,153 +745,180 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         </div>
       )}
 
-      {/* O `data-tour` fica no invólucro das duas versões: no celular a tabela não tem área e o
-        passo do tour pularia a planilha. */}
-      <div data-tour="curto-commitments" className="mt-4">
-        <div className="panel hidden overflow-x-auto custom-scrollbar lg:block" role="region" aria-label={sheetLabel} tabIndex={0}>
-          <table className="table-fixed border-collapse text-left text-xs" style={{ width: columnWidths.total }}>
-            <colgroup>
-              {COLUMN_ORDER.map(column => (
-                <col key={column} style={{ width: columnWidths.widths[column] }} />
-              ))}
-            </colgroup>
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <tr className="text-xs font-semibold normal-case tracking-normal text-slate-400">
-                <th colSpan={6} className="px-2 pt-1.5" />
-                {columns.map(({ day, date }) => (
-                  <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">
-                    {dayMonth(date)}
-                  </th>
-                ))}
-                <th colSpan={5} />
-              </tr>
-              <tr className="border-b border-slate-200">
-                {header('empresa', 'Empresa', 'px-2 py-1.5')}
-                {header('semana', 'Semana', 'px-2 py-1.5')}
-                {header('inicio', 'Início', 'px-2 py-1.5')}
-                {header('termino', 'Término', 'px-2 py-1.5')}
-                {header('atividade', 'Atividade', 'px-2 py-1.5')}
-                {header('equipe', 'Equipe', 'px-2 py-1.5')}
-                {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'border-l border-slate-200 px-1 py-1.5', 'center'))}
-                {header('status', 'Status', 'px-2 py-1.5')}
-                {header('causas', 'Causas', 'px-2 py-1.5')}
-                {header('justificativa', 'Justificativas', 'px-2 py-1.5')}
-                <th scope="col" className="relative overflow-hidden px-2 py-1.5">
-                  {resizeHandle('seguimento', 'Do não cumprido')}
-                  Do não cumprido
-                </th>
-                <th scope="col">
-                  <span className="sr-only">Excluir</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => {
-                const c = controls(row, index);
-                return (
-                  <tr
-                    key={row.id}
-                    className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : 'hover:bg-slate-50/60'}`}
-                  >
-                    <td className="px-1 py-1">{c.company}</td>
-                    <td className="px-1 py-1">{c.week}</td>
-                    <td className="px-1 py-1">{c.start()}</td>
-                    <td className="px-1 py-1">{c.end()}</td>
-                    <td className="px-1 py-1">{c.name()}</td>
-                    <td className="px-1 py-1">{c.team}</td>
-                    {WEEKDAYS.map(day => (
-                      <td
-                        key={day}
-                        className={`border-l border-slate-100 px-1 py-1 text-center font-bold ${marked(row, day) ? 'bg-primary-soft text-primary-ink' : 'text-slate-200'}`}
-                      >
-                        {marked(row, day) ? 'x' : ''}
-                      </td>
-                    ))}
-                    <td className="px-1 py-1">{c.statusPill}</td>
-                    <td className="px-1 py-1">{c.causePill}</td>
-                    <td className="px-1 py-1">{c.justification()}</td>
-                    <td className="px-1 py-1">{c.followUp && <div className="flex gap-1 whitespace-nowrap">{c.followUp}</div>}</td>
-                    <td className="px-1 py-1">{c.deleteButton}</td>
-                  </tr>
-                );
-              })}
-              {!readOnly && (
-                <BlankRow
-                  week={week}
-                  weekEnd={weekEnd}
-                  weekNumber={weekNumber(week)}
-                  companies={companies}
-                  teamNames={company => teamsOfCompany(company).map(t => t.name)}
-                  busy={busy === 'nova'}
-                  onCreate={createRow}
-                />
-              )}
-            </tbody>
-          </table>
-          {emptyState && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
+      {outOfOrder && !sort && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <span>Linhas novas ou editadas ficam onde estão até você organizar.</span>
+          <button type="button" className="text-link" onClick={() => setPinned({ week: '', ids: [] })}>
+            Organizar por empresa
+          </button>
         </div>
+      )}
 
-        {/* No celular, uma linha é um cartão: a tabela de 1760px só serviria para rolar de lado. */}
-        <div className="space-y-3 lg:hidden" role="region" aria-label={sheetLabel}>
-          {rows.map((row, index) => {
-            const c = controls(row, index);
-            return (
-              <article
-                key={row.id}
-                aria-label={`Linha ${index + 1}: ${row.name}`}
-                className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : 'border-slate-200 bg-white'}`}
-              >
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">{c.name('field py-1.5 font-semibold')}</div>
-                  {c.deleteButton}
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <CardField label="Empresa">{c.company}</CardField>
-                  <CardField label="Equipe">{c.team}</CardField>
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  <CardField label="Semana">{c.week}</CardField>
-                  <CardField label="Início">{c.start('field py-1.5 text-xs tabular-nums')}</CardField>
-                  <CardField label="Término">{c.end('field py-1.5 text-xs tabular-nums')}</CardField>
-                </div>
-                <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Dias da linha ${index + 1}`}>
-                  {WEEKDAYS.map(day => {
-                    const on = marked(row, day);
-                    return (
-                      <li
-                        key={day}
-                        className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${on ? 'border-primary-ring bg-primary-soft text-primary-ink' : 'border-slate-200 text-slate-400'}`}
-                      >
-                        {NAMES[day]}
-                        <span className="sr-only">{on ? ', marcado' : ', não marcado'}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <CardField label="Status">{c.statusPill}</CardField>
-                  <CardField label="Causa">{c.causePill}</CardField>
-                </div>
-                <CardField label="Justificativa" className="mt-2">
-                  {c.justification('field py-1.5 text-xs')}
-                </CardField>
-                {c.followUp && <div className="mt-2 flex flex-wrap gap-1">{c.followUp}</div>}
-              </article>
-            );
-          })}
-          {!readOnly && (
-            <BlankCard
-              week={week}
-              weekEnd={weekEnd}
-              weekNumber={weekNumber(week)}
-              companies={companies}
-              teamNames={company => teamsOfCompany(company).map(t => t.name)}
-              busy={busy === 'nova'}
-              onCreate={createRow}
-            />
-          )}
-          {emptyState && <div className="rounded-xl border border-slate-200 bg-white p-4">{emptyState}</div>}
-        </div>
+      {/* O `data-tour` fica no invólucro das duas versões: no celular a tabela não tem área e o
+        passo do tour pularia a planilha. Só uma das duas é desenhada (`useWideScreen`). */}
+      <div data-tour="curto-commitments" className="mt-4">
+        {wide ? (
+          <div
+            ref={element => {
+              sheetPanel.current = element;
+              // Na primeira vez, sem larguras escolhidas, a planilha já abre cabendo na tela.
+              if (element && !autoFitted.current && !columnWidths.saved) {
+                autoFitted.current = true;
+                columnWidths.fit(element.clientWidth, false);
+              }
+            }}
+            // `relative`: os ícones absolutos das células passam a ser cortados por este quadro em vez de
+            // alargar a página inteira (ela chegava a 2.473 px numa tela de 1.366, 09/10/2026). A altura
+            // limitada traz a barra de rolagem lateral para a vista, com o cabeçalho fixo no topo.
+            className="panel custom-scrollbar relative max-h-[calc(100dvh-12rem)] overflow-auto"
+            role="region"
+            aria-label={sheetLabel}
+            tabIndex={0}
+          >
+            <table className="table-fixed border-collapse text-left text-xs" style={{ width: columnWidths.total }}>
+              <colgroup>
+                {COLUMN_ORDER.map(column => (
+                  <col key={column} style={{ width: columnWidths.widths[column] }} />
+                ))}
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 shadow-[0_1px_0_rgb(226_232_240)]">
+                <tr className="text-xs font-semibold normal-case tracking-normal text-slate-400">
+                  <th colSpan={6} className="px-2 pt-1.5" />
+                  {columns.map(({ day, date }) => (
+                    <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">
+                      {dayMonth(date)}
+                    </th>
+                  ))}
+                  <th colSpan={5} />
+                </tr>
+                <tr className="border-b border-slate-200">
+                  {header('empresa', 'Empresa', 'px-2 py-1.5')}
+                  {header('semana', 'Semana', 'px-2 py-1.5')}
+                  {header('inicio', 'Início', 'px-2 py-1.5')}
+                  {header('termino', 'Término', 'px-2 py-1.5')}
+                  {header('atividade', 'Atividade', 'px-2 py-1.5')}
+                  {header('equipe', 'Equipe', 'px-2 py-1.5')}
+                  {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'border-l border-slate-200 px-1 py-1.5', 'center'))}
+                  {header('status', 'Status', 'px-2 py-1.5')}
+                  {header('causas', 'Causas', 'px-2 py-1.5')}
+                  {header('justificativa', 'Justificativas', 'px-2 py-1.5')}
+                  <th scope="col" className="relative overflow-hidden px-2 py-1.5">
+                    {resizeHandle('seguimento', 'Do não cumprido')}
+                    Do não cumprido
+                  </th>
+                  <th scope="col">
+                    <span className="sr-only">Excluir</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const c = controls(row, index);
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : 'hover:bg-slate-50/60'}`}
+                    >
+                      <td className="px-1 py-1">{c.company}</td>
+                      <td className="px-1 py-1">{c.week}</td>
+                      <td className="px-1 py-1">{c.start()}</td>
+                      <td className="px-1 py-1">{c.end()}</td>
+                      <td className="px-1 py-1">{c.name()}</td>
+                      <td className="px-1 py-1">{c.team}</td>
+                      {WEEKDAYS.map(day => (
+                        <td
+                          key={day}
+                          className={`border-l border-slate-100 px-1 py-1 text-center font-bold ${marked(row, day) ? 'bg-primary-soft text-primary-ink' : 'text-slate-200'}`}
+                        >
+                          {marked(row, day) ? 'x' : ''}
+                        </td>
+                      ))}
+                      <td className="px-1 py-1">{c.statusPill}</td>
+                      <td className="px-1 py-1">{c.causePill}</td>
+                      <td className="px-1 py-1">{c.justification()}</td>
+                      <td className="px-1 py-1">{c.followUp && <div className="flex gap-1 whitespace-nowrap">{c.followUp}</div>}</td>
+                      <td className="px-1 py-1">{c.deleteButton}</td>
+                    </tr>
+                  );
+                })}
+                {!readOnly && (
+                  <BlankRow
+                    week={week}
+                    weekEnd={weekEnd}
+                    weekNumber={weekNumber(week)}
+                    companies={companies}
+                    teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                    busy={busy === 'nova'}
+                    onCreate={createRow}
+                  />
+                )}
+              </tbody>
+            </table>
+            {emptyState && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
+          </div>
+        ) : (
+          /* No celular, uma linha é um cartão: a tabela larga só serviria para rolar de lado. */
+          <div className="space-y-3" role="region" aria-label={sheetLabel}>
+            {rows.map((row, index) => {
+              const c = controls(row, index);
+              return (
+                <article
+                  key={row.id}
+                  aria-label={`Linha ${index + 1}: ${row.name}`}
+                  className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : 'border-slate-200 bg-white'}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">{c.name('field py-1.5 font-semibold')}</div>
+                    {c.deleteButton}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <CardField label="Empresa">{c.company}</CardField>
+                    <CardField label="Equipe">{c.team}</CardField>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <CardField label="Semana">{c.week}</CardField>
+                    <CardField label="Início">{c.start('field py-1.5 text-xs tabular-nums')}</CardField>
+                    <CardField label="Término">{c.end('field py-1.5 text-xs tabular-nums')}</CardField>
+                  </div>
+                  <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Dias da linha ${index + 1}`}>
+                    {WEEKDAYS.map(day => {
+                      const on = marked(row, day);
+                      return (
+                        <li
+                          key={day}
+                          className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${on ? 'border-primary-ring bg-primary-soft text-primary-ink' : 'border-slate-200 text-slate-400'}`}
+                        >
+                          {NAMES[day]}
+                          <span className="sr-only">{on ? ', marcado' : ', não marcado'}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <CardField label="Status">{c.statusPill}</CardField>
+                    <CardField label="Causa">{c.causePill}</CardField>
+                  </div>
+                  <CardField label="Justificativa" className="mt-2">
+                    {c.justification('field py-1.5 text-xs')}
+                  </CardField>
+                  {c.followUp && <div className="mt-2 flex flex-wrap gap-1">{c.followUp}</div>}
+                </article>
+              );
+            })}
+            {!readOnly && (
+              <BlankCard
+                week={week}
+                weekEnd={weekEnd}
+                weekNumber={weekNumber(week)}
+                companies={companies}
+                teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                busy={busy === 'nova'}
+                onCreate={createRow}
+              />
+            )}
+            {emptyState && <div className="rounded-xl border border-slate-200 bg-white p-4">{emptyState}</div>}
+          </div>
+        )}
       </div>
 
       <section className="mt-8" aria-labelledby="fechamento-title">
