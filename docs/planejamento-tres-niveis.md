@@ -392,3 +392,22 @@ O usuário disse que a planilha estava ruim de usar e pediu duas coisas: colunas
   - o Playwright renderizou as semanas 114 (fechamento) e 115 (planejamento) da Blentt, e os títulos saíram exatamente como os nomes dos arquivos do usuário;
   - a planilha da tela foi conferida por captura;
   - checagens: TypeScript, ESLint, 337 testes e build.
+
+## Curto prazo: semana encerrada e janela do PDF (08/10/2026)
+
+- **Semana encerrada** (`src/domain/week-lock.ts`, testes em `tests/week-lock.test.ts`):
+  - o usuário pediu que a semana que ficou para trás congele, de modo que só admins editem, e escolheu a folga: **até a terça-feira seguinte, inclusive**, para lançar o fechamento;
+  - `isWeekLocked(weekStart, today)` vale quando hoje passa de segunda + 8 dias, e "hoje" é o de São Paulo;
+  - o servidor (`applyCommand`) recusa `create_commitment`, `update_commitment` (nas duas pontas: tirar a linha de uma semana encerrada ou pôr nela), `record_fulfillment` e `delete_commitment` quando a semana está encerrada e o ator não é admin;
+  - na planilha, a semana encerrada fica só para leitura para quem não é admin, com aviso. O admin vê um aviso de que está alterando uma semana encerrada;
+  - o importador do histórico passou a exigir **admin**, porque todo histórico cai em semanas encerradas.
+- **Janela do PDF** (`src/modules/curto-prazo/print-dialog.tsx`):
+  - os botões "PDF do planejamento" e "PDF do fechamento" abrem antes uma janela;
+  - a janela tem a lista de empreiteiros no estilo do filtro de coluna da planilha (pesquisar, selecionar tudo, limpar, contagem de linhas) e começa com o filtro de Empresa da planilha, se houver;
+  - também tem a ordem das linhas: **por empreiteiro** (empresa, depois início) ou **por data de início** (início, depois empresa);
+  - os empreiteiros desmarcados vão na URL como `excluir`, e a ordem como `ordem=inicio|empreiteiro`. A página de impressão aplica os dois.
+- **Validação:**
+  - o sistema rodou localmente contra a produção, com o acesso local sem login no perfil de um planejador;
+  - a semana 114 da Blentt apareceu encerrada e só para leitura;
+  - uma edição que regravava os mesmos valores foi recusada pelo servidor com 400;
+  - o PDF de fechamento sem ATR ENG e por data de início saiu com 105 linhas e nenhuma do ATR ENG.

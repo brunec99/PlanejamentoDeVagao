@@ -135,7 +135,7 @@ test('contagem de usos distingue prazo, atividades e referências históricas', 
   const planId = run(data, { type: 'create_plan', workId: 'obra-1', month: '2026-09' });
   run(data, { type: 'create_plan_task', planId, name: 'Pintura', plannedStart: '2026-09-21', plannedEnd: '2026-09-25', teamId });
   run(data, { type: 'freeze_plan_baseline', planId, name: 'Aprovado' });
-  run(data, { type: 'create_commitment', workId: 'obra-1', name: 'Pintura', weekStart: '2026-09-07', responsibleId: 'user-1', teamId });
+  run(data, { type: 'create_commitment', workId: 'obra-1', name: 'Pintura', weekStart: '2026-09-14', responsibleId: 'user-1', teamId });
   run(data, { type: 'assign_team', activityId: 'a1', teamId });
   assert.deepEqual(teamUsage(data, teamId), { medium: 1, baselines: 1, short: 1, activities: 1, total: 4 });
   assert.deepEqual(teamUsage(data, 'missing'), { medium: 0, baselines: 0, short: 0, activities: 0, total: 0 });

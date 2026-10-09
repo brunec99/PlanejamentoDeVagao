@@ -38,7 +38,7 @@
  *
  * O apontamento importado (record_fulfillment) é datado no sábado da semana, ao meio-dia de São
  * Paulo (recordedAt), com recordedBy = --actor. O responsável das linhas é o --actor, que precisa
- * ser gestor ou admin com acesso à obra.
+ * ser admin com acesso à obra (semana passada fica encerrada para os demais).
  *
  * Ambiente: NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY, lidos do processo ou de
  * --env-file (padrão .env.local, ignorado se não existir). Nenhum segredo é impresso.

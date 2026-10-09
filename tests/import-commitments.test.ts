@@ -13,7 +13,14 @@ import {
   resolveCause,
 } from '../src/application/use-cases/import-commitments';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
-import { createMockData } from '../src/mocks/planning';
+import { createMockData as mockData } from '../src/mocks/planning';
+
+/** O histórico cai em semanas encerradas, que só admin altera: o ator padrão (user-1) vira admin. */
+const createMockData = () => {
+  const data = mockData();
+  data.users.find(u => u.id === 'user-1')!.role = 'admin';
+  return data;
+};
 import { ppc } from '../src/domain/rules';
 import type { PlanningData } from '../src/domain/entities';
 
@@ -233,11 +240,11 @@ test('--work-id manda todas as linhas para a obra e dispensa a coluna obra', asy
   );
 });
 
-test('ator precisa ser gestor ou admin com acesso à obra; obra ambígua pede --work-id', () => {
+test('ator precisa ser admin com acesso à obra; obra ambígua pede --work-id', () => {
   const data: PlanningData = createMockData();
   const [group] = groupRowsByWork(parseCommitmentsCsv(csv('Residencial Horizonte;Emp;2026-08-03;;;A;;;;')).rows);
-  assert.throws(() => importGroup(structuredClone(data), group, { context: context('user-2') }), /exige gestor ou admin/);
-  assert.throws(() => importGroup(structuredClone(data), group, { context: context('user-3') }), /exige gestor ou admin/);
+  assert.throws(() => importGroup(structuredClone(data), group, { context: context('user-2') }), /exige admin/);
+  assert.throws(() => importGroup(structuredClone(data), group, { context: context('user-3') }), /exige admin/);
   assert.throws(() => importGroup(structuredClone(data), group, { context: context('nao-existe') }), /não encontrado/);
 
   const noAccess = structuredClone(data);

@@ -26,7 +26,7 @@
  * só tem o apontamento atualizado quando o CSV traz um status diferente do gravado. */
 import type { LocalDate, NonFulfillmentCause, PlanningData, Team, WeeklyCommitment } from '../../domain/entities';
 import { NON_FULFILLMENT_CAUSES } from '../../domain/entities';
-import { actsAsManager, ppcSeries, type WeekPpc } from '../../domain/rules';
+import { ppcSeries, type WeekPpc } from '../../domain/rules';
 import { addDays, startOfWeek, validateDate } from '../../domain/validation';
 import { applyCommand, type CommandContext } from './commands';
 
@@ -357,12 +357,12 @@ export interface WorkImportResult {
   warnings: ImportIssue[];
 }
 
-/** Ator da importação: precisa existir e ser gestor ou admin. O domínio aceita planejador nos
- * compromissos, mas a carga do histórico é uma operação administrativa. */
+/** Ator da importação: precisa existir e ser admin. A carga do histórico é operação administrativa e,
+ * desde 08/10/2026, semana passada fica encerrada para quem não é admin (`domain/week-lock.ts`). */
 export function checkImportActor(data: PlanningData, actorId: string) {
   const actor = data.users.find(u => u.id === actorId);
   if (!actor) throw new Error(`Perfil ${actorId} não encontrado.`);
-  if (!actsAsManager(actor.role)) throw new Error(`O perfil ${actor.name} é ${actor.role}; a importação exige gestor ou admin.`);
+  if (actor.role !== 'admin') throw new Error(`O perfil ${actor.name} é ${actor.role}; a importação exige admin.`);
   return actor;
 }
 

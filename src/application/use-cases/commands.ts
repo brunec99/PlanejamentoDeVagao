@@ -18,6 +18,7 @@ import { actsAsManager, isTerminal, leadTimeDeadline, validateActivity, validate
 import { planSequenceRegeneration } from './regenerate-sequence';
 import { LONG_TERM_PREFIX, planLongTermSync, type LongTermSlot } from './sync-long-term-plan';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
+import { canEditWeek, weekLockLastDay } from '../../domain/week-lock';
 export type ActivityInput = Pick<
   Activity,
   'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
@@ -330,6 +331,15 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     if (!sequence) throw new Error('Sequência não encontrada.');
     checkWork(sequence.workId);
     return sequence.workId;
+  };
+  /** Semana encerrada do curto prazo: depois da terça-feira seguinte, só admin altera (`week-lock.ts`). */
+  const guardWeek = (weekStart: string) => {
+    if (canEditWeek(weekStart, today, actor.role)) return;
+    const start = startOfWeek(weekStart);
+    const br = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
+    throw new Error(
+      `A semana de ${br(start)} a ${br(addDays(start, 5))} foi encerrada em ${br(weekLockLastDay(start))}: só administradores podem alterá-la.`,
+    );
   };
   const responsible = (id: string, workId: string) => {
     if (!data.users.some(u => u.id === id && u.workIds.includes(workId))) throw new Error('Responsável deve pertencer à obra.');
@@ -853,6 +863,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       validateDate(command.weekStart);
       const weekStart = startOfWeek(command.weekStart),
         weekEnd = addDays(weekStart, 6);
+      guardWeek(weekStart);
       // Linha nova nasce no primeiro dia da semana: a data é editável, e o calendário vem dela.
       const startDate = command.startDate ?? weekStart,
         endDate = command.endDate ?? startDate;
@@ -881,6 +892,9 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       validateDate(command.weekStart);
       const weekStart = startOfWeek(command.weekStart),
         weekEnd = addDays(weekStart, 6);
+      // As duas pontas: não se tira linha de semana encerrada nem se põe linha nela.
+      guardWeek(commitment.weekStart);
+      guardWeek(weekStart);
       Object.assign(commitment, {
         name: requireText(command.name, 'Atividade'),
         supplier: command.supplier?.trim() ?? '',
@@ -897,6 +911,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const commitment = data.commitments.find(c => c.id === command.commitmentId);
       if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
+      guardWeek(commitment.weekStart);
       // A planilha é editável: corrigir o apontamento é trocar a célula, não excluir a linha.
       let cause: NonFulfillmentCause | undefined;
       if (!command.fulfilled) {
@@ -918,6 +933,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       const commitment = data.commitments.find(c => c.id === command.commitmentId);
       if (!commitment) throw new Error('Compromisso não encontrado.');
       checkWork(commitment.workId);
+      guardWeek(commitment.weekStart);
       // A planilha permite apagar a linha, inclusive já apurada: é como se corrige um apontamento.
       data.commitments = data.commitments.filter(c => c.id !== commitment.id);
       entityId = commitment.id;

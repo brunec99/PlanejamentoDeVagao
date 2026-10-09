@@ -18,7 +18,10 @@ import { formatDate, wagonLabel, workPath } from '@/shared/format';
 import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { ColumnResizeHandle, useColumnWidths } from '@/modules/curto-prazo/column-widths';
+import { PrintDialog } from '@/modules/curto-prazo/print-dialog';
+import type { PrintKind } from '@/modules/curto-prazo/print-sheet';
 import { weekNumberFrom } from '@/domain/week-numbering';
+import { isWeekLocked, weekLockLastDay } from '@/domain/week-lock';
 import {
   applySheetView,
   companyOptions,
@@ -76,6 +79,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const [filters, setFilters] = useState<SheetFilters>({});
   const [sort, setSort] = useState<SheetSort>();
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
+  const [printing, setPrinting] = useState<PrintKind>();
   const { weekOneStart } = useWorkSettings(workId);
   const columnWidths = useColumnWidths('obra360.curto-prazo.colunas', COLUMN_DEFAULTS);
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
@@ -84,7 +88,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const actor = planning.data.users.find(u => u.id === context.actorId);
   if (!selected || !actor?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
   const { data } = planning;
-  const readOnly = actor.role === 'viewer';
+  const viewer = actor.role === 'viewer';
 
   const teams = data.teams
     .filter(t => t.workId === workId)
@@ -97,6 +101,9 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   // Da primeira semana da obra até quatro à frente, mais qualquer semana já usada fora desse intervalo.
   const weeks = [...new Set([...weekOptions(firstWeek, currentWeek), ...commitments.map(c => c.weekStart)])].sort();
   const week = weeks.includes(chosen) ? chosen : currentWeek;
+  // Semana encerrada (depois da terça seguinte): só admin altera; o servidor confere o mesmo.
+  const locked = isWeekLocked(week, planning.today);
+  const readOnly = viewer || (locked && actor.role !== 'admin');
   const weekNumber = (start: string) => weekNumberFrom(firstWeek, start);
   const weekRows = commitments.filter(c => c.weekStart === week);
   const stats = ppc(weekRows);
@@ -575,12 +582,26 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
               {developer ? ' ou gere uma restrição no longo prazo' : ''}; a linha original fica como registro do que aconteceu.
             </p>
             <p>
+              A semana fica aberta até a terça-feira seguinte, para lançar o fechamento. Depois disso ela é encerrada: só administradores
+              alteram, e os demais a veem para consulta e para os PDFs.
+            </p>
+            <p>
               A semana 1 vem das configurações da obra; sem ela, é a primeira semana com linha na planilha. O número de cada semana é
               contado a partir daí.
             </p>
           </>
         }
       />
+      {printing && (
+        <PrintDialog
+          workId={workId}
+          week={week}
+          kind={printing}
+          companies={distinctValues(weekRows, companyOf)}
+          initialSelected={filters.empresa}
+          onClose={() => setPrinting(undefined)}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600">
         <label className="flex items-center gap-2">
@@ -623,32 +644,31 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
             </p>
           </HelpNote>
           <Link className="text-link" href={workPath(workId, 'configuracoes')}>
-            {readOnly ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}
+            {viewer ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}
           </Link>
-          {/* PDFs no formato da planilha da obra: abrem numa aba própria, já no diálogo de impressão
-            ("Salvar como PDF"), com o nome do arquivo no padrão "PCP-<código> - Semana N". */}
-          <a
-            className="button-secondary"
-            href={`/imprimir/curto-prazo/${encodeURIComponent(workId)}?semana=${week}&tipo=planejamento`}
-            target="_blank"
-            rel="noopener"
-          >
+          {/* PDFs no formato da planilha da obra: antes, a janela de empreiteiros e ordem; depois, uma aba
+            própria já no diálogo de impressão ("Salvar como PDF"), com o nome "PCP-<código> - Semana N". */}
+          <button type="button" className="button-secondary" onClick={() => setPrinting('planejamento')}>
             PDF do planejamento
-          </a>
-          <a
-            className="button-secondary"
-            href={`/imprimir/curto-prazo/${encodeURIComponent(workId)}?semana=${week}&tipo=fechamento`}
-            target="_blank"
-            rel="noopener"
-          >
+          </button>
+          <button type="button" className="button-secondary" onClick={() => setPrinting('fechamento')}>
             PDF do fechamento
-          </a>
+          </button>
           <button type="button" className="text-link hidden lg:inline" onClick={() => columnWidths.reset()}>
             Larguras padrão
           </button>
         </span>
       </div>
 
+      {locked && !viewer && (
+        <div className="mt-3">
+          <Callout tone={readOnly ? 'warning' : 'info'} role="status">
+            {readOnly
+              ? `Semana encerrada em ${formatDate(weekLockLastDay(week))}: só administradores podem alterar. A planilha fica para consulta e para os PDFs.`
+              : `Semana encerrada em ${formatDate(weekLockLastDay(week))}: você está alterando como administrador.`}
+          </Callout>
+        </div>
+      )}
       {error && (
         <div className="mt-3">
           <Callout tone="danger" role="alert">

@@ -72,7 +72,7 @@ node --import tsx scripts/import-curto-prazo.ts <arquivo.csv> --actor <id do per
 - **Data do registro:** o `recordedAt` do cumprimento vai para o sábado da semana; o histórico de eventos guarda a hora real da importação.
 - **Semanas passadas:** o domínio já aceitava semanas passadas, então nenhuma regra foi afrouxada.
 
-O ator (`--actor`) precisa ser gestor ou admin com acesso à obra. No banco novo, esse perfil é o do admin inicial, criado no primeiro login com o Google.
+O ator (`--actor`) precisa ser **admin** com acesso à obra: desde 08/10/2026 as semanas passadas ficam encerradas para os demais. No banco novo, esse perfil é o do admin inicial, criado no primeiro login com o Google.
 
 ## Projeto compartilhado com o Takt Hub (08/10/2026)
 

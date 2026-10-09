@@ -13,6 +13,8 @@ import { formatDate } from '@/shared/format';
  * aba própria, fora do layout do sistema, e chama a impressão do navegador ("Salvar como PDF"); o
  * título da página vira o nome do arquivo. O cabeçalho fica no <thead> para repetir em cada folha. */
 export type PrintKind = 'planejamento' | 'fechamento';
+/** Por empreiteiro: como a planilha da obra (empresa, depois início). Por início: data, depois empresa. */
+export type PrintOrder = 'empreiteiro' | 'inicio';
 
 const DAYS = [
   { day: 1, label: 'Seg.' },
@@ -24,7 +26,20 @@ const DAYS = [
 ] as const;
 const dayMonth = (date: string) => formatDate(date).slice(0, 5);
 
-export function PrintSheet({ workId, week: requested, kind }: { workId: string; week?: string; kind: PrintKind }) {
+export function PrintSheet({
+  workId,
+  week: requested,
+  kind,
+  order = 'empreiteiro',
+  excluded = [],
+}: {
+  workId: string;
+  week?: string;
+  kind: PrintKind;
+  order?: PrintOrder;
+  /** Empreiteiros desmarcados na janela do PDF ('' = linhas sem empreiteiro). */
+  excluded?: string[];
+}) {
   const context = usePlanning();
   const { state: settings, weekOneStart } = useWorkSettings(workId);
   const printed = useRef(false);
@@ -47,13 +62,22 @@ export function PrintSheet({ workId, week: requested, kind }: { workId: string; 
     return row.startDate <= date && date <= row.endDate;
   };
   // Ordem da planilha de origem: as linhas de cada empresa juntas, e dentro dela pela data de início.
+  const left = new Set(excluded);
+  const byCompany = (a: WeeklyCommitment, b: WeeklyCommitment) => {
+    const [x, y] = [companyOf(a), companyOf(b)];
+    if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
+    return compareText(x, y);
+  };
   const rows = commitments
-    .filter(c => c.weekStart === week)
-    .sort((a, b) => {
-      const [x, y] = [companyOf(a), companyOf(b)];
-      if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
-      return compareText(x, y) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt);
-    });
+    .filter(c => c.weekStart === week && !left.has(companyOf(c)))
+    .sort((a, b) =>
+      order === 'inicio'
+        ? a.startDate.localeCompare(b.startDate) ||
+          byCompany(a, b) ||
+          a.endDate.localeCompare(b.endDate) ||
+          a.createdAt.localeCompare(b.createdAt)
+        : byCompany(a, b) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt),
+    );
   const closing = kind === 'fechamento';
   const title = work
     ? `PCP-${work.code || work.name} - ${closing ? 'Resultados ' : ''}Semana ${number(week)}`
@@ -98,7 +122,9 @@ export function PrintSheet({ workId, week: requested, kind }: { workId: string; 
           Imprimir / Salvar PDF
         </button>
         <span className="text-slate-500">
-          No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {rows.length} linha{rows.length === 1 ? '' : 's'}.
+          No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {rows.length} linha{rows.length === 1 ? '' : 's'},{' '}
+          {order === 'inicio' ? 'por data de início' : 'por empreiteiro'}
+          {left.size ? ` · fora do PDF: ${[...left].map(c => c || '(sem empreiteiro)').join(', ')}` : ''}.
         </span>
       </div>
       <table>
