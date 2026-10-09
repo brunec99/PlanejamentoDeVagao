@@ -368,3 +368,27 @@ Registro completo em `docs/revisao-2026-10-01.md`. O que toca os três níveis:
 ## Go-live do curto prazo (07/10/2026)
 
 O curto prazo entra sozinho em produção num Supabase novo da ATR. Os outros níveis (longo prazo, vagões e médio prazo) e o grupo Apoio continuam no código, mas ficam restritos a quem está em `DEVELOPER_EMAILS` até serem liberados, um de cada vez. O histórico semanal do Sheets entra pelo importador `scripts/import-curto-prazo.ts`. Detalhes, validação e pendências estão em [go-live-curto-prazo.md](go-live-curto-prazo.md).
+
+## Curto prazo: colunas ajustáveis e PDFs da semana (08/10/2026)
+
+O usuário disse que a planilha estava ruim de usar e pediu duas coisas: colunas de largura arrastável e PDFs do planejamento e do fechamento, no formato da planilha da obra. Ele enviou dois exemplos: "PCP-BLT - Semana 115" e "PCP-BLT - Resultados Semana 114".
+
+- **Colunas ajustáveis** (`src/modules/curto-prazo/column-widths.tsx`):
+  - a tabela passou a `table-layout: fixed`, com `<colgroup>`;
+  - cada cabeçalho tem uma alça na borda direita: arrastar muda a largura, duplo clique volta ao padrão e, com foco na alça, as setas ajustam;
+  - as larguras ficam no `localStorage` de cada pessoa (`obra360.curto-prazo.colunas`), porque são preferência de quem lê, não dado da obra;
+  - "Larguras padrão" restaura todas;
+  - os padrões estão em `COLUMN_DEFAULTS` (`commitments-overview.tsx`). Os dias da semana têm 68 px para o cabeçalho com o filtro não cortar.
+- **PDFs** (`src/modules/curto-prazo/print-sheet.tsx`, rota `src/app/imprimir/curto-prazo/[obraId]/page.tsx`):
+  - os botões "PDF do planejamento" e "PDF do fechamento" abrem, numa aba nova, uma página fora do layout do sistema, que chama a impressão do navegador ("Salvar como PDF", A4 paisagem);
+  - o título da página vira o nome do arquivo: `PCP-<código> - Semana N` ou `PCP-<código> - Resultados Semana N`;
+  - o cabeçalho (faixa azul, obra, semana analisada e atual, datas sobre Seg. a Sáb.) fica no `<thead>` e se repete em cada folha;
+  - a ordem das linhas é a padrão da planilha (empresa, depois início), sem os filtros da tela;
+  - o fechamento acrescenta Realizado (Sim em verde, Não em vermelho), Causas e Justificativa.
+  - O login continua exigido pelo proxy, e os dados vêm da mesma `/api/planning`.
+- **Sem biblioteca de PDF:** a impressão do navegador dá o resultado do exemplo e evita mais uma dependência.
+- **Validação:**
+  - o sistema rodou localmente contra o banco de produção, só leitura e com o acesso local sem login;
+  - o Playwright renderizou as semanas 114 (fechamento) e 115 (planejamento) da Blentt, e os títulos saíram exatamente como os nomes dos arquivos do usuário;
+  - a planilha da tela foi conferida por captura;
+  - checagens: TypeScript, ESLint, 337 testes e build.

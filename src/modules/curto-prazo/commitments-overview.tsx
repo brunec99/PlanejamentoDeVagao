@@ -17,6 +17,7 @@ import { CHART } from '@/shared/palette';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
 import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
+import { ColumnResizeHandle, useColumnWidths } from '@/modules/curto-prazo/column-widths';
 import { weekNumberFrom } from '@/domain/week-numbering';
 import {
   applySheetView,
@@ -39,6 +40,28 @@ const EMPTY_DRAFT: Draft = { supplier: '', startDate: '', endDate: '', name: '',
 /** Capacidade de uma equipe criada na própria planilha. É um ponto de partida, não uma medição:
  * o planejador ajusta nas configurações da obra, e a análise de carga do médio prazo usa o valor. */
 const NEW_TEAM_CAPACITY = 3;
+/** Larguras iniciais (px) das colunas da planilha, na ordem em que aparecem; cada pessoa ajusta
+ * arrastando a borda do cabeçalho, e o ajuste fica no navegador dela. */
+const COLUMN_DEFAULTS: Record<string, number> = {
+  empresa: 176,
+  semana: 112,
+  inicio: 128,
+  termino: 128,
+  atividade: 320,
+  equipe: 160,
+  d1: 68,
+  d2: 68,
+  d3: 68,
+  d4: 68,
+  d5: 68,
+  d6: 68,
+  status: 96,
+  causas: 224,
+  justificativa: 224,
+  seguimento: 208,
+  excluir: 36,
+};
+const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
 
 export function CommitmentsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -54,6 +77,7 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const [sort, setSort] = useState<SheetSort>();
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
   const { weekOneStart } = useWorkSettings(workId);
+  const columnWidths = useColumnWidths('obra360.curto-prazo.colunas', COLUMN_DEFAULTS);
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const selected = selectWorkPlanning(planning, workId);
@@ -228,8 +252,17 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
   const filtered = Object.values(filters).some(Boolean) || !!sort;
   const waiting = weekRows.filter(r => r.fulfilled === undefined && awaitingCause.includes(r.id)).length;
 
+  const resizeHandle = (column: string, label: string) => (
+    <ColumnResizeHandle
+      label={label}
+      width={columnWidths.widths[column]}
+      onResize={width => columnWidths.resize(column, width)}
+      onReset={() => columnWidths.reset(column)}
+    />
+  );
   const header = (column: string, label: string, className: string, align: 'left' | 'center' = 'left') => (
-    <th key={column} scope="col" className={className}>
+    <th key={column} scope="col" className={`relative overflow-hidden ${className}`}>
+      {resizeHandle(column, label)}
       <ColumnFilter
         label={label}
         align={align}
@@ -592,6 +625,27 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
           <Link className="text-link" href={workPath(workId, 'configuracoes')}>
             {readOnly ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}
           </Link>
+          {/* PDFs no formato da planilha da obra: abrem numa aba própria, já no diálogo de impressão
+            ("Salvar como PDF"), com o nome do arquivo no padrão "PCP-<código> - Semana N". */}
+          <a
+            className="button-secondary"
+            href={`/imprimir/curto-prazo/${encodeURIComponent(workId)}?semana=${week}&tipo=planejamento`}
+            target="_blank"
+            rel="noopener"
+          >
+            PDF do planejamento
+          </a>
+          <a
+            className="button-secondary"
+            href={`/imprimir/curto-prazo/${encodeURIComponent(workId)}?semana=${week}&tipo=fechamento`}
+            target="_blank"
+            rel="noopener"
+          >
+            PDF do fechamento
+          </a>
+          <button type="button" className="text-link hidden lg:inline" onClick={() => columnWidths.reset()}>
+            Larguras padrão
+          </button>
         </span>
       </div>
 
@@ -632,7 +686,12 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
         passo do tour pularia a planilha. */}
       <div data-tour="curto-commitments" className="mt-4">
         <div className="panel hidden overflow-x-auto custom-scrollbar lg:block" role="region" aria-label={sheetLabel} tabIndex={0}>
-          <table className="w-full min-w-[1760px] border-collapse text-left text-xs">
+          <table className="table-fixed border-collapse text-left text-xs" style={{ width: columnWidths.total }}>
+            <colgroup>
+              {COLUMN_ORDER.map(column => (
+                <col key={column} style={{ width: columnWidths.widths[column] }} />
+              ))}
+            </colgroup>
             <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <tr className="text-xs font-semibold normal-case tracking-normal text-slate-400">
                 <th colSpan={6} className="px-2 pt-1.5" />
@@ -644,20 +703,21 @@ export function CommitmentsOverview({ workId }: { workId: string }) {
                 <th colSpan={5} />
               </tr>
               <tr className="border-b border-slate-200">
-                {header('empresa', 'Empresa', 'w-44 px-2 py-1.5')}
-                {header('semana', 'Semana', 'w-28 px-2 py-1.5')}
-                {header('inicio', 'Início', 'w-32 px-2 py-1.5')}
-                {header('termino', 'Término', 'w-32 px-2 py-1.5')}
-                {header('atividade', 'Atividade', 'min-w-72 px-2 py-1.5')}
-                {header('equipe', 'Equipe', 'w-40 px-2 py-1.5')}
-                {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'w-14 border-l border-slate-200 px-1 py-1.5', 'center'))}
-                {header('status', 'Status', 'w-24 px-2 py-1.5')}
-                {header('causas', 'Causas', 'min-w-[14rem] px-2 py-1.5')}
-                {header('justificativa', 'Justificativas', 'w-56 px-2 py-1.5')}
-                <th scope="col" className="min-w-[13rem] px-2 py-1.5">
+                {header('empresa', 'Empresa', 'px-2 py-1.5')}
+                {header('semana', 'Semana', 'px-2 py-1.5')}
+                {header('inicio', 'Início', 'px-2 py-1.5')}
+                {header('termino', 'Término', 'px-2 py-1.5')}
+                {header('atividade', 'Atividade', 'px-2 py-1.5')}
+                {header('equipe', 'Equipe', 'px-2 py-1.5')}
+                {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'border-l border-slate-200 px-1 py-1.5', 'center'))}
+                {header('status', 'Status', 'px-2 py-1.5')}
+                {header('causas', 'Causas', 'px-2 py-1.5')}
+                {header('justificativa', 'Justificativas', 'px-2 py-1.5')}
+                <th scope="col" className="relative overflow-hidden px-2 py-1.5">
+                  {resizeHandle('seguimento', 'Do não cumprido')}
                   Do não cumprido
                 </th>
-                <th scope="col" className="w-8">
+                <th scope="col">
                   <span className="sr-only">Excluir</span>
                 </th>
               </tr>
