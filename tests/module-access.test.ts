@@ -45,6 +45,7 @@ test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da adm
     'update_commitment',
     'delete_commitment',
     'record_fulfillment',
+    'clear_fulfillment',
     'create_team',
     'update_team',
     'delete_team',

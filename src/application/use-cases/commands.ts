@@ -115,6 +115,8 @@ export type Command =
     }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
+  /** Desfaz o apontamento: a linha volta a "sem registro", sem Realizado, causa nem justificativa. */
+  | { type: 'clear_fulfillment'; commitmentId: string }
   | { type: 'create_baseline'; workId: string; name: string }
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
   /** `copyFrom`: plano vivo de mês anterior da mesma obra, copiado como ponto de partida. */
@@ -926,6 +928,23 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         justification: command.justification?.trim() || undefined,
         recordedAt: now,
         recordedBy: actorId,
+      });
+      touch(commitment);
+      entityId = commitment.id;
+      break;
+    }
+    case 'clear_fulfillment': {
+      const commitment = data.commitments.find(c => c.id === command.commitmentId);
+      if (!commitment) throw new Error('Compromisso não encontrado.');
+      checkWork(commitment.workId);
+      // Mesma regra do apontamento: sem trava de semana encerrada, porque limpar é corrigir a célula.
+      // Os cinco campos vão juntos: o adaptador grava null no que ficou undefined.
+      Object.assign(commitment, {
+        fulfilled: undefined,
+        cause: undefined,
+        justification: undefined,
+        recordedAt: undefined,
+        recordedBy: undefined,
       });
       touch(commitment);
       entityId = commitment.id;

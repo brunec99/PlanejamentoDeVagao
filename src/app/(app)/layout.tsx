@@ -104,7 +104,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <ToastProvider>
         <ConfirmProvider>
           <PlanningProvider developer={developer}>
-            <div className="flex h-screen overflow-hidden">
+            <div data-app-shell className="flex h-screen overflow-hidden">
               <a className="skip-link" href="#main">
                 Ir para o conteúdo
               </a>

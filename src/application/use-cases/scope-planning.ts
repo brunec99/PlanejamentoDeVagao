@@ -72,6 +72,36 @@ export function scopePlanning(data: PlanningData, actorId: string): PlanningData
   return { ...collections, history };
 }
 
+/** Go-live do curto prazo: quem não desenvolve só abre o curto prazo, a lista de obras e as
+ * configurações, que leem obras, usuários, equipes e compromissos. O resto do payload (vagões,
+ * atividades, planos, IFC...) pesa megabytes a cada ação e pertence aos módulos restritos, então
+ * vai vazio. Função pura: devolve um objeto novo, sem tocar a entrada. Efeitos conhecidos fora do
+ * curto prazo: os cards de obra ficam sem restrição vencida, takt vencido e progresso; a contagem
+ * de uso das equipes só conta compromissos; o takt por obra lista "nenhuma sequência". */
+export function slimForShortTerm(data: PlanningData): PlanningData {
+  return {
+    ...data,
+    locations: [],
+    sequences: [],
+    wagons: [],
+    activities: [],
+    criteria: [],
+    pendingItems: [],
+    restrictions: [],
+    releases: [],
+    debts: [],
+    progressEntries: [],
+    baselines: [],
+    dependencies: [],
+    plans: [],
+    planTasks: [],
+    planDependencies: [],
+    ifcModels: [],
+    ifcVersions: [],
+    linkRules: [],
+  };
+}
+
 /** Ids das entidades de uma obra que podem ter histórico: é o que a rota de histórico confere
  * antes de responder, para ninguém ler eventos de uma obra a que não tem acesso. */
 export function visibleEntityIds(data: PlanningData, workId: string): Set<string> {

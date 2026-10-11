@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Planning } from '@/application/use-cases/get-planning';
 import type { Command } from '@/application/use-cases/commands';
+import { applyCommandLocally } from '@/application/use-cases/local-apply';
 
 type Ready = {
   state: 'ready';
@@ -141,13 +142,35 @@ export function PlanningProvider({ children, developer = false }: { children: Re
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Falha ao aplicar o comando.');
+        const id = body.id as string;
+        // Curto prazo: a tela mostra o comando na hora, projetado sobre os dados carregados, em vez
+        // de esperar os 3 MB da recarga (a equipe de obra sentia a planilha lenta, 10/10/2026). A
+        // recarga confirma em segundo plano; `lastText` é zerado para a resposta dela, mesmo igual à
+        // última, substituir a projeção pelo que o servidor gravou. A projeção é idempotente: se a
+        // recarga já trouxe a linha, não cria outra.
+        const project = () => {
+          if (!current.current) return false;
+          const planning = applyCommandLocally(current.current.planning, command, id, current.current.actorId, new Date().toISOString());
+          if (!planning) return false;
+          current.current = { planning, actorId: current.current.actorId };
+          lastText.current = '';
+          setLoaded(current.current);
+          return true;
+        };
+        const projected = project();
         // Uma recarga que saiu antes da gravação (timer, volta à aba) ainda traz o estado antigo, e
         // `load` entregaria essa mesma promessa: espera-se ela acabar e pede-se outra, já com o comando.
-        if (inFlight.current) await inFlight.current.catch(() => {});
+        // A resposta dela substitui a projeção, por isso o comando é projetado de novo por cima.
+        if (inFlight.current) {
+          await inFlight.current.catch(() => {});
+          if (projected) project();
+        }
         // O comando já foi gravado: se a recarga falhar, a tela fica marcada como desatualizada, mas
-        // quem chamou recebe o id e não vê um erro de algo que deu certo.
-        await load(true).catch(() => {});
-        return body.id as string;
+        // quem chamou recebe o id e não vê um erro de algo que deu certo. Com projeção, quem chamou
+        // nem espera a recarga: a fila da planilha libera a próxima gravação na hora.
+        const reload = load(true).catch(() => {});
+        if (!projected) await reload;
+        return id;
       } finally {
         mutating.current -= 1;
       }

@@ -172,7 +172,7 @@ Desde 02/10/2026 a rota `GET /api/prevision` é liberada **por papel**, não por
 
 `SUPABASE_SERVICE_ROLE_KEY` nunca deve ter o prefixo `NEXT_PUBLIC_` — ela ignora Row Level Security e só é usada no servidor (repositório e rota de callback). O navegador nunca acessa o Postgres diretamente, só as rotas `/api/planning` e `/api/planning/commands`, autenticadas pela sessão do Supabase Auth.
 
-Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) em Project Settings → Environment Variables.
+Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) em Project Settings → Environment Variables. Opcional: `ANTHROPIC_API_KEY` liga o botão "Analisar com IA" do fechamento do curto prazo (sem ela o botão avisa que não está configurado) e `DEVELOPER_EMAILS` lista quem vê os módulos em desenvolvimento.
 
 ## Login com Google
 

@@ -225,6 +225,7 @@ export function PillCombo({
   allowCreate = true,
   createLabel = text => `Usar “${text}”`,
   emptyHint,
+  createHint,
   disabled,
   placeholder,
   tone = 'neutral',
@@ -236,6 +237,9 @@ export function PillCombo({
   allowCreate?: boolean;
   createLabel?: (text: string) => string;
   emptyHint?: string;
+  /** Rodapé fixo enquanto nada foi digitado: a lista só mostra o que existe, e a obra não percebia
+   * que digitar cria um nome novo (11/10/2026). Com a lista vazia, `emptyHint` já diz isso. */
+  createHint?: string;
   disabled?: boolean;
   placeholder?: string;
   tone?: PillTone;
@@ -357,6 +361,9 @@ export function PillCombo({
               </li>
             ))}
           </ul>
+          {allowCreate && createHint && options.length > 0 && !text.trim() && (
+            <p className="border-t border-slate-100 px-3 py-1.5 text-[11px] leading-4 text-slate-500">{createHint}</p>
+          )}
         </Popover>
       )}
     </>

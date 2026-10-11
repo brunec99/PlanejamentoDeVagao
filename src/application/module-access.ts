@@ -23,6 +23,7 @@ export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Comm
   'update_commitment',
   'delete_commitment',
   'record_fulfillment',
+  'clear_fulfillment',
   'create_team',
   'update_team',
   'delete_team',

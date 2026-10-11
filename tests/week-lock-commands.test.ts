@@ -33,6 +33,31 @@ test('Semana encerrada: o Realizado, a causa e a justificativa continuam abertos
   assert.deepEqual([row.fulfilled, row.cause, row.justification], [false, 'Falta de Material', 'Gesso não chegou']);
 });
 
+test('Limpar o apontamento zera os cinco campos, mesmo em semana encerrada; consulta não limpa', () => {
+  const { data, rowId } = withRow();
+  run(
+    data,
+    { type: 'record_fulfillment', commitmentId: rowId, fulfilled: false, cause: 'Falta de Material', justification: 'Gesso não chegou' },
+    'user-2',
+    '2026-10-02',
+  );
+  const row = data.commitments.find(c => c.id === rowId)!;
+  assert.equal(row.recordedBy, 'user-2');
+  // user-3 só consulta: o comando é recusado antes de tocar a linha.
+  data.users.find(u => u.id === 'user-3')!.role = 'viewer';
+  assert.throws(() => run(data, { type: 'clear_fulfillment', commitmentId: rowId }, 'user-3', '2026-10-09'), /consulta/);
+  assert.equal(row.fulfilled, false);
+  // Planejador, dia 09/10, semana de 28/09 já encerrada: o apontamento continua livre.
+  run(data, { type: 'clear_fulfillment', commitmentId: rowId }, 'user-2', '2026-10-09');
+  assert.deepEqual(
+    [row.fulfilled, row.cause, row.justification, row.recordedAt, row.recordedBy],
+    [undefined, undefined, undefined, undefined, undefined],
+  );
+  assert.equal(row.updatedAt, '2026-10-09T12:00:00.000Z');
+  assert.equal(data.history.at(-1)?.action, 'clear_fulfillment');
+  assert.throws(() => run(data, { type: 'clear_fulfillment', commitmentId: 'nao-existe' }, 'user-2', '2026-10-09'), /não encontrado/);
+});
+
 test('Semana encerrada: incluir, editar e excluir linhas fica com os admins', () => {
   const { data, rowId } = withRow();
   const row = data.commitments.find(c => c.id === rowId)!;

@@ -81,6 +81,14 @@
   html[data-zoom='reuniao'] {
     font-size: 112.5%;
   }
+  /* Dentro do sistema só a coluna de conteúdo rola. Com zoom do navegador a casca de 100vh passava da
+   * janela, o corpo da página rolava e sobrava uma área vazia abaixo da planilha, além de a tela
+   * "descer" ao focar campos (obra, 09/10/2026). Login, privacidade e impressão ficam fora da casca. */
+  html:has([data-app-shell]),
+  html:has([data-app-shell]) body {
+    height: 100%;
+    overflow: hidden;
+  }
   body {
     /* Como no Takt Hub: um sopro do azul da marca no alto da página, sobre o fundo neutro. */
     background:
