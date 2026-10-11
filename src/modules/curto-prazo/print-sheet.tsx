@@ -115,6 +115,9 @@ export function PrintSheet({
         .pcp-sim { background: #d9ead3; color: #38761d; }
         .pcp-nao { background: #f4cccc; color: #cc0000; }
         .pcp-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+        .pcp-logos { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 6px; padding: 3px 8px; }
+        .pcp-logos img { height: ${closing ? '16px' : '22px'}; width: auto; display: block; }
+        .pcp-logos-sep { width: 1px; height: ${closing ? '14px' : '20px'}; background: #cbd5e1; }
         @media print { .pcp-toolbar { display: none; } .pcp-print { padding: 0; } }
       `}</style>
       <div className="pcp-toolbar">
@@ -148,8 +151,16 @@ export function PrintSheet({
         </colgroup>
         <thead>
           <tr className="pcp-band">
-            <th colSpan={4} style={{ textAlign: 'left', fontSize: closing ? 12 : 15, padding: '6px 8px' }}>
-              {work.name}
+            <th colSpan={4} style={{ textAlign: 'left', padding: '4px 8px' }}>
+              {/* Os dois logos lado a lado no lugar do nome da obra (pedido da obra, 11/10/2026); o nome
+                segue no título ao centro. Fundo branco porque a faixa é azul e os logos são escuros. */}
+              <span className="pcp-logos">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-atr.png" alt="ATR Incorporadora" />
+                <span className="pcp-logos-sep" aria-hidden />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-takt.png" alt="Takt Engenharia" />
+              </span>
             </th>
             <th colSpan={columns - 7} style={{ textAlign: 'center', fontSize: closing ? 12 : 15, padding: '6px 8px' }}>
               PLANEJAMENTO DE CURTO PRAZO {work.name.toUpperCase()}
