@@ -1,7 +1,5 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run copy-assets && next build",
-  "regions": [
-    "gru1"
-  ]
+  "regions": ["gru1"]
 }
