@@ -60,17 +60,20 @@ async function fetchAll(table: string): Promise<unknown[]> {
   }
 }
 
+/** `planning_meta.version`: linha única que `commit_planning` incrementa a cada gravação. É a
+ * conferência da concorrência otimista e o sinal barato de que há algo novo para a tela. */
+async function fetchVersion(): Promise<number> {
+  const { data, error } = await getServiceClient().from('planning_meta').select('version').eq('id', 1).single();
+  if (error) throw new Error(`Falha ao ler planning_meta: ${error.message}`);
+  return data.version as number;
+}
+
 /** Leitura por tabela, sem recorte: é o caminho de antes da migração 0027, mantido para o banco
  * sem a função continuar servindo todas as telas. */
 async function fetchByTables(): Promise<{ data: PlanningData; version: number }> {
-  const client = getServiceClient();
-  const [rows, meta] = await Promise.all([
-    Promise.all(TABLES.map(fetchAll)),
-    client.from('planning_meta').select('version').eq('id', 1).single(),
-  ]);
-  if (meta.error) throw new Error(`Falha ao ler planning_meta: ${meta.error.message}`);
+  const [rows, version] = await Promise.all([Promise.all(TABLES.map(fetchAll)), fetchVersion()]);
   const byTable = Object.fromEntries(TABLES.map((table, i) => [table, rows[i]])) as unknown as Rows;
-  return { data: rowsToPlanningData({ ...byTable, history_events: [] }), version: meta.data.version as number };
+  return { data: rowsToPlanningData({ ...byTable, history_events: [] }), version };
 }
 
 /** Uma ida só ao banco, já recortada pelas obras do usuário (migração 0027). Sem a função no
@@ -94,6 +97,12 @@ async function fetchSnapshotWithVersion(scope?: SnapshotScope): Promise<{ data: 
 export class SupabasePlanningRepository implements PlanningRepository {
   async getSnapshot(scope?: SnapshotScope): Promise<PlanningData> {
     return (await fetchSnapshotWithVersion(scope)).data;
+  }
+
+  /** Só a versão, uns bytes: a tela confere se há algo novo antes de baixar o planejamento inteiro
+   * (`/api/planning/version`). */
+  async getVersion(): Promise<number> {
+    return fetchVersion();
   }
 
   async transaction<T>(operation: (draft: PlanningData) => T, scope?: SnapshotScope): Promise<T> {

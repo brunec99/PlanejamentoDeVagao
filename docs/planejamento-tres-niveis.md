@@ -422,7 +422,7 @@ O Daniel (planejador da Blentt) testou em produção e mandou observações. O q
   - o quadro passou a `relative`, com altura limitada (`max-h-[calc(100dvh-12rem)]`) e rolagem própria nos dois sentidos, e o cabeçalho ficou fixo (`sticky`). A barra de rolagem lateral, que antes só aparecia depois de 148 linhas, fica à vista.
 - **"Travando":**
   - a semana tinha 46 mil elementos, porque a tabela e os cartões do celular eram desenhados juntos e um deles ficava escondido por CSS. Agora `useWideScreen` desenha só um dos dois, e a página caiu para 22 mil;
-  - a recarga automática (a cada 2 min e ao voltar à aba) baixa os ~3 MB da obra e redesenhava tudo, até duas vezes por recarga. Agora uma resposta idêntica à anterior não muda estado nenhum, e o "Recarregando…" só aparece quando há aviso de conexão.
+  - a recarga automática (a cada 5 min (com verificação de versão antes, desde 12/10/2026) e ao voltar à aba) baixa os ~3 MB da obra e redesenhava tudo, até duas vezes por recarga. Agora uma resposta idêntica à anterior não muda estado nenhum, e o "Recarregando…" só aparece quando há aviso de conexão.
 - **"Larguras padrão" não fazia nada:** sem larguras mexidas, voltar ao padrão não muda nada visível. Ele virou **"Ajustar à tela"** (`fitWidths`, testado em `tests/column-widths.test.ts`), que reduz as colunas proporcionalmente até o mínimo legível de cada uma (`COLUMN_MIN`). Sem preferência gravada, a planilha já abre ajustada. Duplo clique na borda continua voltando a coluna ao padrão.
 - **Linha nova pulava para a ordem alfabética:**
   - a ordem das linhas fica presa enquanto se edita: linha nova entra no fim, e linha editada não muda de lugar, como no Sheets;
@@ -472,3 +472,12 @@ Pedido do usuário: previsão do tempo dia a dia no PDF do planejamento e o temp
 - **Rota:** `GET /api/clima?workId=&semana=` (`src/app/api/clima/route.ts`) devolve os 7 dias da semana (`src/domain/weather.ts`): código WMO traduzido para rótulo e ícone, máx/mín, chuva em mm e probabilidade (só na previsão), com `observed` por dia (dia já passado = observado). Sempre responde 200: sem local ou provedor fora, `available:false` com motivo, para o PDF não travar. Cache em memória por instância (30 min previsão, 24 h arquivo).
 - **No PDF** (`weather-strip.tsx`, no fim do documento): seis quadros de Seg a Sáb com ícone, rótulo, máx/mín, chuva e a marca "obs."/"prev."; título "Previsão do tempo para a semana" (planejamento), "Tempo na semana" (fechamento) ou misto na semana corrente; frase de resumo (dias com chuva relevante) e a fonte. A impressão espera a resposta do tempo por até 4 s e sai mesmo sem ela.
 - **Estado em 12/10/2026:** a 0029 foi aplicada pelo usuário no `takt-hub` (colunas conferidas pela API; o painel esconde o campo de busca enquanto a migração falta, e foi isso que ele viu antes de aplicar). Pendências: informar o local de cada obra em Configurações; decidir a licença do Open-Meteo.
+
+## Tráfego das recargas (12/10/2026)
+
+Cada recarga do planejamento baixa a obra inteira (Blentt: 3,9 MB em JSON, ~350 KB comprimidos), e isso acontecia a cada 2 minutos por aba aberta, ao voltar à aba e depois de cada gravação. Com poucos usuários, dá ~10 GB/mês de saída no Supabase e o mesmo volume de função na Vercel, suficiente para estourar planos gratuitos. O que mudou:
+
+- **Verificação de versão antes de recarregar:** `GET /api/planning/version` (`src/app/api/planning/version/route.ts`) devolve a `planning_meta.version`, que o `commit_planning` incrementa a cada gravação. O provedor (`planning-provider.tsx`) só baixa o planejamento quando a versão mudou; a decisão pura está em `src/application/planning-version.ts`, testada.
+- **Intervalo de 2 para 5 minutos**, ainda só com a aba visível, e ao voltar à aba depois de 30 s. Uma aba parada passa de 3,9 MB a cada 2 min para algumas centenas de bytes a cada 5 min. Medido com relógio simulado: 11 min parada = 2 verificações e nenhuma recarga cheia; voltar à aba = 1 verificação.
+- A recarga após uma gravação continua cheia (confirma a gravação e registra a versão nova). Próximo passo, se ainda for preciso: carregar o curto prazo por janela de semanas.
+- Cada verificação ainda é uma invocação de função na Vercel com leitura de sessão e perfil; baixar isso exigiria cache do perfil no servidor.

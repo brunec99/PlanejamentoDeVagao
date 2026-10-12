@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Planning } from '@/application/use-cases/get-planning';
 import type { Command } from '@/application/use-cases/commands';
 import { applyCommandLocally } from '@/application/use-cases/local-apply';
+import { parseVersion, shouldReload } from '@/application/planning-version';
 
 type Ready = {
   state: 'ready';
@@ -24,10 +25,12 @@ const Context = createContext<PlanningState>({ state: 'loading' });
  * layout, que lê a sessão no servidor. Só esconde atalhos: a proteção é do proxy e das rotas. */
 const DeveloperContext = createContext(false);
 
-/** Recarga ao voltar para a aba, se os dados têm mais que isto. */
+/** Conferência de versão ao voltar para a aba, se a última resposta boa tem mais que isto. */
 const FOCUS_AFTER = 30_000;
-/** Recarga periódica enquanto a aba está visível: numa reunião, dois planejadores veem o mesmo. */
-const EVERY = 120_000;
+/** Conferência periódica enquanto a aba está visível: numa reunião, dois planejadores veem o mesmo.
+ * Eram 2 min de recarga completa; com a conferência de versão na frente, 5 min bastam, e o
+ * planejamento inteiro só desce quando alguém gravou. */
+const EVERY = 300_000;
 
 async function fetchPlanning(): Promise<{ text: string }> {
   const res = await fetch('/api/planning', { cache: 'no-store' });
@@ -36,6 +39,19 @@ async function fetchPlanning(): Promise<{ text: string }> {
     throw new Error(typeof body.error === 'string' ? body.error : 'Falha ao carregar o planejamento.');
   }
   return { text: await res.text() };
+}
+/** Só a versão (`planning_meta.version`, que sobe a cada gravação): uns bytes em vez dos 3,9 MB do
+ * planejamento. A recarga completa a cada 2 min por aba aberta, mais a cada volta à aba e depois de
+ * cada comando, estourava a cota grátis de tráfego da Vercel e do Supabase com poucos usuários
+ * (12/10/2026). Falha vira versão desconhecida: quem decide o que fazer com isso é `shouldReload`. */
+async function fetchVersion(): Promise<number | undefined> {
+  try {
+    const res = await fetch('/api/planning/version', { cache: 'no-store' });
+    if (!res.ok) return undefined;
+    return parseVersion(await res.json());
+  } catch {
+    return undefined;
+  }
 }
 const parsePlanning = (text: string): Loaded => {
   const { actorId, ...planning } = JSON.parse(text) as Planning & { actorId: string };
@@ -49,8 +65,15 @@ export function PlanningProvider({ children, developer = false }: { children: Re
   const [stale, setStale] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(0);
   const inFlight = useRef<Promise<Loaded> | undefined>(undefined);
+  /** Uma conferência de versão por vez: `focus` e `visibilitychange` disparam juntos ao voltar à aba. */
+  const checking = useRef<Promise<void> | undefined>(undefined);
   const mutating = useRef(0);
   const latest = useRef(0);
+  /** A versão do planejamento que os dados na tela representam. É lida logo antes da carga completa,
+   * nunca depois: assim ela nunca é mais nova que os dados, e uma gravação entre as duas leituras
+   * aparece na próxima conferência (custa uma recarga a mais, nunca uma a menos). Fica desconhecida
+   * até a primeira carga boa e quando a leitura que antecedeu a carga falhou. */
+  const version = useRef<number | undefined>(undefined);
   /** A última resposta, como texto. Uma obra com anos de curto prazo passa de 3 MB, e redesenhar a
    * planilha inteira a cada recarga automática travava a tela por meio segundo (09/10/2026): resposta
    * igual à anterior não muda estado nenhum. */
@@ -58,14 +81,18 @@ export function PlanningProvider({ children, developer = false }: { children: Re
   const current = useRef<Loaded | undefined>(undefined);
   const staleNow = useRef(false);
 
-  /** Uma única requisição por vez: quem pedir enquanto outra corre recebe a mesma promessa. */
-  const load = useCallback(async (silent: boolean) => {
+  /** Uma única requisição por vez: quem pedir enquanto outra corre recebe a mesma promessa. `known`
+   * é a versão que a conferência acabou de ler, para a carga não a ler de novo. */
+  const load = useCallback(async (silent: boolean, known?: number) => {
     if (!inFlight.current) {
       // O "Recarregando…" só aparece no aviso de conexão; fora dele, ligar e desligar redesenharia tudo.
       if (silent && staleNow.current) setRefreshing(true);
-      inFlight.current = fetchPlanning()
-        .then(({ text }) => {
+      inFlight.current = (known === undefined ? fetchVersion() : Promise.resolve(known))
+        .then(async fetched => ({ fetched, text: (await fetchPlanning()).text }))
+        .then(({ fetched, text }) => {
           latest.current = Date.now();
+          // Registrada mesmo com resposta igual: a próxima conferência compara com ela.
+          version.current = fetched;
           if (text === lastText.current && current.current) {
             if (staleNow.current) {
               staleNow.current = false;
@@ -101,19 +128,44 @@ export function PlanningProvider({ children, developer = false }: { children: Re
     return inFlight.current;
   }, []);
 
+  /** Recarga automática: confere a versão e só baixa o planejamento se ela mudou. Versão igual
+   * confirma os dados na tela: conta como resposta boa (para a janela do foco e para a hora que o
+   * aviso de conexão mostra) e desfaz o aviso de desatualizado. Conferência falha cai na carga
+   * completa, que é quem sabe marcar desatualizado e restabelecer a versão conhecida. */
+  const check = useCallback(() => {
+    // Uma carga em andamento já traz os dados e a versão mais novos.
+    if (inFlight.current || checking.current) return;
+    checking.current = fetchVersion()
+      .then(fetched => {
+        // Um comando ou uma carga começaram enquanto a conferência corria: a recarga deles basta.
+        if (mutating.current || inFlight.current) return;
+        if (shouldReload(version.current, fetched)) {
+          load(true, fetched).catch(() => {});
+          return;
+        }
+        latest.current = Date.now();
+        if (staleNow.current) {
+          staleNow.current = false;
+          setStale(false);
+        }
+      })
+      .finally(() => {
+        checking.current = undefined;
+      });
+  }, [load]);
+
   useEffect(() => {
     load(false).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Volta para a aba: se os dados têm mais de meio minuto, recarrega em silêncio. Nada disso acontece
-  // no meio de um comando, para a resposta dele não competir com a recarga.
+  // Volta para a aba: se a última resposta boa tem mais de meio minuto, confere a versão em silêncio.
+  // Nada disso acontece no meio de um comando, para a resposta dele não competir com a recarga.
   useEffect(() => {
     const maybe = () => {
-      if (document.visibilityState === 'visible' && !mutating.current && Date.now() - latest.current > FOCUS_AFTER)
-        load(true).catch(() => {});
+      if (document.visibilityState === 'visible' && !mutating.current && Date.now() - latest.current > FOCUS_AFTER) check();
     };
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && !mutating.current) load(true).catch(() => {});
+      if (document.visibilityState === 'visible' && !mutating.current) check();
     }, EVERY);
     window.addEventListener('focus', maybe);
     document.addEventListener('visibilitychange', maybe);
@@ -122,8 +174,10 @@ export function PlanningProvider({ children, developer = false }: { children: Re
       window.removeEventListener('focus', maybe);
       document.removeEventListener('visibilitychange', maybe);
     };
-  }, [load]);
+  }, [check]);
 
+  // Pedido explícito (botão do aviso de conexão, telas que gravam fora dos comandos): carga completa,
+  // sem conferir a versão, porque quem pede sabe que há algo novo ou quer a base refeita.
   const refresh = useCallback(async () => {
     await load(true).catch(() => {});
   }, [load]);
@@ -167,7 +221,8 @@ export function PlanningProvider({ children, developer = false }: { children: Re
         }
         // O comando já foi gravado: se a recarga falhar, a tela fica marcada como desatualizada, mas
         // quem chamou recebe o id e não vê um erro de algo que deu certo. Com projeção, quem chamou
-        // nem espera a recarga: a fila da planilha libera a próxima gravação na hora.
+        // nem espera a recarga: a fila da planilha libera a próxima gravação na hora. A recarga é
+        // completa de propósito (o comando subiu a versão) e registra a versão nova como a conhecida.
         const reload = load(true).catch(() => {});
         if (!projected) await reload;
         return id;
