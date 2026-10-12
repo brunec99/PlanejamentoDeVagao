@@ -179,6 +179,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A aba 5 (Terminalidade) não carrega nem grava; as demais seguem normais.',
     critical: false,
   },
+  {
+    migration: '0029_work_location',
+    label: 'Local da obra para a previsão do tempo nos PDFs',
+    probe: { kind: 'column', table: 'work_settings', column: 'latitude' },
+    effect: 'Os PDFs do curto prazo saem sem a faixa do tempo e o local da obra não pode ser salvo.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

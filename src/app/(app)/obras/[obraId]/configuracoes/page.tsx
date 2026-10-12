@@ -1,11 +1,13 @@
 import { WorkResources, WorkSettingsHeader } from '@/modules/configuracoes/work-resources';
 import { WeekNumbering } from '@/modules/configuracoes/week-numbering';
+import { WorkLocation } from '@/modules/configuracoes/work-location';
 import { TerminalityCatalogs } from '@/modules/configuracoes/terminality-catalogs';
 
 export const metadata = { title: 'Configurações da obra' };
 
-/** Um cabeçalho só para a página; abaixo dele, as seções: quem executa, a semana 1 e os cadastros da
- * terminalidade (pavimentos e unidades, tipos de pendência e responsáveis ATR). */
+/** Um cabeçalho só para a página; abaixo dele, as seções: quem executa, a semana 1, o local da obra
+ * (previsão do tempo nos PDFs) e os cadastros da terminalidade (pavimentos e unidades, tipos de
+ * pendência e responsáveis ATR). */
 export default async function Page({ params }: { params: Promise<{ obraId: string }> }) {
   const { obraId } = await params;
   return (
@@ -13,6 +15,7 @@ export default async function Page({ params }: { params: Promise<{ obraId: strin
       <WorkSettingsHeader key={`header-${obraId}`} workId={obraId} />
       <WorkResources key={obraId} workId={obraId} />
       <WeekNumbering key={`semana-${obraId}`} workId={obraId} />
+      <WorkLocation key={`local-${obraId}`} workId={obraId} />
       <TerminalityCatalogs key={`terminalidade-${obraId}`} workId={obraId} />
     </div>
   );

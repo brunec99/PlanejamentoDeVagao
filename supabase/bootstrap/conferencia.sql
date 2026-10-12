@@ -60,7 +60,8 @@ colunas(ordem, tabela, coluna, migracao) as (
     (307, 'plan_tasks', 'level', '0020'),
     (308, 'plan_dependencies', 'link_type', '0022'),
     (309, 'plan_tasks', 'schedule_meta', '0023'),
-    (310, 'long_term_plans', 'synced_revision', '0026')
+    (310, 'long_term_plans', 'synced_revision', '0026'),
+    (311, 'work_settings', 'latitude', '0029')
 ),
 funcoes(ordem, assinatura, servidor_apenas) as (
   values

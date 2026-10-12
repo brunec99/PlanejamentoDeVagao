@@ -5,7 +5,7 @@
 -- de ajustes do bootstrap. Monta do zero as 32 tabelas, as funções commit_planning e
 -- planning_snapshot, os gatilhos de imutabilidade e o bucket privado 'ifc' do Storage.
 --
--- GERADO AUTOMATICAMENTE — não edite à mão. Fonte: 28 migrações, de 0001_init.sql a 0028_terminality.sql.
+-- GERADO AUTOMATICAMENTE — não edite à mão. Fonte: 29 migrações, de 0001_init.sql a 0029_work_location.sql.
 -- Para regenerar depois de criar uma migração nova:  npm run bootstrap:sql
 --
 -- COMO USAR: só num projeto Supabase VAZIO (recém-criado). Abra o SQL Editor do projeto, cole o
@@ -4827,6 +4827,20 @@ begin
   end if;
 end $$;
 
+notify pgrst, 'reload schema';
+
+-- ===== 0029_work_location.sql =====
+
+-- Local da obra para a previsão do tempo nos PDFs do curto prazo (12/10/2026): cidade/endereço como a
+-- pessoa escreveu e as coordenadas que a busca devolveu. Fica em work_settings, fora do snapshot, como
+-- a semana 1. Pode ser rodada de novo; não reescreve commit_planning. Sem ela, os PDFs saem sem a faixa
+-- do tempo e a tela de configurações avisa.
+alter table work_settings
+  add column if not exists place text,
+  add column if not exists latitude double precision check (latitude is null or (latitude between -90 and 90)),
+  add column if not exists longitude double precision check (longitude is null or (longitude between -180 and 180));
+
+-- As colunas novas só aparecem na API depois que o PostgREST relê o esquema.
 notify pgrst, 'reload schema';
 
 -- ===== Ajustes do bootstrap (gerados por scripts/build-bootstrap-sql.mjs; não são migração) =====

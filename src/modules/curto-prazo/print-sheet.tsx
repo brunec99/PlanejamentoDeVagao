@@ -1,11 +1,13 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WeeklyCommitment } from '@/domain/entities';
 import { addDays, startOfWeek } from '@/domain/validation';
+import type { WeatherResponse } from '@/domain/weather';
 import { weekNumberFrom } from '@/domain/week-numbering';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { compareText } from '@/modules/curto-prazo/sheet-view';
+import { WeatherStrip } from '@/modules/curto-prazo/weather-strip';
 import { formatDate } from '@/shared/format';
 
 /** Os dois PDFs da semana no formato da planilha "Planejamento de curto prazo" da obra (exemplos do
@@ -25,6 +27,11 @@ const DAYS = [
   { day: 6, label: 'Sáb' },
 ] as const;
 const dayMonth = (date: string) => formatDate(date).slice(0, 5);
+/** Tempo de espera pela rota do clima; passou disso, o PDF sai com "indisponível" e imprime assim mesmo. */
+const WEATHER_TIMEOUT_MS = 4000;
+const WEATHER_UNAVAILABLE: WeatherResponse = { available: false, reason: 'indisponivel', message: 'Tempo indisponível no momento.' };
+const isWeatherResponse = (value: unknown): value is WeatherResponse =>
+  typeof value === 'object' && value !== null && typeof (value as { available?: unknown }).available === 'boolean';
 
 export function PrintSheet({
   workId,
@@ -83,14 +90,38 @@ export function PrintSheet({
     ? `PCP-${work.code || work.name} - ${closing ? 'Resultados ' : ''}Semana ${number(week)}`
     : 'Planejamento de curto prazo';
 
+  // Tempo da semana (12/10/2026): buscado uma vez quando a semana é conhecida; a impressão espera a
+  // resposta ou o limite de 4 s, nunca mais que isso. Qualquer falha vira "indisponível".
+  const [weather, setWeather] = useState<WeatherResponse | 'pending'>('pending');
+  const hasWork = Boolean(work);
   useEffect(() => {
-    if (!ready || !work || printed.current) return;
+    if (!ready || !hasWork || !week) return;
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), WEATHER_TIMEOUT_MS);
+    let active = true;
+    fetch(`/api/clima?workId=${encodeURIComponent(workId)}&semana=${week}`, { signal: controller.signal })
+      .then((r): Promise<unknown> => (r.ok ? r.json() : Promise.resolve(WEATHER_UNAVAILABLE)))
+      .then(r => (isWeatherResponse(r) ? r : WEATHER_UNAVAILABLE))
+      .catch(() => WEATHER_UNAVAILABLE)
+      .then(r => {
+        clearTimeout(deadline);
+        if (active) setWeather(r);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      clearTimeout(deadline);
+    };
+  }, [ready, hasWork, workId, week]);
+
+  useEffect(() => {
+    if (!ready || !work || weather === 'pending' || printed.current) return;
     printed.current = true;
     document.title = title;
     // Um respiro para as fontes e o layout assentarem antes do diálogo de impressão.
     const timer = setTimeout(() => window.print(), 400);
     return () => clearTimeout(timer);
-  }, [ready, work, title]);
+  }, [ready, work, title, weather]);
 
   if (context.state === 'error') return <p className="p-6 text-sm text-danger">{context.message}</p>;
   if (!ready) return <p className="p-6 text-sm text-slate-500">Preparando o PDF…</p>;
@@ -118,6 +149,18 @@ export function PrintSheet({
         .pcp-logos { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 6px; padding: 3px 8px; }
         .pcp-logos img { height: ${closing ? '16px' : '22px'}; width: auto; display: block; }
         .pcp-logos-sep { width: 1px; height: ${closing ? '14px' : '20px'}; background: #cbd5e1; }
+        /* Faixa do tempo no fim do documento: mesma largura, bordas e corpo da tabela; não quebra entre folhas. */
+        .pcp-weather { margin-top: 10px; break-inside: avoid; page-break-inside: avoid; }
+        .pcp-weather-title { margin: 0 0 3px; font-size: ${closing ? '8px' : '9.5px'}; font-weight: 700; }
+        .pcp-print .pcp-weather td { width: 16.666%; height: auto; padding: 3px 4px; vertical-align: top; line-height: 1.35; white-space: nowrap; }
+        .pcp-weather-rain { background: #e8f0fe; }
+        .pcp-weather-day { display: flex; justify-content: space-between; gap: 4px; }
+        .pcp-weather-tag { font-size: 0.85em; color: #6b7280; }
+        .pcp-weather-label { display: flex; align-items: center; gap: 3px; white-space: normal; }
+        .pcp-weather-label svg { width: ${closing ? '11px' : '13px'}; height: ${closing ? '11px' : '13px'}; flex: none; }
+        .pcp-weather-summary { margin: 4px 0 0; font-size: ${closing ? '8px' : '9.5px'}; font-weight: 600; }
+        .pcp-weather-source, .pcp-weather-note { margin: 2px 0 0; font-size: ${closing ? '7.5px' : '9px'}; color: #6b7280; }
+        .pcp-weather-note { margin-top: 10px; }
         @media print { .pcp-toolbar { display: none; } .pcp-print { padding: 0; } }
       `}</style>
       <div className="pcp-toolbar">
@@ -242,6 +285,7 @@ export function PrintSheet({
         </tbody>
       </table>
       {rows.length === 0 && <p style={{ marginTop: 12, fontSize: 12 }}>Semana sem linhas no planejamento.</p>}
+      {weather !== 'pending' && <WeatherStrip weather={weather} kind={kind} />}
     </div>
   );
 }

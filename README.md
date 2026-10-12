@@ -172,7 +172,7 @@ Desde 02/10/2026 a rota `GET /api/prevision` é liberada **por papel**, não por
 
 `SUPABASE_SERVICE_ROLE_KEY` nunca deve ter o prefixo `NEXT_PUBLIC_` — ela ignora Row Level Security e só é usada no servidor (repositório e rota de callback). O navegador nunca acessa o Postgres diretamente, só as rotas `/api/planning` e `/api/planning/commands`, autenticadas pela sessão do Supabase Auth.
 
-Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) em Project Settings → Environment Variables. Opcional: `ANTHROPIC_API_KEY` liga o botão "Analisar com IA" do fechamento do curto prazo (sem ela o botão avisa que não está configurado) e `DEVELOPER_EMAILS` lista quem vê os módulos em desenvolvimento.
+Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) em Project Settings → Environment Variables. Opcional: `ANTHROPIC_API_KEY` liga o botão "Analisar com IA" do fechamento do curto prazo (sem ela o botão avisa que não está configurado) e `DEVELOPER_EMAILS` lista quem vê os módulos em desenvolvimento. `OPEN_METEO_API_KEY` (opcional) usa o plano comercial do Open-Meteo para o tempo nos PDFs; sem ela, a API gratuita, que é só para uso não comercial.
 
 ## Login com Google
 
@@ -266,3 +266,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0025 | configurações da obra (semana 1) | não | aplicada (confirmada pela sondagem de 02/10/2026) |
 | 0027 | leitura do planejamento por obra | não | aplicada pelo usuário em 02/10/2026 |
 | 0028 | terminalidade (pendências por apartamento, fotos, bucket `terminalidade`) | não | aplicada no `takt-hub` em 08/10/2026 (6 tabelas e bucket privado com limite de 2 MB/JPEG conferidos) |
+| 0029 | local da obra em `work_settings` (`place`, `latitude`, `longitude`) para o tempo nos PDFs | não | **criada em 12/10/2026, não aplicada** |
