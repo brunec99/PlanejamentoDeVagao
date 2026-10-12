@@ -482,3 +482,9 @@ Cada recarga do planejamento baixa a obra inteira (Blentt: 3,9 MB em JSON, ~350 
 - A recarga após uma gravação continua cheia (confirma a gravação e registra a versão nova). Próximo passo, se ainda for preciso: carregar o curto prazo por janela de semanas.
 - Cada verificação ainda é uma invocação de função na Vercel com leitura de sessão e perfil; baixar isso exigiria cache do perfil no servidor.
 - **Busca de endereço (12/10/2026, retorno do usuário):** a geocodificação do Open-Meteo não achava "Rua Maranhão, 2176 - Portão, Curitiba - PR", porque só conhece nomes de lugares. A busca de `/api/clima/geocode` passou a ter três caminhos: coordenadas coladas (inclusive de um link do Google Maps); endereço completo pelo **Nominatim (OpenStreetMap)** (`src/infrastructure/integrations/geocoding/nominatim.ts`: rua, número, bairro, cidade e UF, com CEP no rótulo; fila de 1 pedido/s, cache de 24 h e identificação no User-Agent, como a política do serviço pede; `GEOCODING_USER_AGENT` opcional); e, só se nada vier, o Open-Meteo. O debounce da tela subiu para 700 ms. Testes em `tests/geocoding.test.ts`.
+
+## Velocidade ao clicar (12/10/2026)
+
+O usuário relatou demora ao clicar. Medido de uma máquina perto do banco: gravar um apontamento levava 1,8 s no servidor (baixa o planejamento inteiro, 3,9 MB, aplica o comando e devolve os 3,9 MB ao banco, regravando 6 mil linhas); `GET /api/planning` 0,5–0,8 s; e a produção rodava as funções da Vercel em `iad1` (EUA) com o banco em São Paulo (`x-vercel-id: gru1::iad1`), somando ~130 ms a cada ida e volta. Três frentes:
+
+- **Região das funções:** `vercel.json` ganhou `"regions": ["gru1"]` (São Paulo, ao lado do Supabase sa-east-1). Conferir pelo cabeçalho `x-vercel-id` (`gru1::gru1`).
