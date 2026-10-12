@@ -35,3 +35,13 @@ Testes de `tests/work-resources.test.ts` cobrem edição, autorização, dados i
 A verificação integrada também passou: `npm run typecheck` e 162 testes via `node --import tsx --test tests/*.test.ts`.
 
 O teste de interface no navegador com dados reais ainda deve conferir o cadastro, a edição de equipe já alocada e o preenchimento de fornecedor na linha nova. O resultado da validação integrada do planejamento fica registrado também em `docs/planejamento-tres-niveis.md`.
+
+## Empreiteiros primeiro, equipes ao abrir (12/10/2026)
+
+Pedido do usuário: a seção "Empreiteiros e equipes" das Configurações da obra deve listar só os empreiteiros e, ao clicar em um, abrir as equipes com a capacidade de cada uma.
+
+- A lista (`work-resources.tsx`) tem uma linha por empreiteiro, em ordem alfabética, com o número de equipes, a soma da capacidade semanal e os vínculos. Começa recolhida; a busca abre a linha quando bate só no nome de uma equipe.
+- Ao abrir: uma linha por equipe com a capacidade editável na própria linha (grava com `update_team` ao sair do campo ou com Enter), Editar (renomear ou trocar de empresa) e Excluir com os mesmos bloqueios de antes, e "Adicionar equipe" já com o empreiteiro preenchido.
+- "Novo empreiteiro / equipe" no topo cadastra uma empresa nova.
+- O agrupamento ignora acento, caixa e espaços (`textKey`); quando o mesmo empreiteiro foi escrito de formas diferentes (ex.: "Hidrotec" e "HIDROTEC"), a linha avisa "N grafias" e mostra a mais usada. A lógica pura está em `work-resources-view.ts`, testada em `tests/work-resources-view.test.ts`.
+- Consulta só lê; os atalhos para o médio prazo seguem só para quem desenvolve.

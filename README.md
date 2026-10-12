@@ -266,4 +266,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0025 | configurações da obra (semana 1) | não | aplicada (confirmada pela sondagem de 02/10/2026) |
 | 0027 | leitura do planejamento por obra | não | aplicada pelo usuário em 02/10/2026 |
 | 0028 | terminalidade (pendências por apartamento, fotos, bucket `terminalidade`) | não | aplicada no `takt-hub` em 08/10/2026 (6 tabelas e bucket privado com limite de 2 MB/JPEG conferidos) |
-| 0029 | local da obra em `work_settings` (`place`, `latitude`, `longitude`) para o tempo nos PDFs | não | **criada em 12/10/2026, não aplicada** |
+| 0029 | local da obra em `work_settings` (`place`, `latitude`, `longitude`) para o tempo nos PDFs | não | aplicada pelo usuário no `takt-hub` em 12/10/2026 (colunas conferidas pela API) |
