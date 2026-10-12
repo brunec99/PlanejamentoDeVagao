@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Planning } from '@/application/use-cases/get-planning';
 import type { Command } from '@/application/use-cases/commands';
 import { applyCommandLocally } from '@/application/use-cases/local-apply';
-import { parseVersion, shouldReload } from '@/application/planning-version';
+import { confirmsOwnWrite, parseVersion, shouldReload } from '@/application/planning-version';
 
 type Ready = {
   state: 'ready';
@@ -218,6 +218,15 @@ export function PlanningProvider({ children, developer = false }: { children: Re
         if (inFlight.current) {
           await inFlight.current.catch(() => {});
           if (projected) project();
+        }
+        // Projeção confirmada pela versão: a resposta diz a versão gravada e, se ela é a conhecida + 1,
+        // a única gravação desde a última carga foi esta. A projeção já é o que o banco tem; a versão
+        // conhecida passa a ser a nova e nada é baixado (antes, cada clique baixava os 3,9 MB e
+        // redesenhava a planilha inteira; a tela travava meio segundo a cada apontamento, 12/10/2026).
+        if (projected && confirmsOwnWrite(version.current, body.version)) {
+          version.current = body.version as number;
+          latest.current = Date.now();
+          return id;
         }
         // O comando já foi gravado: se a recarga falhar, a tela fica marcada como desatualizada, mas
         // quem chamou recebe o id e não vê um erro de algo que deu certo. Com projeção, quem chamou

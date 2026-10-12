@@ -84,8 +84,90 @@ try {
   await db.exec('set role authenticated');
   await assert.rejects(db.query("select planning_snapshot('{}')"), /permission denied/);
   await db.exec('reset role');
+
+  // Gravação parcial, como o adaptador faz desde 12/10/2026 (diffChangedRows): o payload leva só as
+  // linhas novas ou alteradas e os eventos novos. Vale porque commit_planning faz upsert e só apaga o
+  // que p_deletes lista — o que fica de fora do payload não é tocado, nem apagado.
+  const week = (id, week_start, week_end) => ({
+    id,
+    ...stamp,
+    work_id: 'w',
+    name: 'Alvenaria ' + id,
+    supplier: 'Empreiteira',
+    activity_id: null,
+    week_start,
+    week_end,
+    responsible_id: 'tester',
+    team_id: 'eq',
+    start_date: week_start,
+    end_date: week_start,
+    fulfilled: null,
+    cause: null,
+    justification: null,
+    recorded_at: null,
+    recorded_by: null,
+  });
+  const full = structuredClone(liveOnly);
+  full.teams = [{ id: 'eq', ...stamp, work_id: 'w', company: 'Empreiteira', name: 'Alvenaria', weekly_capacity: 3 }];
+  full.weekly_commitments = [
+    week('c1', '2026-10-05', '2026-10-11'),
+    week('c2', '2026-10-05', '2026-10-11'),
+    week('c3', '2026-10-12', '2026-10-18'),
+  ];
+  await commit(4, full);
+  const snapshot = async () => (await db.query('select planning_snapshot($1::text[]) as s', [['w']])).rows[0].s;
+  const historyCount = async () => (await db.query('select count(*)::int n from history_events')).rows[0].n;
+  const before = await snapshot();
+  const eventsBefore = await historyCount();
+  assert.equal(before.version, 5);
+  assert.equal(before.weekly_commitments.length, 3);
+  const tables = Object.keys(before).filter(key => key !== 'version');
+  const sameExcept = (a, b, except) => {
+    for (const table of tables) if (table !== except) assert.deepEqual(b[table], a[table], `${table} não devia mudar`);
+  };
+  // Só a linha apurada e o evento novo; todas as outras chaves vão vazias.
+  const partial = Object.fromEntries(Object.keys(payload).map(key => [key, []]));
+  partial.weekly_commitments = [
+    {
+      ...full.weekly_commitments[1],
+      updated_at: '2026-10-09T18:00:00Z',
+      fulfilled: true,
+      recorded_at: '2026-10-09T18:00:00Z',
+      recorded_by: 'tester',
+    },
+  ];
+  partial.history_events = [
+    {
+      id: 'h-c2',
+      entity_id: 'c2',
+      entity_type: 'planning',
+      action: 'record_fulfillment',
+      author_id: 'tester',
+      occurred_at: '2026-10-09T18:00:00Z',
+      changes: {},
+    },
+  ];
+  await commit(5, partial);
+  const after = await snapshot();
+  assert.equal(after.version, 6);
+  sameExcept(before, after, 'weekly_commitments');
+  assert.deepEqual(
+    after.weekly_commitments.filter(c => c.id !== 'c2'),
+    before.weekly_commitments.filter(c => c.id !== 'c2'),
+    'as linhas fora do payload ficam como estavam',
+  );
+  const c2 = after.weekly_commitments.find(c => c.id === 'c2');
+  assert.deepEqual([c2.fulfilled, c2.recorded_by], [true, 'tester']);
+  assert.equal(await historyCount(), eventsBefore + 1);
+  // Listas vazias ou chaves ausentes: só a versão sobe.
+  await commit(6, Object.fromEntries(Object.keys(payload).map(key => [key, []])));
+  await commit(7, {});
+  const idle = await snapshot();
+  assert.equal(idle.version, 8);
+  sameExcept(after, idle);
+  assert.equal(await historyCount(), eventsBefore + 1);
   console.log(
-    'PostgreSQL isolado: 24 migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027) e RPCs sem acesso público: OK',
+    'PostgreSQL isolado: migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027), gravação parcial (só o que mudou) e RPCs sem acesso público: OK',
   );
 } finally {
   await db.close();

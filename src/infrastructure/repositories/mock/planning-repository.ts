@@ -1,4 +1,4 @@
-import type { PlanningRepository, SnapshotScope } from '../../../application/ports/planning-repository';
+import type { Committed, PlanningRepository, SnapshotScope } from '../../../application/ports/planning-repository';
 import type { PlanningData } from '../../../domain/entities';
 import { createMockData } from '../../../mocks/planning';
 export class MockPlanningRepository implements PlanningRepository {
@@ -8,7 +8,8 @@ export class MockPlanningRepository implements PlanningRepository {
   constructor(seed: PlanningData = createMockData()) {
     this.data = structuredClone(seed);
   }
-  /** O recorte por obra é do adaptador real; em memória o snapshot inteiro é o que os testes esperam. */
+  /** O recorte por obra e o do curto prazo (`commitments`) são do adaptador real; em memória o
+   * snapshot inteiro é o que os testes esperam, e gravar o rascunho inteiro dá no mesmo. */
   async getSnapshot(_scope?: SnapshotScope): Promise<PlanningData> {
     return structuredClone(this.data);
   }
@@ -16,11 +17,14 @@ export class MockPlanningRepository implements PlanningRepository {
   async getVersion(): Promise<number> {
     return this.version;
   }
-  async transaction<T>(operation: (draft: PlanningData) => T, _scope?: SnapshotScope): Promise<T> {
+  async transaction<T>(operation: (draft: PlanningData) => T, scope?: SnapshotScope): Promise<T> {
+    return (await this.commit(operation, scope)).result;
+  }
+  async commit<T>(operation: (draft: PlanningData) => T, _scope?: SnapshotScope): Promise<Committed<T>> {
     const draft = structuredClone(this.data);
     const result = operation(draft);
     this.data = structuredClone(draft);
     this.version += 1;
-    return result;
+    return { result, version: this.version };
   }
 }

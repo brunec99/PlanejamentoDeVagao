@@ -869,6 +869,25 @@ export function planningDataToPayload(data: PlanningData) {
   };
 }
 
+export type CommitPayload = ReturnType<typeof planningDataToPayload>;
+
+/** Só o que mudou entre dois snapshots, por tabela: linha nova ou com algum campo diferente, comparada
+ * já mapeada e serializada (os dois lados saem do mesmo mapeador, então a ordem das chaves é a mesma e
+ * `undefined` some dos dois). `commit_planning` faz upsert e só apaga o que `p_deletes` lista, logo a
+ * linha que fica de fora não é tocada — e o payload cai de todas as linhas das obras (3,9 MB numa obra
+ * com 6 000 compromissos) para as poucas que o comando alterou. O histórico nunca vem no snapshot,
+ * então todo evento do rascunho é novo e viaja. */
+export function diffChangedRows(before: PlanningData, after: PlanningData): CommitPayload {
+  const from = planningDataToPayload(before);
+  const to = planningDataToPayload(after);
+  const changed: Record<string, unknown[]> = {};
+  for (const table of Object.keys(to) as (keyof CommitPayload)[]) {
+    const known = new Map<string, string>(from[table].map(row => [row.id, JSON.stringify(row)]));
+    changed[table] = to[table].filter(row => known.get(row.id) !== JSON.stringify(row));
+  }
+  return changed as CommitPayload;
+}
+
 /** Ids present in `before` but missing from `after`, per table — o que `commit_planning`
  * precisa apagar de fato. Só dois comandos removem linhas: `regenerate_sequence` (a cauda
  * não liberada da sequência) e `delete_link_rule`. */

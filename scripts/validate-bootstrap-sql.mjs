@@ -139,6 +139,42 @@ try {
   assert.equal(Object.keys(snap).length, 23, 'version + 22 tabelas do snapshot');
   steps.push('commit_planning (obra + equipe + compromisso semanal) e planning_snapshot devolvendo os três: OK');
 
+  // Gravação parcial, como o adaptador faz: só a linha alterada e o evento novo; o que fica de fora
+  // não é tocado (commit_planning faz upsert e só apaga o que p_deletes lista).
+  const partial = Object.fromEntries(Object.keys(payload).map(key => [key, []]));
+  partial.weekly_commitments = [
+    {
+      ...payload.weekly_commitments[0],
+      updated_at: '2026-10-09T19:00:00Z',
+      fulfilled: false,
+      cause: 'Baixa Produtividade',
+      justification: 'Chuva',
+    },
+  ];
+  partial.history_events = [
+    {
+      id: 'h-c',
+      entity_id: 'c',
+      entity_type: 'planning',
+      action: 'record_fulfillment',
+      author_id: 'tester',
+      occurred_at: '2026-10-09T19:00:00Z',
+      changes: {},
+    },
+  ];
+  const partialCommit = await db.query('select commit_planning($1, $2::jsonb, $3::jsonb) as v', [1, JSON.stringify(partial), '{}']);
+  assert.equal(Number(partialCommit.rows[0].v), 2);
+  const after = (await db.query('select planning_snapshot($1::text[]) as s', [['w']])).rows[0].s;
+  assert.equal(after.version, 2);
+  assert.deepEqual(after.works, snap.works, 'works fora do payload fica como estava');
+  assert.deepEqual(after.teams, snap.teams, 'teams fora do payload fica como estava');
+  assert.deepEqual(
+    [after.weekly_commitments.length, after.weekly_commitments[0].fulfilled, after.weekly_commitments[0].cause],
+    [1, false, 'Baixa Produtividade'],
+  );
+  assert.equal((await db.query('select count(*)::int n from history_events')).rows[0].n, 1);
+  steps.push('commit_planning parcial (só a linha alterada + evento novo): versão sobe, o resto fica: OK');
+
   // 0025: work_settings existe; a semana 1 tem de ser segunda-feira.
   await db.query("insert into work_settings (work_id, week_one_start, updated_by) values ('w', '2026-10-05', 'tester')");
   await assert.rejects(db.query("update work_settings set week_one_start = '2026-10-06' where work_id = 'w'"), /check constraint/);

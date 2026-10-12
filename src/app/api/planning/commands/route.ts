@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { applyCommand, type Command } from '@/application/use-cases/commands';
+import { commandScope } from '@/application/use-cases/command-scope';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { isCommandAllowedForNonDeveloper, RESTRICTED_MODULE_MESSAGE } from '@/application/module-access';
@@ -23,10 +24,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Use a geração de vagões do Planejador de longo prazo.' }, { status: 400 });
   try {
     const context = commandContext(profile.id);
-    const id = await new SupabasePlanningRepository().transaction(draft => applyCommand(draft, command, context), {
-      workIds: profile.workIds,
-    });
-    return NextResponse.json({ id });
+    // Comandos do curto prazo leem só o recorte deles (equipes e compromissos envolvidos); os demais,
+    // o planejamento inteiro das obras do perfil. A gravação leva só o que mudou, nos dois casos.
+    // A versão gravada vai junto: com ela a tela sabe que a projeção local já é a versão do banco e
+    // não baixa o planejamento inteiro de novo (`confirmsOwnWrite`).
+    const { result: id, version } = await new SupabasePlanningRepository().commit(
+      draft => applyCommand(draft, command, context),
+      commandScope(command, profile.workIds),
+    );
+    return NextResponse.json({ id, version });
   } catch (error) {
     // Regra de negócio recusada volta como 400 com a mensagem; falha de infraestrutura é registrada.
     const message = error instanceof Error ? error.message : 'Falha ao aplicar o comando.';

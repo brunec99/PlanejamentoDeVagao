@@ -20,6 +20,7 @@ export async function GET() {
       {
         getSnapshot: async () => trim(scopePlanning(await repository.getSnapshot(scope), profile.id)),
         transaction: operation => repository.transaction(operation, scope),
+        commit: operation => repository.commit(operation, scope),
       },
       todayInSaoPaulo(),
     );

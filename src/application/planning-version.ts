@@ -18,3 +18,12 @@ export function parseVersion(body: unknown): number | undefined {
   const { version } = body as { version?: unknown };
   return typeof version === 'number' && Number.isFinite(version) ? version : undefined;
 }
+
+/** Depois de um comando, a resposta traz a versão gravada. Se ela é exatamente a conhecida + 1, a única
+ * gravação desde a última carga foi a nossa, e a projeção local (`applyCommandLocally`) já é o que o
+ * banco tem: não vale baixar os 3,9 MB nem redesenhar a planilha. Qualquer outra situação (versão
+ * desconhecida, resposta sem versão, salto maior porque alguém gravou no meio) pede a recarga. */
+export function confirmsOwnWrite(lastVersion: number | undefined, committedVersion: unknown): boolean {
+  if (lastVersion === undefined) return false;
+  return typeof committedVersion === 'number' && Number.isFinite(committedVersion) && committedVersion === lastVersion + 1;
+}
