@@ -38,7 +38,8 @@ export function WorkLocation({ workId }: { workId: string }) {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Preview>({ status: 'idle' });
 
-  // Busca 400 ms depois da última tecla; a resposta de uma busca antiga é descartada pelo abort.
+  // Busca 700 ms depois da última tecla (o Nominatim pede no máximo 1 pedido por segundo); a resposta
+  // de uma busca antiga é descartada pelo abort.
   useEffect(() => {
     const text = query.trim();
     if (text.length < 3) return;
@@ -51,14 +52,16 @@ export function WorkLocation({ workId }: { workId: string }) {
         if (!res.ok) throw new Error(body.error ?? 'Não foi possível buscar o local.');
         const places = body.places ?? [];
         setOptions(places);
-        setSearchError(places.length ? '' : 'Nenhum lugar encontrado. Tente só a cidade, ou cidade e estado.');
+        setSearchError(
+          places.length ? '' : 'Nenhum lugar encontrado. Tente rua e cidade, só a cidade, ou cole as coordenadas (ex.: -25.43, -49.27).',
+        );
       } catch (cause) {
         if (controller.signal.aborted) return;
         setSearchError(cause instanceof Error ? cause.message : 'Não foi possível buscar o local.');
       } finally {
         if (!controller.signal.aborted) setSearching(false);
       }
-    }, 400);
+    }, 700);
     return () => {
       clearTimeout(timer);
       controller.abort();
