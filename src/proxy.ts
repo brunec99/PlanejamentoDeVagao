@@ -93,12 +93,15 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// As telas de `/campo/` (terminalidade no celular, sem sinal) ficam fora: são cascas estáticas, sem
+// dado nenhum, que o service worker guarda para abrir sem sinal; um desvio para o login viraria a
+// casca guardada. Os dados vêm das APIs, que continuam passando por aqui. `campo-sw.js` também.
 // `manifest.webmanifest` e `apple-icon` ficam fora porque o navegador os busca sem cookie de sessão;
 // sem isso o atalho na tela inicial recebia a página de login no lugar do manifest.
 // O `wasm` na lista é o binário do web-ifc: sem ele aqui, a sessão expirada devolveria
 // a página de login no lugar do módulo, e o visualizador falharia sem dizer por quê.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|privacidade|auth/callback|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|privacidade|auth/callback|campo/|campo-sw\\.js|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
   ],
 };

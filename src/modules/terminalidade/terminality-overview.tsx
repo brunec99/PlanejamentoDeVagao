@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Camera, ListFilter, Plus, RefreshCw, Search } from 'lucide-react';
+import { Camera, ListFilter, Plus, RefreshCw, Search, Smartphone } from 'lucide-react';
 import type { TerminalityCommand, TerminalityItem, TerminalityPhoto } from '@/domain/terminality';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
@@ -284,6 +284,14 @@ export function TerminalityOverview({ workId }: { workId: string }) {
               ou pavimento nos quadros acima filtra a lista por ele.
             </p>
           </HelpNote>
+          {/* Atalho para o modo de campo: celular, sem sinal, com fila que sobe quando a conexão volta. */}
+          <a
+            href={`/campo/terminalidade?obra=${encodeURIComponent(workId)}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            title="Abre a lista no celular; depois de baixar a obra, funciona sem sinal no canteiro"
+          >
+            <Smartphone size={14} aria-hidden /> Usar no celular, sem sinal
+          </a>
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div role="group" aria-label="Situação" className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
               {SITUATIONS.map(option => {

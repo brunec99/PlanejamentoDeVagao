@@ -113,3 +113,30 @@ Todos os comandos passam por `POST /api/terminalidade/commands`. Antes de execut
 - As URLs assinadas das fotos valem 1 h: a aba recarrega em silêncio ao voltar ao foco depois de 45 min e refaz a URL uma vez quando uma imagem falha (`photo-refresh.ts`).
 - Os cadastros recarregam sozinhos ao receber 409 (dados alterados por outra pessoa).
 - Envio de foto: o PUT que falha é repetido uma vez com o mesmo ticket; se falhar de novo, `DELETE /api/terminalidade/upload-url` apaga o que subiu (só sem linha registrada). Ainda falta uma limpeza periódica de arquivos órfãos.
+
+## Modo de campo: celular e sem sinal (14/10/2026)
+
+O usuário pediu que a terminalidade funcionasse no celular e sem sinal, seguindo a lógica da vistoria da **Obra do Mês** no App-ATR (`~/Applications/App-ATR`: `src/lib/vistoria-offline.ts`, `public/sw.js`, `src/app/vistoria/`). O desenho é o mesmo, com uma diferença: aqui a fila também guarda **fotos**.
+
+### Como funciona
+
+- **Tela própria**, `/campo/terminalidade` (`src/app/campo/terminalidade/page.tsx` + `src/modules/terminalidade/field-app.tsx`). É uma **casca estática**, sem sessão nem banco na renderização, para o service worker guardá-la e abri-la sem sinal. O proxy deixa `/campo/` e `/campo-sw.js` passarem sem sessão; os dados vêm só das APIs, que continuam exigindo login. A aba 5 tem o atalho "Usar no celular, sem sinal" (abre direto na obra, `?obra=`).
+- **Baixar a obra** (única etapa que exige rede): `GET /api/terminalidade/campo?workId=` devolve o pacote — pavimentos, unidades, tipos, responsáveis, pendências com URLs das fotos e as empresas do cadastro de equipes. As miniaturas das pendências abertas (até 300) são baixadas junto, porque as URLs assinadas vencem em 1 h. Sem `workId`, a rota devolve quem é a pessoa e as obras dela, guardadas para a lista abrir sem sinal.
+- **Dono do rascunho é o aparelho** (`offline-store.ts`, IndexedDB `obra360-terminalidade`): pacote por obra, fila de saída e as fotos (imagem e miniatura já comprimidas, como Blob). Tudo é gravado na hora.
+- **Mesmas regras do servidor, no celular** (`offline-model.ts`): a tela mostra o pacote com a fila aplicada por cima por `planTerminalityCommand`, a mesma função que a rota usa. Sem sinal, o aparelho já recusa o que o servidor recusaria (resolver sem foto da correção, data no futuro, mais de 10 fotos).
+- **Envio**: a fila sobe sozinha ao abrir com sinal, ao voltar o sinal (evento `online`) e logo depois de cada lançamento com sinal; há também o botão de enviar no cabeçalho. Sobe na ordem em que foi lançada, uma operação por vez: o que sobe sai da fila na hora. Foto = pedir URL, enviar imagem e miniatura (com uma nova tentativa), registrar `add_photo`. "Já foi registrada" conta como enviado (a resposta anterior se perdeu). Recusa de regra (4xx) para a fila naquela operação e aparece na tela com "Descartar" (descartar uma pendência leva junto as fotos e a resolução dela). Sessão vencida mostra "Entrar de novo" e não perde nada. Depois de enviar, a obra é baixada de novo.
+- **Service worker** (`public/campo-sw.js`, escopo `/campo/`): rede primeiro na navegação, com cópia da tela como reserva; cache primeiro em `/_next/static`; APIs nunca do cache. O resto do sistema não passa por ele.
+- **O que dá para fazer em campo**: lançar pendência (pavimento, apto, descrição, tipo, data, responsável ATR, terceiro e fotos pela câmera), juntar fotos, resolver com foto da correção e reabrir. Filtros por situação, pavimento, unidade e busca. Cadastros, edição e exclusão de pendência ficam na aba 5.
+
+### Validação (14/10/2026)
+
+- `tests/terminality-offline.test.ts` (6 testes): fila aplicada sobre o pacote, recusa sem sinal pelas regras do servidor, operação que já não vale vai para as recusadas sem derrubar as outras, pendência já enviada não duplica, aplicação pura da mutação e "hoje" de São Paulo.
+- **Navegador (Playwright, iPhone 13 simulado), servidor de desenvolvimento**, na "Obra - Teste": baixou a obra; com a rede cortada lançou pendência com foto (selo "no aparelho", "2 alterações guardadas"); "Resolver" travado sem foto da correção; resolveu com foto; com a rede de volta a fila subiu sozinha em ~4 s, e o servidor mostrou a pendência resolvida com as duas fotos.
+- **Build de produção, sem rede**: depois de uma visita com sinal (service worker no controle) e com o pacote no aparelho, a página **recarregou sem rede** e abriu a obra, a lista de obras abriu, uma pendência com foto entrou na fila, e a fila continuou lá ao fechar e abrir o app de novo. Em modo de desenvolvimento a página não hidrata sem rede (o servidor de desenvolvimento serve os scripts de outro jeito), então o teste sem rede vale para o build de produção.
+- Os registros de teste na "Obra - Teste" foram apagados; o tipo "PINTURA" ficou desativado (tipos não se apagam).
+
+### Pendências
+
+- Não testado num celular de verdade, logado em produção, nem com câmera real (Android e iPhone). No iPhone, o Safari só mantém o IndexedDB de sites usados com frequência; vale adicionar à tela inicial.
+- Edição e exclusão de pendência, e cadastros, não estão no modo de campo.
+- Sem limpeza automática de fotos órfãs no bucket (a mesma pendência da aba 5).
