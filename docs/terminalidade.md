@@ -140,3 +140,14 @@ O usuário pediu que a terminalidade funcionasse no celular e sem sinal, seguind
 - Não testado num celular de verdade, logado em produção, nem com câmera real (Android e iPhone). No iPhone, o Safari só mantém o IndexedDB de sites usados com frequência; vale adicionar à tela inicial.
 - Edição e exclusão de pendência, e cadastros, não estão no modo de campo.
 - Sem limpeza automática de fotos órfãs no bucket (a mesma pendência da aba 5).
+
+## Edição em lote na lista (14/10/2026)
+
+O usuário pediu para editar várias pendências de uma vez na tela da aba 5, escolhendo tipo (classificação) e responsáveis.
+
+- **Seleção:** caixa de marcar em cada linha da tabela e em cada cartão do celular, e "marcar todas" no cabeçalho (todas as da lista filtrada). Quem é só consulta não vê as caixas. A seleção vale para o que está na lista: ao filtrar, as marcadas que saem de vista deixam de contar.
+- **Barra de marcadas:** "N pendências marcadas · Editar em lote · Desmarcar" acima da lista (fixa no rodapé no celular).
+- **Diálogo** (`bulk-edit-dialog.tsx`): Tipo, Responsável ATR e Responsável terceiro, cada um abrindo em "Manter como está". Tipo e responsável ATR listam só os ativos e têm "Sem …" para limpar; o terceiro tem "Trocar por…" (com as empresas do cadastro de equipes e os nomes já usados como sugestão) e "Sem responsável terceiro". Embaixo de cada campo, o valor atual das marcadas ("Hoje: PINTURA", "vazio" ou "valores diferentes"). "Aplicar a N" só libera quando algo muda.
+- **Comando** `update_items` (`{ workId, itemIds, typeId?, atrPersonId?, contractor? }`; ausente = manter, `null` = limpar), numa só gravação. Regras: ao menos uma pendência e no máximo 500 (`maxBulkItems`), todas da obra, tipo e responsável ativos e da obra, nome do terceiro até 80 caracteres, e ao menos um campo a mudar. Descrição, local, datas, situação e fotos não mudam.
+- **Testes:** 2 novos em `tests/terminality-commands.test.ts`. **Navegador** (servidor de desenvolvimento, "Obra - Teste"): duas pendências marcadas com "marcar todas" receberam tipo, responsável ATR e terceiro de uma vez; depois, uma só teve o terceiro limpo e manteve o resto. Os registros de teste foram apagados (o tipo e o responsável de teste ficaram desativados, porque não se apagam).
+- O modo de campo no celular não tem edição em lote; ela fica na aba 5.

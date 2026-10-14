@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Camera, ListFilter, Plus, RefreshCw, Search, Smartphone } from 'lucide-react';
+import { Camera, ListFilter, PencilLine, Plus, RefreshCw, Search, Smartphone, X } from 'lucide-react';
 import type { TerminalityCommand, TerminalityItem, TerminalityPhoto } from '@/domain/terminality';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
@@ -14,6 +14,7 @@ import { companyOptions, compareText, textKey } from '@/modules/curto-prazo/shee
 import { useTerminality } from './api';
 import { ItemDialog } from './item-dialog';
 import { ResolveDialog } from './resolve-dialog';
+import { BulkEditDialog } from './bulk-edit-dialog';
 import { PhotoViewer } from './photo-viewer';
 import { refreshPhotos } from './photo-refresh';
 import {
@@ -37,7 +38,7 @@ import {
   type TerminalitySituation,
 } from './terminality-view';
 
-type DialogState = { kind: 'new' } | { kind: 'edit'; itemId: string } | { kind: 'resolve'; itemId: string };
+type DialogState = { kind: 'new' } | { kind: 'edit'; itemId: string } | { kind: 'resolve'; itemId: string } | { kind: 'bulk' };
 /** Quantas linhas cada quebra (por empreiteiro, por pavimento) mostra antes do "ver todos". */
 const TOP = 6;
 const SITUATIONS: { value: TerminalitySituation; label: string }[] = [
@@ -58,6 +59,8 @@ export function TerminalityOverview({ workId }: { workId: string }) {
   const [busy, setBusy] = useState('');
   const [retrying, setRetrying] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  // Pendências marcadas para a edição em lote (tipo, responsável ATR e responsável terceiro).
+  const [checked, setChecked] = useState<string[]>([]);
 
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
@@ -159,6 +162,13 @@ export function TerminalityOverview({ workId }: { workId: string }) {
     data.items.map(i => i.contractor ?? ''),
   );
   const rows = visibleItems(data, index, filters);
+  // A seleção vale só para o que está na lista: filtrar some com as marcadas que saíram de vista.
+  const visibleIds = new Set(rows.map(item => item.id));
+  const selection = checked.filter(id => visibleIds.has(id));
+  const allChecked = rows.length > 0 && selection.length === rows.length;
+  const toggle = (id: string) => setChecked(current => (current.includes(id) ? current.filter(x => x !== id) : [...current, id]));
+  const toggleAll = () => setChecked(allChecked ? [] : rows.map(item => item.id));
+  const selectable = !readOnly;
   // Os cartões contam a seleção dos filtros em todas as situações: abertas + resolvidas = total.
   const scope = summarize(filterItems(data.items, filters, ['situation']), index);
   // Cada quebra ignora o próprio filtro, para a lista continuar mostrando as alternativas.
@@ -219,7 +229,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
     if (ok) await run(item, { type: 'delete_item', itemId: item.id }, 'Pendência excluída.');
   };
 
-  const editing = dialog && dialog.kind !== 'new' ? data.items.find(i => i.id === dialog.itemId) : undefined;
+  const editing = dialog && 'itemId' in dialog ? data.items.find(i => i.id === dialog.itemId) : undefined;
   const emptyState =
     data.items.length === 0 ? (
       <Empty>
@@ -393,6 +403,26 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           )}
         </div>
 
+        {selectable && selection.length > 0 && (
+          <div
+            role="region"
+            aria-label="Pendências marcadas"
+            className="sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary-ring bg-white px-3 py-2 shadow-lg md:static md:shadow-none"
+          >
+            <span className="text-sm font-semibold text-slate-800">
+              {selection.length} {selection.length === 1 ? 'pendência marcada' : 'pendências marcadas'}
+            </span>
+            <button type="button" className="button ml-auto" onClick={() => setDialog({ kind: 'bulk' })} disabled={!!busy}>
+              <PencilLine size={15} aria-hidden />
+              Editar em lote
+            </button>
+            <button type="button" className="button-ghost" onClick={() => setChecked([])}>
+              <X size={15} aria-hidden />
+              Desmarcar
+            </button>
+          </div>
+        )}
+
         <div className="mt-3">
           <div
             className="panel hidden overflow-x-auto custom-scrollbar md:block"
@@ -403,6 +433,20 @@ export function TerminalityOverview({ workId }: { workId: string }) {
             <table className="w-full min-w-[1280px] border-collapse text-left text-xs">
               <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr className="border-b border-slate-200">
+                  {selectable && (
+                    <th scope="col" className="w-9 px-2 py-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={allChecked}
+                        ref={el => {
+                          if (el) el.indeterminate = selection.length > 0 && !allChecked;
+                        }}
+                        onChange={toggleAll}
+                        aria-label={allChecked ? 'Desmarcar todas as pendências da lista' : 'Marcar todas as pendências da lista'}
+                      />
+                    </th>
+                  )}
                   <th scope="col" className="w-28 px-2 py-2">
                     Local
                   </th>
@@ -449,8 +493,19 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                     <tr
                       key={item.id}
                       onClick={() => openItem(item)}
-                      className={`cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : 'hover:bg-slate-50/60'}`}
+                      className={`cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : selection.includes(item.id) ? 'bg-primary-soft/40' : 'hover:bg-slate-50/60'}`}
                     >
+                      {selectable && (
+                        <td className="px-2 py-1.5" onClick={stop}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={selection.includes(item.id)}
+                            onChange={() => toggle(item.id)}
+                            aria-label={`Marcar a pendência de ${location} para editar em lote`}
+                          />
+                        </td>
+                      )}
                       <td className="px-2 py-1.5 font-semibold text-slate-700">{floorName(index, item)}</td>
                       <td className="px-2 py-1.5 tabular-nums text-slate-700">{unitName(index, item) || <Dash />}</td>
                       <td className="px-2 py-1.5">
@@ -556,7 +611,20 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-bold text-slate-500">{location}</p>
+                        {selectable ? (
+                          <label className="flex min-h-6 items-center gap-2 text-xs font-bold text-slate-500">
+                            <input
+                              type="checkbox"
+                              className="h-5 w-5 accent-primary"
+                              checked={selection.includes(item.id)}
+                              onChange={() => toggle(item.id)}
+                              aria-label={`Marcar a pendência de ${location} para editar em lote`}
+                            />
+                            {location}
+                          </label>
+                        ) : (
+                          <p className="text-xs font-bold text-slate-500">{location}</p>
+                        )}
                         <ResolvedChip resolved={resolved} />
                       </div>
                       <p className="mt-0.5 line-clamp-3 text-sm font-semibold text-slate-900">{item.description}</p>
@@ -621,6 +689,17 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           readOnly={readOnly}
           execute={execute}
           onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === 'bulk' && !readOnly && selection.length > 0 && (
+        <BulkEditDialog
+          workId={workId}
+          itemIds={selection}
+          data={data}
+          companies={companies}
+          execute={execute}
+          onClose={closeDialog}
+          onDone={() => setChecked([])}
         />
       )}
       {dialog?.kind === 'resolve' && editing && !readOnly && (

@@ -452,3 +452,42 @@ test('corpo do comando precisa ser objeto com tipo conhecido', () => {
   assert.equal(parseTerminalityCommand({ type: 'reopen_item', itemId: ITEM }).type, 'reopen_item');
   rejects(data(), { type: 'drop_table' } as unknown as TerminalityCommand, 'Comando desconhecido.');
 });
+
+test('edição em lote troca só os campos enviados, em todas as pendências marcadas, e limpa com null', () => {
+  const d = data();
+  d.types.push({ id: 't3', workId: W, name: 'PINTURA', orderIndex: 3, active: true, ...stamp });
+  d.items = [item(), item({ id: NEW_ITEM, typeId: undefined, atrPersonId: undefined, contractor: 'Outra' })];
+  const m = planTerminalityCommand(
+    d,
+    { type: 'update_items', workId: W, itemIds: [ITEM, NEW_ITEM], typeId: 't3', contractor: null },
+    ctx(),
+  );
+  assert.equal(m.update.items.length, 2);
+  for (const updated of m.update.items) {
+    assert.equal(updated.typeId, 't3');
+    assert.equal(updated.contractor, undefined);
+    assert.equal(updated.updatedAt, NOW);
+  }
+  // Responsável ATR não foi enviado: cada pendência mantém o seu.
+  assert.equal(m.update.items.find(i => i.id === ITEM)!.atrPersonId, 'p1');
+  assert.equal(m.update.items.find(i => i.id === NEW_ITEM)!.atrPersonId, undefined);
+  assert.equal(m.update.items[0].description, 'Rejunte faltando no box');
+  assert.deepEqual(terminalityCommandTarget({ type: 'update_items', workId: W, itemIds: [ITEM] }), { workId: W });
+});
+
+test('edição em lote recusa nada a mudar, pendência de fora, item desativado e lote vazio ou grande demais', () => {
+  const d = data();
+  d.items = [item()];
+  const run = (command: Partial<Extract<TerminalityCommand, { type: 'update_items' }>>) =>
+    planTerminalityCommand(d, { type: 'update_items', workId: W, itemIds: [ITEM], ...command } as TerminalityCommand, ctx());
+  assert.throws(() => run({}), /Escolha o que mudar/);
+  assert.throws(() => run({ itemIds: [] }), /ao menos uma/);
+  assert.throws(() => run({ itemIds: ['nao-existe'], typeId: null }), /não foi encontrada/);
+  assert.throws(() => run({ typeId: 't2' }), /desativado/);
+  assert.throws(() => run({ atrPersonId: 'p2' }), /desativado/);
+  assert.throws(() => run({ contractor: 'x'.repeat(TERMINALITY_LIMITS.maxName + 1) }), /passa de/);
+  assert.throws(() => run({ itemIds: Array.from({ length: TERMINALITY_LIMITS.maxBulkItems + 1 }, () => ITEM), typeId: null }), /até/);
+  d.items.push(item({ id: NEW_ITEM, workId: 'obra-2' }));
+  assert.throws(() => run({ itemIds: [ITEM, NEW_ITEM], typeId: null }), /desta obra/);
+  assert.equal(parseTerminalityCommand({ type: 'update_items' }).type, 'update_items');
+});

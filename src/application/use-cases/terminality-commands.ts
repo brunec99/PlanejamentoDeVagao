@@ -67,6 +67,7 @@ export const TERMINALITY_COMMAND_TYPES = [
   'update_person',
   'create_item',
   'update_item',
+  'update_items',
   'add_photo',
   'delete_photo',
   'resolve_item',
@@ -159,6 +160,7 @@ export function terminalityCommandTarget(command: TerminalityCommand): Terminali
     case 'create_type':
     case 'create_person':
     case 'create_item':
+    case 'update_items':
       return { workId: requiredId(command.workId, 'Obra não informada.') };
     case 'rename_floor':
     case 'delete_floor':
@@ -377,6 +379,46 @@ export function planTerminalityCommand(data: TerminalityData, command: Terminali
       const fields = itemFields(data, item.workId, command, today, item);
       if (item.correctedOn && fields.observedOn > item.correctedOn) fail('A data da observação não pode ser posterior à data da correção.');
       return mutation(item.workId, { update: rows({ items: [{ ...item, ...fields, updatedAt: now }] }) });
+    }
+    case 'update_items': {
+      const workId = requiredId(command.workId, 'Obra não informada.');
+      if (!Array.isArray(command.itemIds) || !command.itemIds.length) fail('Escolha ao menos uma pendência.');
+      if (command.itemIds.length > TERMINALITY_LIMITS.maxBulkItems)
+        fail(`Edite até ${TERMINALITY_LIMITS.maxBulkItems} pendências de cada vez.`);
+      const ids = [...new Set(command.itemIds)];
+      const items = ids.map(id =>
+        find(data.items, typeof id === 'string' ? id : '', 'Uma das pendências não foi encontrada. Recarregue a página.'),
+      );
+      if (items.some(item => item.workId !== workId)) fail('As pendências precisam ser desta obra.');
+      const change: Partial<Pick<TerminalityItem, 'typeId' | 'atrPersonId' | 'contractor'>> = {};
+      // Na edição em lote não se escolhe item desativado: a lista da tela só mostra os ativos.
+      if (command.typeId !== undefined) {
+        if (command.typeId === null || command.typeId === '') change.typeId = undefined;
+        else {
+          const type = find(data.types, command.typeId, 'Tipo de pendência não encontrado.');
+          if (type.workId !== workId) fail('O tipo de pendência não pertence a esta obra.');
+          if (!type.active) fail(`O tipo "${type.name}" está desativado.`);
+          change.typeId = type.id;
+        }
+      }
+      if (command.atrPersonId !== undefined) {
+        if (command.atrPersonId === null || command.atrPersonId === '') change.atrPersonId = undefined;
+        else {
+          const person = find(data.people, command.atrPersonId, 'Responsável ATR não encontrado.');
+          if (person.workId !== workId) fail('O responsável ATR não pertence a esta obra.');
+          if (!person.active) fail(`O responsável "${person.name}" está desativado.`);
+          change.atrPersonId = person.id;
+        }
+      }
+      if (command.contractor !== undefined) {
+        if (command.contractor !== null && typeof command.contractor !== 'string') fail('Responsável terceiro inválido.');
+        const contractor = text(command.contractor ?? '') || undefined;
+        if (contractor && contractor.length > TERMINALITY_LIMITS.maxName)
+          fail(`O nome do responsável terceiro passa de ${TERMINALITY_LIMITS.maxName} caracteres.`);
+        change.contractor = contractor;
+      }
+      if (!Object.keys(change).length) fail('Escolha o que mudar: tipo, responsável ATR ou responsável terceiro.');
+      return mutation(workId, { update: rows({ items: items.map(item => ({ ...item, ...change, updatedAt: now })) }) });
     }
     case 'add_photo': {
       const item = find(data.items, command.itemId, 'Pendência não encontrada.');

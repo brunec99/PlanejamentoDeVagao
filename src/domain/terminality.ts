@@ -94,6 +94,8 @@ export const TERMINALITY_LIMITS = {
   maxPhotosPerItem: 10,
   maxDescription: 1000,
   maxName: 80,
+  /** Pendências numa edição em lote. */
+  maxBulkItems: 500,
 } as const;
 
 /** Comandos de POST /api/terminalidade/commands. Ids de pendência e de foto vêm do navegador
@@ -143,6 +145,16 @@ export type TerminalityCommand =
       width?: number;
       height?: number;
       bytes?: number;
+    }
+  /** Edição em lote (14/10/2026): o mesmo valor em várias pendências da obra. Campo ausente =
+   * manter como está em cada uma; `null` = limpar. */
+  | {
+      type: 'update_items';
+      workId: TerminalityId;
+      itemIds: TerminalityId[];
+      typeId?: TerminalityId | null;
+      atrPersonId?: TerminalityId | null;
+      contractor?: string | null;
     }
   | { type: 'delete_photo'; photoId: TerminalityId }
   | { type: 'resolve_item'; itemId: TerminalityId; correctedOn: string }
