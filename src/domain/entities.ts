@@ -319,8 +319,9 @@ export interface User extends RecordBase {
   name: string;
   role: 'viewer' | 'planner' | 'manager' | 'admin';
   workIds: Id[];
-  /** Permissão de teste: vê o médio prazo (em desenvolvimento) sem ser admin nem desenvolvedor. */
-  testAccess?: boolean;
+  /** Módulos em desenvolvimento liberados pelo admin para a pessoa (seções da obra, como
+   * "medio-prazo"), sem torná-la admin nem desenvolvedora. Os abertos a todos não entram aqui. */
+  modules?: string[];
 }
 export interface HistoryEvent {
   id: Id;

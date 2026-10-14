@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
+import { requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { visibleEntityIds } from '@/application/use-cases/scope-planning';
@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
   if (!ids.length) return NextResponse.json({ events: [] }, { headers });
   if (ids.length > MAX_IDS)
     return NextResponse.json({ error: `Peça o histórico de até ${MAX_IDS} registros por vez.` }, { status: 400, headers });
-  // O médio prazo lê o histórico das tarefas, por isso a permissão de teste também serve aqui.
-  const gate = await requireDeveloperAccess({ tester: true });
+  // O histórico é lido pelo vagão e pelo médio prazo: serve a quem tem um dos dois liberado.
+  const gate = await requireModuleAccess('vagoes', 'medio-prazo');
   if (gate.error) return gate.error;
   const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403, headers });

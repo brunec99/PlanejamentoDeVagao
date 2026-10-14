@@ -1,3 +1,4 @@
+import { hasSectionAccess } from '@/application/module-access';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Users } from 'lucide-react';
@@ -65,8 +66,8 @@ export default async function Page({
   const { obraId } = await params;
   // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve nem tem permissão de teste; a
   // página confere de novo.
-  const { developer, tester } = await getRouteAccess();
-  if (!developer && !tester) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  const access = await getRouteAccess();
+  if (!hasSectionAccess('medio-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { secao } = await searchParams;
   const section: Section = isSection(secao) ? secao : 'cronograma';
   const base = workPath(obraId, 'medio-prazo');

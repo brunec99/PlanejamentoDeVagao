@@ -8,7 +8,7 @@ import { commandContext } from '@/infrastructure/clock';
 import { logRouteError } from '@/infrastructure/log';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
-  const { profile, developer, tester } = await getRouteAccess();
+  const { profile, developer, modules } = await getRouteAccess();
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });
   let command: Command;
   try {
@@ -17,8 +17,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
   }
   // Go-live do curto prazo: fora do desenvolvimento, só os comandos dele, das equipes e da administração,
-  // mais os do médio prazo para quem tem permissão de teste.
-  if (!isCommandAllowed(command?.type, { developer, tester }))
+  // mais os dos módulos liberados para a pessoa.
+  if (!isCommandAllowed(command?.type, { developer, modules }))
     return NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403 });
   // Gerar vagões pelo plano só pela rota própria, que lê o plano salvo em vez de aceitar pavimentos do navegador.
   if (command?.type === 'sync_long_term_plan')

@@ -193,6 +193,14 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'O botão "Permissão de teste" da tela de usuários não grava, e ninguém além de admins e desenvolvedores abre o médio prazo.',
     critical: false,
   },
+  {
+    migration: '0031_module_access',
+    label: 'Módulos liberados por usuário',
+    probe: { kind: 'column', table: 'profiles', column: 'module_access' },
+    effect:
+      'A liberação de módulos na tela de usuários não grava, e ninguém além de admins e desenvolvedores abre os módulos em desenvolvimento.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

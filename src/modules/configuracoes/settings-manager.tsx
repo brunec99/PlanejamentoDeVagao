@@ -1,12 +1,14 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Database, FlaskConical, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Database, Lock, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
 import { formatTimestamp, roleLabels } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
+import type { User } from '@/domain/entities';
+import { MODULES, type ModuleInfo } from '@/application/module-access';
 
 function useCommand() {
   const c = usePlanning();
@@ -69,32 +71,74 @@ function RoleSelect({ userId, role, self }: { userId: string; role: string; self
   );
 }
 
-/** Permissão de teste: quem está testando o curto prazo passa a ver o médio prazo (módulo em
- * desenvolvimento) sem virar admin. Botão de alternância, com o estado dito em texto e no `aria-pressed`. */
-function TestAccessToggle({ userId, enabled }: { userId: string; enabled: boolean }) {
+/** Um módulo na lista de acessos da pessoa: os abertos a todos ficam marcados e travados; os em
+ * desenvolvimento o admin libera ou bloqueia com um clique. Admin vê todos, por isso fica tudo marcado
+ * e travado na linha dele. O estado vai em texto (`aria-pressed` e o título), nunca só na cor. */
+function ModuleChip({ userId, module, granted, locked }: { userId: string; module: ModuleInfo; granted: boolean; locked?: string }) {
   const { busy, error, run } = useCommand();
+  const fixed = !!locked;
   return (
-    <div>
+    <span className="inline-flex flex-col">
       <button
         type="button"
-        className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium ${
-          enabled ? 'border-primary bg-primary-soft text-primary-ink' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-        } disabled:cursor-not-allowed disabled:opacity-50`}
-        disabled={busy}
-        aria-pressed={enabled}
-        title={
-          enabled ? 'Vê o médio prazo em teste. Clique para retirar.' : 'Libera o médio prazo (em desenvolvimento) para esta pessoa testar.'
-        }
-        onClick={() => run({ type: 'set_test_access', userId, enabled: !enabled })}
+        disabled={busy || fixed}
+        aria-pressed={granted}
+        title={locked ?? `${module.hint}. ${granted ? 'Liberado: clique para bloquear.' : 'Bloqueado: clique para liberar.'}`}
+        onClick={() => run({ type: 'set_module_access', userId, section: module.section, enabled: !granted })}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+          granted
+            ? fixed
+              ? 'border-slate-300 bg-slate-100 text-slate-600'
+              : 'border-primary bg-primary text-white hover:bg-primary-strong'
+            : 'border-dashed border-slate-300 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50'
+        } disabled:cursor-default ${busy ? 'opacity-50' : ''}`}
       >
-        <FlaskConical size={14} aria-hidden />
-        {enabled ? 'Testando o médio prazo' : 'Permissão de teste'}
+        {granted ? <Check size={12} aria-hidden /> : <Lock size={11} aria-hidden />}
+        {module.label}
       </button>
       {error && (
-        <p className="mt-1 text-xs text-danger" role="alert">
+        <span className="mt-1 text-xs text-danger" role="alert">
           {error}
-        </p>
+        </span>
       )}
+    </span>
+  );
+}
+
+function ModuleAccessList({ user }: { user: User }) {
+  const admin = user.role === 'admin';
+  const granted = new Set(user.modules ?? []);
+  const released = MODULES.filter(m => !m.open && (admin || granted.has(m.section))).length;
+  const restricted = MODULES.filter(m => !m.open).length;
+  return (
+    <div className="mt-3">
+      <p className="mb-1.5 text-xs font-semibold text-slate-500">
+        Módulos{' '}
+        <span className="font-normal text-slate-400">
+          · {admin ? 'admin vê todos' : `${released} de ${restricted} em desenvolvimento liberados`}
+        </span>
+      </p>
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        {(['Planejamento', 'Apoio'] as const).map(group => (
+          <div key={group} className="flex flex-wrap items-start gap-2" role="group" aria-label={`Módulos de ${group.toLowerCase()}`}>
+            {MODULES.filter(m => m.group === group).map(module => (
+              <ModuleChip
+                key={module.section}
+                userId={user.id}
+                module={module}
+                granted={module.open || admin || granted.has(module.section)}
+                locked={
+                  module.open
+                    ? `${module.label}: aberto a todos.`
+                    : admin
+                      ? `${module.label}: administradores veem todos os módulos.`
+                      : undefined
+                }
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -542,7 +586,6 @@ export function SettingsManager() {
                 </div>
                 <div className="flex items-center gap-2">
                   <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
-                  <TestAccessToggle userId={user.id} enabled={user.testAccess === true} />
                   {user.id !== c.actorId && (
                     <DeleteUserButton
                       userId={user.id}
@@ -555,7 +598,8 @@ export function SettingsManager() {
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <p className="mb-1.5 mt-3 text-xs font-semibold text-slate-500">Obras</p>
+              <div className="flex flex-wrap gap-2">
                 {data.works.length === 0 ? (
                   <span className="text-xs text-slate-400">Nenhuma obra para liberar</span>
                 ) : (
@@ -564,6 +608,7 @@ export function SettingsManager() {
                   ))
                 )}
               </div>
+              <ModuleAccessList user={user} />
             </div>
           ))}
         </div>

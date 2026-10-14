@@ -4,16 +4,22 @@ import {
   BOOTSTRAP_ADMIN_EMAIL,
   developerEmails,
   hasDeveloperAccess,
+  hasApiAccess,
   hasSectionAccess,
   isCommandAllowed,
   isCommandAllowedForNonDeveloper,
   isDeveloperEmail,
   isRestrictedApi,
-  isTesterApi,
+  MODULES,
+  normalizeModules,
   restrictedPageRedirect,
   restrictedSectionOf,
   RESTRICTED_SECTIONS,
+  sectionsForApi,
 } from '../src/application/module-access';
+import { createMockData } from '../src/mocks/planning';
+import { applyCommand, type Command } from '../src/application/use-cases/commands';
+import { planningDataToPayload, rowsToPlanningData, type Rows } from '../src/infrastructure/repositories/supabase/mappers';
 import { workPath } from '../src/shared/format';
 
 test('Sem DEVELOPER_EMAILS, o desenvolvedor é o admin inicial', () => {
@@ -104,25 +110,68 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     assert.equal(isRestrictedApi(path), false, path);
 });
 
-test('Permissão de teste abre só o médio prazo, o histórico e os comandos do plano do mês', () => {
-  const tester = { developer: false, tester: true };
-  const nobody = { developer: false, tester: false };
-  assert.equal(hasSectionAccess('medio-prazo', tester), true);
-  assert.equal(hasSectionAccess('longo-prazo', tester), false);
+test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada além', () => {
+  const medio = { developer: false, modules: ['medio-prazo'] };
+  const nobody = { developer: false, modules: [] };
+  const dev = { developer: true, modules: [] };
+  assert.equal(hasSectionAccess('medio-prazo', medio), true);
+  assert.equal(hasSectionAccess('longo-prazo', medio), false);
+  assert.equal(hasSectionAccess('curto-prazo', nobody), true);
+  assert.equal(hasSectionAccess('terminalidade', nobody), true);
   assert.equal(hasSectionAccess('medio-prazo', nobody), false);
-  assert.equal(hasSectionAccess('ifc', { developer: true, tester: false }), true);
+  assert.equal(hasSectionAccess('ifc', dev), true);
   assert.equal(restrictedSectionOf('/obras/obra-1/medio-prazo'), 'medio-prazo');
   assert.equal(restrictedSectionOf('/obras/obra-1/vagoes/v-1'), 'vagoes');
   assert.equal(restrictedSectionOf('/obras/obra-1/curto-prazo'), null);
-  assert.equal(isTesterApi('/api/history'), true);
-  assert.equal(isTesterApi('/api/history?x=1'), false);
-  assert.equal(isTesterApi('/api/ifc/upload-url'), false);
-  assert.equal(isCommandAllowed('save_plan_revision', tester), true);
-  assert.equal(isCommandAllowed('create_plan', tester), true);
-  assert.equal(isCommandAllowed('record_fulfillment', tester), true);
-  assert.equal(isCommandAllowed('set_test_access', tester), true);
-  assert.equal(isCommandAllowed('create_baseline', tester), false);
+  assert.equal(hasApiAccess('/api/history', medio), true);
+  assert.equal(hasApiAccess('/api/ifc/upload-url', medio), false);
+  assert.equal(hasApiAccess('/api/ifc/upload-url', { developer: false, modules: ['federacao'] }), true);
+  assert.equal(hasApiAccess('/api/prevision', { developer: false, modules: ['importar'] }), true);
+  assert.deepEqual(sectionsForApi('/api/long-term-plan/sync'), ['longo-prazo']);
+  assert.equal(isCommandAllowed('save_plan_revision', medio), true);
+  assert.equal(isCommandAllowed('record_fulfillment', nobody), true);
+  assert.equal(isCommandAllowed('set_module_access', nobody), true);
+  assert.equal(isCommandAllowed('release', medio), false);
+  assert.equal(isCommandAllowed('release', { developer: false, modules: ['vagoes'] }), true);
+  assert.equal(isCommandAllowed('create_ifc_model', { developer: false, modules: ['ifc'] }), true);
   assert.equal(isCommandAllowed('save_plan_revision', nobody), false);
-  assert.equal(isCommandAllowed('create_baseline', { developer: true, tester: false }), true);
-  assert.equal(isCommandAllowedForNonDeveloper('set_test_access'), true);
+  assert.equal(isCommandAllowed('sync_long_term_plan', { developer: false, modules: ['longo-prazo'] }), false);
+});
+
+test('Catálogo: os abertos não são liberáveis, e a lista gravada é limpa e ordenada', () => {
+  assert.ok(MODULES.some(m => m.section === 'curto-prazo' && m.open));
+  assert.deepEqual(
+    MODULES.filter(m => !m.open)
+      .map(m => m.section)
+      .sort(),
+    [...RESTRICTED_SECTIONS].sort(),
+  );
+  assert.deepEqual(normalizeModules(['ifc', 'curto-prazo', 'xyz', 'medio-prazo', 'ifc', 3]), ['medio-prazo', 'ifc']);
+  assert.deepEqual(normalizeModules('medio-prazo'), []);
+});
+
+test('admin libera e bloqueia módulos; demais papéis e módulos abertos são recusados', () => {
+  const data = createMockData();
+  const admin = data.users.find(u => u.id === 'user-1')!;
+  admin.role = 'admin';
+  const other = data.users.find(u => u.id === 'user-2')!;
+  const run = (actorId: string, command: Command) =>
+    applyCommand(data, command, { actorId, today: '2026-10-14', now: '2026-10-14T12:00:00Z', newId: () => 'id' });
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'ifc', enabled: true });
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'medio-prazo', enabled: true });
+  assert.deepEqual(other.modules, ['medio-prazo', 'ifc']);
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'ifc', enabled: false });
+  assert.deepEqual(other.modules, ['medio-prazo']);
+  assert.throws(() => run(other.id, { type: 'set_module_access', userId: admin.id, section: 'ifc', enabled: true }), /administradores/);
+  assert.throws(
+    () => run(admin.id, { type: 'set_module_access', userId: other.id, section: 'curto-prazo', enabled: false }),
+    /não é liberado/,
+  );
+  assert.throws(() => run(admin.id, { type: 'set_module_access', userId: 'x', section: 'ifc', enabled: true }), /não encontrado/);
+  const payload = planningDataToPayload(data) as unknown as Rows;
+  const row = payload.profiles.find(r => r.id === other.id)!;
+  assert.deepEqual(row.module_access, ['medio-prazo']);
+  assert.deepEqual(rowsToPlanningData(payload).users.find(u => u.id === other.id)!.modules, ['medio-prazo']);
+  delete row.module_access;
+  assert.deepEqual(rowsToPlanningData(payload).users.find(u => u.id === other.id)!.modules, []);
 });

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
+import { requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 
@@ -10,7 +10,7 @@ const EXPIRES_IN = 120;
 /** O bucket é privado: o visualizador busca o arquivo com esta URL de curta duração,
  * sem que o navegador conheça a chave de serviço nem o bucket. */
 export async function GET(request: NextRequest) {
-  const gate = await requireDeveloperAccess();
+  const gate = await requireModuleAccess('ifc', 'federacao');
   if (gate.error) return gate.error;
   const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
+import { requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { validateFederation, type SavedFederation } from '@/domain/ifc-federation';
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const workId = request.nextUrl.searchParams.get('workId') ?? '';
     if (!workId) return responseError('Obra não informada.', 400);
-    const gate = await requireDeveloperAccess();
+    const gate = await requireModuleAccess('ifc', 'federacao');
     if (gate.error) return gate.error;
     const { profile } = gate.access;
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     return responseError('Obra não informada.', 400);
   const workId = body.workId;
   try {
-    const gate = await requireDeveloperAccess();
+    const gate = await requireModuleAccess('ifc', 'federacao');
     if (gate.error) return gate.error;
     const { profile } = gate.access;
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);

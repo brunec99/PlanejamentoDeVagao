@@ -2,11 +2,11 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
 import {
+  hasApiAccess,
   hasDeveloperAccess,
   hasSectionAccess,
   isDeveloperEmail,
   isRestrictedApi,
-  isTesterApi,
   restrictedPageRedirect,
   restrictedSectionOf,
   RESTRICTED_MODULE_MESSAGE,
@@ -16,12 +16,14 @@ import { getServiceClient } from '@/infrastructure/repositories/supabase/client'
 /** Papel e permissão de teste do perfil, lidos pelo servidor (a chave anônima não lê `profiles`).
  * Falha conta como "sem papel": na dúvida, o endereço restrito continua fechado. O proxy roda em
  * Node.js no Next 16. */
-async function profileAccessOf(userId: string): Promise<{ role: string | null; tester: boolean }> {
+async function profileAccessOf(userId: string): Promise<{ role: string | null; modules: string[] }> {
   try {
-    const { data } = await getServiceClient().from('profiles').select('role, test_access').eq('id', userId).maybeSingle();
-    return { role: (data?.role as string | undefined) ?? null, tester: data?.test_access === true };
+    // `*` e não as colunas pelo nome: antes da migração 0031 a coluna `module_access` não existe, e pedi-la
+    // derrubaria a consulta inteira (e com ela o papel de admin).
+    const { data } = await getServiceClient().from('profiles').select('*').eq('id', userId).maybeSingle();
+    return { role: (data?.role as string | undefined) ?? null, modules: Array.isArray(data?.module_access) ? data.module_access : [] };
   } catch {
-    return { role: null, tester: false };
+    return { role: null, modules: [] };
   }
 }
 
@@ -62,7 +64,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
   // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve (DEVELOPER_EMAILS),
-  // com os admins e, só o médio prazo, com quem tem permissão de teste. O acesso local sem login já
+  // com os admins e com quem tem o módulo liberado pelo admin. O acesso local sem login já
   // saiu acima e conta como desenvolvedor. As rotas repetem a conferência dos comandos. O perfil só
   // é lido do banco quando o e-mail não basta e o endereço é restrito, para as demais requisições
   // não pagarem uma consulta a mais.
@@ -71,10 +73,10 @@ export async function proxy(request: NextRequest) {
   const target = restrictedPageRedirect(pathname);
   const allowed = async () => {
     if (isDeveloperEmail(user.email, process.env.DEVELOPER_EMAILS)) return true;
-    const { role, tester } = await profileAccessOf(user.id);
-    const access = { developer: hasDeveloperAccess({ email: user.email, role }, process.env.DEVELOPER_EMAILS), tester };
+    const { role, modules } = await profileAccessOf(user.id);
+    const access = { developer: hasDeveloperAccess({ email: user.email, role }, process.env.DEVELOPER_EMAILS), modules };
     if (access.developer) return true;
-    return restrictedApi ? access.tester && isTesterApi(pathname) : hasSectionAccess(restrictedSectionOf(pathname) ?? '', access);
+    return restrictedApi ? hasApiAccess(pathname, access) : hasSectionAccess(restrictedSectionOf(pathname) ?? '', access);
   };
   if ((restrictedApi || target) && !(await allowed())) {
     if (restrictedApi) return NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403 });

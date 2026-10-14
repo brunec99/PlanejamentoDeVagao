@@ -1,3 +1,4 @@
+import { grantableSection, normalizeModules } from '../module-access';
 import {
   scheduleTasks,
   planSnapshot,
@@ -96,7 +97,7 @@ export type Command =
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
-  | { type: 'set_test_access'; userId: string; enabled: boolean }
+  | { type: 'set_module_access'; userId: string; section: string; enabled: boolean }
   | { type: 'create_team'; workId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'update_team'; teamId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'delete_team'; teamId: string }
@@ -1576,13 +1577,17 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       entityId = target.id;
       break;
     }
-    case 'set_test_access': {
-      // Permissão de teste do médio prazo: liga e desliga quem está testando, sem mudar o papel.
-      if (actor.role !== 'admin') throw new Error('Somente administradores podem dar permissão de teste.');
+    case 'set_module_access': {
+      // Módulos em desenvolvimento liberados por pessoa, escolhidos pelo admin na tela de usuários.
+      if (actor.role !== 'admin') throw new Error('Somente administradores liberam módulos.');
       const target = data.users.find(u => u.id === command.userId);
       if (!target) throw new Error('Usuário não encontrado.');
-      if (typeof command.enabled !== 'boolean') throw new Error('Informe se a permissão de teste fica ligada ou desligada.');
-      target.testAccess = command.enabled;
+      if (typeof command.enabled !== 'boolean') throw new Error('Informe se o módulo fica liberado ou bloqueado.');
+      if (!grantableSection(command.section)) throw new Error('Esse módulo não é liberado por pessoa.');
+      const current = new Set(target.modules ?? []);
+      if (command.enabled) current.add(command.section);
+      else current.delete(command.section);
+      target.modules = normalizeModules([...current]);
       touch(target);
       entityId = target.id;
       break;

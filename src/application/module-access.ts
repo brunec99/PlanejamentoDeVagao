@@ -28,52 +28,135 @@ export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Comm
   'update_team',
   'delete_team',
   'set_role',
-  'set_test_access',
+  'set_module_access',
   'grant_access',
   'revoke_access',
   'create_work',
 ]);
 
-/** Permissão de teste (14/10/2026): quem está testando o curto prazo pode receber, pelo admin, acesso
- * ao médio prazo sem virar admin nem entrar em DEVELOPER_EMAILS. Vale só para a aba 3, a API que ela
- * lê e os comandos dela; o resto dos módulos em desenvolvimento continua com quem desenvolve. */
-export const TESTER_SECTIONS: ReadonlySet<string> = new Set(['medio-prazo']);
-export const TESTER_API_PREFIXES = ['/api/history'] as const;
-export const TESTER_COMMANDS: ReadonlySet<Command['type']> = new Set<Command['type']>([
-  'create_plan',
-  'delete_plan',
-  'freeze_plan_baseline',
-  'save_plan_revision',
-  'create_plan_task',
-  'update_plan_task',
-  'indent_plan_task',
-  'outdent_plan_task',
-  'delete_plan_task',
-  'set_plan_task_note',
-  'link_plan_tasks',
-  'unlink_plan_tasks',
-  'replace_plan_predecessors',
-]);
+/** Catálogo de módulos que a tela de usuários mostra (14/10/2026): os sempre abertos aparecem marcados
+ * e travados; os em desenvolvimento o admin libera por pessoa (`User.modules`), sem torná-la admin nem
+ * desenvolvedora. Admin e `DEVELOPER_EMAILS` veem todos. */
+export interface ModuleInfo {
+  section: string;
+  label: string;
+  hint: string;
+  group: 'Planejamento' | 'Apoio';
+  /** Aberto a todos desde o go-live; não depende de liberação. */
+  open?: boolean;
+}
+export const MODULES: readonly ModuleInfo[] = [
+  { section: 'longo-prazo', label: 'Longo prazo', hint: 'Fluxograma, linha de balanço e restrições', group: 'Planejamento' },
+  { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações', group: 'Planejamento' },
+  { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
+  { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento', open: true },
+  { section: 'terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento, com fotos', group: 'Planejamento', open: true },
+  { section: 'federacao', label: 'Modelo federado', hint: 'Modelos IFC combinados', group: 'Apoio' },
+  { section: 'ifc', label: 'Arquivos IFC', hint: 'Repositório e versões dos modelos', group: 'Apoio' },
+  { section: 'dividas', label: 'Dívidas', hint: 'Pendências que passam de um vagão para outro', group: 'Apoio' },
+  { section: 'importar', label: 'Integrações', hint: 'Importação do Prevision', group: 'Apoio' },
+  { section: 'configuracoes', label: 'Configurações da obra', hint: 'Semana 1, local e equipes', group: 'Apoio', open: true },
+];
+const RESTRICTED = new Set<string>(RESTRICTED_SECTIONS);
+const isRestrictedSection = (section: string) => RESTRICTED.has(section);
+export const grantableSection = (section: string) => isRestrictedSection(section);
+
+/** APIs de cada módulo: quem tem o módulo liberado usa a API dele. */
+const SECTION_APIS: Record<string, readonly string[]> = {
+  'longo-prazo': ['/api/long-term-plan', '/api/prevision'],
+  vagoes: ['/api/history'],
+  'medio-prazo': ['/api/history'],
+  federacao: ['/api/ifc'],
+  ifc: ['/api/ifc'],
+  importar: ['/api/prevision'],
+};
+/** Comandos de cada módulo em desenvolvimento. Comando sem módulo aqui fica só com quem desenvolve;
+ * os papéis e as obras continuam conferidos em `applyCommand`. */
+const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
+  'longo-prazo': ['create_restriction', 'resolve_restriction', 'move_restriction', 'create_baseline'],
+  vagoes: [
+    'create_sequence',
+    'create_wagon',
+    'edit_wagon',
+    'create_location',
+    'create_activity',
+    'update_activity',
+    'create_criterion',
+    'set_criterion',
+    'create_pending',
+    'resolve_pending',
+    'release',
+    'assign_team',
+    'record_progress',
+    'link_activities',
+    'unlink_activities',
+    'set_activity_note',
+    'set_takt',
+    'set_sequence_start',
+    'regenerate_sequence',
+    'create_restriction',
+    'resolve_restriction',
+    'move_restriction',
+    'create_baseline',
+  ],
+  'medio-prazo': [
+    'create_plan',
+    'delete_plan',
+    'freeze_plan_baseline',
+    'save_plan_revision',
+    'create_plan_task',
+    'update_plan_task',
+    'indent_plan_task',
+    'outdent_plan_task',
+    'delete_plan_task',
+    'set_plan_task_note',
+    'link_plan_tasks',
+    'unlink_plan_tasks',
+    'replace_plan_predecessors',
+    'create_restriction',
+    'resolve_restriction',
+    'move_restriction',
+  ],
+  federacao: ['create_link_rule', 'delete_link_rule'],
+  ifc: ['create_ifc_model', 'add_ifc_version'],
+  dividas: ['create_pending', 'resolve_pending'],
+  importar: ['import_activities'],
+};
 
 export interface ModuleAccess {
   developer: boolean;
-  tester: boolean;
+  /** Módulos em desenvolvimento liberados para a pessoa. */
+  modules: readonly string[];
 }
 
-/** Quem pode abrir uma seção restrita: quem desenvolve, todas; quem tem permissão de teste, o médio prazo. */
+/** Quem pode abrir uma seção da obra: as abertas, todos; as em desenvolvimento, quem desenvolve e
+ * quem tem o módulo liberado. */
 export function hasSectionAccess(section: string, access: ModuleAccess): boolean {
-  return access.developer || (access.tester && TESTER_SECTIONS.has(section));
+  return !isRestrictedSection(section) || access.developer || access.modules.includes(section);
 }
 
-export function isTesterApi(pathname: string): boolean {
-  return TESTER_API_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+const matchesPrefix = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
+/** Módulos que dão acesso a uma API restrita (vazio quando ela não é de módulo nenhum). */
+export function sectionsForApi(pathname: string): string[] {
+  return Object.entries(SECTION_APIS)
+    .filter(([, prefixes]) => prefixes.some(prefix => matchesPrefix(pathname, prefix)))
+    .map(([section]) => section);
+}
+export function hasApiAccess(pathname: string, access: ModuleAccess): boolean {
+  return access.developer || sectionsForApi(pathname).some(section => access.modules.includes(section));
 }
 
 /** O comando pode ser aplicado por quem tem este acesso (os papéis continuam conferidos em `applyCommand`). */
 export function isCommandAllowed(type: unknown, access: ModuleAccess): boolean {
-  if (access.developer) return true;
-  if (isCommandAllowedForNonDeveloper(type)) return true;
-  return access.tester && typeof type === 'string' && TESTER_COMMANDS.has(type as Command['type']);
+  if (access.developer || isCommandAllowedForNonDeveloper(type)) return true;
+  if (typeof type !== 'string') return false;
+  return access.modules.some(section => SECTION_COMMANDS[section]?.includes(type as Command['type']));
+}
+
+/** Lista de módulos gravável: só seções em desenvolvimento conhecidas, sem repetição, na ordem do catálogo. */
+export function normalizeModules(list: unknown): string[] {
+  const wanted = new Set(Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string') : []);
+  return MODULES.map(m => m.section).filter(section => wanted.has(section) && isRestrictedSection(section));
 }
 
 /** Lista de `DEVELOPER_EMAILS` (vírgulas, sem diferença de maiúsculas); vazia ou ausente, o admin inicial. */

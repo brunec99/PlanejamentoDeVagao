@@ -331,8 +331,8 @@ interface ProfileRow {
   name: string;
   role: User['role'];
   work_ids: string[];
-  /** Permissão de teste do médio prazo (migração 0030); ausente em banco sem ela. */
-  test_access?: boolean | null;
+  /** Módulos em desenvolvimento liberados (migração 0031); ausente em banco sem ela. */
+  module_access?: string[] | null;
 }
 
 export function rowsToPlanningData(rows: Rows): PlanningData {
@@ -594,7 +594,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       name: r.name,
       role: r.role,
       workIds: r.work_ids,
-      testAccess: r.test_access === true,
+      modules: r.module_access ?? [],
     })),
     history: rows.history_events.map((r): HistoryEvent => ({
       id: r.id,
@@ -887,7 +887,7 @@ export function planningDataToPayload(data: PlanningData) {
       name: u.name,
       role: u.role,
       work_ids: u.workIds,
-      test_access: u.testAccess === true,
+      module_access: u.modules ?? [],
     })),
   };
 }

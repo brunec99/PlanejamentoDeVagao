@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { requireDeveloperAccess } from '@/infrastructure/auth/supabase-server';
+import { requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { applyCommand } from '@/application/use-cases/commands';
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (typeof sequenceId !== 'string' || !sequenceId) return responseError('Escolha a sequência de vagões.', 400);
   if (typeof revision !== 'number') return responseError('Revisão inválida.', 400);
   try {
-    const gate = await requireDeveloperAccess();
+    const gate = await requireModuleAccess('longo-prazo');
     if (gate.error) return gate.error;
     const { profile } = gate.access;
     if (!profile?.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);

@@ -1,3 +1,4 @@
+import { hasSectionAccess } from '@/application/module-access';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
@@ -25,8 +26,8 @@ export default async function Page({
 }) {
   const { obraId } = await params;
   // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
-  const { developer } = await getRouteAccess();
-  if (!developer) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  const access = await getRouteAccess();
+  if (!hasSectionAccess('longo-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { visao } = await searchParams;
   const view = visao === 'prevision' ? 'prevision' : 'planejador';
   const base = workPath(obraId, 'longo-prazo');

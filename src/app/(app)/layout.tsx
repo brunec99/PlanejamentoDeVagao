@@ -27,7 +27,7 @@ function initials(name: string) {
 }
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { profile, developer, tester } = await getRouteAccess();
+  const { profile, developer, modules } = await getRouteAccess();
   // O mesmo conteúdo serve a lateral do desktop e a gaveta do celular: marca, abas, Apoio e perfil.
   // Os dois ficam no azul-petróleo da marca (`nav-dark`); modo reunião e ajuda foram para o
   // cabeçalho, ao lado da trilha, que é onde se procuram.
@@ -103,7 +103,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     <TourProvider>
       <ToastProvider>
         <ConfirmProvider>
-          <PlanningProvider developer={developer} tester={tester}>
+          <PlanningProvider developer={developer} modules={modules}>
             <div data-app-shell className="flex h-screen overflow-hidden">
               <a className="skip-link" href="#main">
                 Ir para o conteúdo
