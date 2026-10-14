@@ -543,7 +543,7 @@ O usuário pediu a aba 3 "o mais próximo possível do MS Project" e que se busc
 
 ### Permissão de teste (14/10/2026)
 
-Quem testa o curto prazo pode ganhar acesso ao médio prazo pelo botão "Permissão de teste" da lista de usuários (admin), sem virar admin nem desenvolvedor. Detalhes, regras e a migração 0030 (criada, **não aplicada**) em `docs/go-live-curto-prazo.md`.
+Quem testa o curto prazo pode ganhar acesso ao médio prazo pelo botão "Permissão de teste" da lista de usuários (admin), sem virar admin nem desenvolvedor. Detalhes, regras e a migração 0030 (aplicada em 14/10/2026) em `docs/go-live-curto-prazo.md`.
 
 ### Pendências
 
