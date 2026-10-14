@@ -190,3 +190,28 @@ No redesenho, o sistema passou a se chamar "Sistema de Gestão de Projetos – A
 - o comportamento dos controles em telas estreitas.
 
 **Próximas etapas:** consumir as composições salvas da federação no 4D e estender as regras de vínculo para além de pavimento e tipo.
+
+## Cor e opacidade por modelo no federado (14/10/2026)
+
+O usuário pediu que, no modelo federado, o cliente escolha o nível de opacidade e a cor de cada modelo, ou a cor padrão.
+
+### Comportamento
+
+- Em "Modelos em cena", cada modelo ganhou o botão de paleta, que abre a aparência dele:
+  - **Cor**: "Cor padrão" (o tom da paleta do sistema para a disciplina, como antes), "Cor do IFC" (as cores originais do arquivo, sem pintura) ou "Escolher cor" (seletor de cor, uma cor para o modelo inteiro);
+  - **Opacidade**: de 10% a 100%, de 5 em 5;
+  - "Voltar ao padrão" devolve cor padrão e 100%.
+- A cor escolhida vale na pintura "por modelo"; nas pinturas por pavimento e por classe a cor é a do grupo, e a **opacidade do modelo continua valendo**. A tela avisa isso quando a pintura não é por modelo. O elemento selecionado segue em âmbar, opaco.
+- O ponto de cor ao lado do nome mostra a cor escolhida (um círculo multicolorido quando é a cor do IFC), e a linha diz "· 40% opaco" quando o modelo não está opaco. O botão de paleta fica azul quando a aparência difere do padrão.
+- **Onde fica guardado:** no navegador (`localStorage`, chave `obra360:federacao:aparencia`), por id de modelo — o mesmo id em todas as revisões e composições, como a cor da paleta. É preferência de quem olha, não dado da obra: não vai ao banco e não muda a composição salva. Só o que difere do padrão é guardado.
+- **Como pinta** (`viewer.tsx`, efeito de pintura serializado): cor padrão ou escolhida → `highlight` com a cor e `opacity`/`transparent`; cor do IFC → `resetHighlight` e, abaixo de 100%, `setOpacity` (API do `@thatopen/fragments` 3.4, que preserva a cor original).
+
+### Arquivos
+
+- `src/modules/federacao/appearance.ts` (modelo da aparência, leitura e gravação no navegador, regra da cor pintada), com testes em `tests/federation-appearance.test.ts`.
+- `src/modules/federacao/viewer.tsx` (estado, pintura e o painel `AppearanceControls`).
+
+### Validação e limites
+
+- Tipos, lint e testes passando (`tests/federation-appearance.test.ts`: conferência do que vem do armazenamento e a regra da cor).
+- **Não validado na tela:** em 14/10/2026 nenhuma obra tem versão de modelo com geometria enviada (a tabela `ifc_model_versions` está vazia em produção; os modelos da Blentt ainda não receberam arquivo), e o sistema não tem como apagar um modelo IFC depois, então não subi um IFC de teste. Conferir quando o primeiro conjunto for carregado: opacidade baixa com várias disciplinas sobrepostas e a "Cor do IFC" em modelos que vêm sem cor (o visualizador mostraria o cinza padrão do arquivo).

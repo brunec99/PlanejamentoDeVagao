@@ -10,7 +10,7 @@ A interface de cada obra é organizada em **cinco abas numeradas**: os quatro n�
 2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
 3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt lado a lado, agendamento automático, datas reais), alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos. As seções da aba ficam na URL (`?secao=`).
 4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento; no celular, cada linha vira um cartão.
-5. **Terminalidade** (08/10/2026): lista de pendências por pavimento, apartamento e empreiteiro, no formato da planilha "Lista de pendências".
+5. **Terminalidade** (08/10/2026): lista de pendências por pavimento, apartamento e empreiteiro, no formato da planilha "Lista de pendências". Tem modo de campo para o celular, que funciona sem sinal (`/campo/terminalidade`): baixa-se a obra com sinal, lança-se pendência, foto e resolução no canteiro, e a fila do aparelho sobe sozinha quando a conexão volta — detalhes em [Terminalidade](docs/terminalidade.md).
    - Fotos do problema e da correção, comprimidas no navegador.
    - Resolver exige a foto da correção e a data.
    - Fica fora do snapshot (migração 0028) e é aberta a todos.
@@ -61,7 +61,7 @@ O mesmo conjunto roda no GitHub Actions a cada push e PR (`.github/workflows/ci.
 - Administradores concedem/retiram o acesso de qualquer usuário a qualquer obra em `/configuracoes` e, desde 01/10/2026, também podem tudo o que o gestor pode (cadastrar obra, reabrir vagão terminal, liberar excepcionalmente). O passo a passo de entrar, liberar acesso e resolver cada mensagem de erro está em [Como entrar com a conta Google](docs/login-google.md).
 - Repositório de modelos IFC por obra: cada envio transcreve o arquivo em tabelas e converte a geometria para Fragments, com histórico de versões.
 - Quantitativo do modelo: quantidades somadas por tipo, distribuição por classe IFC e por pavimento, consulta elemento a elemento e exportação em CSV.
-- Modelo federado: composições salvas com versões fixas, visibilidade por modelo, cores por modelo/classe/pavimento e consulta de elementos.
+- Modelo federado: composições salvas com versões fixas, visibilidade por modelo, cores por modelo/classe/pavimento, cor e opacidade escolhidas por modelo (cor padrão, cor do IFC ou cor escolhida, guardadas no navegador) e consulta de elementos.
 - Consulta de obras/atividades e importação revisada do Prevision.
 - Estado do banco em Configurações (quais migrações estão aplicadas), avisos por toast, confirmações próprias, formulários em gaveta lateral, ajuda contextual em cada tela, menu completo no celular e modo reunião (texto maior).
 

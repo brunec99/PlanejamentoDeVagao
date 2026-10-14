@@ -3,7 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { FragmentsModel, MaterialDefinition } from '@thatopen/fragments';
-import { Boxes, Search, MousePointer2, X, Maximize, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Boxes, Search, MousePointer2, X, Maximize, RotateCcw, Eye, EyeOff, Palette } from 'lucide-react';
 import { searchElements } from './element-search';
 import { Callout } from '@/modules/planejamento/ui';
 import { CHART, SERIES_COLORS, seriesColor } from '@/shared/palette';
@@ -11,6 +11,16 @@ import { readElementMap, type MapRow } from '@/modules/ifc/element-map';
 import { frame, loadFragments, type Federation } from '@/modules/ifc/fragments-stage';
 import { SectionControls } from '@/modules/ifc/section-controls';
 import { useSectionPlane } from '@/modules/ifc/use-section-plane';
+import {
+  DEFAULT_APPEARANCE,
+  MIN_OPACITY,
+  isDefaultAppearance,
+  paintColor,
+  readAppearances,
+  writeAppearances,
+  type ColorMode,
+  type ModelAppearance,
+} from './appearance';
 
 export interface FederationJob {
   token: number;
@@ -81,6 +91,20 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [explorer, setExplorer] = useState<'modelos' | 'elementos'>('modelos');
+  // Cor e opacidade escolhidas por modelo, lembradas neste navegador.
+  // Lido na primeira montagem: a lista de modelos só aparece depois de carregar a cena, então o HTML
+  // do servidor (sem armazenamento local) não diverge do da tela.
+  const [appearances, setAppearances] = useState<Record<string, ModelAppearance>>(() =>
+    typeof window === 'undefined' ? {} : readAppearances(),
+  );
+  const [styling, setStyling] = useState('');
+  const appearanceOf = (modelId: string) => appearances[modelId] ?? DEFAULT_APPEARANCE;
+  const changeAppearance = (modelId: string, patch: Partial<ModelAppearance>) =>
+    setAppearances(current => {
+      const next = { ...current, [modelId]: { ...(current[modelId] ?? DEFAULT_APPEARANCE), ...patch } };
+      writeAppearances(next);
+      return next;
+    });
   const busy = !!message;
   const usable = !!loaded && !busy && webgl;
   const section = useSectionPlane(stageRef.current, loaded?.federation);
@@ -344,20 +368,28 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
     let stale = false;
     const apply = async () => {
       if (stale) return;
-      const material = (color: string): MaterialDefinition => ({
+      const material = (color: string, opacity = 1): MaterialDefinition => ({
         color: new stage.three.Color(color),
-        opacity: 1,
-        transparent: false,
+        opacity,
+        transparent: opacity < 1,
         renderedFaces: loaded.federation.api.RenderedFaces.TWO,
       });
       for (const part of loaded.parts) {
         if (stale) return;
-        await part.model.highlight(undefined, material(paint === 'modelo' ? (modelColors.get(part.modelId) ?? NO_DATA) : NO_DATA));
+        // A cor escolhida vale na pintura por modelo; a opacidade vale em qualquer pintura.
+        const look = appearances[part.modelId] ?? DEFAULT_APPEARANCE;
+        const color = paint === 'modelo' ? paintColor(look, modelColors.get(part.modelId) ?? NO_DATA) : NO_DATA;
+        if (color) await part.model.highlight(undefined, material(color, look.opacity));
+        else {
+          // Cores originais do IFC: tira a pintura e, se pedido, só deixa o modelo transparente.
+          await part.model.resetHighlight();
+          if (look.opacity < 1) await part.model.setOpacity(undefined, look.opacity);
+        }
         if (paint !== 'modelo') {
           const groups = paint === 'classe' ? part.byClass : part.byStorey;
           for (const [name, ids] of groups) {
             if (stale) return;
-            await part.model.highlight(ids, material(groupColors.get(name) ?? NO_DATA));
+            await part.model.highlight(ids, material(groupColors.get(name) ?? NO_DATA, look.opacity));
           }
         }
         if (picked?.versionId === part.versionId) await part.model.highlight([picked.localId], material(SELECTED));
@@ -374,7 +406,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
     return () => {
       stale = true;
     };
-  }, [loaded, paint, hidden, storey, picked, modelColors, groupColors]);
+  }, [loaded, paint, hidden, storey, picked, modelColors, groupColors, appearances]);
 
   const storeys = useMemo(() => [...new Set(loaded?.parts.flatMap(part => [...part.byStorey.keys()]) ?? [])].sort(compare), [loaded]);
   const search = useMemo(() => searchElements(loaded?.parts ?? [], deferredQuery, hidden, storey), [loaded, deferredQuery, hidden, storey]);
@@ -582,16 +614,46 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
                         <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
                           {paint === 'modelo' && (
                             <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ background: modelColors.get(part.modelId) ?? NO_DATA }}
+                              className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-300"
+                              title={appearanceOf(part.modelId).mode === 'original' ? 'Cores originais do IFC' : undefined}
+                              style={{
+                                background:
+                                  paintColor(appearanceOf(part.modelId), modelColors.get(part.modelId) ?? NO_DATA) ??
+                                  'conic-gradient(#e34948, #eda100, #1baf7a, #2a78d6, #e34948)',
+                                opacity: Math.max(0.35, appearanceOf(part.modelId).opacity),
+                              }}
                             />
                           )}
                           <span className="break-words">{part.label}</span>
                         </span>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {hidden.includes(part.versionId) ? 'Oculto' : 'Visível'} · {part.rows.size.toLocaleString('pt-BR')} elementos
+                          {appearanceOf(part.modelId).opacity < 1 && ` · ${Math.round(appearanceOf(part.modelId).opacity * 100)}% opaco`}
                         </p>
+                        {styling === part.versionId && (
+                          <AppearanceControls
+                            label={part.label}
+                            appearance={appearanceOf(part.modelId)}
+                            paletteColor={modelColors.get(part.modelId) ?? NO_DATA}
+                            paintByModel={paint === 'modelo'}
+                            disabled={!usable}
+                            onChange={patch => changeAppearance(part.modelId, patch)}
+                          />
+                        )}
                       </div>
+                      <button
+                        type="button"
+                        disabled={!usable}
+                        aria-expanded={styling === part.versionId}
+                        aria-label={`Cor e opacidade de ${part.label}`}
+                        title="Cor e opacidade"
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-md hover:bg-white ${
+                          isDefaultAppearance(appearanceOf(part.modelId)) ? 'text-slate-500' : 'text-primary'
+                        }`}
+                        onClick={() => setStyling(current => (current === part.versionId ? '' : part.versionId))}
+                      >
+                        <Palette size={17} aria-hidden />
+                      </button>
                       <button
                         type="button"
                         disabled={!usable}
@@ -723,5 +785,97 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         </p>
       )}
     </section>
+  );
+}
+
+const COLOR_MODES: { value: ColorMode; label: string; hint: string }[] = [
+  { value: 'paleta', label: 'Cor padrão', hint: 'a cor do sistema para esta disciplina' },
+  { value: 'original', label: 'Cor do IFC', hint: 'as cores que vieram no arquivo' },
+  { value: 'personalizada', label: 'Escolher cor', hint: 'uma cor só para o modelo inteiro' },
+];
+
+/** Cor e opacidade de um modelo. A cor só aparece na pintura "por modelo"; a opacidade vale sempre. */
+function AppearanceControls({
+  label,
+  appearance,
+  paletteColor,
+  paintByModel,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  appearance: ModelAppearance;
+  paletteColor: string;
+  paintByModel: boolean;
+  disabled: boolean;
+  onChange: (patch: Partial<ModelAppearance>) => void;
+}) {
+  const percent = Math.round(appearance.opacity * 100);
+  return (
+    <div className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-white p-3" role="group" aria-label={`Aparência de ${label}`}>
+      <fieldset disabled={disabled}>
+        <legend className="mb-1.5 text-xs font-semibold text-slate-600">Cor</legend>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {COLOR_MODES.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.hint}
+              aria-pressed={appearance.mode === option.value}
+              onClick={() => onChange({ mode: option.value })}
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold ${
+                appearance.mode === option.value
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {option.value === 'paleta' && (
+                <span className="h-3 w-3 rounded-full ring-1 ring-white/60" style={{ background: paletteColor }} />
+              )}
+              {option.label}
+            </button>
+          ))}
+          {appearance.mode === 'personalizada' && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+              <input
+                type="color"
+                className="h-9 w-12 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                value={appearance.color}
+                onChange={event => onChange({ color: event.target.value })}
+                aria-label={`Cor de ${label}`}
+              />
+              <span className="font-mono uppercase">{appearance.color}</span>
+            </label>
+          )}
+        </div>
+        {!paintByModel && (
+          <p className="mt-1.5 text-xs text-warning">
+            A cor escolhida aparece na pintura "por modelo"; a opacidade vale em qualquer pintura.
+          </p>
+        )}
+      </fieldset>
+      <label className="block text-xs font-semibold text-slate-600">
+        Opacidade <span className="font-normal tabular-nums text-slate-500">{percent}%</span>
+        <input
+          type="range"
+          min={MIN_OPACITY * 100}
+          max={100}
+          step={5}
+          disabled={disabled}
+          value={percent}
+          onChange={event => onChange({ opacity: Number(event.target.value) / 100 })}
+          className="mt-1 block w-full accent-primary"
+          aria-valuetext={`${percent}% opaco`}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={disabled || isDefaultAppearance(appearance)}
+        className="text-link text-xs disabled:opacity-40"
+        onClick={() => onChange({ mode: 'paleta', opacity: 1 })}
+      >
+        Voltar ao padrão
+      </button>
+    </div>
   );
 }
