@@ -2,16 +2,20 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerSupabase } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { BOOTSTRAP_ADMIN_EMAIL } from '@/application/module-access';
+import { NOT_REGISTERED_REASON } from '@/application/access-request';
+import { ACCESS_REQUEST_COOKIE, signIdentity } from '@/infrastructure/auth/access-request-token';
 
 export const runtime = 'nodejs';
 const ALLOWED_DOMAIN = 'atrincorporadora.com.br';
 const NOT_REGISTERED = 'Seu e-mail ainda não foi cadastrado no Obra 360. Peça o cadastro a um administrador.';
 
-function loginError(request: NextRequest, message: string) {
+function loginError(request: NextRequest, message: string, reason?: string) {
   const url = request.nextUrl.clone();
   url.pathname = '/login';
   url.search = '';
   url.searchParams.set('error', message);
+  // O motivo deixa a tela de login oferecer "Solicitar acesso" a quem não tem cadastro.
+  if (reason) url.searchParams.set('motivo', reason);
   return NextResponse.redirect(url);
 }
 
@@ -27,7 +31,9 @@ export async function GET(request: NextRequest) {
   const oauthError = request.nextUrl.searchParams.get('error');
   if (oauthError) {
     const reason = `${request.nextUrl.searchParams.get('error_code') ?? ''} ${request.nextUrl.searchParams.get('error_description') ?? ''}`;
-    return loginError(request, /signup/i.test(reason) ? NOT_REGISTERED : 'Falha ao entrar com Google. Tente novamente.');
+    return /signup/i.test(reason)
+      ? loginError(request, NOT_REGISTERED, NOT_REGISTERED_REASON)
+      : loginError(request, 'Falha ao entrar com Google. Tente novamente.');
   }
 
   if (code) {
@@ -59,7 +65,17 @@ export async function GET(request: NextRequest) {
     const isBootstrap = user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
     if (!isBootstrap) {
       await supabase.auth.signOut({ scope: 'local' });
-      return loginError(request, NOT_REGISTERED);
+      // O Google já confirmou quem é: o pedido de acesso sai com o e-mail dele, sem a pessoa digitar.
+      const response = loginError(request, NOT_REGISTERED, NOT_REGISTERED_REASON);
+      const name = (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || '';
+      response.cookies.set(ACCESS_REQUEST_COOKIE, signIdentity({ email: user.email.toLowerCase(), name }), {
+        httpOnly: true,
+        secure: request.nextUrl.protocol === 'https:',
+        sameSite: 'lax',
+        path: '/login',
+        maxAge: 30 * 60,
+      });
+      return response;
     }
     const name = (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || user.email;
     let workIds: string[] = [];

@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Database, Lock, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Database, Inbox, Lock, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
@@ -8,6 +8,7 @@ import { useConfirm } from '@/modules/layout/confirm';
 import { formatTimestamp, roleLabels } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
 import type { User } from '@/domain/entities';
+import type { AccessRequest } from '@/application/access-request';
 import { MODULES, type ModuleInfo } from '@/application/module-access';
 
 function useCommand() {
@@ -205,6 +206,102 @@ function StartDateField({ sequenceId, startDate }: { sequenceId: string; startDa
         </span>
       )}
     </div>
+  );
+}
+
+/** Pedidos de acesso feitos na tela de login por quem não tem cadastro. "Cadastrar" cria o usuário
+ * como consulta, sem obras (o admin libera obras e módulos na lista de usuários logo abaixo), e o
+ * pedido sai da lista; "Dispensar" só o tira da lista. Some quando não há pedido. */
+function AccessRequests({ refreshKey, onRegistered }: { refreshKey: number; onRegistered: () => void }) {
+  const { toast } = useToast();
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/access-requests', { cache: 'no-store' });
+      const body = await res.json();
+      if (res.ok) setRequests(body.requests ?? []);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load, refreshKey]);
+  if (!requests.length) return null;
+  const act = async (request: AccessRequest, kind: 'register' | 'dismiss') => {
+    setBusy(request.id);
+    setError('');
+    try {
+      const res =
+        kind === 'register'
+          ? await fetch('/api/admin/invite', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: request.email, name: request.name, role: 'viewer' }),
+            })
+          : await fetch(`/api/admin/access-requests/${encodeURIComponent(request.id)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'dismissed' }),
+            });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? 'Não foi possível concluir.');
+      if (kind === 'register') {
+        toast({
+          title: `${request.name} cadastrado como consulta.`,
+          description: 'Libere as obras e os módulos na lista de usuários; avise a pessoa para entrar de novo com o Google.',
+          tone: 'success',
+        });
+        onRegistered();
+      }
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível concluir.');
+    } finally {
+      setBusy('');
+    }
+  };
+  return (
+    <section aria-labelledby="access-requests-title" className="panel mb-4 border-primary-ring p-5">
+      <h3 id="access-requests-title" className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        <Inbox size={16} className="text-primary" aria-hidden />
+        Pedidos de acesso
+        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-white">{requests.length}</span>
+      </h3>
+      <p className="mt-1 text-sm text-slate-500">Pessoas que tentaram entrar sem cadastro e pediram acesso pela tela de login.</p>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
+      <ul className="mt-3 divide-y divide-slate-100">
+        {requests.map(request => (
+          <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800">{request.name}</p>
+              <p className="text-xs text-slate-500">
+                {request.email} ·{' '}
+                {request.verified ? (
+                  <span className="text-success">e-mail confirmado pelo Google</span>
+                ) : (
+                  <span className="text-warning">e-mail digitado, não confirmado</span>
+                )}{' '}
+                · {formatTimestamp(request.updatedAt)}
+              </p>
+              {request.message && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">“{request.message}”</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" className="button" disabled={!!busy} onClick={() => act(request, 'register')}>
+                {busy === request.id ? 'Salvando…' : 'Cadastrar'}
+              </button>
+              <button type="button" className="button-ghost" disabled={!!busy} onClick={() => act(request, 'dismiss')}>
+                Dispensar
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -498,6 +595,8 @@ function DatabaseHealth() {
 
 export function SettingsManager() {
   const [emails, setEmails] = useState<Record<string, string>>({});
+  // Cadastrar pelo formulário também aprova o pedido do mesmo e-mail: a lista de pedidos relê.
+  const [requestsKey, setRequestsKey] = useState(0);
   const loadEmails = () =>
     fetch('/api/admin/users', { cache: 'no-store' })
       .then(r => r.json())
@@ -568,11 +667,19 @@ export function SettingsManager() {
           <Users size={16} className="text-primary" aria-hidden />
           Usuários e acessos
         </h2>
+        <AccessRequests
+          refreshKey={requestsKey}
+          onRegistered={() => {
+            c.refresh();
+            loadEmails();
+          }}
+        />
         <div className="mb-4">
           <InviteForm
             onDone={() => {
               c.refresh();
               loadEmails();
+              setRequestsKey(k => k + 1);
             }}
           />
         </div>

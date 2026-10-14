@@ -201,6 +201,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
       'A liberação de módulos na tela de usuários não grava, e ninguém além de admins e desenvolvedores abre os módulos em desenvolvimento.',
     critical: false,
   },
+  {
+    migration: '0032_access_requests',
+    label: 'Pedidos de acesso',
+    probe: { kind: 'table', table: 'access_requests' },
+    effect: 'O botão "Solicitar acesso" da tela de login não registra o pedido, e a lista de pedidos em Configurações não aparece.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

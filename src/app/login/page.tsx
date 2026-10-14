@@ -1,7 +1,11 @@
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { CalendarRange, ChartGantt, ClipboardCheck, TrainFront } from 'lucide-react';
+import { cookies } from 'next/headers';
 import { signInWithGoogle } from './actions';
+import { AccessRequest } from './access-request';
+import { NOT_REGISTERED_REASON } from '@/application/access-request';
+import { ACCESS_REQUEST_COOKIE, readIdentity } from '@/infrastructure/auth/access-request-token';
 export const metadata = { title: 'Entrar' };
 
 /** O que o Obra 360 reúne — a mesma ordem das abas da obra (longo, vagões, médio, curto). */
@@ -34,12 +38,19 @@ function Logos({ priority = false }: { priority?: boolean }) {
  * Entrada do sistema, no mesmo desenho do Takt Hub. No desktop, um painel da marca à esquerda diz
  * em quatro linhas o que o Obra 360 faz; no celular, só os logos e o formulário.
  */
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; redirect?: string; code?: string }> }) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; redirect?: string; code?: string; motivo?: string }>;
+}) {
   const params = await searchParams;
   // O login fica fora do middleware; se o Supabase devolver o código aqui, ele segue para a troca por sessão.
   if (params.code)
     redirect(`/auth/callback?code=${encodeURIComponent(params.code)}&redirect=${encodeURIComponent(params.redirect ?? '/obras')}`);
   const ano = new Date().getFullYear();
+  // Sem cadastro: oferece o pedido de acesso, com o e-mail confirmado pelo Google quando ele veio do login.
+  const notRegistered = params.motivo === NOT_REGISTERED_REASON;
+  const verified = notRegistered ? readIdentity((await cookies()).get(ACCESS_REQUEST_COOKIE)?.value) : null;
   return (
     <main className="grid min-h-dvh font-sans lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <section
@@ -108,6 +119,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 <p className="mt-0.5 text-xs text-rose-700">{params.error}</p>
               </div>
             )}
+
+            {notRegistered && <AccessRequest verified={verified} />}
 
             <form action={signInWithGoogle} aria-labelledby="login-title">
               <input type="hidden" name="redirect" value={params.redirect ?? '/obras'} />

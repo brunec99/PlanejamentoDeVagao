@@ -43,6 +43,14 @@ export async function POST(request: NextRequest) {
   const { error: profileError } = await service.from('profiles').upsert({ id: userId, name, role, work_ids: workIds });
   if (profileError) return NextResponse.json({ error: `Conta criada, mas o perfil falhou: ${profileError.message}` }, { status: 500 });
 
+  // Quem tinha pedido acesso sai da lista de pedidos. Falha aqui não desfaz o cadastro (a tabela pode
+  // ainda não existir, antes da migração 0032).
+  await service
+    .from('access_requests')
+    .update({ status: 'approved', handled_by: profile.id, handled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('email', email)
+    .eq('status', 'pending');
+
   return NextResponse.json({ email, role }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
