@@ -455,12 +455,14 @@ test('plano novo nasce como cópia do anterior, sem o que já terminou e com ví
   assert.ok(rows.every(t => !t.id.startsWith('s') && t.sourceTaskId === undefined && t.version === undefined));
   const named = (name: string) => rows.find(t => t.name === name)!;
   // Elevação perdeu a predecessora: ganha a restrição no início atual e não salta.
-  assert.equal(named('Elevação').anchorStart, '2026-09-28');
+  assert.equal(named('Elevação').anchorStart, undefined);
+  assert.deepEqual([named('Elevação').constraintType, named('Elevação').constraintDate], ['SNET', '2026-09-28']);
   assert.deepEqual([named('Elevação').plannedStart, named('Elevação').plannedEnd], ['2026-09-28', '2026-10-02']);
   assert.equal(named('Elevação').notes, 'Frente norte');
   assert.equal(named('Elevação').teamId, 'equipe-1');
   assert.deepEqual(named('Elevação').duration, { value: 5, unit: 'd' });
   assert.equal(named('Encunhamento').anchorStart, undefined);
+  assert.equal(named('Encunhamento').constraintType, undefined);
   const copiedLinks = saved.planDependencies.filter(l => rows.some(t => t.id === l.successorId));
   assert.deepEqual(
     copiedLinks.map(l => [l.predecessorId, l.successorId, l.type]),

@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Database, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Database, FlaskConical, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
@@ -60,6 +60,36 @@ function RoleSelect({ userId, role, self }: { userId: string; role: string; self
           </option>
         ))}
       </select>
+      {error && (
+        <p className="mt-1 text-xs text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Permissão de teste: quem está testando o curto prazo passa a ver o médio prazo (módulo em
+ * desenvolvimento) sem virar admin. Botão de alternância, com o estado dito em texto e no `aria-pressed`. */
+function TestAccessToggle({ userId, enabled }: { userId: string; enabled: boolean }) {
+  const { busy, error, run } = useCommand();
+  return (
+    <div>
+      <button
+        type="button"
+        className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium ${
+          enabled ? 'border-primary bg-primary-soft text-primary-ink' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+        } disabled:cursor-not-allowed disabled:opacity-50`}
+        disabled={busy}
+        aria-pressed={enabled}
+        title={
+          enabled ? 'Vê o médio prazo em teste. Clique para retirar.' : 'Libera o médio prazo (em desenvolvimento) para esta pessoa testar.'
+        }
+        onClick={() => run({ type: 'set_test_access', userId, enabled: !enabled })}
+      >
+        <FlaskConical size={14} aria-hidden />
+        {enabled ? 'Testando o médio prazo' : 'Permissão de teste'}
+      </button>
       {error && (
         <p className="mt-1 text-xs text-danger" role="alert">
           {error}
@@ -512,6 +542,7 @@ export function SettingsManager() {
                 </div>
                 <div className="flex items-center gap-2">
                   <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
+                  <TestAccessToggle userId={user.id} enabled={user.testAccess === true} />
                   {user.id !== c.actorId && (
                     <DeleteUserButton
                       userId={user.id}

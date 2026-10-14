@@ -4,10 +4,14 @@ import {
   BOOTSTRAP_ADMIN_EMAIL,
   developerEmails,
   hasDeveloperAccess,
+  hasSectionAccess,
+  isCommandAllowed,
   isCommandAllowedForNonDeveloper,
   isDeveloperEmail,
   isRestrictedApi,
+  isTesterApi,
   restrictedPageRedirect,
+  restrictedSectionOf,
   RESTRICTED_SECTIONS,
 } from '../src/application/module-access';
 import { workPath } from '../src/shared/format';
@@ -98,4 +102,27 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     assert.equal(isRestrictedApi(path), true, path);
   for (const path of ['/api/planning', '/api/planning/commands', '/api/work-settings', '/api/admin/users', '/api/health', '/api/ifcx'])
     assert.equal(isRestrictedApi(path), false, path);
+});
+
+test('Permissão de teste abre só o médio prazo, o histórico e os comandos do plano do mês', () => {
+  const tester = { developer: false, tester: true };
+  const nobody = { developer: false, tester: false };
+  assert.equal(hasSectionAccess('medio-prazo', tester), true);
+  assert.equal(hasSectionAccess('longo-prazo', tester), false);
+  assert.equal(hasSectionAccess('medio-prazo', nobody), false);
+  assert.equal(hasSectionAccess('ifc', { developer: true, tester: false }), true);
+  assert.equal(restrictedSectionOf('/obras/obra-1/medio-prazo'), 'medio-prazo');
+  assert.equal(restrictedSectionOf('/obras/obra-1/vagoes/v-1'), 'vagoes');
+  assert.equal(restrictedSectionOf('/obras/obra-1/curto-prazo'), null);
+  assert.equal(isTesterApi('/api/history'), true);
+  assert.equal(isTesterApi('/api/history?x=1'), false);
+  assert.equal(isTesterApi('/api/ifc/upload-url'), false);
+  assert.equal(isCommandAllowed('save_plan_revision', tester), true);
+  assert.equal(isCommandAllowed('create_plan', tester), true);
+  assert.equal(isCommandAllowed('record_fulfillment', tester), true);
+  assert.equal(isCommandAllowed('set_test_access', tester), true);
+  assert.equal(isCommandAllowed('create_baseline', tester), false);
+  assert.equal(isCommandAllowed('save_plan_revision', nobody), false);
+  assert.equal(isCommandAllowed('create_baseline', { developer: true, tester: false }), true);
+  assert.equal(isCommandAllowedForNonDeveloper('set_test_access'), true);
 });

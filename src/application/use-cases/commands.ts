@@ -1,4 +1,14 @@
-import { scheduleTasks, planSnapshot, planWindow, withProgress, DEFAULT_CALENDAR, type WorkCalendar } from '../../domain/plan-schedule';
+import {
+  scheduleTasks,
+  planSnapshot,
+  planWindow,
+  withProgress,
+  constraintOf,
+  constraintNeedsDate,
+  validateConstraint,
+  DEFAULT_CALENDAR,
+  type WorkCalendar,
+} from '../../domain/plan-schedule';
 import type {
   Activity,
   BoardStatus,
@@ -86,6 +96,7 @@ export type Command =
   | { type: 'grant_access'; userId: string; workId: string }
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
+  | { type: 'set_test_access'; userId: string; enabled: boolean }
   | { type: 'create_team'; workId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'update_team'; teamId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'delete_team'; teamId: string }
@@ -237,9 +248,10 @@ function copyPlanForward(
   const lostLink = new Set(sourceLinks.filter(l => ids.has(l.successorId) && !ids.has(l.predecessorId)).map(l => l.successorId));
   let previous = -1;
   const tasks = kept.map((t, at) => {
-    const { id: _id, version: _version, sourceTaskId: _source, ...rest } = t;
+    const { id: _id, version: _version, sourceTaskId: _source, anchorStart: _anchor, ...rest } = t;
     const level = Math.min(Math.max(0, t.level), previous + 1);
     previous = level;
+    const constraint = constraintOf(t);
     return {
       ...rest,
       ...base(),
@@ -247,7 +259,12 @@ function copyPlanForward(
       planId: plan.id,
       order: at + 1,
       level,
-      ...(lostLink.has(t.id) ? { anchorStart: t.plannedStart } : {}),
+      // A restrição vai no formato atual (o `anchorStart` antigo vira "Não iniciar antes de"); quem
+      // perdeu a predecessora e não tinha data ganha uma, para o início não pular.
+      ...(constraint.type !== 'ASAP' ? { constraintType: constraint.type, constraintDate: constraint.date } : {}),
+      ...(lostLink.has(t.id) && !constraintNeedsDate(constraint.type)
+        ? { constraintType: 'SNET' as const, constraintDate: t.plannedStart }
+        : {}),
     };
   });
   // Resumo não carrega real; folha com % passa pela regra do Project (dado antigo com % e sem
@@ -1115,12 +1132,16 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         if (input.teamId && !data.teams.some(t => t.id === input.teamId && t.workId === plan.workId))
           throw new Error('Equipe deve pertencer à obra.');
         validatePeriod(input.plannedStart, input.plannedEnd);
-        if (input.anchorStart) validateDate(input.anchorStart);
+        const constraint = constraintOf(input);
+        validateConstraint(constraint);
+        if (input.deadline) validateDate(input.deadline);
         const summary = command.tasks[index + 1]?.level > input.level;
         if (summary && old && input.progress !== old.progress) throw new Error('Progresso de resumo é calculado.');
         if (input.actualStart) validateDate(input.actualStart);
         if (input.actualEnd) validateDate(input.actualEnd);
         const row = `Linha ${index + 1}`;
+        if (summary && (constraint.type !== 'ASAP' || input.deadline))
+          throw new Error(`${row}: tarefa-resumo não recebe restrição nem prazo final; informe nas subtarefas.`);
         if (summary && (input.actualStart || input.actualEnd))
           throw new Error(`${row}: tarefa-resumo não recebe início ou término real; informe nas subtarefas.`);
         if (input.actualEnd && !input.actualStart) throw new Error(`${row}: término real exige início real.`);
@@ -1142,7 +1163,11 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
           teamId: input.teamId || undefined,
           notes: typeof input.notes === 'string' ? input.notes : undefined,
           duration: input.duration,
-          anchorStart: input.anchorStart,
+          // A restrição só fica no formato atual: o `anchorStart` antigo some da linha gravada.
+          anchorStart: undefined,
+          constraintType: constraint.type === 'ASAP' ? undefined : constraint.type,
+          constraintDate: constraintNeedsDate(constraint.type) ? constraint.date : undefined,
+          deadline: input.deadline || undefined,
           actualStart: input.actualStart || undefined,
           actualEnd: input.actualEnd || undefined,
           version: (old?.version ?? 0) + 1,
@@ -1185,6 +1210,9 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
           'plannedEnd',
           'duration',
           'anchorStart',
+          'constraintType',
+          'constraintDate',
+          'deadline',
           'actualStart',
           'actualEnd',
           'teamId',
@@ -1544,6 +1572,17 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       if (!target) throw new Error('Usuário não encontrado.');
       if (target.id === actorId && command.role !== 'admin') throw new Error('Você não pode remover seu próprio acesso de administrador.');
       target.role = command.role;
+      touch(target);
+      entityId = target.id;
+      break;
+    }
+    case 'set_test_access': {
+      // Permissão de teste do médio prazo: liga e desliga quem está testando, sem mudar o papel.
+      if (actor.role !== 'admin') throw new Error('Somente administradores podem dar permissão de teste.');
+      const target = data.users.find(u => u.id === command.userId);
+      if (!target) throw new Error('Usuário não encontrado.');
+      if (typeof command.enabled !== 'boolean') throw new Error('Informe se a permissão de teste fica ligada ou desligada.');
+      target.testAccess = command.enabled;
       touch(target);
       entityId = target.id;
       break;

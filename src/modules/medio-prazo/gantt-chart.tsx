@@ -2,15 +2,22 @@
 import { useCallback, useEffect, useMemo, type JSX, type KeyboardEvent, type MouseEvent, type RefObject, type UIEvent } from 'react';
 import type { LinkType } from '@/domain/entities';
 import type { WorkCalendar } from '@/domain/plan-schedule';
-import { CHART } from '@/shared/palette';
+import { CHART, SERIES_COLORS, STATUS } from '@/shared/palette';
 
 /* Gráfico de Gantt de acompanhamento, no molde do "Gantt de acompanhamento" do Project: barra
- * azul-clara com o avanço em azul-escuro, linha de base cinza logo abaixo, resumo em colchete preto,
- * marco em losango e vínculos em cotovelo. É só apresentação: recebe as linhas já na ordem da
- * tabela ao lado e não calcula datas — o que ele desenha é o que a tabela mostra. As contas de
- * posição ficam em funções puras exportadas, cobertas por tests/gantt-chart.test.ts. */
+ * azul-clara com o avanço em azul-escuro (vermelha quando crítica), linha de base cinza logo
+ * abaixo, resumo em colchete preto, marco em losango, vínculos em cotovelo, seta de prazo final,
+ * linha de folga e o "Caminho da tarefa" do Project 2013 colorindo predecessoras e sucessoras da
+ * linha selecionada. É só apresentação: recebe as linhas já na ordem da tabela ao lado, com o
+ * caminho crítico, as folgas e os papéis já calculados pelo motor — não calcula datas; o que ele
+ * desenha é o que a tabela mostra. As contas de posição e de cor ficam em funções puras
+ * exportadas, cobertas por tests/gantt-chart.test.ts. */
 
 export type GanttZoom = 'dia' | 'semana' | 'mes';
+/** Papel de uma linha no "Caminho da tarefa": a partir da selecionada, quem de fato fixa a data
+ * dela (predecessora determinante), quem só a antecede, quem ela de fato fixa (sucessora
+ * determinada) e quem só a segue. */
+export type GanttPathRole = 'selected' | 'driving' | 'predecessor' | 'driven' | 'successor';
 export interface GanttRow {
   id: string;
   name: string;
@@ -25,12 +32,27 @@ export interface GanttRow {
   baseStart?: string;
   baseEnd?: string;
   outOfWindow?: boolean;
+  /** Tarefa, marco ou resumo no caminho crítico. */
+  critical?: boolean;
+  /** "Prazo final" (AAAA-MM-DD): seta no topo da linha, vermelha quando perdido. */
+  deadline?: string;
+  deadlineMissed?: boolean;
+  /** Término tardio (AAAA-MM-DD): a linha de folga vai do fim da barra até ele. */
+  lateFinish?: string;
+  /** Folgas em dias úteis; a total pode ser negativa. */
+  totalSlack?: number;
+  freeSlack?: number;
+  /** Algum vínculo de entrada desrespeitado: restrição ou data real prendem a tarefa antes do permitido. */
+  conflict?: boolean;
+  pathRole?: GanttPathRole;
 }
 export interface GanttLink {
   id: string;
   from: string;
   to: string;
   type: LinkType;
+  /** A predecessora de fato fixa a data da sucessora. */
+  driving?: boolean;
 }
 export interface GanttChartProps {
   rows: GanttRow[];
@@ -42,6 +64,12 @@ export interface GanttChartProps {
   headerHeight: number;
   calendar: WorkCalendar;
   showBaseline: boolean;
+  /** "Tarefas críticas" do Gantt de acompanhamento: barras críticas em vermelho (padrão ligado). */
+  showCritical?: boolean;
+  /** "Folga": linha fina do fim da barra até o término tardio (padrão desligado). */
+  showSlack?: boolean;
+  /** "Caminho da tarefa": realça predecessoras e sucessoras da linha selecionada (padrão desligado). */
+  showPath?: boolean;
   selectedId?: string;
   onSelect: (id: string) => void;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -57,7 +85,6 @@ export const GANTT_DAY_PX: Record<GanttZoom, number> = { dia: 28, semana: 6, mes
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
-const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Dias desde 1970-01-01 em UTC. */
 export const dayNumber = (date: string) => Math.round(Date.parse(date + 'T00:00:00Z') / DAY_MS);
@@ -78,15 +105,24 @@ export interface GanttRange {
   days: number;
 }
 
-/** Período desenhado: a janela do plano mais tudo o que as linhas mostram (atual, base e real),
- * com uma semana de folga de cada lado. Na escala semanal começa numa segunda e termina num
- * domingo; na mensal, no primeiro e no último dia do mês. */
-export function ganttRange(rows: readonly GanttRow[], window: { start: string; end: string }, zoom: GanttZoom): GanttRange {
+/** Período desenhado: a janela do plano mais tudo o que as linhas mostram (atual, base, real e
+ * prazo final), com uma semana de folga de cada lado. O término tardio só entra com a linha de
+ * folga à mostra (`showSlack`): sem ela nada o desenha, e o gráfico não precisa alargar por ele.
+ * Na escala semanal começa numa segunda e termina num domingo; na mensal, no primeiro e no último
+ * dia do mês. */
+export function ganttRange(
+  rows: readonly GanttRow[],
+  window: { start: string; end: string },
+  zoom: GanttZoom,
+  options: { showSlack?: boolean } = {},
+): GanttRange {
   let min = window.start,
     max = window.end;
   if (max < min) [min, max] = [max, min];
   for (const row of rows) {
-    for (const date of [row.start, row.end, row.baseStart, row.baseEnd, row.actualStart, row.actualEnd]) {
+    const dates = [row.start, row.end, row.baseStart, row.baseEnd, row.actualStart, row.actualEnd, row.deadline];
+    if (options.showSlack) dates.push(row.lateFinish);
+    for (const date of dates) {
       if (!date || !ISO.test(date)) continue;
       if (date < min) min = date;
       if (date > max) max = date;
@@ -119,6 +155,23 @@ export function barSpan(start: string, end: string, rangeStart: string, zoom: Ga
 /** O marco fica no meio do dia da data dele: a mesma posição em qualquer escala e coerente com o
  * rótulo "dd/mm" ao lado. */
 export const milestoneX = (date: string, rangeStart: string, zoom: GanttZoom) => dateX(date, rangeStart, zoom) + GANTT_DAY_PX[zoom] / 2;
+
+/** A seta do prazo final fica no meio do dia dele, como o marco. */
+export const deadlineX = (date: string, rangeStart: string, zoom: GanttZoom) => milestoneX(date, rangeStart, zoom);
+
+/** Linha de folga: do fim do dia `end` até o fim do dia `lateFinish`. Sem término tardio, ou com
+ * ele no mesmo dia do término ou antes (folga zero ou negativa), não há linha a desenhar. */
+export function slackSpan(
+  end: string,
+  lateFinish: string | undefined,
+  rangeStart: string,
+  zoom: GanttZoom,
+): { left: number; width: number } | undefined {
+  if (!lateFinish || !ISO.test(lateFinish) || !ISO.test(end) || lateFinish <= end) return undefined;
+  const px = GANTT_DAY_PX[zoom];
+  const left = dateX(end, rangeStart, zoom) + px;
+  return { left, width: dateX(lateFinish, rangeStart, zoom) + px - left };
+}
 
 export interface TimescaleCell {
   key: string;
@@ -312,6 +365,7 @@ export interface LinkPath {
   type: LinkType;
   from: string;
   to: string;
+  driving?: boolean;
   points: Point[];
 }
 /** Vínculos desenháveis. O que tem uma ponta fora das linhas exibidas (recolhida, filtrada ou de
@@ -322,7 +376,14 @@ export function layoutLinks(links: readonly GanttLink[], anchors: ReadonlyMap<st
     const from = anchors.get(link.from),
       to = anchors.get(link.to);
     if (!from || !to || link.from === link.to) continue;
-    paths.push({ id: link.id, type: link.type, from: link.from, to: link.to, points: linkPoints(link.type, from, to, gap) });
+    paths.push({
+      id: link.id,
+      type: link.type,
+      from: link.from,
+      to: link.to,
+      driving: link.driving,
+      points: linkPoints(link.type, from, to, gap),
+    });
   }
   return paths;
 }
@@ -330,11 +391,31 @@ export function layoutLinks(links: readonly GanttLink[], anchors: ReadonlyMap<st
 // ————— Textos —————
 
 const percent = (value: number) => `${Math.round(Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0)))}%`;
-/** Texto da dica e do rótulo acessível: "Nome · Seg 24/08/26 a Sex 09/10/26 · 40% · Base: …". */
+/** "1 dia", "3 dias", "0 dias", "-1 dia". */
+const dayCount = (days: number) => `${days} ${Math.abs(days) === 1 ? 'dia' : 'dias'}`;
+/** O que a dica e o rótulo acessível dizem de cada papel; a selecionada já tem `aria-pressed`. */
+const PATH_ROLE_LABEL: Record<GanttPathRole, string | undefined> = {
+  selected: undefined,
+  driving: 'Predecessora determinante',
+  predecessor: 'Predecessora',
+  driven: 'Sucessora determinada',
+  successor: 'Sucessora',
+};
+/** "Prazo final: Seg 24/08/26", ou "Prazo final perdido: …" quando o término passa dele. */
+export const deadlineLabel = (row: Pick<GanttRow, 'deadline' | 'deadlineMissed'>) =>
+  row.deadline && ISO.test(row.deadline)
+    ? `${row.deadlineMissed ? 'Prazo final perdido' : 'Prazo final'}: ${shortDate(row.deadline)}`
+    : undefined;
+
+/** Texto da dica e do rótulo acessível: "Nome · Seg 24/08/26 a Sex 09/10/26 · 40% · Crítica ·
+ * Base: … · Real: … · Folga livre: 2 dias · Folga total: 2 dias · Prazo final: … · Vínculo
+ * desrespeitado · Predecessora determinante · Fora da janela do plano". Tudo em texto: nenhuma
+ * dessas informações depende da cor da barra. */
 export function ganttTooltip(row: GanttRow): string {
   const parts = [row.name.trim() || 'Sem nome'];
   parts.push(row.milestone ? `Marco em ${shortDate(row.start)}` : `${shortDate(row.start)} a ${shortDate(row.end)}`);
   parts.push(percent(row.progress));
+  if (row.critical) parts.push('Crítica');
   if (row.baseStart && row.baseEnd)
     parts.push(row.milestone ? `Base: ${shortDate(row.baseStart)}` : `Base: ${shortDate(row.baseStart)} a ${shortDate(row.baseEnd)}`);
   if (row.actualStart)
@@ -343,17 +424,88 @@ export function ganttTooltip(row: GanttRow): string {
         ? `Real: ${shortDate(row.actualStart)} a ${shortDate(row.actualEnd)}`
         : `Real: iniciada em ${shortDate(row.actualStart)}`,
     );
+  const { freeSlack, totalSlack } = row;
+  if (typeof freeSlack === 'number' && Number.isFinite(freeSlack)) parts.push(`Folga livre: ${dayCount(freeSlack)}`);
+  if (typeof totalSlack === 'number' && Number.isFinite(totalSlack)) parts.push(`Folga total: ${dayCount(totalSlack)}`);
+  const deadline = deadlineLabel(row);
+  if (deadline) parts.push(deadline);
+  if (row.conflict) parts.push('Vínculo desrespeitado');
+  const role = row.pathRole && PATH_ROLE_LABEL[row.pathRole];
+  if (role) parts.push(role);
   if (row.outOfWindow) parts.push('Fora da janela do plano');
   return parts.join(' · ');
 }
 
-// ————— Componente —————
+// ————— Cores —————
 
-/* As cores vêm da paleta única dos gráficos (`CHART`): a barra é o azul de "planejado", a linha de
- * base o cinza de "base", a linha de hoje o âmbar que marca hoje em todos os gráficos do sistema.
- * A barra clara é o mesmo azul misturado com branco, para o avanço ser o tom cheio por cima. */
-const PLANNED_LIGHT = `color-mix(in srgb, ${CHART.planned} 28%, white)`;
-const BASELINE_EDGE = `color-mix(in srgb, ${CHART.baseline} 80%, black)`;
+/* As cores vêm da paleta única dos gráficos (`CHART`): a barra é o azul de "planejado", a crítica
+ * o vermelho de "atrasado" (o Gantt de acompanhamento do Project também pinta as críticas de
+ * vermelho), a linha de base o cinza de "base", a linha de hoje o âmbar que marca hoje em todos os
+ * gráficos do sistema e a linha de folga o tom apagado dos textos. A barra clara é o tom cheio
+ * misturado com branco, para o avanço ser o tom cheio por cima. O caminho da tarefa usa o âmbar e
+ * o roxo da série categórica, que não aparecem em mais nada neste gráfico. */
+const mixWhite = (color: string, share: number) => `color-mix(in srgb, ${color} ${share}%, white)`;
+const mixBlack = (color: string, share: number) => `color-mix(in srgb, ${color} ${share}%, black)`;
+const PLANNED_LIGHT = mixWhite(CHART.planned, 28);
+const CRITICAL_LIGHT = mixWhite(CHART.late, 28);
+const BASELINE_EDGE = mixBlack(CHART.baseline, 80);
+/** O resumo é o colchete preto do Project, no preto petróleo da escala de neutros (`globals.css`). */
+const SUMMARY_INK = 'var(--color-slate-900)';
+const PATH_DRIVING = SERIES_COLORS[3];
+const PATH_DRIVEN = SERIES_COLORS[6];
+/** Com o caminho da tarefa ligado, o que está fora dele apaga para o caminho saltar. */
+const DIM_BAR = 0.45;
+const DIM_LINK = 0.35;
+
+export interface BarTone {
+  fill: string;
+  border: string;
+  progress: string;
+  /** 1, ou 0,45 na linha fora do caminho da tarefa quando ele está ligado. */
+  opacity: number;
+}
+
+/** Cor da barra de uma linha: `fill` no fundo, `border` no contorno e `progress` no avanço. O
+ * marco usa `fill` no losango e `border` no contorno. O caminho da tarefa, quando ligado, vem por
+ * cima da cor crítica, como no Project, que pinta o caminho por cima; o resumo é sempre preto,
+ * crítico ou não. As cores "cheias" (determinante e determinada) escurecem o avanço e o contorno
+ * para o avanço continuar visível sobre o fundo cheio. */
+export function barTone(
+  row: Pick<GanttRow, 'summary' | 'critical' | 'pathRole'>,
+  { showCritical = true, showPath = false }: { showCritical?: boolean; showPath?: boolean } = {},
+): BarTone {
+  const role = showPath ? row.pathRole : undefined;
+  const opacity = showPath && !role ? DIM_BAR : 1;
+  if (row.summary) return { fill: SUMMARY_INK, border: SUMMARY_INK, progress: SUMMARY_INK, opacity };
+  if (role === 'driving' || role === 'driven') {
+    const color = role === 'driving' ? PATH_DRIVING : PATH_DRIVEN,
+      dark = mixBlack(color, 70);
+    return { fill: color, border: dark, progress: dark, opacity };
+  }
+  if (role === 'predecessor' || role === 'successor') {
+    const color = role === 'predecessor' ? PATH_DRIVING : PATH_DRIVEN;
+    return { fill: mixWhite(color, 40), border: color, progress: color, opacity };
+  }
+  if (showCritical && row.critical) return { fill: CRITICAL_LIGHT, border: CHART.late, progress: CHART.late, opacity };
+  return { fill: PLANNED_LIGHT, border: CHART.planned, progress: CHART.planned, opacity };
+}
+
+export interface LinkTone {
+  stroke: string;
+  strokeWidth: number;
+  opacity: number;
+}
+
+/** Cor de um vínculo. Sem o caminho da tarefa (`pathIds` ausente), todos iguais. Com ele, o vínculo
+ * determinante entre duas linhas do caminho fica âmbar e mais grosso, os demais vínculos entre
+ * linhas do caminho continuam normais e os de fora apagam. */
+export function linkTone(link: Pick<GanttLink, 'from' | 'to' | 'driving'>, pathIds?: ReadonlySet<string>): LinkTone {
+  if (!pathIds) return { stroke: CHART.link, strokeWidth: 1.25, opacity: 1 };
+  if (!pathIds.has(link.from) || !pathIds.has(link.to)) return { stroke: CHART.link, strokeWidth: 1.25, opacity: DIM_LINK };
+  return link.driving ? { stroke: PATH_DRIVING, strokeWidth: 2, opacity: 1 } : { stroke: CHART.link, strokeWidth: 1.25, opacity: 1 };
+}
+
+// ————— Componente —————
 
 export function GanttChart({
   rows,
@@ -365,6 +517,9 @@ export function GanttChart({
   headerHeight,
   calendar,
   showBaseline,
+  showCritical = true,
+  showSlack = false,
+  showPath = false,
   selectedId,
   onSelect,
   scrollRef,
@@ -375,9 +530,11 @@ export function GanttChart({
   // A janela entra pelas datas, não pelo objeto: um `{ start, end }` novo a cada render não pode
   // refazer a escala inteira.
   const range = useMemo(
-    () => ganttRange(rows, { start: planWindow.start, end: planWindow.end }, zoom),
-    [rows, planWindow.start, planWindow.end, zoom],
+    () => ganttRange(rows, { start: planWindow.start, end: planWindow.end }, zoom, { showSlack }),
+    [rows, planWindow.start, planWindow.end, zoom, showSlack],
   );
+  // Linhas do caminho da tarefa, para os vínculos saberem se ligam duas delas.
+  const pathIds = useMemo(() => (showPath ? new Set(rows.filter(row => row.pathRole).map(row => row.id)) : undefined), [rows, showPath]);
   const width = range.days * px;
   const tiers = useMemo(() => timescaleTiers(range, zoom), [range, zoom]);
   const offDays = useMemo(() => (zoom === 'mes' ? [] : nonWorkingRuns(range, calendar)), [range, zoom, calendar]);
@@ -507,11 +664,26 @@ export function GanttChart({
           {rows.map((row, index) => {
             const bar = geometry.bars[index];
             const selected = row.id === selectedId;
-            const tooltip = ganttTooltip(row);
+            // O papel no caminho só entra no texto com o caminho à mostra: a grade pode calculá-lo sempre.
+            const tooltip = ganttTooltip(showPath || !row.pathRole ? row : { ...row, pathRole: undefined });
             const kind = row.milestone ? 'Marco' : row.summary ? 'Resumo' : 'Tarefa';
             const progress = Math.min(100, Math.max(0, Number.isFinite(row.progress) ? row.progress : 0));
+            const tone = barTone(row, { showCritical, showPath });
+            const borderStyle = row.conflict ? 'dashed' : 'solid';
             const base = showBaseline && row.baseStart && row.baseEnd ? barSpan(row.baseStart, row.baseEnd, range.start, zoom) : undefined;
-            const textLeft = Math.max(bar.right, base?.right ?? 0) + 4;
+            // A linha de folga começa onde a barra (ou o losango) acaba, e o "%" fica depois dela.
+            const slack = showSlack && !row.summary ? slackSpan(row.end, row.lateFinish, range.start, zoom) : undefined;
+            const slackLeft = slack ? Math.max(slack.left, bar.right) : 0;
+            const slackWidth = slack ? slack.left + slack.width - slackLeft : 0;
+            const slackLine = slackWidth > 0 && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute"
+                style={{ left: slackLeft, width: slackWidth, top: metrics.mid - 1, height: 2, background: CHART.inkMuted }}
+              />
+            );
+            const textLeft = Math.max(bar.right, base?.right ?? 0, slackWidth > 0 ? slackLeft + slackWidth : 0) + 4;
+            const deadline = row.deadline && ISO.test(row.deadline) ? deadlineX(row.deadline, range.start, zoom) : undefined;
             const barProps = {
               type: 'button' as const,
               title: tooltip,
@@ -532,121 +704,155 @@ export function GanttChart({
                 style={{ height: rowHeight }}
                 className={`relative border-b border-slate-100 ${selected ? 'bg-primary/10' : row.outOfWindow ? 'bg-warning/10' : ''}`}
               >
-                {row.milestone ? (
-                  <>
-                    {base && (
-                      <div
-                        aria-hidden="true"
-                        className="absolute rotate-45"
+                {/* Tudo da linha apaga junto quando ela está fora do caminho da tarefa; a seta do
+                 * prazo final fica fora desse invólucro, porque um prazo perdido não pode apagar. */}
+                <div className="absolute inset-0" style={{ opacity: tone.opacity }}>
+                  {row.milestone ? (
+                    <>
+                      {base && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute rotate-45"
+                          style={{
+                            background: CHART.baseline,
+                            left: milestoneX(row.baseStart!, range.start, zoom) - diamond * 0.35,
+                            top: metrics.baseTop + (metrics.baseHeight - diamond * 0.7) / 2,
+                            width: diamond * 0.7,
+                            height: diamond * 0.7,
+                          }}
+                        />
+                      )}
+                      {slackLine}
+                      {/* Marco: losango na cor da linha; em conflito, o contorno fica tracejado. */}
+                      <button
+                        {...barProps}
+                        className="absolute rotate-45 rounded-[1px] border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                         style={{
-                          background: CHART.baseline,
-                          left: milestoneX(row.baseStart!, range.start, zoom) - diamond * 0.35,
-                          top: metrics.baseTop + (metrics.baseHeight - diamond * 0.7) / 2,
-                          width: diamond * 0.7,
-                          height: diamond * 0.7,
+                          left: bar.center - diamond / 2,
+                          top: metrics.mid - diamond / 2,
+                          width: diamond,
+                          height: diamond,
+                          background: tone.fill,
+                          borderColor: tone.border,
+                          borderStyle,
                         }}
                       />
-                    )}
-                    <button
-                      {...barProps}
-                      className="absolute rotate-45 rounded-[1px] bg-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      style={{ left: bar.center - diamond / 2, top: metrics.mid - diamond / 2, width: diamond, height: diamond }}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute whitespace-nowrap text-xs font-medium tabular-nums leading-none text-slate-700"
-                      style={{
-                        left: Math.max(bar.right + 2, base ? milestoneX(row.baseStart!, range.start, zoom) + diamond * 0.35 : 0) + 4,
-                        top: metrics.mid - 6,
-                      }}
-                    >
-                      {row.start.slice(8, 10)}/{row.start.slice(5, 7)}
-                    </span>
-                  </>
-                ) : row.summary ? (
-                  <>
-                    {base && (
-                      <div
+                      <span
                         aria-hidden="true"
-                        className="absolute"
+                        className="pointer-events-none absolute whitespace-nowrap text-xs font-medium tabular-nums leading-none text-slate-700"
                         style={{
-                          background: CHART.baseline,
-                          left: base.left,
-                          width: base.width,
-                          top: metrics.baseTop,
-                          height: Math.max(2, Math.round(metrics.baseHeight * 0.6)),
+                          left: Math.max(bar.right + 2, base ? milestoneX(row.baseStart!, range.start, zoom) + diamond * 0.35 : 0) + 4,
+                          top: metrics.mid - 6,
                         }}
-                      />
-                    )}
-                    {/* Resumo: colchete preto com as pontas voltadas para baixo, como no Project. */}
-                    <button
-                      {...barProps}
-                      className="absolute focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      style={{ left: bar.left, width: bar.width, top: metrics.barTop, height: summaryThickness + 5 }}
-                    >
-                      <span className="absolute inset-x-0 top-0 bg-slate-900" style={{ height: summaryThickness }} />
+                      >
+                        {row.start.slice(8, 10)}/{row.start.slice(5, 7)}
+                      </span>
+                    </>
+                  ) : row.summary ? (
+                    <>
+                      {base && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute"
+                          style={{
+                            background: CHART.baseline,
+                            left: base.left,
+                            width: base.width,
+                            top: metrics.baseTop,
+                            height: Math.max(2, Math.round(metrics.baseHeight * 0.6)),
+                          }}
+                        />
+                      )}
+                      {/* Resumo: colchete preto com as pontas voltadas para baixo, como no Project. */}
+                      <button
+                        {...barProps}
+                        className="absolute focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        style={{ left: bar.left, width: bar.width, top: metrics.barTop, height: summaryThickness + 5 }}
+                      >
+                        <span className="absolute inset-x-0 top-0" style={{ height: summaryThickness, background: tone.fill }} />
+                        <span
+                          className="absolute left-0 w-[5px]"
+                          style={{ top: summaryThickness, height: 5, clipPath: 'polygon(0 0, 100% 0, 0 100%)', background: tone.fill }}
+                        />
+                        <span
+                          className="absolute right-0 w-[5px]"
+                          style={{ top: summaryThickness, height: 5, clipPath: 'polygon(0 0, 100% 0, 100% 100%)', background: tone.fill }}
+                        />
+                      </button>
                       <span
-                        className="absolute left-0 w-[5px] bg-slate-900"
-                        style={{ top: summaryThickness, height: 5, clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
-                      />
-                      <span
-                        className="absolute right-0 w-[5px] bg-slate-900"
-                        style={{ top: summaryThickness, height: 5, clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }}
-                      />
-                    </button>
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute whitespace-nowrap text-xs font-semibold tabular-nums leading-none text-slate-800"
-                      style={{ left: textLeft, top: metrics.barTop }}
-                    >
-                      {percent(progress)}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {base && (
-                      <div
                         aria-hidden="true"
-                        className="absolute rounded-[1px] border"
+                        className="pointer-events-none absolute whitespace-nowrap text-xs font-semibold tabular-nums leading-none text-slate-800"
+                        style={{ left: textLeft, top: metrics.barTop }}
+                      >
+                        {percent(progress)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {base && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute rounded-[1px] border"
+                          style={{
+                            background: CHART.baseline,
+                            borderColor: BASELINE_EDGE,
+                            left: base.left,
+                            width: base.width,
+                            top: metrics.baseTop,
+                            height: metrics.baseHeight,
+                          }}
+                        />
+                      )}
+                      {slackLine}
+                      {/* Tarefa: barra clara com o avanço no tom cheio; em conflito, a borda fica tracejada. */}
+                      <button
+                        {...barProps}
+                        className="absolute overflow-hidden rounded-[2px] border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                         style={{
-                          background: CHART.baseline,
-                          borderColor: BASELINE_EDGE,
-                          left: base.left,
-                          width: base.width,
-                          top: metrics.baseTop,
-                          height: metrics.baseHeight,
+                          background: tone.fill,
+                          borderColor: tone.border,
+                          borderStyle,
+                          left: bar.left,
+                          width: bar.width,
+                          top: metrics.barTop,
+                          height: metrics.barHeight,
                         }}
-                      />
-                    )}
-                    <button
-                      {...barProps}
-                      className="absolute overflow-hidden rounded-[2px] border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      style={{
-                        background: PLANNED_LIGHT,
-                        borderColor: CHART.planned,
-                        left: bar.left,
-                        width: bar.width,
-                        top: metrics.barTop,
-                        height: metrics.barHeight,
-                      }}
-                    >
-                      <span className="absolute inset-y-0 left-0" style={{ background: CHART.planned, width: `${progress}%` }} />
-                    </button>
-                    {row.actualStart && ISO.test(row.actualStart) && (
+                      >
+                        <span className="absolute inset-y-0 left-0" style={{ background: tone.progress, width: `${progress}%` }} />
+                      </button>
+                      {row.actualStart && ISO.test(row.actualStart) && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute w-px bg-slate-800/70"
+                          style={{ left: x(row.actualStart), top: metrics.barTop - 2, height: metrics.barHeight + 4 }}
+                        />
+                      )}
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute w-px bg-slate-800/70"
-                        style={{ left: x(row.actualStart), top: metrics.barTop - 2, height: metrics.barHeight + 4 }}
-                      />
-                    )}
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute whitespace-nowrap text-xs tabular-nums leading-none text-slate-600"
-                      style={{ left: textLeft, top: metrics.barTop + (metrics.barHeight - 12) / 2 }}
-                    >
-                      {percent(progress)}
-                    </span>
-                  </>
+                        className="pointer-events-none absolute whitespace-nowrap text-xs tabular-nums leading-none text-slate-600"
+                        style={{ left: textLeft, top: metrics.barTop + (metrics.barHeight - 12) / 2 }}
+                      >
+                        {percent(progress)}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {/* Prazo final: seta para baixo no meio do dia, no topo da linha, verde; vermelha
+                 * quando perdido. Aparece com qualquer combinação de opções, inclusive sem as críticas. */}
+                {deadline !== undefined && (
+                  <span
+                    aria-hidden="true"
+                    title={deadlineLabel(row)}
+                    className="absolute z-10"
+                    style={{
+                      left: deadline - 5,
+                      top: 1,
+                      width: 10,
+                      height: 7,
+                      clipPath: 'polygon(0 0, 100% 0, 50% 100%)',
+                      background: row.deadlineMissed ? STATUS.danger : STATUS.good,
+                    }}
+                  />
                 )}
               </div>
             );
@@ -659,23 +865,26 @@ export function GanttChart({
               width={width}
               height={bodyHeight}
             >
-              {paths.map(path => (
-                <g key={path.id}>
-                  <polyline
-                    points={path.points.map(p => p.join(',')).join(' ')}
-                    fill="none"
-                    stroke={CHART.link}
-                    strokeWidth={1.25}
-                    strokeLinejoin="miter"
-                  />
-                  <polygon
-                    points={arrowHead(path.points)
-                      .map(p => p.join(','))
-                      .join(' ')}
-                    fill={CHART.link}
-                  />
-                </g>
-              ))}
+              {paths.map(path => {
+                const tone = linkTone(path, pathIds);
+                return (
+                  <g key={path.id} opacity={tone.opacity}>
+                    <polyline
+                      points={path.points.map(p => p.join(',')).join(' ')}
+                      fill="none"
+                      stroke={tone.stroke}
+                      strokeWidth={tone.strokeWidth}
+                      strokeLinejoin="miter"
+                    />
+                    <polygon
+                      points={arrowHead(path.points)
+                        .map(p => p.join(','))
+                        .join(' ')}
+                      fill={tone.stroke}
+                    />
+                  </g>
+                );
+              })}
             </svg>
           )}
         </div>

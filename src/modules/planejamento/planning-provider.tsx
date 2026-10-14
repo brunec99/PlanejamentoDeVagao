@@ -24,6 +24,8 @@ const Context = createContext<PlanningState>({ state: 'loading' });
 /** Quem desenvolve o sistema vê todos os módulos; os demais, só o curto prazo (go-live). Vem do
  * layout, que lê a sessão no servidor. Só esconde atalhos: a proteção é do proxy e das rotas. */
 const DeveloperContext = createContext(false);
+/** Permissão de teste: vê o médio prazo sem desenvolver o sistema. */
+const TesterContext = createContext(false);
 
 /** Conferência de versão ao voltar para a aba, se a última resposta boa tem mais que isto. */
 const FOCUS_AFTER = 30_000;
@@ -58,7 +60,15 @@ const parsePlanning = (text: string): Loaded => {
   return { planning, actorId };
 };
 
-export function PlanningProvider({ children, developer = false }: { children: ReactNode; developer?: boolean }) {
+export function PlanningProvider({
+  children,
+  developer = false,
+  tester = false,
+}: {
+  children: ReactNode;
+  developer?: boolean;
+  tester?: boolean;
+}) {
   const [loaded, setLoaded] = useState<Loaded>();
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -250,7 +260,9 @@ export function PlanningProvider({ children, developer = false }: { children: Re
   }, [loaded, error, execute, refresh, refreshing, updatedAt, stale, retry]);
   return (
     <DeveloperContext.Provider value={developer}>
-      <Context.Provider value={value}>{children}</Context.Provider>
+      <TesterContext.Provider value={tester}>
+        <Context.Provider value={value}>{children}</Context.Provider>
+      </TesterContext.Provider>
     </DeveloperContext.Provider>
   );
 }
@@ -259,4 +271,7 @@ export function usePlanning() {
 }
 export function useDeveloper() {
   return useContext(DeveloperContext);
+}
+export function useTester() {
+  return useContext(TesterContext);
 }

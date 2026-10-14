@@ -80,15 +80,27 @@ export interface MediumTermPlan extends RecordBase {
 }
 /** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
  * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
+/** Os oito tipos de restrição do Project, com as siglas do pt-BR (OMBP, OMTP, NIAD, NIDD, NTAD,
+ * NTDD, DIE, DTE). ASAP e ALAP não levam data; os demais exigem `constraintDate`. */
+export type ConstraintType = 'ASAP' | 'ALAP' | 'SNET' | 'SNLT' | 'FNET' | 'FNLT' | 'MSO' | 'MFO';
+export const CONSTRAINT_TYPES: ConstraintType[] = ['ASAP', 'ALAP', 'SNET', 'SNLT', 'FNET', 'FNLT', 'MSO', 'MFO'];
 /** Tarefa do plano do mês. `level` é o recuo, como no MS Project: o pai de uma linha é a linha
  * anterior mais próxima com nível menor. Linha com filhos é resumo — início, término e avanço
  * dela são os dos filhos, calculados na leitura (`rollUp`), e não os valores guardados aqui.
- * `anchorStart` é a restrição "Não iniciar antes de"; `actualStart`/`actualEnd` são o início e o
- * término reais, que prendem as datas como no Project. `duration` de valor zero é marco. */
+ * `constraintType`/`constraintDate` são a restrição do Project (sem tipo = "O mais breve
+ * possível"); `anchorStart` é o formato antigo da restrição "Não iniciar antes de", que o motor
+ * ainda lê (`constraintOf`) e que deixa de ser gravado. `deadline` é o "Prazo final": não
+ * reprograma, só reduz a folga e acende o indicador quando o término passa dele.
+ * `actualStart`/`actualEnd` são o início e o término reais, que prendem as datas como no
+ * Project. `duration` de valor zero é marco. */
 export interface PlanTask extends RecordBase {
   version?: number;
   duration?: TaskDuration;
+  /** @deprecated Restrição NIAD gravada antes de 13/10/2026; use `constraintType`/`constraintDate`. */
   anchorStart?: string;
+  constraintType?: ConstraintType;
+  constraintDate?: string;
+  deadline?: string;
   sourceTaskId?: Id;
   planId: Id;
   name: string;
@@ -307,6 +319,8 @@ export interface User extends RecordBase {
   name: string;
   role: 'viewer' | 'planner' | 'manager' | 'admin';
   workIds: Id[];
+  /** Permissão de teste: vê o médio prazo (em desenvolvimento) sem ser admin nem desenvolvedor. */
+  testAccess?: boolean;
 }
 export interface HistoryEvent {
   id: Id;

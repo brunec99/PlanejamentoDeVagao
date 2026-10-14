@@ -28,10 +28,53 @@ export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Comm
   'update_team',
   'delete_team',
   'set_role',
+  'set_test_access',
   'grant_access',
   'revoke_access',
   'create_work',
 ]);
+
+/** Permissão de teste (14/10/2026): quem está testando o curto prazo pode receber, pelo admin, acesso
+ * ao médio prazo sem virar admin nem entrar em DEVELOPER_EMAILS. Vale só para a aba 3, a API que ela
+ * lê e os comandos dela; o resto dos módulos em desenvolvimento continua com quem desenvolve. */
+export const TESTER_SECTIONS: ReadonlySet<string> = new Set(['medio-prazo']);
+export const TESTER_API_PREFIXES = ['/api/history'] as const;
+export const TESTER_COMMANDS: ReadonlySet<Command['type']> = new Set<Command['type']>([
+  'create_plan',
+  'delete_plan',
+  'freeze_plan_baseline',
+  'save_plan_revision',
+  'create_plan_task',
+  'update_plan_task',
+  'indent_plan_task',
+  'outdent_plan_task',
+  'delete_plan_task',
+  'set_plan_task_note',
+  'link_plan_tasks',
+  'unlink_plan_tasks',
+  'replace_plan_predecessors',
+]);
+
+export interface ModuleAccess {
+  developer: boolean;
+  tester: boolean;
+}
+
+/** Quem pode abrir uma seção restrita: quem desenvolve, todas; quem tem permissão de teste, o médio prazo. */
+export function hasSectionAccess(section: string, access: ModuleAccess): boolean {
+  return access.developer || (access.tester && TESTER_SECTIONS.has(section));
+}
+
+export function isTesterApi(pathname: string): boolean {
+  return TESTER_API_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/** O comando pode ser aplicado por quem tem este acesso (os papéis continuam conferidos em `applyCommand`). */
+export function isCommandAllowed(type: unknown, access: ModuleAccess): boolean {
+  if (access.developer) return true;
+  if (isCommandAllowedForNonDeveloper(type)) return true;
+  return access.tester && typeof type === 'string' && TESTER_COMMANDS.has(type as Command['type']);
+}
 
 /** Lista de `DEVELOPER_EMAILS` (vírgulas, sem diferença de maiúsculas); vazia ou ausente, o admin inicial. */
 export function developerEmails(envValue: string | undefined): string[] {
@@ -64,6 +107,12 @@ const RESTRICTED_PAGE = new RegExp(`^/obras/([^/]+)/(?:${RESTRICTED_SECTIONS.joi
 export function restrictedPageRedirect(pathname: string): string | null {
   const workId = pathname.match(RESTRICTED_PAGE)?.[1];
   return workId ? `/obras/${workId}/curto-prazo` : null;
+}
+
+/** A seção restrita de um endereço de página da obra ("medio-prazo"), ou null. */
+export function restrictedSectionOf(pathname: string): string | null {
+  const match = pathname.match(RESTRICTED_PAGE);
+  return match ? pathname.slice(match[0].indexOf(match[1]) + match[1].length + 1).split('/')[0] : null;
 }
 
 export function isRestrictedApi(pathname: string): boolean {

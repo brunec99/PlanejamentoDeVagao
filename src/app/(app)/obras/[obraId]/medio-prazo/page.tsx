@@ -63,9 +63,10 @@ export default async function Page({
   searchParams: Promise<{ secao?: string }>;
 }) {
   const { obraId } = await params;
-  // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
-  const { developer } = await getRouteAccess();
-  if (!developer) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve nem tem permissão de teste; a
+  // página confere de novo.
+  const { developer, tester } = await getRouteAccess();
+  if (!developer && !tester) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { secao } = await searchParams;
   const section: Section = isSection(secao) ? secao : 'cronograma';
   const base = workPath(obraId, 'medio-prazo');

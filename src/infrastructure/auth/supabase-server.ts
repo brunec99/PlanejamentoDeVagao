@@ -39,30 +39,44 @@ const loadProfile = cache(async (id: string): Promise<User | null> => {
   const { data, error } = await getServiceClient().from('profiles').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(`Falha ao carregar perfil: ${error.message}`);
   if (!data) return null;
-  return { id: data.id, createdAt: data.created_at, updatedAt: data.updated_at, name: data.name, role: data.role, workIds: data.work_ids };
+  return {
+    id: data.id,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    name: data.name,
+    role: data.role,
+    workIds: data.work_ids,
+    testAccess: data.test_access === true,
+  };
 });
 
-export type RouteAccess = { profile: User | null; developer: boolean };
+export type RouteAccess = { profile: User | null; developer: boolean; tester: boolean };
 
-/** Perfil de quem está logado e se essa pessoa desenvolve o sistema (`DEVELOPER_EMAILS`), com uma só
- * leitura da sessão por requisição. O acesso local sem login conta como desenvolvedor. */
+/** Perfil de quem está logado, se essa pessoa desenvolve o sistema (`DEVELOPER_EMAILS`) e se tem a
+ * permissão de teste do médio prazo, com uma só leitura da sessão por requisição. O acesso local
+ * sem login conta como desenvolvedor. */
 export const getRouteAccess = cache(async (): Promise<RouteAccess> => {
   const bypass = devBypassProfileId();
-  if (bypass) return { profile: await loadProfile(bypass), developer: true };
+  if (bypass) return { profile: await loadProfile(bypass), developer: true, tester: false };
   const authUser = await getAuthUser();
-  if (!authUser) return { profile: null, developer: false };
+  if (!authUser) return { profile: null, developer: false, tester: false };
   const profile = await loadProfile(authUser.id);
-  return { profile, developer: hasDeveloperAccess({ email: authUser.email, role: profile?.role }, process.env.DEVELOPER_EMAILS) };
+  return {
+    profile,
+    developer: hasDeveloperAccess({ email: authUser.email, role: profile?.role }, process.env.DEVELOPER_EMAILS),
+    tester: profile?.testAccess === true,
+  };
 });
 
 /** Rotas dos módulos em desenvolvimento (`RESTRICTED_API_PREFIXES`): o proxy já barra quem não
  * desenvolve, e cada handler repete a conferência na mesma leitura de sessão que lhe dá o perfil,
- * para a proteção não depender de uma camada só. `error` é a resposta 403 pronta. */
-export async function requireDeveloperAccess(): Promise<
-  { access: RouteAccess; error?: undefined } | { access?: undefined; error: NextResponse }
-> {
+ * para a proteção não depender de uma camada só. `error` é a resposta 403 pronta. Com `tester`, a
+ * rota também serve a quem tem permissão de teste (o histórico, que o médio prazo lê). */
+export async function requireDeveloperAccess(
+  options: { tester?: boolean } = {},
+): Promise<{ access: RouteAccess; error?: undefined } | { access?: undefined; error: NextResponse }> {
   const access = await getRouteAccess();
-  if (!access.developer)
+  if (!access.developer && !(options.tester && access.tester))
     return { error: NextResponse.json({ error: RESTRICTED_MODULE_MESSAGE }, { status: 403, headers: { 'Cache-Control': 'no-store' } }) };
   return { access };
 }

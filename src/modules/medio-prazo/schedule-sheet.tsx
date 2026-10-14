@@ -9,10 +9,12 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  Download,
   Flag,
   IndentDecrease,
   IndentIncrease,
   Link2,
+  Link2Off,
   ListPlus,
   Lock,
   LockOpen,
@@ -21,28 +23,44 @@ import {
   StickyNote,
   Table2,
   Trash2,
+  TriangleAlert,
   Undo2,
   Unlink2,
 } from 'lucide-react';
-import type { MediumTermPlan, PlanTask, PlanDependency, PlanningData, User } from '@/domain/entities';
 import {
+  CONSTRAINT_TYPES,
+  type ConstraintType,
+  type MediumTermPlan,
+  type PlanTask,
+  type PlanDependency,
+  type PlanningData,
+  type User,
+} from '@/domain/entities';
+import {
+  CONSTRAINT_ABBREVIATIONS,
+  CONSTRAINT_LABELS,
   DEFAULT_CALENDAR,
+  analyzeSchedule,
+  constraintFlexibility,
+  constraintNeedsDate,
+  constraintOf,
   countedDays,
   endFor,
   formatDuration,
-  isWorking,
   parseDuration,
   planSnapshot,
   planWindow,
   scheduleTasks,
-  shift,
   temporalTarget,
   withActualEnd,
   withActualStart,
   withProgress,
+  type ScheduleAnalysis,
   type TaskDuration,
+  type TaskSchedule,
   type WorkCalendar,
 } from '@/domain/plan-schedule';
+import { buildMspdi } from '@/domain/mspdi';
 import { parseLinks, formatLink, rollUpPlan } from '@/domain/rules';
 import { validateDate } from '@/domain/validation';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
@@ -69,10 +87,18 @@ type Col =
   | 'actualEnd'
   | 'start'
   | 'end'
+  | 'lateStart'
+  | 'lateFinish'
+  | 'totalSlack'
+  | 'freeSlack'
+  | 'critical'
   | 'baseStart'
   | 'baseEnd'
   | 'links'
   | 'team'
+  | 'constraintType'
+  | 'constraintDate'
+  | 'deadline'
   | 'notes'
   | 'elapsed'
   | 'target'
@@ -89,25 +115,136 @@ const columns: { key: Col; label: string; width: number; editable?: boolean; rig
   { key: 'actualEnd', label: 'Término real', width: 104, editable: true },
   { key: 'start', label: 'Início', width: 104, editable: true },
   { key: 'end', label: 'Término', width: 104, editable: true },
+  { key: 'lateStart', label: 'Início tardio', width: 104 },
+  { key: 'lateFinish', label: 'Término tardio', width: 104 },
+  { key: 'totalSlack', label: 'Folga total', width: 84, right: true },
+  { key: 'freeSlack', label: 'Folga livre', width: 84, right: true },
+  { key: 'critical', label: 'Crítica', width: 64 },
   { key: 'baseStart', label: 'Início da linha de base', width: 104 },
   { key: 'baseEnd', label: 'Término da linha de base', width: 104 },
   { key: 'links', label: 'Predecessoras', width: 120, editable: true },
   { key: 'team', label: 'Nomes dos recursos', width: 170, editable: true },
+  { key: 'constraintType', label: 'Tipo de restrição', width: 150, editable: true },
+  { key: 'constraintDate', label: 'Data da restrição', width: 104, editable: true },
+  { key: 'deadline', label: 'Prazo final', width: 104, editable: true },
   { key: 'notes', label: 'Anotações', width: 220, editable: true },
   { key: 'elapsed', label: 'Decorrido / total', width: 110 },
   { key: 'target', label: '% alvo', width: 70, right: true },
   { key: 'gap', label: 'Desvio (pp)', width: 84, right: true },
   { key: 'variance', label: 'Variação (dias)', width: 90, right: true },
 ];
-const DEFAULT_HIDDEN: Col[] = ['notes', 'elapsed', 'target', 'gap', 'variance'];
-const LEAF_ONLY: Col[] = ['duration', 'start', 'end', 'progress', 'links', 'actualStart', 'actualEnd'];
+// As colunas do motor (tardias, folgas, crítica) e as de restrição ficam ocultas por padrão: a tabela
+// padrão é a do Gantt de acompanhamento do Project; o seletor "Colunas" mostra as demais.
+const DEFAULT_HIDDEN: Col[] = [
+  'lateStart',
+  'lateFinish',
+  'totalSlack',
+  'freeSlack',
+  'critical',
+  'constraintType',
+  'constraintDate',
+  'deadline',
+  'notes',
+  'elapsed',
+  'target',
+  'gap',
+  'variance',
+];
+const LEAF_ONLY: Col[] = [
+  'duration',
+  'start',
+  'end',
+  'progress',
+  'links',
+  'actualStart',
+  'actualEnd',
+  'constraintType',
+  'constraintDate',
+  'deadline',
+];
+/** Colunas editadas num `<select>`, não num `<input>`: a tecla digitada não vira semente. */
+const SELECT_COLS: Col[] = ['team', 'constraintType'];
+const DATE_COLS: Col[] = ['actualStart', 'actualEnd', 'constraintDate', 'deadline'];
+type Column = (typeof columns)[number];
+const COLUMN = Object.fromEntries(columns.map(c => [c.key, c])) as Record<Col, Column>;
+/** Ordem padrão das colunas. Id e Indicadores ficam presas no começo, como a coluna de identificação
+ * do Project; as demais, inclusive o nome, vão para onde a pessoa arrastar o cabeçalho. */
+const DEFAULT_ORDER: Col[] = columns.map(c => c.key);
+export const FIXED_COLS: Col[] = ['id', 'ind'];
+/** Ordem lida das preferências: chaves desconhecidas caem, repetidas valem uma vez, as presas voltam
+ * ao começo e as que faltam entram no fim, na ordem padrão. */
+export function normalizeOrder(raw: unknown): Col[] {
+  const seen = new Set<Col>(FIXED_COLS);
+  const kept: Col[] = [];
+  for (const k of Array.isArray(raw) ? raw : [])
+    if (typeof k === 'string' && k in COLUMN && !seen.has(k as Col)) {
+      seen.add(k as Col);
+      kept.push(k as Col);
+    }
+  return [...FIXED_COLS, ...kept, ...DEFAULT_ORDER.filter(k => !seen.has(k))];
+}
+/** Move `key` para antes de `target` (ou depois, com `after`). Coluna presa não se move; soltar sobre
+ * uma presa põe a coluna arrastada logo depois delas. Sem mudança, devolve o mesmo array. */
+export function moveColumn(order: Col[], key: Col, target: Col, after: boolean): Col[] {
+  if (key === target || FIXED_COLS.includes(key) || !order.includes(key) || !order.includes(target)) return order;
+  const rest = order.filter(k => k !== key);
+  const at = FIXED_COLS.includes(target) ? rest.filter(k => FIXED_COLS.includes(k)).length : rest.indexOf(target) + (after ? 1 : 0);
+  const next = [...rest.slice(0, at), key, ...rest.slice(at)];
+  return next.every((k, i) => k === order[i]) ? order : next;
+}
+/** Um resumo não carrega data real, restrição (nova ou antiga) nem prazo final; os vínculos saem fora daqui. */
+function asSummary(t: PlanTask): PlanTask {
+  const summary = { ...t };
+  for (const k of ['actualStart', 'actualEnd', 'deadline', 'anchorStart', 'constraintType', 'constraintDate'] as const) delete summary[k];
+  return summary;
+}
+/** Recua (`delta` 1) ou diminui o recuo (`-1`) do bloco que começa na linha `from` e vai até o fim da
+ * subárvore da linha `to` (índices em `tasks`): as subtarefas, visíveis ou recolhidas, acompanham e a
+ * estrutura relativa se mantém. Recuar exige que a primeira linha possa virar subitem da de cima;
+ * diminuir o recuo, que nenhuma linha do bloco esteja no nível 0. Quem vira resumo (a linha de cima,
+ * ao recuar; a última do bloco, ao diminuir o recuo com uma irmã logo abaixo) perde vínculos, datas
+ * reais, restrição e prazo, como na linha única. Não reagenda: quem chama faz isso. Com erro, devolve
+ * a frase e as entradas intactas. */
+export function shiftLevels(
+  tasks: PlanTask[],
+  from: number,
+  to: number,
+  delta: 1 | -1,
+  links: PlanDependency[] = [],
+): { tasks: PlanTask[]; links: PlanDependency[]; error?: string } {
+  if (from < 0 || to < from || to >= tasks.length) return { tasks, links, error: 'Selecione as linhas para recuar.' };
+  let end = to + 1;
+  while (end < tasks.length && tasks[end].level > tasks[to].level) end++;
+  if (delta === 1 && (from === 0 || tasks[from].level > tasks[from - 1].level))
+    return { tasks, links, error: 'A primeira linha selecionada não pode recuar.' };
+  if (delta === -1 && tasks.slice(from, end).some(t => t.level === 0)) return { tasks, links, error: 'Há linha no nível 0 na seleção.' };
+  const next = tasks.map((t, i) => (i >= from && i < end ? { ...t, level: t.level + delta } : t));
+  const promoted = delta === 1 ? (next[from].level > next[from - 1].level ? from - 1 : -1) : next[end]?.level > next[to].level ? to : -1;
+  if (promoted < 0) return { tasks: next, links };
+  next[promoted] = asSummary(next[promoted]);
+  const id = next[promoted].id;
+  return { tasks: next, links: links.filter(l => l.predecessorId !== id && l.successorId !== id) };
+}
+/** Linhas visíveis sem filtro: ficam de fora os descendentes de resumo recolhido. */
+function unfoldedRows(tasks: PlanTask[], folded: string[]): PlanTask[] {
+  const parents: PlanTask[] = [];
+  return tasks.filter(t => {
+    while (parents.length && parents.at(-1)!.level >= t.level) parents.pop();
+    const shown = !parents.some(p => folded.includes(p.id));
+    parents.push(t);
+    return shown;
+  });
+}
 const PLAN_ROW = '__plano__';
 const fieldLabels: Record<string, string> = {
   name: 'Nome',
   plannedStart: 'Início',
   plannedEnd: 'Término',
   duration: 'Duração',
-  anchorStart: 'Não iniciar antes de',
+  anchorStart: 'Não iniciar antes de (antigo)',
+  constraintType: 'Tipo de restrição',
+  constraintDate: 'Data da restrição',
+  deadline: 'Prazo final',
   actualStart: 'Início real',
   actualEnd: 'Término real',
   teamId: 'Recurso',
@@ -139,6 +276,50 @@ function dateInput(raw: string) {
   validateDate(d);
   return d;
 }
+/** Tipo de restrição como se cola do Project: o nome em português ("Não iniciar antes de"), a sigla
+ * (NIAD) ou o código interno (SNET), sem distinguir acento nem caixa. Vazio é "O mais breve possível". */
+function constraintInput(raw: string): ConstraintType {
+  const key = normalize(raw).replace(/\s+/g, ' ').trim();
+  if (!key) return 'ASAP';
+  const found = CONSTRAINT_TYPES.find(c => [c, CONSTRAINT_ABBREVIATIONS[c], CONSTRAINT_LABELS[c]].some(s => normalize(s) === key));
+  if (!found) throw new Error('Tipo de restrição: use o nome do Project ou a sigla (NIAD, NIDD, NTAD, NTDD, DIE, DTE, OMBP, OMTP).');
+  return found;
+}
+const startConstraint = (type: ConstraintType) => type === 'SNET' || type === 'SNLT' || type === 'MSO';
+/** Folga como o Project escreve: "3 dias", "1 dia", "-2 dias". */
+const slackText = (n?: number) => (n === undefined ? '' : `${n} ${Math.abs(n) === 1 ? 'dia' : 'dias'}`);
+const constraintText = (c: { type: ConstraintType; date?: string }) =>
+  `${CONSTRAINT_LABELS[c.type]}${c.date && constraintNeedsDate(c.type) ? ` ${projectDate(c.date)}` : ''}`;
+/** Alcançáveis a partir de `from` seguindo `step`, sem o próprio `from` (busca em largura). */
+function reachable(from: string, step: (id: string) => string[]): Set<string> {
+  const seen = new Set<string>();
+  const queue = [from];
+  for (let i = 0; i < queue.length; i++)
+    for (const next of step(queue[i]))
+      if (next !== from && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+  return seen;
+}
+/** "Caminho da tarefa" do Project 2013, a partir de uma linha: predecessoras (subindo por todos os
+ * vínculos de entrada), predecessoras determinantes (subindo só por quem de fato segura cada data),
+ * sucessoras (descendo por todos os de saída) e sucessoras determinadas (descendo só por vínculos
+ * em que a origem é determinante da sucessora). */
+function taskPath(from: string, links: PlanDependency[], info: Map<string, TaskSchedule>) {
+  const incoming = new Map<string, string[]>(),
+    outgoing = new Map<string, string[]>();
+  for (const l of links) {
+    incoming.set(l.successorId, [...(incoming.get(l.successorId) ?? []), l.predecessorId]);
+    outgoing.set(l.predecessorId, [...(outgoing.get(l.predecessorId) ?? []), l.successorId]);
+  }
+  return {
+    predecessors: reachable(from, id => incoming.get(id) ?? []),
+    driving: reachable(from, id => info.get(id)?.driverIds ?? []),
+    successors: reachable(from, id => outgoing.get(id) ?? []),
+    driven: reachable(from, id => (outgoing.get(id) ?? []).filter(s => info.get(s)?.driverIds.includes(id))),
+  };
+}
 const stored = (data: PlanningData, plan: MediumTermPlan): Draft => ({
   tasks: data.planTasks.filter(t => t.planId === plan.id).sort((a, b) => a.order - b.order),
   links: data.planDependencies.filter(l => data.planTasks.some(t => t.planId === plan.id && t.id === l.successorId)),
@@ -146,12 +327,20 @@ const stored = (data: PlanningData, plan: MediumTermPlan): Draft => ({
 });
 /** O plano como a regra atual o calcula. Plano gravado antes das datas reais tem % sem início real, e
  * datas que o "Não iniciar antes de" agora segura; os dois são acertados aqui e a tela avisa quantas
- * linhas mudaram, que vão ao banco no próximo "Revisar e salvar". */
+ * linhas mudaram, que vão ao banco no próximo "Revisar e salvar". O `anchorStart` antigo vira
+ * "Não iniciar antes de" em `constraintType`/`constraintDate` (o mapper já faz isso ao ler; aqui é a
+ * defesa para rascunho antigo) e o resumo não carrega restrição. */
 function initial(data: PlanningData, plan: MediumTermPlan): Draft {
   const draft = stored(data, plan);
   const summaries = new Set(draft.tasks.filter((t, i) => draft.tasks[i + 1]?.level > t.level).map(t => t.id));
+  const converted = draft.tasks.map(t => {
+    if (!t.anchorStart) return t;
+    const { anchorStart, ...rest } = t;
+    if (summaries.has(t.id) || rest.constraintType) return rest;
+    return { ...rest, constraintType: 'SNET' as const, constraintDate: anchorStart };
+  });
   try {
-    const tasks = draft.tasks.map(t =>
+    const tasks = converted.map(t =>
       !summaries.has(t.id) && t.progress > 0 && !t.actualStart ? withProgress(t, t.progress, draft.calendar) : t,
     );
     return { ...draft, tasks: scheduleTasks(tasks, draft.links, draft.calendar) };
@@ -296,10 +485,18 @@ export function Sheet({
     [reference, setReference] = useState(today);
   const [folded, setFolded] = useState<string[]>([]),
     [hidden, setHidden] = useState<Col[]>(DEFAULT_HIDDEN),
+    [order, setOrder] = useState<Col[]>(DEFAULT_ORDER),
     [widths, setWidths] = useState<Record<string, number>>({});
+  // Arrasto do cabeçalho: a coluna em movimento e a coluna alvo, com o lado em que será solta.
+  const [dragCol, setDragCol] = useState<Col | null>(null),
+    [drop, setDrop] = useState<{ key: Col; after: boolean } | null>(null);
   const [presentation, setPresentation] = useState<Presentation>('split'),
     [zoom, setZoom] = useState<GanttZoom>('semana'),
     [tableWidth, setTableWidth] = useState(720);
+  // "Exibir" do Gantt: o caminho crítico vem ligado, como no Gantt de acompanhamento do Project.
+  const [showCritical, setShowCritical] = useState(true),
+    [showSlack, setShowSlack] = useState(false),
+    [showPath, setShowPath] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [selected, setSelected] = useState<{ row: number; col: number }>({ row: 0, col: 3 }),
     [anchor, setAnchor] = useState<{ row: number; col: number }>({ row: 0, col: 3 });
@@ -332,6 +529,18 @@ export function Sheet({
   };
   const win = useMemo(() => planWindow(plan.month), [plan.month]);
   const roll = useMemo(() => rollUpPlan(draft.tasks), [draft.tasks]);
+  // Passada inversa, folgas e caminho crítico sobre o rascunho já agendado: as datas são as mesmas do
+  // `scheduleTasks`; o que se lê daqui são as tardias, as folgas e quem segura cada data.
+  const analysis = useMemo<ScheduleAnalysis>(() => {
+    try {
+      return analyzeSchedule(draft.tasks, draft.links, draft.calendar);
+    } catch {
+      return { tasks: draft.tasks, info: new Map() };
+    }
+  }, [draft]);
+  const info = (id: string) => analysis.info.get(id);
+  const criticalCount = draft.tasks.filter(t => !roll.get(t.id)?.summary && info(t.id)?.critical).length;
+  const anyCritical = criticalCount > 0;
   const changed = draft.tasks.filter(
     t =>
       JSON.stringify(t) !== JSON.stringify(original.tasks.find(o => o.id === t.id)) ||
@@ -341,20 +550,12 @@ export function Sheet({
   const removed = original.tasks.filter(t => !draft.tasks.some(n => n.id === t.id));
   const baselineTasks = useMemo(() => data.planTasks.filter(t => t.planId === baseId), [data.planTasks, baseId]);
   const baselineRoll = useMemo(() => rollUpPlan(baselineTasks), [baselineTasks]);
-  const visibleCols = columns.filter(c => !hidden.includes(c.key) || c.key === 'name');
+  const visibleCols = order.map(k => COLUMN[k]).filter(c => !hidden.includes(c.key) || c.key === 'name');
   const filtering = !!query || status !== 'all' || !!team;
-  const predecessorsOf = (id: string) => draft.links.filter(l => l.successorId === id);
   const outOfWindow = (id: string) => {
     const v = roll.get(id)!;
     return !v.summary && (v.plannedEnd < win.start || v.plannedStart > win.end);
   };
-  // Restrição "Não iniciar antes de" só aparece quando é ela, e não a rede, que segura o início.
-  const constrained = (t: PlanTask) =>
-    !t.actualStart &&
-    !!t.anchorStart &&
-    predecessorsOf(t.id).length > 0 &&
-    (t.plannedStart === t.anchorStart ||
-      (!isWorking(t.anchorStart, draft.calendar) && t.plannedStart === shift(t.anchorStart, 1, true, draft.calendar)));
   const included = new Set<string>();
   const parents: PlanTask[] = [];
   draft.tasks.forEach(t => {
@@ -373,7 +574,10 @@ export function Sheet({
         (status === 'late' && v.progress < 100 && v.plannedEnd < reference) ||
         (status === 'changed' && changed.some(c => c.id === t.id)) ||
         (status === 'notes' && !!t.notes) ||
-        (status === 'window' && outOfWindow(t.id)));
+        (status === 'window' && outOfWindow(t.id)) ||
+        (status === 'critical' && !!info(t.id)?.critical) ||
+        (status === 'conflict' && !!info(t.id)?.conflict) ||
+        (status === 'deadline' && !!info(t.id)?.deadlineMissed));
     if (filtering ? match : !parents.some(p => folded.includes(p.id))) {
       included.add(t.id);
       if (filtering) parents.forEach(p => included.add(p.id));
@@ -428,6 +632,7 @@ export function Sheet({
       const p = JSON.parse(localStorage.getItem(prefKey) ?? '{}');
       setFolded(Array.isArray(p.folded) ? p.folded : []);
       if (Array.isArray(p.hidden)) setHidden(p.hidden.filter((k: string) => columns.some(c => c.key === k)));
+      setOrder(normalizeOrder(p.order));
       setWidths(
         p.widths && typeof p.widths === 'object'
           ? Object.fromEntries(
@@ -440,15 +645,21 @@ export function Sheet({
       if (['split', 'table', 'chart'].includes(p.presentation)) setPresentation(p.presentation);
       if (['dia', 'semana', 'mes'].includes(p.zoom)) setZoom(p.zoom);
       if (typeof p.tableWidth === 'number' && p.tableWidth >= 240 && p.tableWidth <= 2400) setTableWidth(p.tableWidth);
+      if (typeof p.showCritical === 'boolean') setShowCritical(p.showCritical);
+      if (typeof p.showSlack === 'boolean') setShowSlack(p.showSlack);
+      if (typeof p.showPath === 'boolean') setShowPath(p.showPath);
     } catch {}
     setPreferencesLoaded(true);
   }, [prefKey]);
   useEffect(() => {
     if (preferencesLoaded)
       try {
-        localStorage.setItem(prefKey, JSON.stringify({ folded, hidden, widths, presentation, zoom, tableWidth }));
+        localStorage.setItem(
+          prefKey,
+          JSON.stringify({ folded, hidden, order, widths, presentation, zoom, tableWidth, showCritical, showSlack, showPath }),
+        );
       } catch {}
-  }, [prefKey, folded, hidden, widths, presentation, zoom, tableWidth, preferencesLoaded]);
+  }, [prefKey, folded, hidden, order, widths, presentation, zoom, tableWidth, showCritical, showSlack, showPath, preferencesLoaded]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (dirty || editor) {
@@ -548,6 +759,17 @@ export function Sheet({
     if (!extend) setAnchor(next);
     requestAnimationFrame(() => gridRef.current?.querySelector<HTMLElement>(`[data-pos="${next.row}:${next.col}"]`)?.focus());
   }
+  /** Aplica a ordem nova mantendo a seleção na mesma coluna: a seleção guarda posições em `visibleCols`. */
+  function reorder(next: Col[]) {
+    if (next === order) return;
+    const shown = (o: Col[]) => o.filter(k => !hidden.includes(k) || k === 'name');
+    const before = shown(order),
+      after = shown(next);
+    const remap = (col: number) => Math.max(0, after.indexOf(before[col]));
+    setOrder(next);
+    setSelected(s => ({ ...s, col: remap(s.col) }));
+    setAnchor(a => ({ ...a, col: remap(a.col) }));
+  }
   function durationText(t: PlanTask) {
     const v = roll.get(t.id)!;
     if (v.summary) return formatDuration({ value: countedDays(v.plannedStart, v.plannedEnd, true, draft.calendar), unit: 'd' });
@@ -600,6 +822,25 @@ export function Sheet({
         return projectDate(bv?.plannedEnd);
       case 'variance':
         return bv ? String(Math.round((Date.parse(v.plannedEnd) - Date.parse(bv.plannedEnd)) / 86400000)) : '';
+      case 'constraintType':
+        return v.summary ? '' : CONSTRAINT_LABELS[constraintOf(t).type];
+      case 'constraintDate': {
+        if (v.summary) return '';
+        const c = constraintOf(t);
+        return constraintNeedsDate(c.type) ? projectDate(c.date) : 'ND';
+      }
+      case 'deadline':
+        return v.summary ? '' : projectDate(t.deadline);
+      case 'lateStart':
+        return projectDate(info(t.id)?.lateStart);
+      case 'lateFinish':
+        return projectDate(info(t.id)?.lateFinish);
+      case 'totalSlack':
+        return slackText(info(t.id)?.totalSlack);
+      case 'freeSlack':
+        return slackText(info(t.id)?.freeSlack);
+      case 'critical':
+        return info(t.id) ? (info(t.id)!.critical ? 'Sim' : 'Não') : '';
     }
   }
   function planRaw(key: Col): string {
@@ -625,6 +866,13 @@ export function Sheet({
         return baseId ? projectDate(planRow.baseStart) : 'ND';
       case 'baseEnd':
         return baseId ? projectDate(planRow.baseEnd) : 'ND';
+      case 'lateFinish':
+        return projectDate(analysis.projectFinish);
+      case 'totalSlack':
+      case 'freeSlack':
+        return analysis.projectFinish ? slackText(0) : '';
+      case 'critical':
+        return analysis.projectFinish ? (anyCritical ? 'Sim' : 'Não') : '';
       default:
         return '';
     }
@@ -632,9 +880,24 @@ export function Sheet({
   function editable(t: PlanTask, key: Col) {
     return canEdit && !!columns.find(c => c.key === key)?.editable && !(roll.get(t.id)?.summary && LEAF_ONLY.includes(key));
   }
+  /** Grava a restrição no formato novo e apaga o `anchorStart` antigo. "O mais breve possível" é a
+   * ausência de restrição, por isso fica sem campo; "O mais tarde possível" não leva data. */
+  function setConstraint(t: PlanTask, type: ConstraintType, date?: string) {
+    delete t.anchorStart;
+    delete t.constraintType;
+    delete t.constraintDate;
+    if (type === 'ASAP') return;
+    t.constraintType = type;
+    if (constraintNeedsDate(type)) t.constraintDate = date;
+  }
   function applyCells(entries: { id: string; key: Col; text: string }[]) {
+    stage(applyCellsTo(draft, entries));
+  }
+  /** As células aplicadas sobre `base`, já reagendadas, sem mexer no rascunho: quem chama decide se
+   * grava direto ou se encadeia outra operação (Enter na última linha edita e insere de uma vez). */
+  function applyCellsTo(base: Draft, entries: { id: string; key: Col; text: string }[]): Draft {
     if (entries.length > 1000) throw new Error('Limite de 1000 células por operação.');
-    const next = structuredClone(draft);
+    const next = structuredClone(base);
     for (const entry of entries) {
       const at = next.tasks.findIndex(t => t.id === entry.id);
       const t = next.tasks[at];
@@ -681,12 +944,13 @@ export function Sheet({
           // Apagar o início de uma tarefa com predecessoras devolve a data à rede, como "o mais breve possível".
           if (blank(entry.text)) {
             if (!next.links.some(l => l.successorId === t.id)) throw new Error('Informe o início.');
-            delete t.anchorStart;
+            setConstraint(t, 'ASAP');
             break;
           }
+          // Como no Project: digitar o início cria "Não iniciar antes de" nessa data.
           const start = dateInput(entry.text);
           t.duration ??= { value: countedDays(t.plannedStart, t.plannedEnd, false, next.calendar), unit: 'dd' };
-          t.anchorStart = start;
+          setConstraint(t, 'SNET', start);
           t.plannedStart = start;
           t.plannedEnd = endFor(start, t.duration, next.calendar).end;
           break;
@@ -698,8 +962,31 @@ export function Sheet({
           t.duration = { value: countedDays(t.plannedStart, end, business, next.calendar), unit: business ? 'd' : 'dd' };
           if (!t.duration.value) throw new Error('Período sem dia de trabalho.');
           t.plannedEnd = end;
+          // Como no Project: digitar o término cria "Não terminar antes de" nessa data.
+          setConstraint(t, 'FNET', end);
           break;
         }
+        case 'constraintType': {
+          const type = constraintInput(entry.text);
+          // Tipo com data numa tarefa sem data: o Project usa o início (ou o término) atual da tarefa.
+          const date = constraintOf(t).date ?? (startConstraint(type) ? t.plannedStart : t.plannedEnd);
+          setConstraint(t, type, date);
+          break;
+        }
+        case 'constraintDate': {
+          if (blank(entry.text)) {
+            setConstraint(t, 'ASAP');
+            break;
+          }
+          // Data numa tarefa sem restrição vira "Não iniciar antes de", como no Project.
+          const current = constraintOf(t).type;
+          setConstraint(t, constraintNeedsDate(current) ? current : 'SNET', dateInput(entry.text));
+          break;
+        }
+        case 'deadline':
+          if (blank(entry.text)) delete t.deadline;
+          else t.deadline = dateInput(entry.text);
+          break;
         case 'links': {
           const parsed = parseLinks(entry.text);
           if (parsed.invalid.length) throw new Error(`Predecessora inválida: ${parsed.invalid.join(', ')}`);
@@ -723,7 +1010,45 @@ export function Sheet({
       }
     }
     next.tasks = scheduleTasks(next.tasks, next.links, next.calendar);
+    return next;
+  }
+  /** Tarefa nova logo abaixo da linha `at` (no fim, sem linha). Fica no nível dela; abaixo de um
+   * resumo vira a primeira subtarefa, senão as subtarefas dele passariam para a linha nova. Nasce
+   * "O mais breve possível", com 1 dia, na data da linha de cima, e já reagendada. */
+  function insertBelow(base: Draft, at: number): { next: Draft; task: PlanTask; unfold?: string } {
+    const next = structuredClone(base);
+    const current = at >= 0 ? next.tasks[at] : undefined;
+    const summary = !!current && next.tasks[at + 1]?.level > current.level;
+    const start = current ? (roll.get(current.id)?.plannedStart ?? current.plannedStart) : win.start;
+    const task: PlanTask = {
+      id: crypto.randomUUID(),
+      ...stamp(),
+      planId: plan.id,
+      name: 'Nova tarefa',
+      plannedStart: start,
+      plannedEnd: start,
+      duration: { value: 1, unit: 'd' },
+      progress: 0,
+      order: 0,
+      level: current ? current.level + (summary ? 1 : 0) : 0,
+    };
+    next.tasks.splice(current ? at + 1 : next.tasks.length, 0, task);
+    next.tasks.forEach((t, i) => (t.order = i + 1));
+    next.tasks = scheduleTasks(next.tasks, next.links, next.calendar);
+    return { next, task, unfold: summary && current && folded.includes(current.id) ? current.id : undefined };
+  }
+  /** Grava o rascunho com a linha nova, seleciona-a e abre o nome para digitar, na coluna do nome. */
+  function stageInserted({ next, task, unfold }: ReturnType<typeof insertBelow>, row: number) {
     stage(next);
+    if (unfold) setFolded(f => f.filter(id => id !== unfold));
+    const col = Math.max(
+      0,
+      visibleCols.findIndex(c => c.key === 'name'),
+    );
+    setSelected({ row, col });
+    setAnchor({ row, col });
+    committedEditor.current = null;
+    setEditor({ id: task.id, key: 'name', text: task.name });
   }
   function commit() {
     if (!editor || committedEditor.current === editor) return true;
@@ -742,12 +1067,49 @@ export function Sheet({
     if (editable(t, key)) {
       setError('');
       const text = raw(t, key);
-      setEditor({
-        id: t.id,
-        key,
-        seeded: seed !== undefined,
-        text: seed ?? (key === 'team' ? (t.teamId ?? '') : text === 'ND' ? '' : key === 'progress' ? text.replace('%', '') : text),
+      // O `<select>` abre no valor atual: a tecla digitada não substitui uma escolha de lista.
+      const current =
+        key === 'team'
+          ? (t.teamId ?? '')
+          : key === 'constraintType'
+            ? constraintOf(t).type
+            : text === 'ND'
+              ? ''
+              : key === 'progress'
+                ? text.replace('%', '')
+                : text;
+      const select = SELECT_COLS.includes(key);
+      setEditor({ id: t.id, key, seeded: seed !== undefined && !select, text: select ? current : (seed ?? current) });
+    }
+  }
+  /** XML do Project (MSPDI) com o rascunho como está, inclusive folgas e caminho crítico. */
+  function exportXml() {
+    try {
+      const baseline = baseId
+        ? new Map(
+            draft.tasks.flatMap(t => {
+              const b = baseFor(t.id);
+              return b ? [[t.id, { start: b.plannedStart, end: b.plannedEnd }] as const] : [];
+            }),
+          )
+        : undefined;
+      const xml = buildMspdi({
+        plan,
+        tasks: draft.tasks,
+        links: draft.links,
+        calendar: draft.calendar,
+        analysis,
+        workName: data.works.find(w => w.id === plan.workId)?.name,
+        baseline,
       });
+      const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${plan.name.replace(/[\\/:*?"<>|]+/g, '-')}.xml`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setError((e as Error).message);
     }
   }
   async function save() {
@@ -787,24 +1149,14 @@ export function Sheet({
     const next = structuredClone(draft);
     const at = activeIndex;
     if (kind === 'insert') {
-      // Como a tecla Insert do Project: a nova linha entra acima da selecionada, no mesmo nível.
-      const start = at >= 0 ? roll.get(draft.tasks[at].id)!.plannedStart : win.start;
-      const level = at >= 0 ? next.tasks[at].level : 0;
-      const task: PlanTask = {
-        id: crypto.randomUUID(),
-        ...stamp(),
-        planId: plan.id,
-        name: 'Nova tarefa',
-        plannedStart: start,
-        plannedEnd: start,
-        anchorStart: start,
-        duration: { value: 1, unit: 'd' },
-        progress: 0,
-        order: 0,
-        level,
-      };
-      next.tasks.splice(at >= 0 ? at : next.tasks.length, 0, task);
-      next.tasks.forEach((t, i) => (t.order = i + 1));
+      // A linha nova entra abaixo da selecionada (no fim, sem seleção) e já abre o nome para digitar.
+      if (editor && !commit()) return;
+      try {
+        stageInserted(insertBelow(draft, at), at >= 0 ? selected.row + 1 : rows.length);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+      return;
     } else if (kind === 'link' || kind === 'unlink') {
       const chosen = rows.slice(bounds.r0, bounds.r1 + 1).filter(t => !roll.get(t.id)!.summary);
       const ids = new Set(chosen.map(t => t.id));
@@ -830,9 +1182,9 @@ export function Sheet({
             ? next.links.filter(l => !(ids.has(l.predecessorId) && ids.has(l.successorId)))
             : next.links.filter(l => !ids.has(l.predecessorId) && !ids.has(l.successorId));
     } else if (at >= 0) {
-      let end = at + 1;
-      while (end < next.tasks.length && next.tasks[end].level > next.tasks[at].level) end++;
       if (kind === 'remove') {
+        let end = at + 1;
+        while (end < next.tasks.length && next.tasks[end].level > next.tasks[at].level) end++;
         const ok = await confirm({
           title: `Excluir “${active.name}”${end - at > 1 ? ` e ${end - at - 1} subitens` : ''}?`,
           description: 'A exclusão fica no rascunho e só vai ao banco em “Revisar e salvar”. Dá para desfazer com Ctrl+Z.',
@@ -845,18 +1197,29 @@ export function Sheet({
         next.links = next.links.filter(l => !ids.has(l.predecessorId) && !ids.has(l.successorId));
         next.tasks.forEach((t, i) => (t.order = i + 1));
       } else {
-        if (
-          (kind === 'indent' && (at === 0 || next.tasks[at].level > next.tasks[at - 1].level)) ||
-          (kind === 'outdent' && next.tasks[at].level === 0)
-        )
+        // Recuo e seu inverso agem no intervalo selecionado (Shift+setas ou Shift+clique), da primeira
+        // linha ao fim da subárvore da última, numa só entrada do desfazer.
+        const first = draft.tasks.indexOf(rows[bounds.r0]),
+          last = draft.tasks.indexOf(rows[Math.min(bounds.r1, rows.length - 1)]);
+        const shifted = shiftLevels(next.tasks, first, last, kind === 'indent' ? 1 : -1, next.links);
+        if (shifted.error) {
+          setError(shifted.error);
           return;
-        for (let i = at; i < end; i++) next.tasks[i].level += kind === 'indent' ? 1 : -1;
-        // Quem vira resumo não pode carregar vínculo nem data real: esses ficam nas subtarefas.
-        if (kind === 'indent' && next.tasks[at].level > next.tasks[at - 1].level) {
-          const parent = next.tasks[at - 1];
-          next.links = next.links.filter(l => l.predecessorId !== parent.id && l.successorId !== parent.id);
-          delete parent.actualStart;
-          delete parent.actualEnd;
+        }
+        next.tasks = shifted.tasks;
+        next.links = shifted.links;
+        // Recuo para dentro de um resumo recolhido: abre o resumo, senão o bloco sumiria da vista; a
+        // seleção desce o tanto de linhas que apareceram antes dela.
+        if (kind === 'indent') {
+          let p = first - 1;
+          while (p >= 0 && next.tasks[p].level >= next.tasks[first].level) p--;
+          if (p >= 0 && folded.includes(next.tasks[p].id)) {
+            const open = folded.filter(id => id !== next.tasks[p].id);
+            const shift = unfoldedRows(next.tasks, open).findIndex(t => t.id === rows[bounds.r0].id) - bounds.r0;
+            setFolded(open);
+            setSelected(s => ({ ...s, row: s.row + shift }));
+            setAnchor(a => ({ ...a, row: a.row + shift }));
+          }
         }
       }
     } else return;
@@ -893,7 +1256,8 @@ export function Sheet({
       structural('insert');
       return;
     }
-    if (e.altKey && e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    // Alt+Shift+setas é o atalho do Project; Cmd/Ctrl+Alt+setas, o pedido pela equipe no Mac.
+    if (e.altKey && (e.shiftKey || cmd) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       e.preventDefault();
       structural(e.key === 'ArrowRight' ? 'indent' : 'outdent');
       return;
@@ -955,6 +1319,20 @@ export function Sheet({
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (!editor) return;
+      // Na última linha, Enter grava a célula e já cria a próxima tarefa, para digitar uma atrás da
+      // outra; nas demais, desce uma linha como numa planilha.
+      if (r === rows.length - 1 && canEdit && !filtering) {
+        try {
+          const committed = committedEditor.current === editor ? draft : applyCellsTo(draft, [editor]);
+          const at = committed.tasks.findIndex(t => t.id === editor.id);
+          stageInserted(insertBelow(committed, at), r + 1);
+        } catch (err) {
+          setError((err as Error).message);
+          editRef.current?.focus();
+        }
+        return;
+      }
       if (commit()) focus(r + 1, c);
       return;
     }
@@ -978,18 +1356,37 @@ export function Sheet({
     requestAnimationFrame(() => target?.focus());
   }
   const show = (key: string, v: unknown) =>
-    v === undefined || v === null || v === ''
-      ? '—'
-      : ['plannedStart', 'plannedEnd', 'anchorStart', 'actualStart', 'actualEnd'].includes(key)
-        ? projectDate(String(v))
-        : key === 'duration'
-          ? formatDuration(v as TaskDuration)
-          : key === 'teamId'
-            ? teamLabel(String(v)) || '—'
-            : key === 'progress'
-              ? `${v}%`
-              : String(v);
+    key === 'constraintType'
+      ? (CONSTRAINT_LABELS[(v || 'ASAP') as ConstraintType] ?? String(v))
+      : v === undefined || v === null || v === ''
+        ? '—'
+        : ['plannedStart', 'plannedEnd', 'anchorStart', 'constraintDate', 'deadline', 'actualStart', 'actualEnd'].includes(key)
+          ? projectDate(String(v))
+          : key === 'duration'
+            ? formatDuration(v as TaskDuration)
+            : key === 'teamId'
+              ? teamLabel(String(v)) || '—'
+              : key === 'progress'
+                ? `${v}%`
+                : String(v);
 
+  // Sem memo de propósito: `rows` já muda a cada render, e a busca é barata.
+  const activeId = active?.id;
+  const path = showPath && activeId ? taskPath(activeId, draft.links, analysis.info) : undefined;
+  const pathRole = (id: string): GanttRow['pathRole'] =>
+    !path
+      ? undefined
+      : id === activeId
+        ? 'selected'
+        : path.driving.has(id)
+          ? 'driving'
+          : path.predecessors.has(id)
+            ? 'predecessor'
+            : path.driven.has(id)
+              ? 'driven'
+              : path.successors.has(id)
+                ? 'successor'
+                : undefined;
   const ganttRows: GanttRow[] = useMemo(
     () => [
       ...(planRow
@@ -1007,12 +1404,15 @@ export function Sheet({
               actualEnd: planRow.actualEnd,
               baseStart: baseId ? planRow.baseStart : undefined,
               baseEnd: baseId ? planRow.baseEnd : undefined,
+              critical: anyCritical,
+              lateFinish: analysis.projectFinish,
             },
           ]
         : []),
       ...rows.map(t => {
         const v = roll.get(t.id)!;
         const bv = baseFor(t.id);
+        const ai = info(t.id);
         return {
           id: t.id,
           name: t.name,
@@ -1027,14 +1427,29 @@ export function Sheet({
           baseStart: bv?.plannedStart,
           baseEnd: bv?.plannedEnd,
           outOfWindow: outOfWindow(t.id),
+          critical: ai?.critical,
+          deadline: v.summary ? undefined : t.deadline,
+          deadlineMissed: ai?.deadlineMissed,
+          lateFinish: ai?.lateFinish,
+          totalSlack: ai?.totalSlack,
+          freeSlack: ai?.freeSlack,
+          conflict: ai?.conflict,
+          pathRole: pathRole(t.id),
         };
       }),
     ],
-    [rows, roll, planRow, baseId, baselineTasks, baselineRoll],
+    [rows, roll, planRow, baseId, baselineTasks, baselineRoll, analysis, path],
   ); // eslint-disable-line react-hooks/exhaustive-deps
   const ganttLinks: GanttLink[] = useMemo(
-    () => draft.links.map(l => ({ id: l.id, from: l.predecessorId, to: l.successorId, type: l.type })),
-    [draft.links],
+    () =>
+      draft.links.map(l => ({
+        id: l.id,
+        from: l.predecessorId,
+        to: l.successorId,
+        type: l.type,
+        driving: analysis.info.get(l.successorId)?.driverIds.includes(l.predecessorId),
+      })),
+    [draft.links, analysis],
   );
   const outside = draft.tasks.filter(t => outOfWindow(t.id)).length;
   const normalized = useMemo(() => {
@@ -1117,7 +1532,7 @@ export function Sheet({
             className={tool}
             disabled={!canEdit || !!editor || filtering}
             onClick={() => structural('insert')}
-            title="Inserir tarefa acima da selecionada (Insert)"
+            title="Inserir tarefa abaixo da selecionada (Insert)"
           >
             <ListPlus size={14} aria-hidden />
             Inserir tarefa
@@ -1126,7 +1541,7 @@ export function Sheet({
             className={tool}
             disabled={!canEdit || !active || !!editor || filtering}
             onClick={() => structural('outdent')}
-            title="Diminuir recuo (Alt+Shift+←)"
+            title="Diminuir o recuo das linhas selecionadas (Alt+Shift+←)"
           >
             <IndentDecrease size={14} aria-hidden />
             <span className="sr-only">Diminuir recuo</span>
@@ -1135,7 +1550,7 @@ export function Sheet({
             className={tool}
             disabled={!canEdit || !active || !!editor || filtering}
             onClick={() => structural('indent')}
-            title="Recuar tarefa, tornando-a subitem da de cima (Alt+Shift+→)"
+            title="Recuar as linhas selecionadas, tornando-as subitens da de cima (Alt+Shift+→)"
           >
             <IndentIncrease size={14} aria-hidden />
             <span className="sr-only">Recuar tarefa</span>
@@ -1209,6 +1624,7 @@ export function Sheet({
                 className="button-ghost mt-1"
                 onClick={() => {
                   setHidden(DEFAULT_HIDDEN);
+                  setOrder(DEFAULT_ORDER);
                   setWidths({});
                 }}
               >
@@ -1216,6 +1632,30 @@ export function Sheet({
               </button>
             </div>
           </details>
+          <button
+            className={tool}
+            aria-pressed={showCritical}
+            onClick={() => setShowCritical(!showCritical)}
+            title="Pinta de vermelho as tarefas sem folga no Gantt"
+          >
+            Caminho crítico
+          </button>
+          <button
+            className={tool}
+            aria-pressed={showSlack}
+            onClick={() => setShowSlack(!showSlack)}
+            title="Linha de folga depois da barra, até o término tardio"
+          >
+            Folga
+          </button>
+          <button
+            className={tool}
+            aria-pressed={showPath}
+            onClick={() => setShowPath(!showPath)}
+            title="Realça predecessoras e sucessoras da tarefa selecionada; as determinantes em tom mais forte"
+          >
+            Caminho da tarefa
+          </button>
           <button className={tool} aria-pressed={meeting} onClick={() => setMeeting(!meeting)}>
             Modo reunião
           </button>
@@ -1253,6 +1693,9 @@ export function Sheet({
               ['ongoing', 'Em andamento'],
               ['done', 'Concluídas'],
               ['late', 'Atrasadas'],
+              ['critical', 'Críticas'],
+              ['conflict', 'Com vínculo desrespeitado'],
+              ['deadline', 'Prazo final perdido'],
               ['window', 'Fora do horizonte'],
               ['changed', 'Alteradas no rascunho'],
               ['notes', 'Com anotações'],
@@ -1303,8 +1746,10 @@ export function Sheet({
               <kbd className={kbd}>Esc</kbd> cancela.
             </p>
             <p>
-              <kbd className={kbd}>Insert</kbd> insere uma tarefa acima da selecionada. <kbd className={kbd}>Alt+Shift+→</kbd> recua,{' '}
-              <kbd className={kbd}>Alt+Shift+←</kbd> diminui o recuo.
+              <kbd className={kbd}>Insert</kbd> insere uma tarefa abaixo da selecionada; <kbd className={kbd}>Enter</kbd> na última linha
+              grava e cria a próxima. <kbd className={kbd}>Alt+Shift+→</kbd> ou <kbd className={kbd}>Cmd+Alt+→</kbd> recua,{' '}
+              <kbd className={kbd}>Alt+Shift+←</kbd> ou <kbd className={kbd}>Cmd+Alt+←</kbd> diminui o recuo; com um intervalo selecionado,
+              os dois agem em todas as linhas dele.
             </p>
             <p>
               <kbd className={kbd}>Ctrl+F2</kbd> vincula as tarefas selecionadas em Término-Início; <kbd className={kbd}>Ctrl+Shift+F2</kbd>{' '}
@@ -1318,14 +1763,18 @@ export function Sheet({
               <kbd className={kbd}>Ctrl+Z</kbd> desfaz e <kbd className={kbd}>Ctrl+Y</kbd> refaz. <kbd className={kbd}>Ctrl+Home</kbd> e{' '}
               <kbd className={kbd}>Ctrl+End</kbd> vão à primeira e à última linha.
             </p>
+            <p>
+              Arraste o cabeçalho para mudar a ordem das colunas; com o foco no cabeçalho, <kbd className={kbd}>Alt+←</kbd> e{' '}
+              <kbd className={kbd}>Alt+→</kbd> também movem a coluna.
+            </p>
           </HelpNote>
         </span>
       </div>
       {normalized > 0 && (
         <p className="border-b border-primary-ring bg-primary-soft px-3 py-2 text-xs text-primary-ink">
           {normalized} {normalized === 1 ? 'tarefa foi ajustada' : 'tarefas foram ajustadas'} à regra do Project ao abrir: % concluída sem
-          início real recebe o início previsto, e o “Não iniciar antes de” passa a valer junto das predecessoras. O ajuste é gravado no
-          próximo “Revisar e salvar”.
+          início real recebe o início previsto, e o “Não iniciar antes de” antigo vira “Tipo de restrição” e passa a valer junto das
+          predecessoras. O ajuste é gravado no próximo “Revisar e salvar”.
         </p>
       )}
       {error && (
@@ -1394,52 +1843,118 @@ export function Sheet({
             >
               <thead>
                 <tr>
-                  {visibleCols.map(c => (
-                    <th key={c.key} scope="col" style={{ width: widths[c.key] ?? c.width }} className={c.right ? 'text-right' : ''}>
-                      {c.key === 'ind' ? (
-                        <span title="Indicadores">
-                          <span aria-hidden>ⓘ</span>
-                          <span className="sr-only">Indicadores</span>
-                        </span>
-                      ) : (
-                        c.label
-                      )}
-                      <span
-                        role="separator"
-                        aria-label={`Largura de ${c.label}`}
-                        aria-orientation="vertical"
-                        aria-valuemin={36}
-                        aria-valuemax={600}
-                        aria-valuenow={widths[c.key] ?? c.width}
+                  {visibleCols.map((c, i) => {
+                    // Id e Indicadores ficam presas no começo (FIXED_COLS); as outras se arrastam pelo
+                    // cabeçalho e caem antes ou depois da coluna alvo conforme a metade em que forem soltas.
+                    const fixed = FIXED_COLS.includes(c.key);
+                    const side = (e: React.DragEvent<HTMLElement>) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      return fixed || e.clientX > r.left + r.width / 2;
+                    };
+                    const target = drop?.key === c.key ? drop : undefined;
+                    return (
+                      <th
+                        key={c.key}
+                        scope="col"
+                        data-col={c.key}
                         tabIndex={0}
-                        className="schedule-resize"
+                        draggable={!fixed}
+                        aria-label={fixed ? `Coluna ${c.label}, fixa` : `Coluna ${c.label}; arraste ou use Alt com as setas para mover`}
+                        title={fixed ? undefined : 'Arraste para mover a coluna; com o foco aqui, Alt+← e Alt+→ também movem'}
+                        style={{ width: widths[c.key] ?? c.width }}
+                        className={`${c.right ? 'text-right' : ''} ${fixed ? '' : 'cursor-grab'} ${dragCol === c.key ? 'opacity-50' : ''} ${
+                          target
+                            ? target.after
+                              ? 'shadow-[inset_-3px_0_var(--color-primary)]'
+                              : 'shadow-[inset_3px_0_var(--color-primary)]'
+                            : ''
+                        }`}
+                        onDragStart={e => {
+                          e.dataTransfer.setData('text/plain', c.key);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDragCol(c.key);
+                        }}
+                        onDragEnd={() => {
+                          setDragCol(null);
+                          setDrop(null);
+                        }}
+                        onDragOver={e => {
+                          if (!dragCol || dragCol === c.key) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          const after = side(e);
+                          setDrop(d => (d && d.key === c.key && d.after === after ? d : { key: c.key, after }));
+                        }}
+                        onDragLeave={e => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(d => (d?.key === c.key ? null : d));
+                        }}
+                        onDrop={e => {
+                          e.preventDefault();
+                          const key = dragCol ?? (e.dataTransfer.getData('text/plain') as Col);
+                          if (key && key in COLUMN && key !== c.key) reorder(moveColumn(order, key, c.key, side(e)));
+                          setDragCol(null);
+                          setDrop(null);
+                        }}
                         onKeyDown={e => {
-                          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                            e.preventDefault();
-                            setWidths(w => ({
-                              ...w,
-                              [c.key]: Math.max(36, Math.min(600, (w[c.key] ?? c.width) + (e.key === 'ArrowRight' ? 10 : -10))),
-                            }));
-                          }
+                          // Só com o foco no próprio cabeçalho: no separador, as setas mudam a largura.
+                          if (e.target !== e.currentTarget || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+                          e.preventDefault();
+                          const neighbor = visibleCols[e.key === 'ArrowRight' ? i + 1 : i - 1];
+                          if (!neighbor) return;
+                          reorder(moveColumn(order, c.key, neighbor.key, e.key === 'ArrowRight'));
+                          // Mover o nó no DOM tira o foco dele; devolve depois da nova pintura.
+                          requestAnimationFrame(() => gridRef.current?.querySelector<HTMLElement>(`th[data-col="${c.key}"]`)?.focus());
                         }}
-                        onPointerDown={e => {
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                          e.currentTarget.dataset.x = String(e.clientX);
-                          e.currentTarget.dataset.width = String(widths[c.key] ?? c.width);
-                        }}
-                        onPointerMove={e => {
-                          if (e.currentTarget.hasPointerCapture(e.pointerId))
-                            setWidths(w => ({
-                              ...w,
-                              [c.key]: Math.max(
-                                36,
-                                Math.min(600, Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x)),
-                              ),
-                            }));
-                        }}
-                      />
-                    </th>
-                  ))}
+                      >
+                        {c.key === 'ind' ? (
+                          <span title="Indicadores">
+                            <span aria-hidden>ⓘ</span>
+                            <span className="sr-only">Indicadores</span>
+                          </span>
+                        ) : (
+                          c.label
+                        )}
+                        <span
+                          role="separator"
+                          aria-label={`Largura de ${c.label}`}
+                          aria-orientation="vertical"
+                          aria-valuemin={36}
+                          aria-valuemax={600}
+                          aria-valuenow={widths[c.key] ?? c.width}
+                          tabIndex={0}
+                          draggable={false}
+                          className="schedule-resize"
+                          // O arrasto para redimensionar usa captura de ponteiro; cancelar o mousedown impede
+                          // que o navegador comece o arrasto de coluna a partir do separador.
+                          onMouseDown={e => e.preventDefault()}
+                          onKeyDown={e => {
+                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                              e.preventDefault();
+                              setWidths(w => ({
+                                ...w,
+                                [c.key]: Math.max(36, Math.min(600, (w[c.key] ?? c.width) + (e.key === 'ArrowRight' ? 10 : -10))),
+                              }));
+                            }
+                          }}
+                          onPointerDown={e => {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            e.currentTarget.dataset.x = String(e.clientX);
+                            e.currentTarget.dataset.width = String(widths[c.key] ?? c.width);
+                          }}
+                          onPointerMove={e => {
+                            if (e.currentTarget.hasPointerCapture(e.pointerId))
+                              setWidths(w => ({
+                                ...w,
+                                [c.key]: Math.max(
+                                  36,
+                                  Math.min(600, Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x)),
+                                ),
+                              }));
+                          }}
+                        />
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -1516,6 +2031,21 @@ export function Sheet({
                                     </option>
                                   ))}
                                 </select>
+                              ) : col.key === 'constraintType' ? (
+                                <select
+                                  ref={editRef}
+                                  aria-label={`Tipo de restrição de ${t.name}`}
+                                  value={editor.text}
+                                  onChange={e => setEditor({ ...editor, text: e.target.value })}
+                                  onBlur={commit}
+                                  onKeyDown={e => editorKey(e, r, c)}
+                                >
+                                  {CONSTRAINT_TYPES.map(type => (
+                                    <option key={type} value={type}>
+                                      {CONSTRAINT_LABELS[type]}
+                                    </option>
+                                  ))}
+                                </select>
                               ) : (
                                 <input
                                   ref={editRef}
@@ -1523,7 +2053,7 @@ export function Sheet({
                                   aria-invalid={!!error}
                                   aria-describedby={error ? 'schedule-error' : undefined}
                                   value={editor.text}
-                                  placeholder={col.key.startsWith('actual') ? 'dd/mm/aa ou vazio' : undefined}
+                                  placeholder={DATE_COLS.includes(col.key) ? 'dd/mm/aa ou vazio' : undefined}
                                   onChange={e => setEditor({ ...editor, text: e.target.value })}
                                   onBlur={commit}
                                   onKeyDown={e => editorKey(e, r, c)}
@@ -1553,7 +2083,10 @@ export function Sheet({
                             ) : col.key === 'ind' ? (
                               <Indicators
                                 done={v.progress === 100}
-                                constraint={constrained(t) ? t.anchorStart : undefined}
+                                constraint={v.summary ? undefined : constraintOf(t)}
+                                holding={info(t.id)?.drivenBy === 'constraint'}
+                                deadline={info(t.id)?.deadlineMissed ? t.deadline : undefined}
+                                conflict={!!info(t.id)?.conflict}
                                 outside={outOfWindow(t.id)}
                                 notes={!!t.notes}
                               />
@@ -1615,6 +2148,9 @@ export function Sheet({
             headerHeight={metrics.head}
             calendar={draft.calendar}
             showBaseline={!!baseId}
+            showCritical={showCritical}
+            showSlack={showSlack}
+            showPath={showPath}
             selectedId={active?.id}
             onSelect={id => {
               if (id === PLAN_ROW) return;
@@ -1636,8 +2172,9 @@ export function Sheet({
           Novas tarefas: <strong>Agendadas automaticamente</strong>
         </span>
         <span>
-          {draft.tasks.length} tarefas · {draft.links.length} vínculos
+          {draft.tasks.length} tarefas · {draft.links.length} vínculos · {criticalCount} críticas
         </span>
+        {analysis.projectFinish && <span>Fim do projeto: {projectDate(analysis.projectFinish)}</span>}
         {!draft.tasks.some(t => t.progress > 0) && <span>Sem avanço lançado ainda</span>}
         <div className="ml-auto flex items-center gap-1" aria-label="Modo de exibição">
           {(
@@ -1718,9 +2255,23 @@ export function Sheet({
           <p className="mt-3 text-sm leading-6 text-slate-700">
             {raw(active, 'start')} a {raw(active, 'end')} · {raw(active, 'duration')} · {raw(active, 'progress')} concluída · Início real{' '}
             {raw(active, 'actualStart')} · Término real {raw(active, 'actualEnd')} · Predecessoras {raw(active, 'links') || '—'}
-            {constrained(active) ? ` · Não iniciar antes de ${projectDate(active.anchorStart)}` : ''}
             {baseId ? ` · Variação contra a base ${raw(active, 'variance') || '—'} dias` : ''}
           </p>
+          {info(active.id) && (
+            <p className="mt-1 text-sm leading-6 text-slate-700">
+              Início tardio {raw(active, 'lateStart')} · Término tardio {raw(active, 'lateFinish')} · Folga total{' '}
+              {raw(active, 'totalSlack')} · Folga livre {raw(active, 'freeSlack')} · Crítica {raw(active, 'critical')}
+              {!roll.get(active.id)?.summary && constraintOf(active).type !== 'ASAP'
+                ? ` · Restrição: ${constraintText(constraintOf(active))}`
+                : ''}
+              {active.deadline ? ` · Prazo final: ${projectDate(active.deadline)}` : ''}
+              {info(active.id)?.drivenBy === 'network'
+                ? ` · Predecessoras determinantes: ${info(active.id)!
+                    .driverIds.map(id => draft.tasks.findIndex(t => t.id === id) + 1)
+                    .join('; ')}`
+                : ''}
+            </p>
+          )}
           <p className="mt-1 text-xs text-slate-500">
             % alvo em {formatDate(reference)}: {raw(active, 'target')} — leitura de tempo decorrido, não medição física.
           </p>
@@ -1836,10 +2387,24 @@ export function Sheet({
               Predecessoras usam o Id da linha, como no Project: “12”, “12;14”, “27TI+6 dias”, “12II+2 dias corridos”, “5TT-1 dia”. Vínculos
               ficam nas subtarefas, não nos resumos.
             </p>
+            <p>
+              Tipo de restrição aceita o nome do Project ou a sigla: NIAD, NIDD, NTAD, NTDD, DIE, DTE, OMBP, OMTP. Digitar o início cria
+              “Não iniciar antes de”; digitar o término, “Não terminar antes de”. Prazo final não move a tarefa: reduz a folga e acende o
+              indicador quando o término passa dele.
+            </p>
           </HelpNote>
         </div>
       </details>
       <div className="flex flex-wrap gap-3 border-t border-slate-200 p-3">
+        <button
+          type="button"
+          className="button-ghost inline-flex items-center gap-1.5"
+          disabled={!draft.tasks.length}
+          onClick={exportXml}
+          title="Baixa o cronograma como XML do Project, com restrições, prazos, folgas e caminho crítico"
+        >
+          <Download size={14} aria-hidden /> Exportar para o Project (.xml)
+        </button>
         {!readOnly && !dirty && !editor && (
           <>
             <CommandForm
@@ -1920,6 +2485,9 @@ export function Sheet({
                       'plannedEnd',
                       'duration',
                       'anchorStart',
+                      'constraintType',
+                      'constraintDate',
+                      'deadline',
                       'actualStart',
                       'actualEnd',
                       'teamId',
@@ -1980,11 +2548,41 @@ export function Sheet({
   );
 }
 
-/** Coluna de indicadores do Project: ícone e texto, nunca só cor. */
-function Indicators({ done, constraint, outside, notes }: { done: boolean; constraint?: string; outside: boolean; notes: boolean }) {
+/** Coluna de indicadores do Project: ícone e texto, nunca só cor. A restrição aparece sempre que não
+ * é "O mais breve possível", no tom da flexibilidade (semiflexível em azul, inflexível em vermelho,
+ * "O mais tarde possível" em cinza), e diz quando é ela que está segurando a data. */
+function Indicators({
+  done,
+  constraint,
+  holding,
+  deadline,
+  conflict,
+  outside,
+  notes,
+}: {
+  done: boolean;
+  constraint?: { type: ConstraintType; date?: string };
+  holding?: boolean;
+  deadline?: string;
+  conflict: boolean;
+  outside: boolean;
+  notes: boolean;
+}) {
+  const flexibility = constraint ? constraintFlexibility(constraint.type) : 'flexible';
   const items = [
     done && { Icon: Check, label: 'Tarefa concluída', tone: 'text-success' },
-    constraint && { Icon: CalendarClock, label: `Não iniciar antes de ${projectDate(constraint)}`, tone: 'text-primary' },
+    constraint &&
+      constraint.type !== 'ASAP' && {
+        Icon: CalendarClock,
+        label: `${constraintText(constraint)}${holding ? ' · segurando a data' : ''}`,
+        tone: flexibility === 'inflexible' ? 'text-danger' : flexibility === 'semi' ? 'text-primary' : 'text-slate-500',
+      },
+    deadline && { Icon: TriangleAlert, label: `Prazo final perdido: termina depois de ${projectDate(deadline)}`, tone: 'text-danger' },
+    conflict && {
+      Icon: Link2Off,
+      label: 'Vínculo desrespeitado: a restrição ou a data real prendem a tarefa antes do que a predecessora permite',
+      tone: 'text-danger',
+    },
     outside && { Icon: CircleAlert, label: 'Fora do horizonte de três meses', tone: 'text-warning' },
     notes && { Icon: StickyNote, label: 'Tem anotações', tone: 'text-slate-500' },
   ].filter(Boolean) as { Icon: typeof Check; label: string; tone: string }[];

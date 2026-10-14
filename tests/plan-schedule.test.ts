@@ -40,7 +40,8 @@ for (const [type, start, end] of [
   ['TI', '2026-09-09', '2026-09-10'],
   ['II', '2026-09-07', '2026-09-08'],
   ['TT', '2026-09-07', '2026-09-08'],
-  ['IT', '2026-09-04', '2026-09-07'],
+  // IT: terminar quando a predecessora começa (08:00 de segunda) é terminar na sexta anterior, como no Project.
+  ['IT', '2026-09-03', '2026-09-04'],
 ] as const)
   test(`motor calcula ${type}`, () => {
     const result = scheduleTasks([task('1'), task('2')], [link(type)]);

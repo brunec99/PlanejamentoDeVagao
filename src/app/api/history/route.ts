@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
   if (!ids.length) return NextResponse.json({ events: [] }, { headers });
   if (ids.length > MAX_IDS)
     return NextResponse.json({ error: `Peça o histórico de até ${MAX_IDS} registros por vez.` }, { status: 400, headers });
-  const gate = await requireDeveloperAccess();
+  // O médio prazo lê o histórico das tarefas, por isso a permissão de teste também serve aqui.
+  const gate = await requireDeveloperAccess({ tester: true });
   if (gate.error) return gate.error;
   const { profile } = gate.access;
   if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403, headers });

@@ -27,6 +27,20 @@ import type {
   WeeklyCommitment,
   Work,
 } from '../../../domain/entities';
+import { constraintOf } from '../../../domain/plan-schedule';
+
+/** O jsonb da tarefa como a tela entende: a restrição gravada no formato antigo (`anchorStart`)
+ * vira "Não iniciar antes de" já na leitura, e o campo antigo não sobe para a entidade. */
+function planTaskMeta(meta: PlanTaskRow['schedule_meta']): Partial<PlanTask> {
+  if (!meta) return {};
+  const { anchorStart, ...rest } = meta;
+  return anchorStart && !rest.constraintType ? { ...rest, constraintType: 'SNET', constraintDate: anchorStart } : rest;
+}
+/** A restrição no formato atual, mesmo quando a entidade em memória ainda trouxer o antigo. */
+function constraintFields(task: PlanTask): Pick<PlanTask, 'constraintType' | 'constraintDate'> {
+  const constraint = constraintOf(task);
+  return constraint.type === 'ASAP' ? {} : { constraintType: constraint.type, constraintDate: constraint.date };
+}
 
 /** Raw rows as returned by `select('*')` — snake_case, matching the SQL columns in 0001_init.sql. */
 export interface Rows {
@@ -224,7 +238,11 @@ interface PlanTaskRow {
   schedule_meta?: {
     version?: number;
     duration?: PlanTask['duration'];
+    /** Formato antigo da restrição "Não iniciar antes de": lido e convertido, nunca mais gravado. */
     anchorStart?: string;
+    constraintType?: PlanTask['constraintType'];
+    constraintDate?: string;
+    deadline?: string;
     sourceTaskId?: string;
     actualStart?: string;
     actualEnd?: string;
@@ -313,6 +331,8 @@ interface ProfileRow {
   name: string;
   role: User['role'];
   work_ids: string[];
+  /** Permissão de teste do médio prazo (migração 0030); ausente em banco sem ela. */
+  test_access?: boolean | null;
 }
 
 export function rowsToPlanningData(rows: Rows): PlanningData {
@@ -512,7 +532,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       createdBy: r.created_by,
     })),
     planTasks: rows.plan_tasks.map((r): PlanTask => ({
-      ...r.schedule_meta,
+      ...planTaskMeta(r.schedule_meta),
       id: r.id,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
@@ -574,6 +594,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       name: r.name,
       role: r.role,
       workIds: r.work_ids,
+      testAccess: r.test_access === true,
     })),
     history: rows.history_events.map((r): HistoryEvent => ({
       id: r.id,
@@ -790,7 +811,8 @@ export function planningDataToPayload(data: PlanningData) {
       schedule_meta: {
         version: t.version,
         duration: t.duration,
-        anchorStart: t.anchorStart,
+        ...constraintFields(t),
+        deadline: t.deadline,
         sourceTaskId: t.sourceTaskId,
         actualStart: t.actualStart,
         actualEnd: t.actualEnd,
@@ -865,6 +887,7 @@ export function planningDataToPayload(data: PlanningData) {
       name: u.name,
       role: u.role,
       work_ids: u.workIds,
+      test_access: u.testAccess === true,
     })),
   };
 }

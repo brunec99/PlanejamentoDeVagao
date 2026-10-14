@@ -89,7 +89,7 @@ export const tours: Record<TourKey, TourStep[]> = {
     {
       target: 'medio-gantt',
       title: 'Tabela e Gantt',
-      body: 'A tabela à esquerda e o Gantt de acompanhamento à direita andam juntos: barra azul é o previsto atual, a cinza embaixo é a linha de base, o colchete é o resumo e o losango é o marco (0 dias). A linha 0 resume o cronograma inteiro. As datas são agendadas automaticamente: mudar duração ou predecessora empurra as sucessoras. Digitar um início numa tarefa com predecessoras vira "Não iniciar antes de"; apagar o início devolve a data à rede.',
+      body: 'A tabela à esquerda e o Gantt de acompanhamento à direita andam juntos: barra azul é o previsto atual, a cinza embaixo é a linha de base, o colchete é o resumo e o losango é o marco (0 dias). A linha 0 resume o cronograma inteiro. As datas são agendadas automaticamente: mudar duração ou predecessora empurra as sucessoras. Digitar um início vira "Não iniciar antes de"; apagar o início devolve a data à rede. Barra vermelha é tarefa crítica (folga zero), como no Gantt de acompanhamento do Project; as oito restrições, o prazo final, as datas tardias e as folgas ficam em "Colunas", e o botão "Exportar para o Project" gera o .xml para conferir no próprio Project.',
     },
     {
       target: 'medio-gantt',
@@ -99,7 +99,7 @@ export const tours: Record<TourKey, TourStep[]> = {
     {
       target: 'medio-gantt',
       title: 'Item e subitem',
-      body: 'Recue uma linha (com o botão ou com Alt+Shift+→, como no MS Project) para ela virar subitem da linha de cima. O recuo leva os subitens dela junto. Um item com subitens passa a ser resumo: início, término e avanço dele são os dos subitens, e por isso essas células ficam travadas. Excluir um item exclui os subitens.',
+      body: 'Recue uma linha (com o botão, com Alt+Shift+→ como no MS Project ou com Cmd+Alt+→) para ela virar subitem da linha de cima. "Inserir tarefa" entra abaixo da selecionada e já abre o nome; Enter na última linha cria a próxima. O recuo leva os subitens dela junto. Um item com subitens passa a ser resumo: início, término e avanço dele são os dos subitens, e por isso essas células ficam travadas. Excluir um item exclui os subitens.',
     },
     {
       title: 'Cobertura entre os níveis',

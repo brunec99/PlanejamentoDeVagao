@@ -186,6 +186,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'Os PDFs do curto prazo saem sem a faixa do tempo e o local da obra não pode ser salvo.',
     critical: false,
   },
+  {
+    migration: '0030_test_access',
+    label: 'Permissão de teste do médio prazo',
+    probe: { kind: 'column', table: 'profiles', column: 'test_access' },
+    effect: 'O botão "Permissão de teste" da tela de usuários não grava, e ninguém além de admins e desenvolvedores abre o médio prazo.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

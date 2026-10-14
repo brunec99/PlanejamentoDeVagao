@@ -1,4 +1,4 @@
-import type { LocalDate, MediumTermPlan, PlanTask, PlanDependency } from './entities';
+import type { ConstraintType, Id, LocalDate, MediumTermPlan, PlanTask, PlanDependency } from './entities';
 import { addDays, validateDate, validatePeriod } from './validation';
 export interface WorkCalendar {
   weekdays: number[];
@@ -107,6 +107,10 @@ export function shift(date: string, amount: number, business: boolean, c: WorkCa
   }
   return next;
 }
+/** O próprio dia quando é útil; senão o dia útil seguinte (ou anterior). */
+export const nextWorking = (date: string, c: WorkCalendar) => (isWorking(date, c) ? date : shift(date, 1, true, c));
+export const previousWorking = (date: string, c: WorkCalendar) => (isWorking(date, c) ? date : shift(date, -1, true, c));
+
 export function durationDays(duration: TaskDuration, c: WorkCalendar) {
   const d = parseDuration(`${duration.value}${duration.unit}`);
   return Math.ceil(d.value * (d.unit === 'h' ? 1 / c.hoursPerDay : d.unit === 'mês' ? c.daysPerMonth : d.unit === 'md' ? 30 : 1));
@@ -127,18 +131,135 @@ export function countedDays(start: string, end: string, business: boolean, c: Wo
   for (let date = start; date <= end; date = addDays(date, 1)) if (!business || isWorking(date, c)) total++;
   return total;
 }
-/** Programação automática, como o "Agendada automaticamente" do Project.
+/** Dias úteis de `from` até `to`, com sinal: positivo quando `to` vem depois, negativo quando vem
+ * antes, zero no mesmo dia. É a unidade das folgas do Project. */
+export function signedWorkingDays(from: string, to: string, c: WorkCalendar): number {
+  if (from === to) return 0;
+  const [a, b, sign] = from < to ? [from, to, 1] : [to, from, -1];
+  if ((Date.parse(b) - Date.parse(a)) / 86400000 > 100000) throw new Error('Período excede o limite do cronograma.');
+  let n = 0;
+  for (let date = addDays(a, 1); date <= b; date = addDays(date, 1)) if (isWorking(date, c)) n++;
+  return sign * n;
+}
+
+// ————— Restrições —————
+
+export const CONSTRAINT_LABELS: Record<ConstraintType, string> = {
+  ASAP: 'O mais breve possível',
+  ALAP: 'O mais tarde possível',
+  SNET: 'Não iniciar antes de',
+  SNLT: 'Não iniciar depois de',
+  FNET: 'Não terminar antes de',
+  FNLT: 'Não terminar depois de',
+  MSO: 'Deve iniciar em',
+  MFO: 'Deve terminar em',
+};
+/** Siglas do Project em português, as que a equipe lê na coluna "Tipo de restrição". */
+export const CONSTRAINT_ABBREVIATIONS: Record<ConstraintType, string> = {
+  ASAP: 'OMBP',
+  ALAP: 'OMTP',
+  SNET: 'NIAD',
+  SNLT: 'NIDD',
+  FNET: 'NTAD',
+  FNLT: 'NTDD',
+  MSO: 'DIE',
+  MFO: 'DTE',
+};
+export const constraintNeedsDate = (type: ConstraintType) => type !== 'ASAP' && type !== 'ALAP';
+/** Como o Project classifica: flexível (só a rede manda), semiflexível (a data é um limite num
+ * sentido só) e inflexível (a data manda, mesmo contra a rede). */
+export const constraintFlexibility = (type: ConstraintType): 'flexible' | 'semi' | 'inflexible' =>
+  type === 'ASAP' || type === 'ALAP' ? 'flexible' : type === 'MSO' || type === 'MFO' ? 'inflexible' : 'semi';
+export interface TaskConstraint {
+  type: ConstraintType;
+  date?: LocalDate;
+}
+/** A restrição da tarefa, lendo também o formato antigo (`anchorStart` = "Não iniciar antes de"). */
+export function constraintOf(task: Pick<PlanTask, 'constraintType' | 'constraintDate' | 'anchorStart'>): TaskConstraint {
+  if (task.constraintType)
+    return constraintNeedsDate(task.constraintType)
+      ? { type: task.constraintType, date: task.constraintDate }
+      : { type: task.constraintType };
+  if (task.anchorStart) return { type: 'SNET', date: task.anchorStart };
+  return { type: 'ASAP' };
+}
+export function validateConstraint(constraint: TaskConstraint) {
+  if (!(constraint.type in CONSTRAINT_LABELS)) throw new Error('Tipo de restrição inválido.');
+  if (constraintNeedsDate(constraint.type)) {
+    if (!constraint.date) throw new Error(`A restrição "${CONSTRAINT_LABELS[constraint.type]}" exige uma data.`);
+    validateDate(constraint.date);
+  }
+}
+
+// ————— Motor: passada direta, passada inversa, folgas e caminho crítico —————
+
+/** O que o motor calcula para cada linha além das datas, no vocabulário do Project. As datas
+ * cedo são as agendadas (a tarefa OMTP é a exceção: agendada nas tardias, por isso folga zero). */
+export interface TaskSchedule {
+  earlyStart: LocalDate;
+  earlyFinish: LocalDate;
+  lateStart: LocalDate;
+  lateFinish: LocalDate;
+  /** Em dias úteis; negativa quando restrição, prazo final ou data real não cabem na rede. */
+  totalSlack: number;
+  freeSlack: number;
+  critical: boolean;
+  /** O que segura a data: a rede, a restrição, a data real, o início guardado (sem predecessora) ou, no resumo, os filhos. */
+  drivenBy: 'network' | 'constraint' | 'actual' | 'stored' | 'summary';
+  /** Predecessoras determinantes: as que de fato fixam o início quando é a rede que manda. */
+  driverIds: Id[];
+  /** Algum vínculo de entrada desrespeitado — a data real ou a restrição prenderam a tarefa antes do permitido. */
+  conflict: boolean;
+  deadlineMissed: boolean;
+}
+export interface ScheduleOptions {
+  /** "As tarefas são críticas se a folga for menor ou igual a N dias", como na opção do Project. */
+  criticalSlack?: number;
+}
+export interface ScheduleAnalysis {
+  tasks: PlanTask[];
+  info: Map<Id, TaskSchedule>;
+  projectStart?: LocalDate;
+  projectFinish?: LocalDate;
+}
+interface LeafShape {
+  duration: TaskDuration;
+  days: number;
+  business: boolean;
+}
+interface Boundary {
+  link: PlanDependency;
+  edge: 'start' | 'end';
+  /** A data mais cedo que o vínculo permite na ponta `edge` da sucessora. */
+  date: LocalDate;
+  /** O início que isso implica para a sucessora. */
+  start: LocalDate;
+}
+
+/** Programação automática, como o "Agendada automaticamente" do Project, com as oito restrições,
+ * prazo final, passada inversa, folgas e caminho crítico.
  *
  * Tarefa com início real fica presa nele, e no término real quando houver — vínculos e restrição
- * deixam de mandar, porque o que já aconteceu não se reprograma. Sem real, o início é o mais tarde
- * entre a restrição `anchorStart` ("Não iniciar antes de") e o que cada predecessora permite; sem
- * predecessora e sem restrição, vale o início guardado. A duração nunca muda aqui. */
-export function scheduleTasks(input: PlanTask[], links: PlanDependency[], calendar: WorkCalendar = DEFAULT_CALENDAR): PlanTask[] {
+ * deixam de mandar, porque o que já aconteceu não se reprograma. Sem real, o início sai da rede
+ * (o mais tarde que as predecessoras permitem) e da restrição: "Não iniciar/terminar antes de"
+ * só empurram para a frente; "Não iniciar/terminar depois de", "Deve iniciar em" e "Deve terminar
+ * em" prendem a data mesmo contra a rede, como o Project faz com "as tarefas sempre respeitam as
+ * datas de restrição", e aí o vínculo fica desrespeitado e a folga, negativa. "O mais tarde
+ * possível" desliza para as datas tardias. A duração nunca muda aqui. */
+export function analyzeSchedule(
+  input: PlanTask[],
+  links: PlanDependency[],
+  calendar: WorkCalendar = DEFAULT_CALENDAR,
+  options: ScheduleOptions = {},
+): ScheduleAnalysis {
   validateCalendar(calendar);
+  const c = calendar;
+  const threshold = Number.isFinite(options.criticalSlack) ? (options.criticalSlack as number) : 0;
   const rows = structuredClone(input).sort((a, b) => a.order - b.order);
   const byId = new Map(rows.map(t => [t.id, t]));
   const summary = new Set(rows.filter((t, i) => rows[i + 1]?.level > t.level).map(t => t.id));
   const incoming = new Map<string, PlanDependency[]>();
+  const outgoing = new Map<string, PlanDependency[]>();
   for (const link of links) {
     if (!byId.has(link.predecessorId) || !byId.has(link.successorId)) throw new Error('Predecessora inexistente.');
     if (summary.has(link.predecessorId) || summary.has(link.successorId)) throw new Error('Vincule as subtarefas, não as tarefas-resumo.');
@@ -147,52 +268,226 @@ export function scheduleTasks(input: PlanTask[], links: PlanDependency[], calend
     const list = incoming.get(link.successorId) ?? [];
     if (list.some(l => l.predecessorId === link.predecessorId)) throw new Error('Predecessora repetida.');
     incoming.set(link.successorId, [...list, link]);
+    outgoing.set(link.predecessorId, [...(outgoing.get(link.predecessorId) ?? []), link]);
   }
-  // Kahn evita estouro de pilha em cadeias longas.
+  // Kahn evita estouro de pilha em cadeias longas; a fila é a ordem topológica das duas passadas.
   const remaining = new Map(rows.map(t => [t.id, incoming.get(t.id)?.length ?? 0]));
-  const outgoing = new Map<string, string[]>();
-  links.forEach(l => outgoing.set(l.predecessorId, [...(outgoing.get(l.predecessorId) ?? []), l.successorId]));
-  const queue = rows.filter(t => remaining.get(t.id) === 0);
-  let visited = 0;
-  for (let i = 0; i < queue.length; i++) {
-    const task = queue[i];
-    visited++;
+  const order = rows.filter(t => remaining.get(t.id) === 0);
+  for (let i = 0; i < order.length; i++)
+    for (const link of outgoing.get(order[i].id) ?? []) {
+      remaining.set(link.successorId, remaining.get(link.successorId)! - 1);
+      if (!remaining.get(link.successorId)) order.push(byId.get(link.successorId)!);
+    }
+  if (order.length !== rows.length) throw new Error('Essa ligação criaria um ciclo entre as linhas.');
+
+  const leaves = new Map<Id, LeafShape>();
+  for (const task of rows) {
+    if (summary.has(task.id)) continue;
     validatePeriod(task.plannedStart, task.plannedEnd);
-    if (!summary.has(task.id)) {
-      const duration = task.duration ?? { value: countedDays(task.plannedStart, task.plannedEnd, false, calendar), unit: 'dd' as const };
+    const duration = task.duration ?? { value: countedDays(task.plannedStart, task.plannedEnd, false, c), unit: 'dd' as const };
+    leaves.set(task.id, { duration, days: durationDays(duration, c), business: businessDuration(duration) });
+    validateConstraint(constraintOf(task));
+    if (task.deadline) validateDate(task.deadline);
+  }
+  const info = new Map<Id, TaskSchedule>();
+  const pinned = new Map<Id, LocalDate>();
+
+  /** Os limites que as predecessoras impõem à sucessora, com as datas que elas têm agora. */
+  const boundaries = (task: PlanTask, leaf: LeafShape): Boundary[] =>
+    (incoming.get(task.id) ?? []).map(link => {
+      const p = byId.get(link.predecessorId)!;
+      let date = shift(link.type[0] === 'T' ? p.plannedEnd : p.plannedStart, link.lagDays, link.lagBusiness, c);
+      if (link.type[1] === 'I') {
+        // Como no Project, o marco fica no dia em que a predecessora termina; tarefa com duração começa no dia útil seguinte.
+        if (link.type === 'TI' && leaf.days > 0) date = shift(date, 1, leaf.business, c);
+        return { link, edge: 'start', date, start: date };
+      }
+      // Terminar quando a outra começa (às 08:00) é terminar às 17:00 do dia útil anterior; o marco não tem duração a recuar.
+      if (link.type === 'IT' && leaf.days > 0) date = shift(date, -1, leaf.business, c);
+      return { link, edge: 'end', date, start: leaf.days ? shift(date, -(leaf.days - 1), leaf.business, c) : date };
+    });
+
+  const forward = () => {
+    for (const task of order) {
+      const leaf = leaves.get(task.id);
+      if (!leaf) continue;
+      const bounds = boundaries(task, leaf);
+      let drivenBy: TaskSchedule['drivenBy'] = 'stored',
+        driverIds: Id[] = [];
       if (task.actualStart) {
         validateActualDates(task);
         task.plannedStart = task.actualStart;
-        task.plannedEnd =
-          task.actualEnd ?? (durationDays(duration, calendar) ? endFor(task.actualStart, duration, calendar).end : task.actualStart);
+        task.plannedEnd = task.actualEnd ?? (leaf.days ? endFor(task.actualStart, leaf.duration, c).end : task.actualStart);
+        drivenBy = 'actual';
       } else {
         if (task.actualEnd) throw new Error('Informe o início real antes do término real.');
-        const predecessors = incoming.get(task.id) ?? [];
-        let start = task.anchorStart ?? (predecessors.length ? '0001-01-01' : task.plannedStart);
-        for (const link of predecessors) {
-          const p = byId.get(link.predecessorId)!;
-          let boundary = shift(link.type[0] === 'T' ? p.plannedEnd : p.plannedStart, link.lagDays, link.lagBusiness, calendar);
-          // Como no Project, o marco fica no dia em que a predecessora termina; tarefa com duração começa no dia útil seguinte.
-          if (link.type === 'TI' && durationDays(duration, calendar) > 0)
-            boundary = shift(boundary, 1, businessDuration(duration), calendar);
-          // Vínculo que prende o término recua a duração; o marco não tem duração a recuar.
-          if (link.type[1] === 'T')
-            boundary = shift(boundary, -Math.max(0, durationDays(duration, calendar) - 1), businessDuration(duration), calendar);
-          if (boundary > start) start = boundary;
+        const networkStart = bounds.length ? bounds.reduce((m, b) => (b.start > m ? b.start : m), bounds[0].start) : undefined;
+        let base = networkStart ?? task.plannedStart;
+        drivenBy = networkStart ? 'network' : 'stored';
+        const constraint: TaskConstraint = pinned.has(task.id) ? { type: 'MSO', date: pinned.get(task.id) } : constraintOf(task);
+        const date = constraint.date!;
+        // Término em data não útil: "não antes de" vale o dia útil seguinte; "não depois de" e "deve terminar em", o anterior.
+        const startToFinishFrom = (finish: LocalDate) =>
+          leaf.days ? shift(finish, -(leaf.days - 1), leaf.business, c) : leaf.business ? finish : finish;
+        const hold = (start: LocalDate) => {
+          base = start;
+          drivenBy = 'constraint';
+        };
+        switch (constraint.type) {
+          case 'SNET':
+            if (!networkStart || date > base) hold(date);
+            break;
+          case 'FNET': {
+            const start = startToFinishFrom(leaf.business ? nextWorking(date, c) : date);
+            if (!networkStart || start > base) hold(start);
+            break;
+          }
+          case 'SNLT': {
+            const start = leaf.business ? previousWorking(date, c) : date;
+            if (start < base) hold(start);
+            break;
+          }
+          case 'FNLT': {
+            const start = startToFinishFrom(leaf.business ? previousWorking(date, c) : date);
+            if (start < base) hold(start);
+            break;
+          }
+          case 'MSO':
+            hold(date);
+            break;
+          case 'MFO':
+            hold(startToFinishFrom(leaf.business ? previousWorking(date, c) : date));
+            break;
         }
-        const dates = endFor(start, duration, calendar);
+        const dates = endFor(base, leaf.duration, c);
         task.plannedStart = dates.start;
         task.plannedEnd = dates.end;
+        if (drivenBy === 'network') driverIds = bounds.filter(b => b.start === networkStart).map(b => b.link.predecessorId);
       }
+      const conflict = bounds.some(b => (b.edge === 'start' ? task.plannedStart : task.plannedEnd) < b.date);
+      info.set(task.id, {
+        earlyStart: task.plannedStart,
+        earlyFinish: task.plannedEnd,
+        lateStart: task.plannedStart,
+        lateFinish: task.plannedEnd,
+        totalSlack: 0,
+        freeSlack: 0,
+        critical: false,
+        drivenBy,
+        driverIds,
+        conflict,
+        deadlineMissed: !!task.deadline && task.plannedEnd > task.deadline,
+      });
     }
-    for (const id of outgoing.get(task.id) ?? []) {
-      remaining.set(id, remaining.get(id)! - 1);
-      if (!remaining.get(id)) queue.push(byId.get(id)!);
+  };
+
+  let projectStart: LocalDate | undefined, projectFinish: LocalDate | undefined;
+  const backward = () => {
+    projectStart = projectFinish = undefined;
+    for (const task of order) {
+      if (!leaves.has(task.id)) continue;
+      if (!projectStart || task.plannedStart < projectStart) projectStart = task.plannedStart;
+      if (!projectFinish || task.plannedEnd > projectFinish) projectFinish = task.plannedEnd;
     }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const task = order[i],
+        leaf = leaves.get(task.id);
+      if (!leaf) continue;
+      let lateFinish = projectFinish!;
+      for (const link of outgoing.get(task.id) ?? []) {
+        const successor = byId.get(link.successorId)!,
+          sLeaf = leaves.get(successor.id)!,
+          sInfo = info.get(successor.id)!;
+        // O inverso exato do limite da passada direta, a partir das datas tardias da sucessora.
+        let date = link.type[1] === 'I' ? sInfo.lateStart : sInfo.lateFinish;
+        if (link.type === 'TI' && sLeaf.days > 0) date = shift(date, -1, sLeaf.business, c);
+        if (link.type === 'IT' && sLeaf.days > 0) date = shift(date, 1, sLeaf.business, c);
+        date = shift(date, -link.lagDays, link.lagBusiness, c);
+        const bound = link.type[0] === 'T' ? date : leaf.days ? shift(date, leaf.days - 1, leaf.business, c) : date;
+        if (bound < lateFinish) lateFinish = bound;
+      }
+      if (task.deadline && task.deadline < lateFinish) lateFinish = task.deadline;
+      const constraint = constraintOf(task);
+      // "Não ... depois de" é teto das datas tardias; "Deve iniciar/terminar em" as fixa na data
+      // (MPXJ e ProjectLibre concordam): a tarefa fica com folga zero e o conflito aparece ao redor.
+      if (constraint.type === 'FNLT' && constraint.date! < lateFinish) lateFinish = constraint.date!;
+      if (constraint.type === 'MFO') lateFinish = constraint.date!;
+      if (constraint.type === 'SNLT' || constraint.type === 'MSO') {
+        const bound = leaf.days ? shift(constraint.date!, leaf.days - 1, leaf.business, c) : constraint.date!;
+        if (constraint.type === 'MSO' || bound < lateFinish) lateFinish = bound;
+      }
+      // Como no Project (e no MicrosoftScheduler do MPXJ): o que já aconteceu fixa as datas tardias.
+      if (task.actualEnd) lateFinish = task.actualEnd;
+      else if (leaf.business && !isWorking(lateFinish, c)) lateFinish = previousWorking(lateFinish, c);
+      const lateStart = task.actualStart ?? (leaf.days ? shift(lateFinish, -(leaf.days - 1), leaf.business, c) : lateFinish);
+      Object.assign(info.get(task.id)!, { lateStart, lateFinish });
+    }
+  };
+
+  forward();
+  backward();
+  // "O mais tarde possível": a tarefa vai para as datas tardias e as sucessoras são refeitas a partir delas.
+  const alap = rows.filter(t => leaves.has(t.id) && !t.actualStart && constraintOf(t).type === 'ALAP');
+  if (alap.length) {
+    for (const task of alap) pinned.set(task.id, info.get(task.id)!.lateStart);
+    forward();
+    backward();
   }
-  if (visited !== rows.length) throw new Error('Essa ligação criaria um ciclo entre as linhas.');
-  return rows;
+
+  for (const task of order) {
+    const leaf = leaves.get(task.id);
+    if (!leaf) continue;
+    const self = info.get(task.id)!;
+    const complete = task.progress >= 100 || !!task.actualEnd;
+    // Folga total = a menor entre a do término e a do início; tarefa iniciada só tem a do término,
+    // tarefa concluída nunca é crítica e não tem folga livre — regras observadas no Project.
+    const finishSlack = signedWorkingDays(task.plannedEnd, self.lateFinish, c);
+    self.totalSlack = task.actualStart ? finishSlack : Math.min(finishSlack, signedWorkingDays(task.plannedStart, self.lateStart, c));
+    let free = Infinity;
+    for (const link of outgoing.get(task.id) ?? []) {
+      const successor = byId.get(link.successorId)!;
+      const bound = boundaries(successor, leaves.get(successor.id)!).find(b => b.link === link)!;
+      free = Math.min(free, signedWorkingDays(bound.date, bound.edge === 'start' ? successor.plannedStart : successor.plannedEnd, c));
+    }
+    self.freeSlack = complete ? 0 : Math.max(0, Math.min(self.totalSlack, free === Infinity ? self.totalSlack : free));
+    self.critical = !complete && self.totalSlack <= threshold;
+  }
+  // Resumo: envelope dos filhos nas quatro datas; a folga é a do envelope.
+  rows.forEach((task, at) => {
+    if (!summary.has(task.id)) return;
+    const children: TaskSchedule[] = [];
+    for (let below = at + 1; below < rows.length && rows[below].level > task.level; below++)
+      if (leaves.has(rows[below].id)) children.push(info.get(rows[below].id)!);
+    const min = (pick: (i: TaskSchedule) => string) => children.map(pick).sort()[0];
+    const max = (pick: (i: TaskSchedule) => string) => children.map(pick).sort().at(-1)!;
+    const earlyStart = min(i => i.earlyStart),
+      earlyFinish = max(i => i.earlyFinish),
+      lateStart = min(i => i.lateStart),
+      lateFinish = max(i => i.lateFinish);
+    const totalSlack = Math.min(signedWorkingDays(earlyFinish, lateFinish, c), signedWorkingDays(earlyStart, lateStart, c));
+    info.set(task.id, {
+      earlyStart,
+      earlyFinish,
+      lateStart,
+      lateFinish,
+      totalSlack,
+      freeSlack: Math.max(0, totalSlack),
+      // Resumo é crítico quando alguma subtarefa é, como o Project resume.
+      critical: children.some(child => child.critical),
+      drivenBy: 'summary',
+      driverIds: [],
+      conflict: false,
+      deadlineMissed: false,
+    });
+  });
+  return { tasks: rows, info, projectStart, projectFinish };
 }
+
+/** Só as datas: o que o servidor confere ao gravar e o que a tela usa quando não precisa de folga. */
+export function scheduleTasks(input: PlanTask[], links: PlanDependency[], calendar: WorkCalendar = DEFAULT_CALENDAR): PlanTask[] {
+  return analyzeSchedule(input, links, calendar).tasks;
+}
+
 function validateActualDates(task: Pick<PlanTask, 'actualStart' | 'actualEnd'>) {
   if (task.actualStart) validateDate(task.actualStart);
   if (task.actualEnd) validateDate(task.actualEnd);

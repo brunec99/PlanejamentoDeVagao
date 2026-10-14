@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { Boxes, Layers, Wallet, RefreshCw, Settings2 } from 'lucide-react';
-import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
-import { RESTRICTED_SECTIONS } from '@/application/module-access';
+import { useDeveloper, usePlanning, useTester } from '@/modules/planejamento/planning-provider';
+import { hasSectionAccess, RESTRICTED_SECTIONS } from '@/application/module-access';
 import { workPath } from '@/shared/format';
 
 /** As abas do sistema: os quatro níveis, na ordem em que o planejamento desce do macro para a semana,
@@ -36,8 +36,12 @@ function useWork() {
   const pathname = usePathname();
   const context = usePlanning();
   const developer = useDeveloper();
-  // Fora do desenvolvimento, só as seções abertas no go-live; o número segue o da aba.
-  const tabs = WORK_TABS.map((tab, index) => ({ ...tab, number: index + 1 })).filter(t => developer || !restricted.has(t.section));
+  const tester = useTester();
+  // Fora do desenvolvimento, só as seções abertas no go-live (e o médio prazo para quem tem permissão
+  // de teste); o número segue o da aba.
+  const tabs = WORK_TABS.map((tab, index) => ({ ...tab, number: index + 1 })).filter(
+    t => developer || !restricted.has(t.section) || hasSectionAccess(t.section, { developer, tester }),
+  );
   const support = SUPPORT.filter(s => developer || !restricted.has(s.section));
   const workId = pathname.match(/^\/obras\/([^/]+)/)?.[1];
   const work = workId && context.state === 'ready' ? context.planning.data.works.find(w => w.id === decodeURIComponent(workId)) : undefined;
