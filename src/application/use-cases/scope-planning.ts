@@ -72,34 +72,53 @@ export function scopePlanning(data: PlanningData, actorId: string): PlanningData
   return { ...collections, history };
 }
 
-/** Go-live do curto prazo: quem não desenvolve só abre o curto prazo, a lista de obras e as
- * configurações, que leem obras, usuários, equipes e compromissos. O resto do payload (vagões,
- * atividades, planos, IFC...) pesa megabytes a cada ação e pertence aos módulos restritos, então
- * vai vazio. Função pura: devolve um objeto novo, sem tocar a entrada. Efeitos conhecidos fora do
- * curto prazo: os cards de obra ficam sem restrição vencida, takt vencido e progresso; a contagem
- * de uso das equipes só conta compromissos; o takt por obra lista "nenhuma sequência". */
+/** Partes do planejamento que cada grupo de módulos lê. O curto prazo, a lista de obras e as
+ * configurações leem só obras, usuários, equipes e compromissos, que vão sempre. */
+const WAGON_DATA = [
+  'locations',
+  'sequences',
+  'wagons',
+  'activities',
+  'criteria',
+  'pendingItems',
+  'restrictions',
+  'releases',
+  'debts',
+  'progressEntries',
+  'baselines',
+  'dependencies',
+] as const;
+const PLAN_DATA = ['plans', 'planTasks', 'planDependencies'] as const;
+const IFC_DATA = ['ifcModels', 'ifcVersions', 'linkRules'] as const;
+type Slice = (typeof WAGON_DATA)[number] | (typeof PLAN_DATA)[number] | (typeof IFC_DATA)[number];
+/** O que cada módulo em desenvolvimento precisa receber. O médio prazo leva também os vagões: a
+ * janela de três meses, a cobertura e o quadro de restrições da aba 3 leem atividades e locais. */
+const MODULE_DATA: Record<string, readonly Slice[]> = {
+  'longo-prazo': WAGON_DATA,
+  vagoes: WAGON_DATA,
+  dividas: WAGON_DATA,
+  importar: WAGON_DATA,
+  'medio-prazo': [...WAGON_DATA, ...PLAN_DATA],
+  ifc: IFC_DATA,
+  federacao: IFC_DATA,
+};
+
+/** Recorte de quem não desenvolve: só o que os módulos liberados para a pessoa leem. Sem módulo
+ * liberado, é o recorte do go-live do curto prazo (o resto pesa megabytes a cada ação). Até
+ * 14/10/2026 o recorte ignorava os módulos liberados, e quem tinha IFC ou médio prazo liberado abria
+ * a tela vazia (os modelos criados não apareciam). Função pura: devolve um objeto novo. Efeitos
+ * conhecidos no recorte do curto prazo: os cards de obra ficam sem restrição vencida, takt vencido e
+ * progresso; a contagem de uso das equipes só conta compromissos. */
+export function slimForModules(data: PlanningData, modules: readonly string[]): PlanningData {
+  const keep = new Set<Slice>(modules.flatMap(section => MODULE_DATA[section] ?? []));
+  const slim: PlanningData = { ...data };
+  for (const key of [...WAGON_DATA, ...PLAN_DATA, ...IFC_DATA]) if (!keep.has(key)) slim[key] = [];
+  return slim;
+}
+
+/** Recorte do go-live do curto prazo: nenhum módulo em desenvolvimento. */
 export function slimForShortTerm(data: PlanningData): PlanningData {
-  return {
-    ...data,
-    locations: [],
-    sequences: [],
-    wagons: [],
-    activities: [],
-    criteria: [],
-    pendingItems: [],
-    restrictions: [],
-    releases: [],
-    debts: [],
-    progressEntries: [],
-    baselines: [],
-    dependencies: [],
-    plans: [],
-    planTasks: [],
-    planDependencies: [],
-    ifcModels: [],
-    ifcVersions: [],
-    linkRules: [],
-  };
+  return slimForModules(data, []);
 }
 
 /** Ids das entidades de uma obra que podem ter histórico: é o que a rota de histórico confere
