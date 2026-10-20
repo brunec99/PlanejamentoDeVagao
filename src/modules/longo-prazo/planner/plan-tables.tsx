@@ -53,7 +53,7 @@ export function PlanStats({
   const measured = document.measurements.filter(m => m.date <= today).length;
 
   return (
-    <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div data-tour="longo-indicadores" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
       <StatCard
         label="Serviços"
         value={
@@ -155,7 +155,7 @@ export function ActivitySummaryTable({
     .sort((a, b) => a.span.start.localeCompare(b.span.start) || a.activity.name.localeCompare(b.activity.name, 'pt-BR'));
 
   return (
-    <section className="panel overflow-hidden" aria-labelledby="resumo-servicos-title">
+    <section data-tour="longo-resumo" className="panel overflow-hidden" aria-labelledby="resumo-servicos-title">
       <div className="border-b border-slate-100 px-5 py-3.5">
         <h3 id="resumo-servicos-title" className="text-sm font-bold text-slate-800">
           Resumo dos serviços
@@ -187,10 +187,25 @@ export function ActivitySummaryTable({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ activity, span }) => {
+              {rows.map(({ activity, span }, index) => {
                 const open = expanded.has(activity.id);
                 const custom = !!activity.floorDurations && Object.keys(activity.floorDurations).length > 0;
                 const teams = activity.teams.map(t => `${t.name} (${t.size})`);
+                const visibility = (
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    className="rounded p-1 text-slate-400 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-slate-400"
+                    aria-label={`${activity.visible ? 'Ocultar' : 'Mostrar'} ${activity.name} no gráfico`}
+                    title={activity.visible ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}
+                    onClick={e => {
+                      e.stopPropagation();
+                      onToggleVisible(activity.id);
+                    }}
+                  >
+                    {activity.visible ? <Eye size={15} aria-hidden /> : <EyeOff size={15} aria-hidden />}
+                  </button>
+                );
                 return (
                   <Fragment key={activity.id}>
                     <tr
@@ -243,19 +258,14 @@ export function ActivitySummaryTable({
                         {!teams.length ? '—' : teams.length <= 2 ? teams.join(', ') : plural(teams.length, 'equipe', 'equipes')}
                       </td>
                       <td className="px-2">
-                        <button
-                          type="button"
-                          disabled={readOnly}
-                          className="rounded p-1 text-slate-400 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-slate-400"
-                          aria-label={`${activity.visible ? 'Ocultar' : 'Mostrar'} ${activity.name} no gráfico`}
-                          title={activity.visible ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}
-                          onClick={e => {
-                            e.stopPropagation();
-                            onToggleVisible(activity.id);
-                          }}
-                        >
-                          {activity.visible ? <Eye size={15} aria-hidden /> : <EyeOff size={15} aria-hidden />}
-                        </button>
+                        {/* Só a primeira linha leva a marcação do tour. */}
+                        {index === 0 ? (
+                          <span data-tour="longo-resumo-visibilidade" className="inline-flex">
+                            {visibility}
+                          </span>
+                        ) : (
+                          visibility
+                        )}
                       </td>
                     </tr>
                     {open &&
@@ -305,7 +315,7 @@ export function TeamAllocation({ document }: { document: LongTermPlanDocument })
   const { weeks, teams, matrix } = teamDemand(document.activities);
   if (!teams.length) return null;
   return (
-    <section className="panel overflow-hidden" aria-labelledby="alocacao-equipes-title">
+    <section data-tour="longo-alocacao" className="panel overflow-hidden" aria-labelledby="alocacao-equipes-title">
       <div className="border-b border-slate-100 px-5 py-3.5">
         <h3 id="alocacao-equipes-title" className="text-sm font-bold text-slate-800">
           Alocação de equipes

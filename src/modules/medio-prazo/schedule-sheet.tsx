@@ -389,7 +389,9 @@ export function ScheduleSheet({ workId }: { workId: string }) {
             Cada mês tem o seu cronograma, com horizonte de três meses. Crie o primeiro para começar; os seguintes nascem como cópia do
             anterior.
           </p>
-          <NewPlanForm workId={workId} plans={plans} today={today} onDone={setId} tone="primary" />
+          <span data-tour="medio-primeiro-plano" className="inline-flex">
+            <NewPlanForm workId={workId} plans={plans} today={today} onDone={setId} tone="primary" />
+          </span>
         </div>
       )}
     </section>
@@ -1477,7 +1479,7 @@ export function Sheet({
               : ''}
           </p>
         </div>
-        <label className="text-xs font-semibold text-slate-600">
+        <label data-tour="medio-mes" className="text-xs font-semibold text-slate-600">
           Mês{' '}
           <select
             className="field w-auto py-1.5"
@@ -1492,19 +1494,21 @@ export function Sheet({
             ))}
           </select>
         </label>
-        <span role="status" aria-live="polite" className={`text-xs ${dirty ? 'font-semibold text-warning' : 'text-slate-500'}`}>
-          {busy ? 'Salvando…' : dirty ? `${changed.length + removed.length} tarefas alteradas · não salvo` : 'Tudo salvo'}
-        </span>
-        <button className="button" disabled={!dirty || readOnly || busy || !!editor} onClick={() => setReview(true)}>
-          Revisar e salvar
-        </button>
+        <div data-tour="medio-salvar" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span role="status" aria-live="polite" className={`text-xs ${dirty ? 'font-semibold text-warning' : 'text-slate-500'}`}>
+            {busy ? 'Salvando…' : dirty ? `${changed.length + removed.length} tarefas alteradas · não salvo` : 'Tudo salvo'}
+          </span>
+          <button className="button" disabled={!dirty || readOnly || busy || !!editor} onClick={() => setReview(true)}>
+            Revisar e salvar
+          </button>
+        </div>
       </div>
       <div
         className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5"
         role="toolbar"
         aria-label="Ferramentas do cronograma"
       >
-        <div className={group}>
+        <div className={group} data-tour="medio-edicao">
           <button
             className={tool}
             disabled={readOnly || busy || !!plan.frozenAt}
@@ -1530,6 +1534,7 @@ export function Sheet({
         <div className={group} aria-label="Tarefa">
           <button
             className={tool}
+            data-tour="medio-inserir"
             disabled={!canEdit || !!editor || filtering}
             onClick={() => structural('insert')}
             title="Inserir tarefa abaixo da selecionada (Insert)"
@@ -1537,43 +1542,48 @@ export function Sheet({
             <ListPlus size={14} aria-hidden />
             Inserir tarefa
           </button>
+          <span data-tour="medio-recuo" className="inline-flex items-center gap-0.5">
+            <button
+              className={tool}
+              disabled={!canEdit || !active || !!editor || filtering}
+              onClick={() => structural('outdent')}
+              title="Diminuir o recuo das linhas selecionadas (Alt+Shift+←)"
+            >
+              <IndentDecrease size={14} aria-hidden />
+              <span className="sr-only">Diminuir recuo</span>
+            </button>
+            <button
+              className={tool}
+              disabled={!canEdit || !active || !!editor || filtering}
+              onClick={() => structural('indent')}
+              title="Recuar as linhas selecionadas, tornando-as subitens da de cima (Alt+Shift+→)"
+            >
+              <IndentIncrease size={14} aria-hidden />
+              <span className="sr-only">Recuar tarefa</span>
+            </button>
+          </span>
+          <span data-tour="medio-vinculos" className="inline-flex items-center gap-0.5">
+            <button
+              className={tool}
+              disabled={!canEdit || !active || !!editor || filtering}
+              onClick={() => structural('link')}
+              title="Vincular as tarefas selecionadas em Término-Início (Ctrl+F2)"
+            >
+              <Link2 size={14} aria-hidden />
+              Vincular
+            </button>
+            <button
+              className={tool}
+              disabled={!canEdit || !active || !!editor || filtering}
+              onClick={() => structural('unlink')}
+              title="Desvincular as tarefas selecionadas (Ctrl+Shift+F2)"
+            >
+              <Unlink2 size={14} aria-hidden />
+              <span className="sr-only">Desvincular</span>
+            </button>
+          </span>
           <button
-            className={tool}
-            disabled={!canEdit || !active || !!editor || filtering}
-            onClick={() => structural('outdent')}
-            title="Diminuir o recuo das linhas selecionadas (Alt+Shift+←)"
-          >
-            <IndentDecrease size={14} aria-hidden />
-            <span className="sr-only">Diminuir recuo</span>
-          </button>
-          <button
-            className={tool}
-            disabled={!canEdit || !active || !!editor || filtering}
-            onClick={() => structural('indent')}
-            title="Recuar as linhas selecionadas, tornando-as subitens da de cima (Alt+Shift+→)"
-          >
-            <IndentIncrease size={14} aria-hidden />
-            <span className="sr-only">Recuar tarefa</span>
-          </button>
-          <button
-            className={tool}
-            disabled={!canEdit || !active || !!editor || filtering}
-            onClick={() => structural('link')}
-            title="Vincular as tarefas selecionadas em Término-Início (Ctrl+F2)"
-          >
-            <Link2 size={14} aria-hidden />
-            Vincular
-          </button>
-          <button
-            className={tool}
-            disabled={!canEdit || !active || !!editor || filtering}
-            onClick={() => structural('unlink')}
-            title="Desvincular as tarefas selecionadas (Ctrl+Shift+F2)"
-          >
-            <Unlink2 size={14} aria-hidden />
-            <span className="sr-only">Desvincular</span>
-          </button>
-          <button
+            data-tour="medio-excluir"
             className={`${tool} text-danger`}
             disabled={!canEdit || !active || !!editor || filtering}
             onClick={() => structural('remove')}
@@ -1584,7 +1594,7 @@ export function Sheet({
           </button>
         </div>
         <div className={group} aria-label="Exibir">
-          <label className="flex items-center gap-1 text-xs text-slate-600">
+          <label data-tour="medio-base-exibida" className="flex items-center gap-1 text-xs text-slate-600">
             Linha de base
             <select className="field w-auto py-1 text-xs" value={baseId} onChange={e => setBaseId(e.target.value)}>
               <option value="">Nenhuma</option>
@@ -1596,17 +1606,19 @@ export function Sheet({
               ))}
             </select>
           </label>
-          <button className={tool} disabled={filtering} onClick={() => setFolded([])}>
-            Expandir
-          </button>
-          <button
-            className={tool}
-            disabled={filtering}
-            onClick={() => setFolded(draft.tasks.filter(t => roll.get(t.id)?.summary).map(t => t.id))}
-          >
-            Recolher
-          </button>
-          <details className="relative">
+          <span data-tour="medio-expandir" className="inline-flex items-center gap-0.5">
+            <button className={tool} disabled={filtering} onClick={() => setFolded([])}>
+              Expandir
+            </button>
+            <button
+              className={tool}
+              disabled={filtering}
+              onClick={() => setFolded(draft.tasks.filter(t => roll.get(t.id)?.summary).map(t => t.id))}
+            >
+              Recolher
+            </button>
+          </span>
+          <details className="relative" data-tour="medio-colunas">
             <summary className={`${tool} cursor-pointer list-none`}>Colunas</summary>
             <div className="absolute left-0 z-40 mt-1 grid w-56 gap-1.5 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl">
               {columns.map(c => (
@@ -1632,23 +1644,26 @@ export function Sheet({
               </button>
             </div>
           </details>
+          <span data-tour="medio-critico" className="inline-flex items-center gap-0.5">
+            <button
+              className={tool}
+              aria-pressed={showCritical}
+              onClick={() => setShowCritical(!showCritical)}
+              title="Pinta de vermelho as tarefas sem folga no Gantt"
+            >
+              Caminho crítico
+            </button>
+            <button
+              className={tool}
+              aria-pressed={showSlack}
+              onClick={() => setShowSlack(!showSlack)}
+              title="Linha de folga depois da barra, até o término tardio"
+            >
+              Folga
+            </button>
+          </span>
           <button
-            className={tool}
-            aria-pressed={showCritical}
-            onClick={() => setShowCritical(!showCritical)}
-            title="Pinta de vermelho as tarefas sem folga no Gantt"
-          >
-            Caminho crítico
-          </button>
-          <button
-            className={tool}
-            aria-pressed={showSlack}
-            onClick={() => setShowSlack(!showSlack)}
-            title="Linha de folga depois da barra, até o término tardio"
-          >
-            Folga
-          </button>
-          <button
+            data-tour="medio-caminho"
             className={tool}
             aria-pressed={showPath}
             onClick={() => setShowPath(!showPath)}
@@ -1656,77 +1671,79 @@ export function Sheet({
           >
             Caminho da tarefa
           </button>
-          <button className={tool} aria-pressed={meeting} onClick={() => setMeeting(!meeting)}>
+          <button data-tour="medio-reuniao" className={tool} aria-pressed={meeting} onClick={() => setMeeting(!meeting)}>
             Modo reunião
           </button>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-1.5 text-xs">
-        <label className="relative">
-          <span className="sr-only">Buscar tarefas</span>
-          <input
-            type="search"
-            className="field w-56 py-1 text-xs"
-            placeholder="Buscar tarefa, recurso ou anotação"
-            value={query}
-            disabled={!!editor}
-            onChange={e => {
-              setQuery(e.target.value);
-              setSelected({ row: 0, col: selected.col });
-            }}
-          />
-        </label>
-        <label>
-          <span className="sr-only">Filtrar por situação</span>
-          <select
-            className="field w-auto py-1 text-xs"
-            value={status}
-            disabled={!!editor}
-            onChange={e => {
-              setStatus(e.target.value);
-              setSelected({ row: 0, col: selected.col });
-            }}
-          >
-            {[
-              ['all', 'Todas as tarefas'],
-              ['zero', 'Não iniciadas'],
-              ['ongoing', 'Em andamento'],
-              ['done', 'Concluídas'],
-              ['late', 'Atrasadas'],
-              ['critical', 'Críticas'],
-              ['conflict', 'Com vínculo desrespeitado'],
-              ['deadline', 'Prazo final perdido'],
-              ['window', 'Fora do horizonte'],
-              ['changed', 'Alteradas no rascunho'],
-              ['notes', 'Com anotações'],
-            ].map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="sr-only">Filtrar por recurso</span>
-          <select
-            className="field w-auto py-1 text-xs"
-            value={team}
-            disabled={!!editor}
-            onChange={e => {
-              setTeam(e.target.value);
-              setSelected({ row: 0, col: selected.col });
-            }}
-          >
-            <option value="">Todos os recursos</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.company} · {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <span data-tour="medio-filtros" className="flex flex-wrap items-center gap-2">
+          <label className="relative">
+            <span className="sr-only">Buscar tarefas</span>
+            <input
+              type="search"
+              className="field w-56 py-1 text-xs"
+              placeholder="Buscar tarefa, recurso ou anotação"
+              value={query}
+              disabled={!!editor}
+              onChange={e => {
+                setQuery(e.target.value);
+                setSelected({ row: 0, col: selected.col });
+              }}
+            />
+          </label>
+          <label>
+            <span className="sr-only">Filtrar por situação</span>
+            <select
+              className="field w-auto py-1 text-xs"
+              value={status}
+              disabled={!!editor}
+              onChange={e => {
+                setStatus(e.target.value);
+                setSelected({ row: 0, col: selected.col });
+              }}
+            >
+              {[
+                ['all', 'Todas as tarefas'],
+                ['zero', 'Não iniciadas'],
+                ['ongoing', 'Em andamento'],
+                ['done', 'Concluídas'],
+                ['late', 'Atrasadas'],
+                ['critical', 'Críticas'],
+                ['conflict', 'Com vínculo desrespeitado'],
+                ['deadline', 'Prazo final perdido'],
+                ['window', 'Fora do horizonte'],
+                ['changed', 'Alteradas no rascunho'],
+                ['notes', 'Com anotações'],
+              ].map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Filtrar por recurso</span>
+            <select
+              className="field w-auto py-1 text-xs"
+              value={team}
+              disabled={!!editor}
+              onChange={e => {
+                setTeam(e.target.value);
+                setSelected({ row: 0, col: selected.col });
+              }}
+            >
+              <option value="">Todos os recursos</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.company} · {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </span>
         {!hidden.includes('target') && (
-          <label className="flex items-center gap-1 text-slate-600">
+          <label data-tour="medio-referencia" className="flex items-center gap-1 text-slate-600">
             Referência do % alvo
             <input
               className="field w-auto py-1 text-xs"
@@ -1738,7 +1755,7 @@ export function Sheet({
             />
           </label>
         )}
-        <span className="ml-auto flex items-center gap-0.5 text-slate-500">
+        <span data-tour="medio-atalhos" className="ml-auto flex items-center gap-0.5 text-slate-500">
           Atalhos
           <HelpNote title="Atalhos do teclado" label="Atalhos do teclado" compact align="end">
             <p>
@@ -1831,6 +1848,7 @@ export function Sheet({
             }}
             role="region"
             aria-label="Tabela do cronograma"
+            data-tour="medio-tabela"
             tabIndex={-1}
           >
             <table
@@ -1907,12 +1925,12 @@ export function Sheet({
                         }}
                       >
                         {c.key === 'ind' ? (
-                          <span title="Indicadores">
+                          <span title="Indicadores" data-tour="medio-col-indicadores">
                             <span aria-hidden>ⓘ</span>
                             <span className="sr-only">Indicadores</span>
                           </span>
                         ) : (
-                          c.label
+                          <ColumnLabel column={c} />
                         )}
                         <span
                           role="separator"
@@ -1959,7 +1977,7 @@ export function Sheet({
               </thead>
               <tbody>
                 {planRow && (
-                  <tr className="project-plan-row" aria-label={`Resumo do cronograma: ${plan.name}`}>
+                  <tr className="project-plan-row" data-tour="medio-linha-resumo" aria-label={`Resumo do cronograma: ${plan.name}`}>
                     {visibleCols.map(col => (
                       <td
                         key={col.key}
@@ -2167,7 +2185,11 @@ export function Sheet({
           />
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-3 bg-slate-100 px-3 py-1 text-xs text-slate-600" aria-label="Barra de status">
+      <div
+        data-tour="medio-status"
+        className="flex flex-wrap items-center gap-3 bg-slate-100 px-3 py-1 text-xs text-slate-600"
+        aria-label="Barra de status"
+      >
         <span>
           Novas tarefas: <strong>Agendadas automaticamente</strong>
         </span>
@@ -2222,6 +2244,7 @@ export function Sheet({
 
       {active && (
         <aside
+          data-tour="medio-detalhes"
           className={fullDetails ? 'fixed inset-0 z-40 overflow-auto bg-white p-5' : 'border-t border-slate-200 bg-slate-50 p-4'}
           aria-label="Detalhes da tarefa"
         >
@@ -2233,7 +2256,7 @@ export function Sheet({
               {fullDetails ? 'Fechar tela cheia' : 'Detalhes em tela cheia'}
             </button>
             {meeting && (
-              <>
+              <span data-tour="medio-reuniao-navegar" className="flex flex-wrap items-center gap-2">
                 <button className="button-ghost" onClick={() => focus(selected.row - 1, selected.col)}>
                   Anterior
                 </button>
@@ -2249,7 +2272,7 @@ export function Sheet({
                   />{' '}
                   Revisado nesta reunião
                 </label>
-              </>
+              </span>
             )}
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-700">
@@ -2275,47 +2298,54 @@ export function Sheet({
           <p className="mt-1 text-xs text-slate-500">
             % alvo em {formatDate(reference)}: {raw(active, 'target')} — leitura de tempo decorrido, não medição física.
           </p>
-          <label className="mt-4 block text-xs font-semibold text-slate-600">
-            Anotações e encaminhamentos
-            <textarea
-              key={active.id}
-              className="field mt-1.5 min-h-24 whitespace-pre-wrap font-normal"
-              readOnly={!canEdit}
-              value={active.notes ?? ''}
-              onChange={e => {
-                try {
-                  applyCells([{ id: active.id, key: 'notes', text: e.target.value }]);
-                } catch (err) {
-                  setError((err as Error).message);
-                }
-              }}
-            />
-          </label>
-          <button
-            className="button-ghost mt-2"
-            disabled={!canEdit || !active.notes}
-            onClick={() =>
-              applyCells([
-                {
-                  id: active.id,
-                  key: 'notes',
-                  text: active
-                    .notes!.split('\n')
-                    .map(l => (l.trim() ? `• ${l}` : l))
-                    .join('\n'),
-                },
-              ])
-            }
+          <div data-tour="medio-anotacoes" className="mt-4">
+            <label className="block text-xs font-semibold text-slate-600">
+              Anotações e encaminhamentos
+              <textarea
+                key={active.id}
+                className="field mt-1.5 min-h-24 whitespace-pre-wrap font-normal"
+                readOnly={!canEdit}
+                value={active.notes ?? ''}
+                onChange={e => {
+                  try {
+                    applyCells([{ id: active.id, key: 'notes', text: e.target.value }]);
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
+                }}
+              />
+            </label>
+            <button
+              className="button-ghost mt-2"
+              disabled={!canEdit || !active.notes}
+              onClick={() =>
+                applyCells([
+                  {
+                    id: active.id,
+                    key: 'notes',
+                    text: active
+                      .notes!.split('\n')
+                      .map(l => (l.trim() ? `• ${l}` : l))
+                      .join('\n'),
+                  },
+                ])
+              }
+            >
+              Transformar linhas em tópicos
+            </button>
+          </div>
+          <details
+            data-tour="medio-historico-tarefa"
+            className="mt-4"
+            open={historyOpen}
+            onToggle={e => setHistoryOpen(e.currentTarget.open)}
           >
-            Transformar linhas em tópicos
-          </button>
-          <details className="mt-4" open={historyOpen} onToggle={e => setHistoryOpen(e.currentTarget.open)}>
             <summary className="cursor-pointer text-sm font-semibold text-slate-700">Histórico da tarefa</summary>
             {historyOpen && <TaskHistory workId={plan.workId} taskId={active.id} users={data.users} show={show} />}
           </details>
         </aside>
       )}
-      <details className="border-t border-slate-200 p-3 text-sm">
+      <details data-tour="medio-calendario" className="border-t border-slate-200 p-3 text-sm">
         <summary className="cursor-pointer font-semibold text-slate-700">Calendário de trabalho</summary>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {[0, 1, 2, 3, 4, 5, 6].map(day => (
@@ -2398,6 +2428,7 @@ export function Sheet({
       <div className="flex flex-wrap gap-3 border-t border-slate-200 p-3">
         <button
           type="button"
+          data-tour="medio-exportar"
           className="button-ghost inline-flex items-center gap-1.5"
           disabled={!draft.tasks.length}
           onClick={exportXml}
@@ -2407,27 +2438,32 @@ export function Sheet({
         </button>
         {!readOnly && !dirty && !editor && (
           <>
-            <CommandForm
-              title="Definir linha de base"
-              description="Congela as datas de hoje como referência: a tabela e o Gantt passam a mostrar a variação contra ela."
-              submit="Salvar linha de base"
-              icon="none"
-              trigger={
-                <>
-                  <Flag size={14} aria-hidden /> Definir linha de base
-                </>
-              }
-              success="Linha de base definida"
-              onDone={setBaseId}
-              command={d => ({ type: 'freeze_plan_baseline', planId: plan.id, name: value(d, 'name') })}
-            >
-              <TextField name="name" label="Nome da linha de base" defaultValue={`Base ${formatDate(today)}`} />
-            </CommandForm>
-            <NewPlanForm workId={plan.workId} plans={plans} today={today} onDone={choose} />
+            <span data-tour="medio-definir-base" className="inline-flex">
+              <CommandForm
+                title="Definir linha de base"
+                description="Congela as datas de hoje como referência: a tabela e o Gantt passam a mostrar a variação contra ela."
+                submit="Salvar linha de base"
+                icon="none"
+                trigger={
+                  <>
+                    <Flag size={14} aria-hidden /> Definir linha de base
+                  </>
+                }
+                success="Linha de base definida"
+                onDone={setBaseId}
+                command={d => ({ type: 'freeze_plan_baseline', planId: plan.id, name: value(d, 'name') })}
+              >
+                <TextField name="name" label="Nome da linha de base" defaultValue={`Base ${formatDate(today)}`} />
+              </CommandForm>
+            </span>
+            <span data-tour="medio-novo-plano" className="inline-flex">
+              <NewPlanForm workId={plan.workId} plans={plans} today={today} onDone={choose} />
+            </span>
           </>
         )}
         {dirty && (
           <button
+            data-tour="medio-descartar"
             className="button-ghost"
             disabled={busy}
             onClick={async () => {
@@ -2546,6 +2582,39 @@ export function Sheet({
       </dialog>
     </>
   );
+}
+
+/** Rótulo do cabeçalho, com a marca do tour "Como usar" nas colunas que ele explica. Cada marca vai
+ * escrita por extenso porque tests/tour-targets.test.ts procura o texto `data-tour="…"` no código. */
+function ColumnLabel({ column }: { column: Column }) {
+  switch (column.key) {
+    case 'progress':
+      return <span data-tour="medio-col-avanco">{column.label}</span>;
+    case 'duration':
+      return <span data-tour="medio-col-duracao">{column.label}</span>;
+    case 'actualStart':
+      return <span data-tour="medio-col-reais">{column.label}</span>;
+    case 'start':
+      return <span data-tour="medio-col-datas">{column.label}</span>;
+    case 'links':
+      return <span data-tour="medio-col-predecessoras">{column.label}</span>;
+    case 'team':
+      return <span data-tour="medio-col-recursos">{column.label}</span>;
+    case 'lateStart':
+      return <span data-tour="medio-col-tardias">{column.label}</span>;
+    case 'totalSlack':
+      return <span data-tour="medio-col-folgas">{column.label}</span>;
+    case 'constraintType':
+      return <span data-tour="medio-col-restricao">{column.label}</span>;
+    case 'deadline':
+      return <span data-tour="medio-col-prazo">{column.label}</span>;
+    case 'target':
+      return <span data-tour="medio-col-alvo">{column.label}</span>;
+    case 'variance':
+      return <span data-tour="medio-col-variacao">{column.label}</span>;
+    default:
+      return <>{column.label}</>;
+  }
 }
 
 /** Coluna de indicadores do Project: ícone e texto, nunca só cor. A restrição aparece sempre que não

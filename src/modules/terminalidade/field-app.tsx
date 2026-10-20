@@ -19,6 +19,9 @@ import {
   X,
 } from 'lucide-react';
 import type { TerminalityItem, TerminalityPhoto, TerminalityPhotoKind } from '@/domain/terminality';
+import { HelpButton } from '@/modules/tour/help-button';
+import { TourOverlay } from '@/modules/tour/tour-overlay';
+import { TourProvider } from '@/modules/tour/tour-provider';
 import { compareFloors, compareItems, indexTerminality, unitOptions, type TerminalityIndex } from './terminality-view';
 import { compressImage } from './compress-image';
 import { localView, todayInSaoPaulo, type FieldPackage, type LocalView, type QueuedOperation } from './offline-model';
@@ -66,7 +69,19 @@ const LOGIN_URL = '/login?redirect=%2Fcampo%2Fterminalidade';
 
 type Toast = { text: string; tone: 'ok' | 'error' } | null;
 
+/** O tour "Como usar" (botão "?" do cabeçalho e das folhas) também aqui, que fica fora do layout do
+ * sistema e por isso não herda o dele. Só componentes de cliente, importados direto: entram nos
+ * mesmos arquivos que o service worker guarda, e o tour abre sem sinal como o resto da tela. */
 export function FieldTerminality() {
+  return (
+    <TourProvider>
+      <FieldApp />
+      <TourOverlay />
+    </TourProvider>
+  );
+}
+
+function FieldApp() {
   const online = useOnline();
   const [works, setWorks] = useState<StoredWorks | null>(null);
   const [packages, setPackages] = useState<Record<string, FieldPackage>>({});
@@ -194,7 +209,7 @@ export function FieldTerminality() {
       {needsLogin && (
         <Banner tone="warning">
           Sua sessão expirou. O que foi lançado continua guardado neste aparelho.{' '}
-          <a href={LOGIN_URL} className="inline-flex items-center gap-1 font-semibold underline">
+          <a href={LOGIN_URL} data-tour="campo-entrar" className="inline-flex items-center gap-1 font-semibold underline">
             <LogIn size={14} aria-hidden /> Entrar de novo
           </a>
         </Banner>
@@ -261,6 +276,12 @@ function Header({
   onBack?: () => void;
   onSync: () => void;
 }) {
+  const heading = (
+    <>
+      <h1 className="truncate text-base font-semibold">{title}</h1>
+      <p className="truncate text-xs text-brand-200">{subtitle}</p>
+    </>
+  );
   return (
     <header className="sticky top-0 z-30 bg-brand-950 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white shadow">
       <div className="flex items-center gap-2">
@@ -269,6 +290,7 @@ function Header({
             type="button"
             onClick={onBack}
             aria-label="Voltar para as obras"
+            data-tour="campo-voltar-obras"
             className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10"
           >
             <ArrowLeft size={20} aria-hidden />
@@ -277,16 +299,21 @@ function Header({
           <Link
             href="/obras"
             aria-label="Voltar ao Obra 360"
+            data-tour="campo-sair"
             className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10"
           >
             <ArrowLeft size={20} aria-hidden />
           </Link>
         )}
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-semibold">{title}</h1>
-          <p className="truncate text-xs text-brand-200">{subtitle}</p>
-        </div>
+        {onBack ? (
+          <div data-tour="campo-obra-aberta" className="min-w-0 flex-1">
+            {heading}
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">{heading}</div>
+        )}
         <span
+          data-tour="campo-conexao"
           className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${online ? 'bg-white/15 text-brand-50' : 'bg-amber-400 text-amber-950'}`}
         >
           {online ? <CloudUpload size={13} aria-hidden /> : <WifiOff size={13} aria-hidden />}
@@ -297,13 +324,18 @@ function Header({
           onClick={onSync}
           disabled={!online || syncing || pending === 0}
           aria-label="Enviar o que está no aparelho"
+          data-tour="campo-enviar"
           className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-40"
         >
           <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} aria-hidden />
         </button>
+        {/* O "?" do sistema é cinza sobre fundo claro; aqui o cabeçalho é escuro e o toque, de 44 px. */}
+        <span className="flex [&>button:hover]:bg-white/10 [&>button:hover]:text-white [&>button]:h-11 [&>button]:text-brand-100">
+          <HelpButton variant="icon" />
+        </span>
       </div>
       {pending > 0 && (
-        <p className="mt-1 rounded-md bg-amber-400/90 px-2 py-1 text-xs font-medium text-amber-950">
+        <p data-tour="campo-fila" className="mt-1 rounded-md bg-amber-400/90 px-2 py-1 text-xs font-medium text-amber-950">
           {pending} {pending === 1 ? 'alteração guardada no aparelho' : 'alterações guardadas no aparelho'}
           {online ? ', enviando…' : ' — sobe sozinho quando o sinal voltar'}
         </p>
@@ -312,10 +344,11 @@ function Header({
   );
 }
 
-function Banner({ tone, children }: { tone: 'warning' | 'error'; children: ReactNode }) {
+function Banner({ tone, tourId, children }: { tone: 'warning' | 'error'; tourId?: string; children: ReactNode }) {
   return (
     <div
       role="alert"
+      data-tour={tourId}
       className={`mx-3 mt-3 rounded-xl px-4 py-3 text-sm ${tone === 'warning' ? 'bg-amber-100 text-amber-950' : 'bg-rose-100 text-rose-900'}`}
     >
       {children}
@@ -325,7 +358,7 @@ function Banner({ tone, children }: { tone: 'warning' | 'error'; children: React
 
 function FailedOperations({ failed, onDiscard }: { failed: QueuedOperation[]; onDiscard: (q: QueuedOperation) => void }) {
   return (
-    <Banner tone="error">
+    <Banner tone="error" tourId="campo-recusadas">
       <p className="font-semibold">O servidor recusou {failed.length === 1 ? 'uma alteração' : `${failed.length} alterações`}.</p>
       <p className="mt-0.5 text-xs">O envio parou nela para não mudar a ordem. Confira e descarte para seguir.</p>
       <ul className="mt-2 space-y-2">
@@ -339,6 +372,7 @@ function FailedOperations({ failed, onDiscard }: { failed: QueuedOperation[]; on
             <button
               type="button"
               onClick={() => onDiscard(q)}
+              data-tour="campo-descartar"
               className="inline-flex shrink-0 items-center gap-1 rounded-md bg-rose-700 px-2 py-1.5 font-semibold text-white"
             >
               <Trash2 size={12} aria-hidden /> Descartar
@@ -384,7 +418,7 @@ function WorkList({
 }) {
   if (!works)
     return (
-      <div className="m-3 rounded-2xl bg-white p-6 text-center shadow-sm">
+      <div data-tour="campo-preparar" className="m-3 rounded-2xl bg-white p-6 text-center shadow-sm">
         <CloudDownload size={28} className="mx-auto text-brand-600" aria-hidden />
         <h2 className="mt-2 text-base font-semibold">Prepare com sinal</h2>
         <p className="mt-1 text-sm text-slate-600">
@@ -395,6 +429,7 @@ function WorkList({
             type="button"
             onClick={onReloadWorks}
             disabled={busy}
+            data-tour="campo-carregar-obras"
             className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
             Carregar minhas obras
@@ -406,7 +441,9 @@ function WorkList({
     );
   return (
     <div className="space-y-3 p-3">
-      <p className="px-1 text-xs text-slate-500">{works.actor.name} · obras liberadas para você. Baixe antes de ir para o canteiro.</p>
+      <p data-tour="campo-obras" className="px-1 text-xs text-slate-500">
+        {works.actor.name} · obras liberadas para você. Baixe antes de ir para o canteiro.
+      </p>
       {works.works.map(work => {
         const pkg = packages[work.id];
         const queued = queue.filter(q => q.workId === work.id).length;
@@ -417,6 +454,7 @@ function WorkList({
             type="button"
             onClick={() => onOpen(work.id)}
             disabled={busy || (!pkg && !online)}
+            data-tour="campo-obra"
             className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm active:bg-slate-50 disabled:opacity-60"
           >
             <div className="min-w-0 flex-1">
@@ -495,7 +533,12 @@ function WorkScreen({
   return (
     <>
       <div className="sticky top-[4.25rem] z-20 space-y-2 bg-slate-100 px-3 pb-2 pt-3">
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-white p-1 text-sm shadow-sm" role="group" aria-label="Situação">
+        <div
+          className="grid grid-cols-3 gap-1 rounded-xl bg-white p-1 text-sm shadow-sm"
+          role="group"
+          aria-label="Situação"
+          data-tour="campo-situacao"
+        >
           {(
             [
               ['open', `Abertas (${openCount})`],
@@ -514,7 +557,7 @@ function WorkScreen({
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2" data-tour="campo-local">
           <select
             aria-label="Pavimento"
             className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
@@ -546,7 +589,7 @@ function WorkScreen({
             ))}
           </select>
         </div>
-        <label className="relative block">
+        <label className="relative block" data-tour="campo-busca">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
           <span className="sr-only">Buscar na descrição</span>
           <input
@@ -588,6 +631,7 @@ function WorkScreen({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
+            data-tour="campo-atualizar"
             className="text-xs font-semibold text-brand-700 underline disabled:opacity-50"
           >
             {refreshing ? 'Atualizando…' : 'Atualizar a obra com o que está no servidor'}
@@ -599,6 +643,7 @@ function WorkScreen({
         <button
           type="button"
           onClick={() => setCreating(true)}
+          data-tour="campo-nova-pendencia"
           className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-white shadow-xl active:scale-95"
         >
           <Plus size={20} aria-hidden /> Nova pendência
@@ -639,7 +684,7 @@ function ItemCard({
   const type = item.typeId ? index.types.get(item.typeId)?.name : '';
   const person = item.atrPersonId ? index.people.get(item.atrPersonId)?.name : '';
   return (
-    <li className={`rounded-2xl bg-white p-3 shadow-sm ${item.status === 'resolved' ? 'opacity-80' : ''}`}>
+    <li data-tour="campo-pendencia" className={`rounded-2xl bg-white p-3 shadow-sm ${item.status === 'resolved' ? 'opacity-80' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-semibold text-brand-700">
           {floor}
@@ -679,12 +724,18 @@ function ItemCard({
         <div className="mt-3 flex gap-2">
           {item.status === 'open' ? (
             <>
-              <button type="button" onClick={onResolve} className="h-11 flex-1 rounded-xl bg-emerald-700 text-sm font-semibold text-white">
+              <button
+                type="button"
+                onClick={onResolve}
+                data-tour="campo-resolver"
+                className="h-11 flex-1 rounded-xl bg-emerald-700 text-sm font-semibold text-white"
+              >
                 Resolver
               </button>
               <button
                 type="button"
                 onClick={onAddPhoto}
+                data-tour="campo-foto"
                 className="inline-flex h-11 items-center gap-1 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700"
               >
                 <Camera size={16} aria-hidden /> Foto
@@ -694,6 +745,7 @@ function ItemCard({
             <button
               type="button"
               onClick={onReopen}
+              data-tour="campo-reabrir"
               className="inline-flex h-11 items-center gap-1 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700"
             >
               <RotateCcw size={16} aria-hidden /> Reabrir
@@ -749,20 +801,25 @@ function Thumb({ photo, local }: { photo: TerminalityPhoto; local: boolean }) {
   );
 }
 
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Sheet({ title, tourId, onClose, children }: { title: string; tourId: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end bg-slate-900/50" role="dialog" aria-modal="true" aria-label={title}>
+    // `data-tour-scope`: o "?" desta folha explica só os campos dela, não a tela escurecida atrás.
+    <div data-tour-scope className="fixed inset-0 z-40 flex items-end bg-slate-900/50" role="dialog" aria-modal="true" aria-label={title}>
       <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
+        <div data-tour={tourId} className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-slate-100"
-          >
-            <X size={20} aria-hidden />
-          </button>
+          {/* A folha cobre o cabeçalho: o "?" dela é o que alcança o tour dos campos do formulário. */}
+          <div className="flex items-center gap-1">
+            <HelpButton variant="icon" />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-slate-100"
+            >
+              <X size={20} aria-hidden />
+            </button>
+          </div>
         </div>
         {children}
       </div>
@@ -775,12 +832,22 @@ const fieldClass = 'mt-1 h-12 w-full rounded-xl border border-slate-300 bg-white
 type Prepared = { image: Blob; thumb: Blob; width: number; height: number; preview: string };
 
 /** Fotos tiradas pela câmera do celular, já comprimidas (≈1600 px, ≈300 KB) e com miniatura. */
-function PhotoPicker({ photos, onChange, label }: { photos: Prepared[]; onChange: (photos: Prepared[]) => void; label: string }) {
+function PhotoPicker({
+  photos,
+  onChange,
+  label,
+  tourId,
+}: {
+  photos: Prepared[];
+  onChange: (photos: Prepared[]) => void;
+  label: string;
+  tourId: string;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   return (
-    <div className="mt-3">
+    <div className="mt-3" data-tour={tourId}>
       <p className="text-sm font-semibold text-slate-700">{label}</p>
       <div className="mt-1 flex flex-wrap gap-2">
         {photos.map((photo, i) => (
@@ -891,7 +958,7 @@ function NewItemSheet({
   const types = data.types.filter(t => t.active).sort((a, b) => a.orderIndex - b.orderIndex);
   const people = data.people.filter(p => p.active).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   return (
-    <Sheet title="Nova pendência" onClose={onClose}>
+    <Sheet title="Nova pendência" tourId="campo-nova" onClose={onClose}>
       {floors.length === 0 ? (
         <p className="text-sm text-slate-600">
           Esta obra ainda não tem pavimentos cadastrados. O cadastro é feito no computador, em Configurações da obra.
@@ -925,29 +992,31 @@ function NewItemSheet({
             if (ok) onClose();
           }}
         >
-          <label className="block text-sm font-semibold text-slate-700">
-            Pavimento
-            <select required className={fieldClass} value={floorId} onChange={e => (setFloorId(e.target.value), setUnitId(''))}>
-              <option value="">Escolha</option>
-              {floors.map(f => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mt-3 block text-sm font-semibold text-slate-700">
-            Apto ou área
-            <select className={fieldClass} value={unitId} disabled={!floorId} onChange={e => setUnitId(e.target.value)}>
-              <option value="">Do pavimento todo</option>
-              {units.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mt-3 block text-sm font-semibold text-slate-700">
+          <div data-tour="campo-nova-local">
+            <label className="block text-sm font-semibold text-slate-700">
+              Pavimento
+              <select required className={fieldClass} value={floorId} onChange={e => (setFloorId(e.target.value), setUnitId(''))}>
+                <option value="">Escolha</option>
+                {floors.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-3 block text-sm font-semibold text-slate-700">
+              Apto ou área
+              <select className={fieldClass} value={unitId} disabled={!floorId} onChange={e => setUnitId(e.target.value)}>
+                <option value="">Do pavimento todo</option>
+                {units.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label data-tour="campo-nova-descricao" className="mt-3 block text-sm font-semibold text-slate-700">
             Descrição
             <textarea
               required
@@ -957,7 +1026,7 @@ function NewItemSheet({
               onChange={e => setDescription(e.target.value)}
             />
           </label>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div data-tour="campo-nova-tipo-data" className="mt-3 grid grid-cols-2 gap-2">
             <label className="block text-sm font-semibold text-slate-700">
               Tipo
               <select className={fieldClass} value={typeId} onChange={e => setTypeId(e.target.value)}>
@@ -981,36 +1050,39 @@ function NewItemSheet({
               />
             </label>
           </div>
-          <label className="mt-3 block text-sm font-semibold text-slate-700">
-            Responsável ATR
-            <select className={fieldClass} value={personId} onChange={e => setPersonId(e.target.value)}>
-              <option value="">—</option>
-              {people.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mt-3 block text-sm font-semibold text-slate-700">
-            Responsável terceiro
-            <input
-              list="field-companies"
-              className={fieldClass}
-              value={contractor}
-              onChange={e => setContractor(e.target.value)}
-              placeholder="Empresa"
-            />
-            <datalist id="field-companies">
-              {pkg.companies.map(company => (
-                <option key={company} value={company} />
-              ))}
-            </datalist>
-          </label>
-          <PhotoPicker photos={photos} onChange={setPhotos} label="Fotos da pendência" />
+          <div data-tour="campo-nova-responsaveis">
+            <label className="mt-3 block text-sm font-semibold text-slate-700">
+              Responsável ATR
+              <select className={fieldClass} value={personId} onChange={e => setPersonId(e.target.value)}>
+                <option value="">—</option>
+                {people.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-3 block text-sm font-semibold text-slate-700">
+              Responsável terceiro
+              <input
+                list="field-companies"
+                className={fieldClass}
+                value={contractor}
+                onChange={e => setContractor(e.target.value)}
+                placeholder="Empresa"
+              />
+              <datalist id="field-companies">
+                {pkg.companies.map(company => (
+                  <option key={company} value={company} />
+                ))}
+              </datalist>
+            </label>
+          </div>
+          <PhotoPicker photos={photos} onChange={setPhotos} label="Fotos da pendência" tourId="campo-nova-fotos" />
           <button
             type="submit"
             disabled={saving}
+            data-tour="campo-nova-lancar"
             className="mt-5 h-13 w-full rounded-xl bg-primary py-3.5 text-base font-semibold text-white disabled:opacity-60"
           >
             {saving ? 'Guardando…' : 'Lançar pendência'}
@@ -1038,7 +1110,7 @@ function ResolveSheet({
   const [saving, setSaving] = useState(false);
   const hasCorrection = view.data.photos.some(p => p.itemId === item.id && p.kind === 'correction');
   return (
-    <Sheet title="Resolver pendência" onClose={onClose}>
+    <Sheet title="Resolver pendência" tourId="campo-resolucao" onClose={onClose}>
       <p className="text-sm text-slate-700">{item.description}</p>
       <form
         onSubmit={async e => {
@@ -1056,7 +1128,7 @@ function ResolveSheet({
           if (ok) onClose();
         }}
       >
-        <label className="mt-3 block text-sm font-semibold text-slate-700">
+        <label data-tour="campo-resolucao-data" className="mt-3 block text-sm font-semibold text-slate-700">
           Corrigida em
           <input
             type="date"
@@ -1068,7 +1140,7 @@ function ResolveSheet({
             onChange={e => setCorrectedOn(e.target.value)}
           />
         </label>
-        <label className="mt-3 block text-sm font-semibold text-slate-700">
+        <label data-tour="campo-resolucao-nota" className="mt-3 block text-sm font-semibold text-slate-700">
           Como foi corrigido <span className="font-normal text-slate-500">(opcional)</span>
           <textarea
             maxLength={1000}
@@ -1082,10 +1154,12 @@ function ResolveSheet({
           photos={photos}
           onChange={setPhotos}
           label={hasCorrection ? 'Mais fotos da correção (opcional)' : 'Foto da correção (obrigatória)'}
+          tourId="campo-resolucao-fotos"
         />
         <button
           type="submit"
           disabled={saving || (!hasCorrection && photos.length === 0)}
+          data-tour="campo-resolucao-salvar"
           className="mt-5 w-full rounded-xl bg-emerald-700 py-3.5 text-base font-semibold text-white disabled:opacity-50"
         >
           {saving ? 'Guardando…' : 'Marcar como resolvida'}
@@ -1107,12 +1181,13 @@ function AddPhotoSheet({
   const [photos, setPhotos] = useState<Prepared[]>([]);
   const [saving, setSaving] = useState(false);
   return (
-    <Sheet title="Foto da pendência" onClose={onClose}>
+    <Sheet title="Foto da pendência" tourId="campo-mais-fotos" onClose={onClose}>
       <p className="text-sm text-slate-700">{item.description}</p>
-      <PhotoPicker photos={photos} onChange={setPhotos} label="Fotos" />
+      <PhotoPicker photos={photos} onChange={setPhotos} label="Fotos" tourId="campo-mais-fotos-camera" />
       <button
         type="button"
         disabled={saving || photos.length === 0}
+        data-tour="campo-mais-fotos-guardar"
         onClick={async () => {
           setSaving(true);
           const ok = await act(

@@ -6,7 +6,7 @@ import { ancestors } from '@/application/use-cases/commands';
 import { selectWagonDetail } from '@/application/use-cases/get-planning';
 import { isTerminal } from '@/domain/rules';
 import { activityLabels, formatDate, formatTimestamp, planningPath, releaseLabels, wagonLabel, wagonPath } from '@/shared/format';
-import { ActivityEditor, CriterionAction, ReleaseForm, ResolveAction, WagonActions } from './wagon-actions';
+import { ActivityEditor, CriterionAction, ReleaseForm, ResolveAction, TourMark, WagonActions } from './wagon-actions';
 import { useHistory } from './history';
 import { usePlanning } from './planning-provider';
 import { Callout, Empty, LoadState, Missing, Panel, Progress, Status } from './ui';
@@ -70,6 +70,9 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
   const reopenedAncestors = ancestorWagons.filter(w => !isTerminal(w.id, data) && reopened.events.some(e => e.entityId === w.id));
   const events = [...history.events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   const columns = ['Atividade / local', 'Responsável', 'Previsão', 'Progresso', 'Status', 'Peso / origem', ...(canAct ? ['Ações'] : [])];
+  // O tour destaca só a primeira resolução disponível de cada lista.
+  const firstOpenPending = pendingItems.find(p => p.status === 'open')?.id;
+  const firstOpenRestriction = restrictions.find(r => r.status === 'open')?.id;
   const neighbours = [
     { label: '← Vagão anterior', value: predecessor, empty: 'Primeiro vagão da sequência' },
     { label: 'Vagão seguinte →', value: successor, empty: 'Último vagão planejado' },
@@ -77,7 +80,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
 
   return (
     <>
-      <nav aria-label="Navegação estrutural" className="mb-6 flex flex-wrap gap-2 text-sm">
+      <nav data-tour="vagao-trilha" aria-label="Navegação estrutural" className="mb-6 flex flex-wrap gap-2 text-sm">
         <Link className="text-link" href="/obras">
           Obras
         </Link>
@@ -91,7 +94,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
 
       <header className="mb-6 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-5">
-          <div>
+          <div data-tour="vagao-titulo">
             <p className="eyebrow">{sequence.name}</p>
             <h1 className="page-title">{wagonLabel(wagon.number)}</h1>
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -109,7 +112,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
       </header>
 
       {reopenedAncestors.length > 0 && (
-        <div className="mb-6">
+        <div data-tour="vagao-reaberta" className="mb-6">
           <Callout tone="warning" role="alert">
             Terminalidade reaberta em período anterior: {reopenedAncestors.map(w => wagonLabel(w.number)).join(', ')}. Reavalie a liberação
             e registre as novas pendências.
@@ -125,7 +128,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
         </p>
       )}
 
-      <dl className="mb-6 grid gap-4 sm:grid-cols-3">
+      <dl data-tour="vagao-resumo" className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="stat-card">
           <dt className="text-xs font-medium text-slate-500">Duração do takt</dt>
           <dd className="mt-1.5 text-lg font-bold text-slate-900">
@@ -144,7 +147,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
         </div>
       </dl>
 
-      <nav aria-label="Sequência de vagões" className="mb-6 grid gap-3 sm:grid-cols-2">
+      <nav data-tour="vagao-vizinhos" aria-label="Sequência de vagões" className="mb-6 grid gap-3 sm:grid-cols-2">
         {neighbours.map(item => (
           <div className="panel p-4" key={item.label}>
             <p className="mb-2 text-sm text-slate-600">{item.label}</p>
@@ -185,7 +188,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
                 </tr>
               </thead>
               <tbody>
-                {activities.map(activity => (
+                {activities.map((activity, index) => (
                   <tr key={activity.id}>
                     <th scope="row" className="min-w-64">
                       <p>{activity.name}</p>
@@ -211,7 +214,9 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
                     {/* A chave em `updatedAt` remonta o editor depois de salvar, para os valores padrão acompanharem. */}
                     {canAct && (
                       <td className="whitespace-nowrap">
-                        <ActivityEditor key={activity.updatedAt} workId={workId} activity={activity} />
+                        <TourMark tourId="vagao-editar-atividade" when={index === 0}>
+                          <ActivityEditor key={activity.updatedAt} workId={workId} activity={activity} />
+                        </TourMark>
                       </td>
                     )}
                   </tr>
@@ -234,7 +239,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
             </div>
           ) : (
             <ul className="mt-4 space-y-3">
-              {criteria.map(c => (
+              {criteria.map((c, index) => (
                 <li key={c.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                     <div className="min-w-0">
@@ -251,7 +256,9 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
                         </p>
                       )}
                     </div>
-                    <CriterionAction id={c.id} fulfilled={c.fulfilled} />
+                    <TourMark tourId="vagao-criterio-acao" when={index === 0}>
+                      <CriterionAction id={c.id} fulfilled={c.fulfilled} />
+                    </TourMark>
                   </div>
                 </li>
               ))}
@@ -313,7 +320,9 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
                   </p>
                   {p.status === 'open' && (
                     <div className="mt-2">
-                      <ResolveAction id={p.id} kind="pending" />
+                      <TourMark tourId="vagao-resolver-pendencia" when={p.id === firstOpenPending}>
+                        <ResolveAction id={p.id} kind="pending" />
+                      </TourMark>
                     </div>
                   )}
                 </li>
@@ -340,7 +349,9 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
                   </p>
                   {r.status === 'open' && (
                     <div className="mt-2">
-                      <ResolveAction id={r.id} kind="restriction" />
+                      <TourMark tourId="vagao-resolver-restricao" when={r.id === firstOpenRestriction}>
+                        <ResolveAction id={r.id} kind="restriction" />
+                      </TourMark>
                     </div>
                   )}
                 </li>
@@ -349,7 +360,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
           )}
         </Panel>
 
-        <Panel title="Dívidas de terminalidade">
+        <Panel title="Dívidas de terminalidade" tourId="vagao-dividas">
           {debts.length === 0 ? (
             <Empty>Nenhuma dívida deste vagão ou de seus antecessores.</Empty>
           ) : (
@@ -388,7 +399,7 @@ export function WagonDetail({ workId, wagonId }: { workId: string; wagonId: stri
           )}
         </Panel>
 
-        <Panel title="Histórico">
+        <Panel title="Histórico" tourId="vagao-historico">
           {history.status === 'loading' && (
             <div role="status" aria-label="Carregando histórico" className="space-y-3">
               {[0, 1, 2].map(i => (

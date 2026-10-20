@@ -37,19 +37,21 @@ export function WorkSettingsHeader({ workId }: { workId: string }) {
           <p className="text-sm text-slate-500">
             Quem executa nesta obra, qual é a semana 1 do curto prazo e os cadastros da terminalidade.
           </p>
-          <HelpNote title="Como funciona: configurações da obra" compact>
-            <p>
-              <strong>Empreiteiros e equipes</strong> é o cadastro de quem executa. A lista mostra os empreiteiros; cada um abre nas suas
-              equipes e na capacidade de cada uma. As mesmas equipes aparecem como recurso no cronograma de médio prazo e como opção na
-              planilha do curto prazo; a capacidade é o número de atividades que a equipe atende por semana, e é ela que sinaliza
-              sobrecarga.
-            </p>
-            <p>
-              <strong>Numeração das semanas</strong> define a semana 1 da obra. É dela que sai o número de cada semana no curto prazo — use
-              o mesmo da planilha que a equipe já preenche.
-            </p>
-            <p>Quem tem perfil de consulta vê as duas seções, mas não edita.</p>
-          </HelpNote>
+          <div data-tour="obra-config-ajuda" className="inline-flex">
+            <HelpNote title="Como funciona: configurações da obra" compact>
+              <p>
+                <strong>Empreiteiros e equipes</strong> é o cadastro de quem executa. A lista mostra os empreiteiros; cada um abre nas suas
+                equipes e na capacidade de cada uma. As mesmas equipes aparecem como recurso no cronograma de médio prazo e como opção na
+                planilha do curto prazo; a capacidade é o número de atividades que a equipe atende por semana, e é ela que sinaliza
+                sobrecarga.
+              </p>
+              <p>
+                <strong>Numeração das semanas</strong> define a semana 1 da obra. É dela que sai o número de cada semana no curto prazo —
+                use o mesmo da planilha que a equipe já preenche.
+              </p>
+              <p>Quem tem perfil de consulta vê as duas seções, mas não edita.</p>
+            </HelpNote>
+          </div>
         </div>
       </div>
     </header>
@@ -193,14 +195,21 @@ export function WorkResources({ workId }: { workId: string }) {
           </div>
         </div>
         {!readOnly && (
-          <button type="button" className="button min-h-10" aria-haspopup="dialog" onClick={() => open()} disabled={busy}>
+          <button
+            data-tour="obra-config-new-team"
+            type="button"
+            className="button min-h-10"
+            aria-haspopup="dialog"
+            onClick={() => open()}
+            disabled={busy}
+          >
             <Plus size={16} aria-hidden />
             Novo empreiteiro / equipe
           </button>
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div data-tour="obra-config-team-stats" className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Empreiteiros" value={companies.length} />
         <StatCard label="Equipes cadastradas" value={teams.length} />
         <StatCard
@@ -249,7 +258,7 @@ export function WorkResources({ workId }: { workId: string }) {
               {teams.length === 1 ? 'equipe' : 'equipes'}
             </p>
           </div>
-          <label className="relative w-full sm:max-w-xs">
+          <label data-tour="obra-config-team-search" className="relative w-full sm:max-w-xs">
             <span className="sr-only">Buscar empreiteiro ou equipe</span>
             <Search className="pointer-events-none absolute left-3 top-3 text-slate-400" size={16} aria-hidden />
             <input
@@ -286,6 +295,8 @@ export function WorkResources({ workId }: { workId: string }) {
             )}
           </div>
         ) : (
+          // As marcas do tour se repetem em todas as linhas e o tour destaca a primeira na tela: nas de equipe, a do
+          // primeiro empreiteiro aberto.
           <ul className="divide-y divide-slate-100" aria-label="Empreiteiros da obra">
             {shown.map(({ group, teams: visible, byTeam }) => {
               // A busca que bate só em equipes abre a linha para mostrá-las; o clique continua
@@ -297,6 +308,7 @@ export function WorkResources({ workId }: { workId: string }) {
                 <li key={group.key || '∅'}>
                   <h4>
                     <button
+                      data-tour="obra-config-company"
                       type="button"
                       className="flex min-h-12 w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-brand-50/60"
                       aria-expanded={expanded}
@@ -367,6 +379,7 @@ export function WorkResources({ workId }: { workId: string }) {
                         ) : (
                           <div className="py-2">
                             <button
+                              data-tour="obra-config-add-team"
                               type="button"
                               className="button-ghost min-h-10 text-xs"
                               disabled={busy}
@@ -390,7 +403,7 @@ export function WorkResources({ workId }: { workId: string }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+      <div data-tour="obra-config-allocate" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
         <span className="text-slate-500">Alocar recursos:</span>
         {developer && (
           <Link className="text-link inline-flex items-center gap-1" href={workPath(workId, 'medio-prazo')}>
@@ -431,7 +444,7 @@ function TeamRow({
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5">
       <span className="min-w-40 flex-1 text-sm font-semibold text-slate-800">{team.name}</span>
-      <label className="flex items-center gap-2 text-xs text-slate-500">
+      <label data-tour="obra-config-team-capacity" className="flex items-center gap-2 text-xs text-slate-500">
         {readOnly ? (
           <span className="text-sm font-semibold tabular-nums text-slate-800">{team.weeklyCapacity}</span>
         ) : (
@@ -459,7 +472,7 @@ function TeamRow({
         )}
         atividades / semana
       </label>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <div data-tour="obra-config-team-usage" className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
         {developer ? (
           <Link className="text-link" href={workPath(workId, 'medio-prazo')}>
             {usage.medium} no médio
@@ -474,7 +487,7 @@ function TeamRow({
         {usage.baselines > 0 && <span className="text-slate-500">{usage.baselines} em linhas de base</span>}
       </div>
       {!readOnly && (
-        <div className="flex items-center gap-1">
+        <div data-tour="obra-config-team-actions" className="flex items-center gap-1">
           <button
             className="button-secondary min-h-10 px-2.5 text-xs"
             type="button"

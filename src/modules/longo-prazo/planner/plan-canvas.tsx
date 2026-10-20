@@ -680,9 +680,18 @@ const FlowChrome = memo(function FlowChrome({
           }),
         )}
       </g>
-      {flow.nodes.map(node => (
-        <NodeCard key={node.id} node={node} document={document} percent={percents[node.id]} interactive={interactive} />
-      ))}
+      {flow.nodes.map((node, index) => {
+        const card = <NodeCard key={node.id} node={node} document={document} percent={percents[node.id]} interactive={interactive} />;
+        // Só o primeiro cartão, e só no fluxograma: na Linha de Balanço os cartões ficam transparentes,
+        // e o tour destacaria um retângulo vazio.
+        return index === 0 && interactive ? (
+          <g key={node.id} data-tour="longo-servico-cartao">
+            {card}
+          </g>
+        ) : (
+          card
+        );
+      })}
     </>
   );
 });
@@ -941,7 +950,7 @@ export function PlanCanvas({
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="longo-canvas-modo" className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label="Visualização" className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1">
             {(['flow', 'lob'] as const).map(m => (
               <button
@@ -963,7 +972,10 @@ export function PlanCanvas({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-2.5">
-        <div className="flex max-h-24 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 overflow-y-auto custom-scrollbar">
+        <div
+          data-tour="longo-canvas-legenda"
+          className="flex max-h-24 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 overflow-y-auto custom-scrollbar"
+        >
           {shown.map(a => (
             <button
               key={a.id}
@@ -988,7 +1000,7 @@ export function PlanCanvas({
           )}
         </div>
         {inLob && (
-          <div role="group" aria-label="Zoom do eixo do tempo" className="flex flex-wrap items-center gap-1">
+          <div data-tour="longo-canvas-zoom" role="group" aria-label="Zoom do eixo do tempo" className="flex flex-wrap items-center gap-1">
             <span className="mr-1 text-xs font-semibold text-slate-500">Zoom</span>
             {ZOOMS.map(z => (
               <button

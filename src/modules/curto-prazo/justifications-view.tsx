@@ -22,7 +22,7 @@ export function JustificationsView({ groups, period, request }: { groups: CauseG
   const justified = groups.reduce((sum, group) => sum + group.justified, 0);
 
   return (
-    <section className="panel mt-5 p-5" aria-labelledby="justificativas-title">
+    <section data-tour="curto-fechamento-justificativas" className="panel mt-5 p-5" aria-labelledby="justificativas-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-x-1">
@@ -45,7 +45,7 @@ export function JustificationsView({ groups, period, request }: { groups: CauseG
             série e do Pareto.
           </p>
         </div>
-        <label className="relative block w-full max-w-64">
+        <label data-tour="curto-fechamento-busca" className="relative block w-full max-w-64">
           <Search aria-hidden size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
@@ -146,7 +146,7 @@ function AiAnalysis({ request, disabled }: { request: AnalysisRequest; disabled:
   };
   return (
     <div className="mt-4 border-t border-slate-100 pt-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div data-tour="curto-fechamento-ia" className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           className="button-secondary px-3 py-1.5 text-xs"

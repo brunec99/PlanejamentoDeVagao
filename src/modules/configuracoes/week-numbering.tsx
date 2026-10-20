@@ -63,7 +63,7 @@ export function WeekNumbering({ workId }: { workId: string }) {
   };
 
   return (
-    <section className="panel p-5" aria-labelledby="semana-1-title">
+    <section data-tour="obra-config-week" className="panel p-5" aria-labelledby="semana-1-title">
       <div className="flex items-start gap-3">
         <CalendarDays size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
@@ -114,7 +114,7 @@ export function WeekNumbering({ workId }: { workId: string }) {
 
           {!readOnly && state.status === 'ready' && state.available && (
             <form className="mt-4 space-y-3" onSubmit={submit}>
-              <fieldset className="flex flex-wrap gap-4 text-sm text-slate-700">
+              <fieldset data-tour="obra-config-week-mode" className="flex flex-wrap gap-4 text-sm text-slate-700">
                 <legend className="sr-only">Como informar a semana 1</legend>
                 <label className="flex items-center gap-2">
                   <input type="radio" className="accent-primary" checked={mode === 'numero'} onChange={() => setMode('numero')} />
@@ -125,7 +125,7 @@ export function WeekNumbering({ workId }: { workId: string }) {
                   Pela data da semana 1
                 </label>
               </fieldset>
-              <div className="flex flex-wrap items-end gap-3">
+              <div data-tour="obra-config-week-value" className="flex flex-wrap items-end gap-3">
                 {mode === 'numero' ? (
                   <label className="text-xs font-semibold text-slate-600">
                     Número da semana de {range(currentWeek)}
@@ -151,6 +151,7 @@ export function WeekNumbering({ workId }: { workId: string }) {
                 </button>
                 {weekOneStart && (
                   <button
+                    data-tour="obra-config-week-reset"
                     className="button-ghost"
                     type="button"
                     disabled={busy}

@@ -241,3 +241,7 @@ A pedido do usuário, a janela do PDF ganhou o agrupamento por **tipo**, e em to
 - **Não conferido no navegador:**
   - a tela da aba 5 com as roscas, os cabeçalhos classificáveis, o seletor do celular e o botão "Gerar PDF". O layout do sistema lê o perfil no banco, e não havia banco local;
   - o PDF com dados e fotos reais em produção, e a saída num celular.
+
+## Tour guiado (20/10/2026)
+
+A aba 5 (27 passos) e o modo de campo (39 passos) ganharam tour "Como usar". No modo de campo, que fica fora do layout do sistema, `FieldTerminality` passou a envolver o app com `TourProvider` e `TourOverlay`, com o "?" no cabeçalho e outro em cada folha (Nova pendência, Resolver, Foto). O "?" da folha explica só os campos dela (`data-tour-scope`). Tudo é componente estático, então o tour abre sem sinal. Detalhes em [tour-guiado.md](tour-guiado.md).

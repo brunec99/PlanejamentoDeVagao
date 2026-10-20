@@ -29,7 +29,7 @@ export function TabHeader({
   const tab = WORK_TABS[index];
   const work = context.state === 'ready' ? context.planning.data.works.find(w => w.id === workId) : undefined;
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <header data-tour="tab-header" className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div className="flex min-w-0 items-start gap-4">
         {/* O número da aba, no mesmo chip da lateral: liga o título ao item aceso do menu. */}
         <span
@@ -47,9 +47,11 @@ export function TabHeader({
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="text-sm text-slate-500">{description ?? tab.hint}</p>
             {help && (
-              <HelpNote title={helpTitle ?? `Como funciona: ${tab.label.toLowerCase()}`} compact>
-                {help}
-              </HelpNote>
+              <span data-tour="tab-ajuda" className="inline-flex">
+                <HelpNote title={helpTitle ?? `Como funciona: ${tab.label.toLowerCase()}`} compact>
+                  {help}
+                </HelpNote>
+              </span>
             )}
           </div>
         </div>

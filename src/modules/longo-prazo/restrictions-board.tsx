@@ -40,6 +40,8 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
   const overdue = pendingOpen.filter(r => deadlineOf(r) < planning.today);
   const next = pendingOpen[0];
   const detail = restrictions.find(r => r.id === openId);
+  // O primeiro card do quadro, na ordem das colunas: só ele leva a marcação do tour.
+  const firstCardId = columns.flatMap(column => restrictions.filter(r => columnOf(r) === column))[0]?.id;
 
   return (
     <section className="mt-8" aria-labelledby="pendencias-title">
@@ -71,35 +73,37 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
             Cada restrição aponta para uma atividade; o limite de resolução sai do início previsto dela menos o lead time.
           </p>
         </div>
-        <CommandForm
-          title="Registrar restrição"
-          submit="Registrar restrição"
-          tone="primary"
-          success="Restrição registrada."
-          description="Escolha o local e a atividade; com lead time, o prazo é calculado."
-          command={d => {
-            const activity = activityOf(value(d, 'activityId'));
-            const raw = value(d, 'leadTimeDays');
-            const lead = isInteger(raw) ? number(d, 'leadTimeDays') : undefined;
-            return {
-              type: 'create_restriction',
-              wagonId: activity?.wagonId ?? '',
-              activityId: activity?.id,
-              description: value(d, 'description'),
-              responsibleId: value(d, 'responsibleId'),
-              // Com lead time o servidor recalcula o prazo pelo início previsto e ignora o que enviamos aqui.
-              dueDate: lead !== undefined && activity ? leadTimeDeadline(activity.plannedStart, lead) : value(d, 'dueDate'),
-              blocksExecution: checked(d, 'blocksExecution'),
-              blocksTerminality: checked(d, 'blocksTerminality'),
-              leadTimeDays: lead,
-            };
-          }}
-        >
-          <RestrictionFields workId={workId} activities={activities} locations={data.locations} />
-        </CommandForm>
+        <span data-tour="longo-restricoes-registrar" className="inline-flex">
+          <CommandForm
+            title="Registrar restrição"
+            submit="Registrar restrição"
+            tone="primary"
+            success="Restrição registrada."
+            description="Escolha o local e a atividade; com lead time, o prazo é calculado."
+            command={d => {
+              const activity = activityOf(value(d, 'activityId'));
+              const raw = value(d, 'leadTimeDays');
+              const lead = isInteger(raw) ? number(d, 'leadTimeDays') : undefined;
+              return {
+                type: 'create_restriction',
+                wagonId: activity?.wagonId ?? '',
+                activityId: activity?.id,
+                description: value(d, 'description'),
+                responsibleId: value(d, 'responsibleId'),
+                // Com lead time o servidor recalcula o prazo pelo início previsto e ignora o que enviamos aqui.
+                dueDate: lead !== undefined && activity ? leadTimeDeadline(activity.plannedStart, lead) : value(d, 'dueDate'),
+                blocksExecution: checked(d, 'blocksExecution'),
+                blocksTerminality: checked(d, 'blocksTerminality'),
+                leadTimeDays: lead,
+              };
+            }}
+          >
+            <RestrictionFields workId={workId} activities={activities} locations={data.locations} />
+          </CommandForm>
+        </span>
       </div>
 
-      <div className="my-5 grid gap-4 sm:grid-cols-3">
+      <div data-tour="longo-restricoes-indicadores" className="my-5 grid gap-4 sm:grid-cols-3">
         <StatCard label="Restrições abertas" value={pendingOpen.length} />
         <StatCard label="Com prazo vencido" value={overdue.length} tone={overdue.length > 0 ? 'danger' : 'default'} />
         <StatCard
@@ -138,7 +142,7 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
                     const activity = activityOf(r.activityId);
                     const limit = deadlineFor(r, activity);
                     const late = r.status === 'open' && limit < planning.today;
-                    return (
+                    const card = (
                       <button
                         key={r.id}
                         type="button"
@@ -160,6 +164,13 @@ export function RestrictionsBoard({ workId }: { workId: string }) {
                           </p>
                         )}
                       </button>
+                    );
+                    return r.id === firstCardId ? (
+                      <div key={r.id} data-tour="longo-restricao-card">
+                        {card}
+                      </div>
+                    ) : (
+                      card
                     );
                   })
                 )}

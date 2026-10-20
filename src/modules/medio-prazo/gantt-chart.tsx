@@ -611,6 +611,7 @@ export function GanttChart({
       onScroll={onScroll}
       role="region"
       aria-label="Gráfico de Gantt"
+      data-tour="medio-gantt-grafico"
       tabIndex={0}
       className={`relative overflow-auto bg-white [scrollbar-gutter:stable] [scrollbar-width:auto] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-lg [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-slate-100 [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:bg-slate-100 ${className}`}
     >

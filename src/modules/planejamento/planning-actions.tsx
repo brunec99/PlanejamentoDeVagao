@@ -42,79 +42,85 @@ export function PlanningActions({ workId }: { workId: string }) {
   const noSequence = sequences.length === 0;
   return (
     <div role="toolbar" aria-label="Ações do planejamento" className="flex flex-wrap items-center gap-2">
-      <CommandForm
-        title="Criar sequência"
-        description="Sequência temporal de produção: o takt padrão e o calendário valem para os vagões dela."
-        tone={noSequence ? 'primary' : 'ghost'}
-        success="Sequência criada."
-        command={d => ({
-          type: 'create_sequence',
-          workId,
-          name: value(d, 'name'),
-          taktDays: number(d, 'taktDays'),
-          calendar: value(d, 'calendar') as 'calendar_days' | 'business_days',
-        })}
-      >
-        <TextField name="name" label="Nome da sequência" />
-        <TextField name="taktDays" label="Takt padrão (dias)" type="number" min={1} max={365} defaultValue={5} />
-        <Field label="Calendário">
-          <select name="calendar" className="field">
-            <option value="calendar_days">Dias corridos</option>
-            <option value="business_days">Dias úteis (segunda a sexta)</option>
-          </select>
-        </Field>
-      </CommandForm>
+      <span data-tour="vagoes-criar-sequencia" className="inline-flex">
+        <CommandForm
+          title="Criar sequência"
+          description="Sequência temporal de produção: o takt padrão e o calendário valem para os vagões dela."
+          tone={noSequence ? 'primary' : 'ghost'}
+          success="Sequência criada."
+          command={d => ({
+            type: 'create_sequence',
+            workId,
+            name: value(d, 'name'),
+            taktDays: number(d, 'taktDays'),
+            calendar: value(d, 'calendar') as 'calendar_days' | 'business_days',
+          })}
+        >
+          <TextField name="name" label="Nome da sequência" />
+          <TextField name="taktDays" label="Takt padrão (dias)" type="number" min={1} max={365} defaultValue={5} />
+          <Field label="Calendário">
+            <select name="calendar" className="field">
+              <option value="calendar_days">Dias corridos</option>
+              <option value="business_days">Dias úteis (segunda a sexta)</option>
+            </select>
+          </Field>
+        </CommandForm>
+      </span>
 
-      <CommandForm
-        title="Criar vagão"
-        description="Um período de takt dentro de uma sequência. Ao salvar, o detalhe do vagão abre."
-        tone={noSequence ? 'ghost' : 'primary'}
-        success="Vagão criado."
-        command={d => ({
-          type: 'create_wagon',
-          sequenceId: value(d, 'sequenceId'),
-          number: number(d, 'number'),
-          predecessorId: value(d, 'predecessorId') || undefined,
-          plannedStart: value(d, 'plannedStart'),
-          plannedEnd: value(d, 'plannedEnd'),
-          responsibleId: value(d, 'responsibleId'),
-        })}
-        onDone={id => router.push(wagonPath(workId, id))}
-      >
-        <Field label="Sequência">
-          <select className="field" name="sequenceId" required>
-            <option value="">Selecione</option>
-            {sequences.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <TextField name="number" label="Número do vagão" type="number" min={1} />
-        <Field label="Vagão anterior">
-          <select className="field" name="predecessorId">
-            <option value="">Primeiro da sequência</option>
-            {tails.map(w => (
-              <option key={w.id} value={w.id}>
-                Vagão {w.number} · {sequences.find(s => s.id === w.sequenceId)?.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <TextField name="plannedStart" label="Marco inicial" type="date" />
-        <TextField name="plannedEnd" label="Marco final previsto" type="date" />
-        <Responsible workId={workId} />
-      </CommandForm>
+      <span data-tour="vagoes-criar-vagao" className="inline-flex">
+        <CommandForm
+          title="Criar vagão"
+          description="Um período de takt dentro de uma sequência. Ao salvar, o detalhe do vagão abre."
+          tone={noSequence ? 'ghost' : 'primary'}
+          success="Vagão criado."
+          command={d => ({
+            type: 'create_wagon',
+            sequenceId: value(d, 'sequenceId'),
+            number: number(d, 'number'),
+            predecessorId: value(d, 'predecessorId') || undefined,
+            plannedStart: value(d, 'plannedStart'),
+            plannedEnd: value(d, 'plannedEnd'),
+            responsibleId: value(d, 'responsibleId'),
+          })}
+          onDone={id => router.push(wagonPath(workId, id))}
+        >
+          <Field label="Sequência">
+            <select className="field" name="sequenceId" required>
+              <option value="">Selecione</option>
+              {sequences.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <TextField name="number" label="Número do vagão" type="number" min={1} />
+          <Field label="Vagão anterior">
+            <select className="field" name="predecessorId">
+              <option value="">Primeiro da sequência</option>
+              {tails.map(w => (
+                <option key={w.id} value={w.id}>
+                  Vagão {w.number} · {sequences.find(s => s.id === w.sequenceId)?.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <TextField name="plannedStart" label="Marco inicial" type="date" />
+          <TextField name="plannedEnd" label="Marco final previsto" type="date" />
+          <Responsible workId={workId} />
+        </CommandForm>
+      </span>
 
-      <CommandForm
-        title="Cadastrar local"
-        description="Pavimento, zona ou frente. Os locais pertencem às atividades, não aos vagões."
-        success="Local cadastrado."
-        command={d => ({ type: 'create_location', workId, name: value(d, 'name') })}
-      >
-        <TextField name="name" label="Nome do local / zona" />
-      </CommandForm>
+      <span data-tour="vagoes-cadastrar-local" className="inline-flex">
+        <CommandForm
+          title="Cadastrar local"
+          description="Pavimento, zona ou frente. Os locais pertencem às atividades, não aos vagões."
+          success="Local cadastrado."
+          command={d => ({ type: 'create_location', workId, name: value(d, 'name') })}
+        >
+          <TextField name="name" label="Nome do local / zona" />
+        </CommandForm>
+      </span>
     </div>
   );
 }

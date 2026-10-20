@@ -121,7 +121,7 @@ export function WorkLocation({ workId }: { workId: string }) {
   };
 
   return (
-    <section className="panel p-5" aria-labelledby="local-obra-title">
+    <section data-tour="obra-config-location" className="panel p-5" aria-labelledby="local-obra-title">
       <div className="flex items-start gap-3">
         <MapPin size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
@@ -180,7 +180,7 @@ export function WorkLocation({ workId }: { workId: string }) {
 
           {canEdit && (
             <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-slate-600">
+              <label data-tour="obra-config-location-search" className="block text-xs font-semibold text-slate-600">
                 {location ? 'Trocar o local' : 'Buscar o local'}
                 <input
                   className="field mt-1 block w-full sm:max-w-md"
@@ -222,7 +222,7 @@ export function WorkLocation({ workId }: { workId: string }) {
                 </p>
               )}
               {location && (
-                <button className="button-ghost" type="button" disabled={busy} onClick={remove}>
+                <button data-tour="obra-config-location-remove" className="button-ghost" type="button" disabled={busy} onClick={remove}>
                   Remover local
                 </button>
               )}
@@ -231,7 +231,13 @@ export function WorkLocation({ workId }: { workId: string }) {
 
           {location && (
             <div className="mt-4 space-y-2">
-              <button className="button-secondary" type="button" disabled={preview.status === 'loading'} onClick={loadPreview}>
+              <button
+                data-tour="obra-config-weather"
+                className="button-secondary"
+                type="button"
+                disabled={preview.status === 'loading'}
+                onClick={loadPreview}
+              >
                 {preview.status === 'loading' ? 'Consultando…' : 'Ver o tempo desta semana'}
               </button>
               {preview.status === 'error' && (

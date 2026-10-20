@@ -83,10 +83,11 @@ export function WorksOverview() {
         )}
       </header>
       {works.length === 0 ? (
-        <div className="panel mt-6 p-6">
+        <div data-tour="obras-empty" className="panel mt-6 p-6">
           <Empty>Você ainda não tem acesso a nenhuma obra. Peça a um administrador para liberar em Configurações.</Empty>
         </div>
       ) : (
+        // As marcas do tour dentro do cartão se repetem em todos; o tour destaca a do primeiro.
         <div data-tour="obras-grid" className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {works.map(work => {
             const selected = selectWorkPlanning(planning, work.id)!;
@@ -134,13 +135,17 @@ export function WorksOverview() {
                     <h2 className="mt-1 text-base font-bold leading-snug text-slate-900">{work.name}</h2>
                   </div>
                   <span
+                    data-tour="obras-card-status"
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${PILL[tone]}`}
                   >
                     <Icon size={13} aria-hidden />
                     {LABEL[tone]}
                   </span>
                 </div>
-                <dl className="mx-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-100">
+                <dl
+                  data-tour="obras-card-indicators"
+                  className="mx-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-100"
+                >
                   <Indicator
                     label="PPC da semana"
                     tone={ppcState}
@@ -161,7 +166,7 @@ export function WorksOverview() {
                   />
                 </dl>
                 {inProduction.length > 0 && (
-                  <div className="mx-5 mt-4">
+                  <div data-tour="obras-card-progress" className="mx-5 mt-4">
                     <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                       <span>
                         Progresso em produção · {inProduction.length} {inProduction.length === 1 ? 'vagão' : 'vagões'}
@@ -183,7 +188,10 @@ export function WorksOverview() {
                     </div>
                   </div>
                 )}
-                <span className="mx-5 mb-5 mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+                <span
+                  data-tour="obras-card-open"
+                  className="mx-5 mb-5 mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
+                >
                   Abrir planejamento <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               </Link>

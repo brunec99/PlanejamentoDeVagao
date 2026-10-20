@@ -125,7 +125,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
       }
     >
       {!readOnly && hasCatalog && (
-        <button type="button" className="button" onClick={() => setDialog({ kind: 'new' })}>
+        <button type="button" className="button" data-tour="termin-nova" onClick={() => setDialog({ kind: 'new' })}>
           <Plus size={16} aria-hidden />
           Nova pendência
         </button>
@@ -174,7 +174,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
         {header}
         <Callout tone="info" role="status">
           A lista de pendências é organizada por pavimento e apartamento.{' '}
-          <Link className="text-link" href={workPath(workId, 'configuracoes')}>
+          <Link className="text-link" data-tour="termin-cadastro" href={workPath(workId, 'configuracoes')}>
             Cadastre pavimentos e apartamentos nas Configurações da obra
           </Link>{' '}
           para registrar a primeira pendência.
@@ -236,6 +236,11 @@ export function TerminalityOverview({ workId }: { workId: string }) {
     patch(donutSelected(field, slice) ? Object.fromEntries(Object.keys(next).map(key => [key, ''])) : next);
   };
   const activeCount = (['floorId', 'unitId', 'typeId', 'contractor', 'atrPersonId', 'search'] as const).filter(k => filters[k]).length;
+  // Alvos do tour "Como usar" que se repetem por linha: só a primeira ocorrência leva a marca.
+  const legendDonut = donuts.find(donut => donut.total > 0)?.field;
+  const firstPhotoId = rows.find(item => photosOf(index, item.id).issue.length > 0)?.id;
+  const firstOpenId = rows.find(item => item.status === 'open')?.id;
+  const firstResolvedId = rows.find(item => item.status === 'resolved')?.id;
 
   const patch = (next: Partial<TerminalityFilters>) => setFilters(current => ({ ...current, ...next }));
   const sortBy = (column: TerminalitySortColumn) => setSort(current => nextSort(current, column));
@@ -312,7 +317,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
     <>
       {header}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3" data-tour="termin-indicadores">
         <StatCard
           label="Abertas"
           value={scope.open}
@@ -324,7 +329,11 @@ export function TerminalityOverview({ workId }: { workId: string }) {
       </div>
 
       {donuts.some(donut => donut.total > 0) && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3" aria-label="Pendências por tipo, pavimento e responsável terceiro">
+        <div
+          className="mt-4 grid gap-4 lg:grid-cols-3"
+          aria-label="Pendências por tipo, pavimento e responsável terceiro"
+          data-tour="termin-roscas"
+        >
           {donuts.map(donut => (
             <DonutPanel
               key={donut.field}
@@ -332,6 +341,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
               plural={donut.plural}
               total={donut.total}
               slices={donut.slices}
+              markLegend={donut.field === legendDonut}
               selected={slice => donutSelected(donut.field, slice)}
               onPick={slice => pickSlice(donut.field, slice)}
             />
@@ -340,7 +350,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
       )}
 
       {(byContractor.length > 0 || byFloor.length > 0) && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2" data-tour="termin-quebras">
           <BreakdownPanel
             title="Abertas por responsável terceiro"
             items={byContractor}
@@ -361,23 +371,26 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           <h2 id="pendencias-title" className="text-lg font-bold text-slate-900">
             Lista de pendências
           </h2>
-          <HelpNote title="Como usar a lista" label="Como usar a lista" compact>
-            <p>A lista abre nas pendências abertas, na ordem da obra: pavimento, apartamento e data de observação.</p>
-            <p>
-              Clique no título de uma coluna para classificar por ela, como no Excel: o primeiro clique põe em ordem crescente, o segundo em
-              decrescente e o terceiro volta à ordem padrão. Células vazias ficam no fim nos dois sentidos. “Local” segue a ordem dos
-              pavimentos da obra, não a alfabética, e as colunas de foto classificam pela quantidade de fotos. No celular, use “Classificar
-              por”, acima dos cartões.
-            </p>
-            <p>“Gerar PDF” leva o que a lista mostra, com os filtros e a classificação de agora.</p>
-            <p>
-              Clique numa linha para ver ou editar a pendência e as fotos. Clique numa miniatura para ampliar a foto. Clicar num empreiteiro
-              ou pavimento nos quadros acima filtra a lista por ele.
-            </p>
-          </HelpNote>
+          <span data-tour="termin-como-usar" className="inline-flex">
+            <HelpNote title="Como usar a lista" label="Como usar a lista" compact>
+              <p>A lista abre nas pendências abertas, na ordem da obra: pavimento, apartamento e data de observação.</p>
+              <p>
+                Clique no título de uma coluna para classificar por ela, como no Excel: o primeiro clique põe em ordem crescente, o segundo
+                em decrescente e o terceiro volta à ordem padrão. Células vazias ficam no fim nos dois sentidos. “Local” segue a ordem dos
+                pavimentos da obra, não a alfabética, e as colunas de foto classificam pela quantidade de fotos. No celular, use
+                “Classificar por”, acima dos cartões.
+              </p>
+              <p>“Gerar PDF” leva o que a lista mostra, com os filtros e a classificação de agora.</p>
+              <p>
+                Clique numa linha para ver ou editar a pendência e as fotos. Clique numa miniatura para ampliar a foto. Clicar num
+                empreiteiro ou pavimento nos quadros acima filtra a lista por ele.
+              </p>
+            </HelpNote>
+          </span>
           {/* Atalho para o modo de campo: celular, sem sinal, com fila que sobe quando a conexão volta. */}
           <a
             href={`/campo/terminalidade?obra=${encodeURIComponent(workId)}`}
+            data-tour="termin-celular"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             title="Abre a lista no celular; depois de baixar a obra, funciona sem sinal no canteiro"
           >
@@ -389,13 +402,19 @@ export function TerminalityOverview({ workId }: { workId: string }) {
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
             disabled={data.items.length === 0}
             aria-haspopup="dialog"
+            data-tour="termin-pdf"
             title="Gera um PDF com as pendências que a lista mostra, com os filtros e a classificação de agora"
             onClick={() => setPrinting(true)}
           >
             <FileDown size={14} aria-hidden /> Gerar PDF
           </button>
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-            <div role="group" aria-label="Situação" className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+            <div
+              role="group"
+              aria-label="Situação"
+              data-tour="termin-situacao"
+              className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5"
+            >
               {SITUATIONS.map(option => {
                 const count = option.value === 'open' ? scope.open : option.value === 'resolved' ? scope.resolved : scope.total;
                 const active = filters.situation === option.value;
@@ -417,6 +436,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
               className="button-ghost px-2.5 py-1.5 text-xs md:hidden"
               aria-expanded={showFilters}
               aria-controls="terminalidade-filtros"
+              data-tour="termin-filtros-celular"
               onClick={() => setShowFilters(open => !open)}
             >
               <ListFilter size={14} aria-hidden />
@@ -425,7 +445,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           </div>
         </div>
 
-        <div className="relative mt-3">
+        <div className="relative mt-3" data-tour="termin-busca">
           <Search aria-hidden size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
@@ -439,6 +459,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
 
         <div
           id="terminalidade-filtros"
+          data-tour="termin-filtros"
           className={`${showFilters ? 'grid' : 'hidden'} mt-3 grid-cols-2 gap-2 sm:grid-cols-3 md:grid lg:grid-cols-5`}
         >
           <FilterSelect label="Pavimento" value={filters.floorId} onChange={floorId => patch({ floorId, unitId: '' })}>
@@ -484,7 +505,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           </FilterSelect>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-tour="termin-contagem">
           <span>
             Mostrando {rows.length} de {data.items.length} {data.items.length === 1 ? 'pendência' : 'pendências'}.
           </span>
@@ -509,6 +530,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           <div
             role="region"
             aria-label="Pendências marcadas"
+            data-tour="termin-lote"
             className="sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary-ring bg-white px-3 py-2 shadow-lg md:static md:shadow-none"
           >
             <span className="text-sm font-semibold text-slate-800">
@@ -534,9 +556,9 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           >
             <table className="w-full min-w-[1280px] border-collapse text-left text-xs">
               <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                <tr className="border-b border-slate-200">
+                <tr className="border-b border-slate-200" data-tour="termin-colunas">
                   {selectable && (
-                    <th scope="col" className="w-9 px-2 py-2">
+                    <th scope="col" className="w-9 px-2 py-2" data-tour="termin-marcar">
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-primary"
@@ -566,15 +588,12 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(item => {
+                {rows.map((item, rowIndex) => {
                   const photos = photosOf(index, item.id);
                   const location = locationLabel(index, item);
-                  return (
-                    <tr
-                      key={item.id}
-                      onClick={() => openItem(item)}
-                      className={`cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : selection.includes(item.id) ? 'bg-primary-soft/40' : 'hover:bg-slate-50/60'}`}
-                    >
+                  const rowClass = `cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : selection.includes(item.id) ? 'bg-primary-soft/40' : 'hover:bg-slate-50/60'}`;
+                  const cells = (
+                    <>
                       {selectable && (
                         <td className="px-2 py-1.5" onClick={stop}>
                           <input
@@ -611,7 +630,9 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                       <td className="px-2 py-1.5 text-slate-600">{personName(index, item) || <Dash />}</td>
                       <td className="px-2 py-1.5 font-semibold text-slate-700">{item.contractor || <Dash />}</td>
                       <td className="px-2 py-1" onClick={stop}>
-                        <Thumbs photos={photos.issue} label={`do problema em ${location}`} onOpen={at => openPhotos(item, 'issue', at)} />
+                        <TourSpot tourId="termin-foto" on={item.id === firstPhotoId}>
+                          <Thumbs photos={photos.issue} label={`do problema em ${location}`} onOpen={at => openPhotos(item, 'issue', at)} />
+                        </TourSpot>
                       </td>
                       <td
                         className="px-2 py-1.5 text-center"
@@ -631,40 +652,56 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                         {!readOnly && (
                           <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                             {item.status === 'open' ? (
-                              <button
-                                type="button"
-                                className="button-secondary px-2 py-1 text-xs"
-                                disabled={!!busy}
-                                aria-haspopup="dialog"
-                                aria-label={`Resolver a pendência de ${location}`}
-                                onClick={() => setDialog({ kind: 'resolve', itemId: item.id })}
-                              >
-                                Resolver
-                              </button>
+                              <TourSpot tourId="termin-resolver" on={item.id === firstOpenId}>
+                                <button
+                                  type="button"
+                                  className="button-secondary px-2 py-1 text-xs"
+                                  disabled={!!busy}
+                                  aria-haspopup="dialog"
+                                  aria-label={`Resolver a pendência de ${location}`}
+                                  onClick={() => setDialog({ kind: 'resolve', itemId: item.id })}
+                                >
+                                  Resolver
+                                </button>
+                              </TourSpot>
                             ) : (
+                              <TourSpot tourId="termin-reabrir" on={item.id === firstResolvedId}>
+                                <button
+                                  type="button"
+                                  className="button-ghost px-2 py-1 text-xs"
+                                  disabled={!!busy}
+                                  aria-label={`Reabrir a pendência de ${location}`}
+                                  onClick={() => reopen(item)}
+                                >
+                                  Reabrir
+                                </button>
+                              </TourSpot>
+                            )}
+                            <TourSpot tourId="termin-excluir" on={rowIndex === 0}>
                               <button
                                 type="button"
-                                className="button-ghost px-2 py-1 text-xs"
+                                onClick={() => remove(item)}
                                 disabled={!!busy}
-                                aria-label={`Reabrir a pendência de ${location}`}
-                                onClick={() => reopen(item)}
+                                aria-label={`Excluir a pendência de ${location}`}
+                                title="Excluir pendência"
+                                className="rounded px-1.5 py-1 text-slate-300 transition-colors hover:bg-danger-soft hover:text-danger disabled:opacity-50"
                               >
-                                Reabrir
+                                ✕
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => remove(item)}
-                              disabled={!!busy}
-                              aria-label={`Excluir a pendência de ${location}`}
-                              title="Excluir pendência"
-                              className="rounded px-1.5 py-1 text-slate-300 transition-colors hover:bg-danger-soft hover:text-danger disabled:opacity-50"
-                            >
-                              ✕
-                            </button>
+                            </TourSpot>
                           </div>
                         )}
                       </td>
+                    </>
+                  );
+                  // O tour destaca a primeira linha: o valor de `data-tour` é único na página.
+                  return rowIndex === 0 ? (
+                    <tr key={item.id} data-tour="termin-linha" onClick={() => openItem(item)} className={rowClass}>
+                      {cells}
+                    </tr>
+                  ) : (
+                    <tr key={item.id} onClick={() => openItem(item)} className={rowClass}>
+                      {cells}
                     </tr>
                   );
                 })}
@@ -675,7 +712,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
 
           {/* No celular não há cabeçalho de coluna para clicar: a classificação vira um select. */}
           {data.items.length > 0 && (
-            <div className="mb-3 flex items-end gap-2 md:hidden">
+            <div className="mb-3 flex items-end gap-2 md:hidden" data-tour="termin-classificar-celular">
               <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">
                 Classificar por
                 <select
@@ -714,14 +751,13 @@ export function TerminalityOverview({ workId }: { workId: string }) {
 
           {/* No celular, cada pendência é um cartão: a tabela de onze colunas só serviria para rolar de lado. */}
           <div className="space-y-3 md:hidden" role="region" aria-label="Lista de pendências">
-            {rows.map(item => {
+            {rows.map((item, rowIndex) => {
               const photos = photosOf(index, item.id);
               const location = locationLabel(index, item);
               const resolved = item.status === 'resolved';
               const details = [typeName(index, item), item.contractor, `obs. ${formatDate(item.observedOn)}`].filter(Boolean).join(' · ');
-              return (
+              const card = (
                 <article
-                  key={item.id}
                   aria-label={`${location}: ${item.description}`}
                   className={`rounded-xl border p-3 shadow-sm ${busy === item.id ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'}`}
                 >
@@ -798,6 +834,11 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                   </div>
                 </article>
               );
+              return (
+                <TourSpot key={item.id} tourId="termin-cartao" on={rowIndex === 0} className="block">
+                  {card}
+                </TourSpot>
+              );
             })}
             {emptyState && <div className="rounded-xl border border-slate-200 bg-white p-4">{emptyState}</div>}
           </div>
@@ -852,6 +893,27 @@ export function TerminalityOverview({ workId }: { workId: string }) {
 }
 
 const Dash = () => <span className="text-slate-300">—</span>;
+
+/** Alvo do tour "Como usar" num elemento que se repete (linha, cartão, rosca): só a ocorrência escolhida
+ * leva a marca, para o `data-tour` ficar único na página. Sem a marca, o filho entra sem invólucro. */
+function TourSpot({
+  tourId,
+  on,
+  className = 'flex w-fit',
+  children,
+}: {
+  tourId: string;
+  on: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  if (!on) return <>{children}</>;
+  return (
+    <div data-tour={tourId} className={className}>
+      {children}
+    </div>
+  );
+}
 
 /** Cabeçalho que classifica a lista, como no Excel: cada clique passa de crescente para decrescente e
  * de volta à ordem padrão. A seta fraca avisa que a coluna é clicável. */
@@ -996,6 +1058,7 @@ function DonutPanel({
   plural,
   total,
   slices,
+  markLegend,
   selected,
   onPick,
 }: {
@@ -1003,6 +1066,8 @@ function DonutPanel({
   plural: string;
   total: number;
   slices: DonutSlice[];
+  /** A legenda desta rosca é o alvo do tour (a primeira rosca com pendências). */
+  markLegend: boolean;
   selected: (slice: DonutSlice) => boolean;
   onPick: (slice: DonutSlice) => void;
 }) {
@@ -1014,39 +1079,41 @@ function DonutPanel({
       ) : (
         <div className="mt-2 flex items-center gap-4">
           <DonutRing slices={slices} total={total} title={title} className="h-28 w-28 shrink-0" />
-          <ul className="min-w-0 flex-1 space-y-0.5">
-            {slices.map((slice, i) => {
-              const active = selected(slice);
-              const label = slice.others ? `Outros (${slice.others} ${plural})` : slice.label;
-              const content = (
-                <>
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: donutColor(slice, i) }} aria-hidden />
-                  <span className="min-w-0 flex-1 truncate" title={label}>
-                    {label}
-                  </span>
-                  <span className="font-semibold tabular-nums">{slice.count}</span>
-                  <span className="w-9 text-right tabular-nums text-slate-500">{sharePercent(slice)}</span>
-                </>
-              );
-              return (
-                <li key={slice.key}>
-                  {slice.others ? (
-                    <div className="flex items-center gap-2 px-2 py-1 text-xs text-slate-600">{content}</div>
-                  ) : (
-                    <button
-                      type="button"
-                      aria-pressed={active}
-                      title={active ? 'Clique para tirar o filtro' : `Filtrar a lista por ${label}`}
-                      onClick={() => onPick(slice)}
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors ${active ? 'bg-primary-soft font-bold text-primary-ink ring-1 ring-primary-ring' : 'text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      {content}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <TourSpot tourId="termin-rosca-legenda" on={markLegend} className="min-w-0 flex-1">
+            <ul className="min-w-0 flex-1 space-y-0.5">
+              {slices.map((slice, i) => {
+                const active = selected(slice);
+                const label = slice.others ? `Outros (${slice.others} ${plural})` : slice.label;
+                const content = (
+                  <>
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: donutColor(slice, i) }} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate" title={label}>
+                      {label}
+                    </span>
+                    <span className="font-semibold tabular-nums">{slice.count}</span>
+                    <span className="w-9 text-right tabular-nums text-slate-500">{sharePercent(slice)}</span>
+                  </>
+                );
+                return (
+                  <li key={slice.key}>
+                    {slice.others ? (
+                      <div className="flex items-center gap-2 px-2 py-1 text-xs text-slate-600">{content}</div>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        title={active ? 'Clique para tirar o filtro' : `Filtrar a lista por ${label}`}
+                        onClick={() => onPick(slice)}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors ${active ? 'bg-primary-soft font-bold text-primary-ink ring-1 ring-primary-ring' : 'text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {content}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </TourSpot>
         </div>
       )}
     </section>

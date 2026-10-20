@@ -115,14 +115,14 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
   if (section === 'janela')
     return (
       <>
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-tour="medio-janela-indicadores" className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Atividades na janela" value={lookAhead.length} hint={windowLabel} />
           <StatCard label="Atividades sem equipe" value={withoutTeam} tone={withoutTeam > 0 ? 'warning' : 'default'} />
           <StatCard label="Equipes em sobrecarga" value={overloaded} tone={overloaded > 0 ? 'danger' : 'default'} />
           <StatCard label="Progresso ponderado da janela" value={`${Math.round(weightedProgress(lookAhead))}%`} />
         </div>
 
-        <section className="panel overflow-hidden" aria-labelledby="look-ahead-title">
+        <section data-tour="medio-janela" className="panel overflow-hidden" aria-labelledby="look-ahead-title">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
             <div className="flex items-center gap-1">
               <h2 id="look-ahead-title" className="text-sm font-bold text-slate-800">
@@ -143,7 +143,7 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
               <span className="badge-muted">
                 {rows.length} de {lookAhead.length} {lookAhead.length === 1 ? 'atividade' : 'atividades'}
               </span>
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <label data-tour="medio-janela-filtro" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                 <input
                   type="checkbox"
                   className="accent-primary"
@@ -223,7 +223,11 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
               </p>
               <p>O cadastro em Configurações da obra abastece os recursos do plano do mês e da planilha de curto prazo.</p>
             </HelpNote>
-            <Link className="text-link inline-flex min-h-10 items-center gap-2 text-sm" href={workPath(workId, 'configuracoes')}>
+            <Link
+              data-tour="medio-teams-gerenciar"
+              className="text-link inline-flex min-h-10 items-center gap-2 text-sm"
+              href={workPath(workId, 'configuracoes')}
+            >
               <Users size={15} aria-hidden />
               Gerenciar equipes
             </Link>
@@ -273,6 +277,7 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
     return (
       <Panel
         title="Cobertura entre os níveis"
+        tourId="medio-cobertura"
         actions={
           <>
             <HelpNote title="Como funciona: cobertura" align="end" compact>
@@ -295,7 +300,7 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
               </p>
             </HelpNote>
             {plan && (
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <label data-tour="medio-cobertura-plano" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                 Plano conferido
                 <select
                   className="field max-w-60 py-1.5"
@@ -435,7 +440,7 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
 
   // section === 'historico'
   return (
-    <section className="panel overflow-hidden" aria-labelledby="entries-title">
+    <section data-tour="medio-historico" className="panel overflow-hidden" aria-labelledby="entries-title">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
         <div className="flex items-center gap-1">
           <h2 id="entries-title" className="text-sm font-bold text-slate-800">

@@ -49,7 +49,7 @@ function AccessChip({ userId, workId, name, granted }: { userId: string; workId:
 function RoleSelect({ userId, role, self }: { userId: string; role: string; self: boolean }) {
   const { busy, error, run } = useCommand();
   return (
-    <div>
+    <div data-tour="config-user-role">
       <select
         className="field w-auto py-1.5 text-xs"
         value={role}
@@ -112,7 +112,7 @@ function ModuleAccessList({ user }: { user: User }) {
   const released = MODULES.filter(m => !m.open && (admin || granted.has(m.section))).length;
   const restricted = MODULES.filter(m => !m.open).length;
   return (
-    <div className="mt-3">
+    <div data-tour="config-user-modules" className="mt-3">
       <p className="mb-1.5 text-xs font-semibold text-slate-500">
         Módulos{' '}
         <span className="font-normal text-slate-400">
@@ -149,7 +149,7 @@ function TaktField({ sequenceId, taktDays }: { sequenceId: string; taktDays: num
   const [value, setValue] = useState(String(taktDays));
   const dirty = value !== String(taktDays);
   return (
-    <div className="flex items-center gap-2">
+    <div data-tour="config-takt-field" className="flex items-center gap-2">
       <input
         className="field w-20 py-1.5 text-sm"
         type="number"
@@ -262,7 +262,7 @@ function AccessRequests({ refreshKey, onRegistered }: { refreshKey: number; onRe
     }
   };
   return (
-    <section aria-labelledby="access-requests-title" className="panel mb-4 border-primary-ring p-5">
+    <section data-tour="config-requests" aria-labelledby="access-requests-title" className="panel mb-4 border-primary-ring p-5">
       <h3 id="access-requests-title" className="flex items-center gap-2 text-sm font-bold text-slate-800">
         <Inbox size={16} className="text-primary" aria-hidden />
         Pedidos de acesso
@@ -290,7 +290,7 @@ function AccessRequests({ refreshKey, onRegistered }: { refreshKey: number; onRe
               </p>
               {request.message && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">“{request.message}”</p>}
             </div>
-            <div className="flex items-center gap-2">
+            <div data-tour="config-request-actions" className="flex items-center gap-2">
               <button type="button" className="button" disabled={!!busy} onClick={() => act(request, 'register')}>
                 {busy === request.id ? 'Salvando…' : 'Cadastrar'}
               </button>
@@ -369,7 +369,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
           <span className="mb-1.5 block">Nome (opcional)</span>
           <input className="field w-56" value={name} onChange={e => setName(e.target.value)} />
         </label>
-        <label className="block text-xs font-semibold text-slate-600">
+        <label data-tour="config-invite-role" className="block text-xs font-semibold text-slate-600">
           <span className="mb-1.5 block">Papel</span>
           <select className="field w-40" value={role} onChange={e => setRole(e.target.value)}>
             {(['viewer', 'planner', 'manager', 'admin'] as const).map(r => (
@@ -401,7 +401,7 @@ function DeleteUserButton({ userId, name, onDone }: { userId: string; name: stri
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
-    <div>
+    <div data-tour="config-user-delete">
       <button
         type="button"
         disabled={busy}
@@ -484,13 +484,13 @@ function DatabaseHealth() {
   const optional = missing.filter(m => !m.critical);
 
   return (
-    <section aria-labelledby="db-title">
+    <section data-tour="config-db" aria-labelledby="db-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 id="db-title" className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <Database size={16} className="text-primary" aria-hidden />
           Banco de dados
         </h2>
-        <button type="button" className="button-ghost" disabled={checking} onClick={() => check()}>
+        <button data-tour="config-db-refresh" type="button" className="button-ghost" disabled={checking} onClick={() => check()}>
           <RefreshCw size={15} aria-hidden className={checking ? 'animate-spin' : ''} />
           {checking ? 'Verificando…' : 'Verificar de novo'}
         </button>
@@ -614,7 +614,7 @@ export function SettingsManager() {
   const actor = data.users.find(u => u.id === c.actorId);
   if (actor?.role !== 'admin')
     return (
-      <div className="panel p-6">
+      <div data-tour="config-restrito" className="panel p-6">
         <Empty>Acesso restrito a administradores.</Empty>
       </div>
     );
@@ -683,6 +683,8 @@ export function SettingsManager() {
             }}
           />
         </div>
+        {/* As marcas do tour de cada linha (papel, excluir, obras, módulos) se repetem em todas; o tour destaca a
+            primeira que aparece — a de excluir, portanto, nunca na sua própria linha. */}
         <div data-tour="config-users" className="panel divide-y divide-slate-100">
           {data.users.map(user => (
             <div key={user.id} className="p-4">
@@ -706,7 +708,7 @@ export function SettingsManager() {
                 </div>
               </div>
               <p className="mb-1.5 mt-3 text-xs font-semibold text-slate-500">Obras</p>
-              <div className="flex flex-wrap gap-2">
+              <div data-tour="config-user-works" className="flex flex-wrap gap-2">
                 {data.works.length === 0 ? (
                   <span className="text-xs text-slate-400">Nenhuma obra para liberar</span>
                 ) : (

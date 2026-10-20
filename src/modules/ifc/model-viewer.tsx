@@ -482,7 +482,7 @@ export function ModelViewer({ workId }: { workId: string }) {
       ) : (
         <div className="p-5">
           <div className="flex flex-wrap items-end gap-4">
-            <label className="block text-xs font-semibold text-slate-600">
+            <label data-tour="ifc-viewer-version" className="block text-xs font-semibold text-slate-600">
               <span className="mb-1.5 block">Versão do modelo</span>
               <select
                 className="field w-full sm:w-96"
@@ -498,7 +498,7 @@ export function ModelViewer({ workId }: { workId: string }) {
                 ))}
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-600">
+            <label data-tour="ifc-viewer-storey" className="block text-xs font-semibold text-slate-600">
               <span className="mb-1.5 block">Recorte por pavimento</span>
               <select
                 className="field w-52"
@@ -515,7 +515,7 @@ export function ModelViewer({ workId }: { workId: string }) {
                 ))}
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-600">
+            <label data-tour="ifc-viewer-paint" className="block text-xs font-semibold text-slate-600">
               <span className="mb-1.5 block">Cor dos elementos</span>
               <select
                 className="field w-44"
@@ -531,6 +531,7 @@ export function ModelViewer({ workId }: { workId: string }) {
             {/* Sem cena montada não há para onde carregar: clicar antes do `three` chegar deixaria o
                 progresso ligado esperando um estágio que pode nem existir, se o WebGL faltar. */}
             <button
+              data-tour="ifc-viewer-load"
               type="button"
               className="button"
               disabled={busy || !webgl || !ready || !chosen}
@@ -554,6 +555,7 @@ export function ModelViewer({ workId }: { workId: string }) {
 
           <div className="mt-4">
             <SectionControls
+              tourId="ifc-section"
               value={section.value}
               disabled={busy || !report || !section.available}
               error={section.error}
@@ -601,7 +603,7 @@ export function ModelViewer({ workId }: { workId: string }) {
 
           {job && report && (
             <>
-              <div className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div data-tour="ifc-viewer-stats" className="my-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                   label="Elementos desenhados"
                   value={count(report.elements)}
@@ -634,7 +636,11 @@ export function ModelViewer({ workId }: { workId: string }) {
             </>
           )}
 
-          <div ref={setBox} className="relative h-[600px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+          <div
+            ref={setBox}
+            data-tour="ifc-viewer-canvas"
+            className="relative h-[600px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+          >
             <canvas ref={setCanvas} role="img" aria-label={label} className="block h-full w-full" />
             {!webgl && (
               <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm leading-6 text-slate-600">
@@ -664,7 +670,7 @@ export function ModelViewer({ workId }: { workId: string }) {
           </div>
 
           {legend.length > 0 && (
-            <div className="mt-4">
+            <div data-tour="ifc-viewer-legend" className="mt-4">
               <p className="eyebrow">Legenda · {paint === 'classe' ? 'classe IFC' : 'pavimento'}</p>
               <ul className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto custom-scrollbar">
                 {legend.map(item => (
@@ -682,7 +688,7 @@ export function ModelViewer({ workId }: { workId: string }) {
             </div>
           )}
 
-          <div className="mt-4">
+          <div data-tour="ifc-viewer-picked" className="mt-4">
             {picked ? (
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { PlanningActions } from './planning-actions';
 import { usePlanning } from './planning-provider';
+import { TourMark } from './wagon-actions';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, releaseLabels, wagonLabel, wagonPath } from '@/shared/format';
 import { LoadState, Missing, Status, Progress, Empty, StatCard } from './ui';
@@ -26,6 +27,8 @@ export function PlanningOverview({ workId }: { workId: string }) {
   const pastCount = wagons.filter(isPast).length;
   const overdueCount = wagons.filter(w => w.overdue).length;
   const openDebts = debts.filter(d => data.pendingItems.some(p => p.id === d.pendingItemId && p.status === 'open')).length;
+  // O tour marca só a primeira sequência e o primeiro vagão da primeira tabela que aparece.
+  const firstShown = sequences.find(s => wagons.some(w => w.sequenceId === s.id && (showPast || !isPast(w))))?.id;
 
   return (
     <>
@@ -81,7 +84,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
       )}
 
       <div className="space-y-5">
-        {sequences.map(sequence => {
+        {sequences.map((sequence, index) => {
           const all = wagons.filter(w => w.sequenceId === sequence.id);
           const rows = showPast ? all : all.filter(w => !isPast(w));
           return (
@@ -90,9 +93,11 @@ export function PlanningOverview({ workId }: { workId: string }) {
                 <h2 id={`title-${sequence.id}`} className="text-sm font-bold text-slate-800">
                   {sequence.name}
                 </h2>
-                <span className="badge-muted">
-                  Takt {sequence.defaultTaktDays} dias {sequence.calendar === 'calendar_days' ? 'corridos' : 'úteis'}
-                </span>
+                <TourMark tourId="vagoes-sequencia" when={index === 0}>
+                  <span className="badge-muted">
+                    Takt {sequence.defaultTaktDays} dias {sequence.calendar === 'calendar_days' ? 'corridos' : 'úteis'}
+                  </span>
+                </TourMark>
               </div>
               {rows.length === 0 ? (
                 <div className="p-5">
@@ -115,15 +120,17 @@ export function PlanningOverview({ workId }: { workId: string }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map(w => {
+                      {rows.map((w, row) => {
                         const release = data.releases.find(r => r.wagonId === w.id);
                         const past = isPast(w);
                         return (
                           <tr key={w.id} className={past ? 'opacity-60' : undefined}>
                             <th scope="row">
-                              <Link className="text-link whitespace-nowrap" href={wagonPath(workId, w.id)}>
-                                {wagonLabel(w.number)}
-                              </Link>
+                              <TourMark tourId="vagoes-abrir-vagao" when={sequence.id === firstShown && row === 0}>
+                                <Link className="text-link whitespace-nowrap" href={wagonPath(workId, w.id)}>
+                                  {wagonLabel(w.number)}
+                                </Link>
+                              </TourMark>
                               {past && <span className="mt-0.5 block text-xs font-normal text-slate-400">passado</span>}
                             </th>
                             <td className="whitespace-nowrap tabular-nums">

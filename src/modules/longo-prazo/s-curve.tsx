@@ -217,7 +217,7 @@ export function SCurve({ workId }: { workId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {baselines.length > 0 ? (
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <label data-tour="longo-curva-referencia" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
               Planejado de
               <select className="field max-w-48 py-1.5" value={chosen} onChange={e => setReferenceId(e.target.value)}>
                 <option value="">Planejamento atual</option>
@@ -229,35 +229,39 @@ export function SCurve({ workId }: { workId: string }) {
               </select>
             </label>
           ) : (
-            <span className="badge-muted">Sem linha de base salva</span>
+            <span data-tour="longo-curva-referencia" className="badge-muted">
+              Sem linha de base salva
+            </span>
           )}
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            De
-            <input
-              type="date"
-              className="field max-w-40 py-1.5"
-              value={period.from}
-              onChange={e => setRange({ from: e.target.value || defaults.from, to: period.to })}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            até
-            <input
-              type="date"
-              className="field max-w-40 py-1.5"
-              value={period.to}
-              onChange={e => setRange({ from: period.from, to: e.target.value || defaults.to })}
-            />
-          </label>
-          {range && (
-            <button type="button" className="button-ghost" onClick={() => setRange(undefined)}>
-              Período padrão
-            </button>
-          )}
+          <span data-tour="longo-curva-periodo" className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              De
+              <input
+                type="date"
+                className="field max-w-40 py-1.5"
+                value={period.from}
+                onChange={e => setRange({ from: e.target.value || defaults.from, to: period.to })}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              até
+              <input
+                type="date"
+                className="field max-w-40 py-1.5"
+                value={period.to}
+                onChange={e => setRange({ from: period.from, to: e.target.value || defaults.to })}
+              />
+            </label>
+            {range && (
+              <button type="button" className="button-ghost" onClick={() => setRange(undefined)}>
+                Período padrão
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
-      <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="longo-curva-indicadores" className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label={`Planejado até ${formatDate(today)}`} value={pct(plannedToday)} />
         <StatCard label="Executado medido até hoje" value={measured ? pct(executedToday) : '—'} />
         <StatCard label="Desvio de hoje (executado − planejado)" value={measured ? `${signed(deviation)} p.p.` : '—'} tone={tone} />
@@ -420,7 +424,7 @@ export function SCurve({ workId }: { workId: string }) {
         </span>
       </div>
 
-      <details className="border-t border-slate-100 px-5 py-3">
+      <details data-tour="longo-curva-tabela" className="border-t border-slate-100 px-5 py-3">
         <summary className="cursor-pointer text-xs font-semibold text-slate-600">Ver os pontos da curva em tabela ({rows.length})</summary>
         <div
           className="mt-3 max-h-72 overflow-auto custom-scrollbar"

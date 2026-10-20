@@ -187,25 +187,27 @@ export function FederationOverview({ workId }: { workId: string }) {
           <h1 className="page-title">Modelo federado</h1>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="text-sm text-slate-500">Os modelos IFC da obra numa mesma cena, para análise virtual dos projetos.</p>
-            <HelpNote compact title="Como funciona: modelo federado">
-              <p>
-                Marque os modelos que entram no conjunto, escolha a versão de cada um e clique em Carregar conjunto. A cena só muda ao
-                carregar: mexer na seleção não recarrega nada sozinho.
-              </p>
-              <p>
-                Uma composição salva guarda as versões escolhidas, mesmo depois de novos envios de IFC. Abrir uma composição restaura essa
-                seleção; salvar cria sempre uma nova cópia, e as anteriores são preservadas.
-              </p>
-              <p>
-                Os modelos usam o posicionamento da geometria importada. Ajustes de coordenadas e a organização pelos sistemas internos do
-                IFC ficam para as próximas etapas. Cores, recorte por pavimento, corte e visibilidade são só de exploração: não alteram a
-                composição salva.
-              </p>
-            </HelpNote>
+            <span data-tour="federation-help" className="inline-flex">
+              <HelpNote compact title="Como funciona: modelo federado">
+                <p>
+                  Marque os modelos que entram no conjunto, escolha a versão de cada um e clique em Carregar conjunto. A cena só muda ao
+                  carregar: mexer na seleção não recarrega nada sozinho.
+                </p>
+                <p>
+                  Uma composição salva guarda as versões escolhidas, mesmo depois de novos envios de IFC. Abrir uma composição restaura essa
+                  seleção; salvar cria sempre uma nova cópia, e as anteriores são preservadas.
+                </p>
+                <p>
+                  Os modelos usam o posicionamento da geometria importada. Ajustes de coordenadas e a organização pelos sistemas internos do
+                  IFC ficam para as próximas etapas. Cores, recorte por pavimento, corte e visibilidade são só de exploração: não alteram a
+                  composição salva.
+                </p>
+              </HelpNote>
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link className="button-ghost min-h-10" href={workPath(workId, 'ifc')}>
+          <Link data-tour="federation-ifc-link" className="button-ghost min-h-10" href={workPath(workId, 'ifc')}>
             Arquivos IFC <ArrowUpRight size={16} aria-hidden />
           </Link>
         </div>
@@ -226,7 +228,7 @@ export function FederationOverview({ workId }: { workId: string }) {
           </span>
         </summary>
         <div className="grid gap-5 border-t border-slate-100 p-4 lg:grid-cols-2">
-          <div>
+          <div data-tour="federation-saved-open">
             <div className="flex items-center gap-1">
               <label htmlFor={`${ids}-open`} className="text-sm font-medium text-slate-700">
                 Abrir uma composição
@@ -264,6 +266,7 @@ export function FederationOverview({ workId }: { workId: string }) {
           </div>
           {canSave ? (
             <form
+              data-tour="federation-saved-save"
               onSubmit={event => {
                 event.preventDefault();
                 void save();
@@ -325,7 +328,7 @@ export function FederationOverview({ workId }: { workId: string }) {
                 {versions.length}/{models.length}
               </span>
             </div>
-            <label className="relative mt-4 block">
+            <label data-tour="federation-search" className="relative mt-4 block">
               <span className="sr-only">Buscar modelo ou disciplina</span>
               <Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-400" aria-hidden />
               <input
@@ -336,7 +339,7 @@ export function FederationOverview({ workId }: { workId: string }) {
                 placeholder="Buscar modelo ou disciplina"
               />
             </label>
-            <label className="mt-2 flex min-h-10 items-center gap-2 text-sm text-slate-600">
+            <label data-tour="federation-only-selected" className="mt-2 flex min-h-10 items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-primary"
@@ -345,7 +348,7 @@ export function FederationOverview({ workId }: { workId: string }) {
               />
               Somente selecionados
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="federation-bulk" className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className="text-link min-h-9 text-xs"
@@ -384,7 +387,7 @@ export function FederationOverview({ workId }: { workId: string }) {
               </button>
             </div>
           </div>
-          <div className="border-t border-slate-200 bg-slate-50 p-4">
+          <div data-tour="federation-load" className="border-t border-slate-200 bg-slate-50 p-4">
             <p id="load-hint" className="mb-3 text-xs leading-5 text-slate-600" role="status">
               {loadHint}
             </p>
@@ -407,7 +410,7 @@ export function FederationOverview({ workId }: { workId: string }) {
               {viewerState === 'loading' ? 'Carregando conjunto…' : job ? 'Aplicar seleção ao 3D' : 'Carregar conjunto'}
             </button>
           </div>
-          <div className="max-h-96 overflow-y-auto overscroll-contain custom-scrollbar xl:max-h-[52vh]">
+          <div data-tour="federation-models" className="max-h-96 overflow-y-auto overscroll-contain custom-scrollbar xl:max-h-[52vh]">
             {!models.length ? (
               <div className="p-5">
                 <Empty>Envie seus primeiros modelos em Arquivos IFC.</Empty>

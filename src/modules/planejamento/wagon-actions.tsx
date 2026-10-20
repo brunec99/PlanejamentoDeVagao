@@ -1,9 +1,32 @@
 'use client';
+import type { ReactNode } from 'react';
 import type { Activity } from '@/domain/entities';
 import { assessRelease } from '@/application/use-cases/commands';
 import { formatDate } from '@/shared/format';
 import { usePlanning } from './planning-provider';
 import { Check, CommandForm, Field, Reason, Responsible, TextField, checked, number, value } from './forms';
+
+/** Marca de um controle para o tour "Como usar" (`data-tour`), num `span` em volta dele. Em listas,
+ * `when` deixa marcado só o primeiro item e os demais saem sem invólucro, para o alvo ser único. O
+ * valor vai literal em `tourId="..."`, que é o que `tests/tour-targets.test.ts` procura no código. */
+export function TourMark({
+  tourId,
+  when = true,
+  className = 'inline-flex',
+  children,
+}: {
+  tourId: string;
+  when?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  if (!when) return <>{children}</>;
+  return (
+    <span data-tour={tourId} className={className}>
+      {children}
+    </span>
+  );
+}
 
 /** Lê os campos comuns de uma atividade. Criar e atualizar usam a mesma leitura, para os dois
  * comandos aceitarem exatamente o mesmo conjunto de campos. */
@@ -130,110 +153,120 @@ export function WagonActions({ workId, wagonId }: { workId: string; wagonId: str
   );
   return (
     <div role="toolbar" aria-label="Ações do vagão" data-tour="vagao-actions" className="flex flex-wrap items-center gap-2">
-      <CommandForm
-        title="Adicionar atividade"
-        description={`A atividade precisa caber no período do vagão, ${period}.`}
-        tone="primary"
-        success="Atividade adicionada."
-        command={d => ({ type: 'create_activity', wagonId, activity: activityInput(d), reason: value(d, 'reason') })}
-      >
-        <ActivityFields workId={workId} start={wagon.plannedStart} end={wagon.plannedEnd} />
-      </CommandForm>
+      <span data-tour="vagao-nova-atividade" className="inline-flex">
+        <CommandForm
+          title="Adicionar atividade"
+          description={`A atividade precisa caber no período do vagão, ${period}.`}
+          tone="primary"
+          success="Atividade adicionada."
+          command={d => ({ type: 'create_activity', wagonId, activity: activityInput(d), reason: value(d, 'reason') })}
+        >
+          <ActivityFields workId={workId} start={wagon.plannedStart} end={wagon.plannedEnd} />
+        </CommandForm>
+      </span>
 
-      <CommandForm
-        title="Critério de terminalidade"
-        description="Condição de aceite ligada a uma atividade deste vagão. Os obrigatórios precisam ser confirmados para o vagão virar terminal."
-        success="Critério adicionado."
-        command={d => ({
-          type: 'create_criterion',
-          activityId: value(d, 'activityId'),
-          description: value(d, 'description'),
-          mandatory: checked(d, 'mandatory'),
-          reason: value(d, 'reason'),
-        })}
-      >
-        <Field label="Atividade">
-          <select className="field" name="activityId" required>
-            <option value="">Selecione</option>
-            {activities.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <TextField name="description" label="Critério de aceite" />
-        <Check name="mandatory" label="Obrigatório" defaultChecked />
-        <Reason />
-      </CommandForm>
+      <span data-tour="vagao-novo-criterio" className="inline-flex">
+        <CommandForm
+          title="Critério de terminalidade"
+          description="Condição de aceite ligada a uma atividade deste vagão. Os obrigatórios precisam ser confirmados para o vagão virar terminal."
+          success="Critério adicionado."
+          command={d => ({
+            type: 'create_criterion',
+            activityId: value(d, 'activityId'),
+            description: value(d, 'description'),
+            mandatory: checked(d, 'mandatory'),
+            reason: value(d, 'reason'),
+          })}
+        >
+          <Field label="Atividade">
+            <select className="field" name="activityId" required>
+              <option value="">Selecione</option>
+              {activities.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <TextField name="description" label="Critério de aceite" />
+          <Check name="mandatory" label="Obrigatório" defaultChecked />
+          <Reason />
+        </CommandForm>
+      </span>
 
-      <CommandForm
-        title="Pendência"
-        description="Item em aberto deste período. Enquanto bloquear a terminalidade, o vagão não vira terminal."
-        success="Pendência registrada."
-        command={d => ({
-          type: 'create_pending',
-          wagonId,
-          activityId: value(d, 'activityId') || undefined,
-          description: value(d, 'description'),
-          responsibleId: value(d, 'responsibleId'),
-          dueDate: value(d, 'dueDate'),
-          blocksTerminality: checked(d, 'blocksTerminality'),
-          reason: value(d, 'reason'),
-        })}
-      >
-        <TextField name="description" label="Pendência" />
-        {selectActivity}
-        <Responsible workId={workId} />
-        <TextField name="dueDate" label="Prazo" type="date" />
-        <Check name="blocksTerminality" label="Bloqueia terminalidade" defaultChecked />
-        <Reason />
-      </CommandForm>
+      <span data-tour="vagao-nova-pendencia" className="inline-flex">
+        <CommandForm
+          title="Pendência"
+          description="Item em aberto deste período. Enquanto bloquear a terminalidade, o vagão não vira terminal."
+          success="Pendência registrada."
+          command={d => ({
+            type: 'create_pending',
+            wagonId,
+            activityId: value(d, 'activityId') || undefined,
+            description: value(d, 'description'),
+            responsibleId: value(d, 'responsibleId'),
+            dueDate: value(d, 'dueDate'),
+            blocksTerminality: checked(d, 'blocksTerminality'),
+            reason: value(d, 'reason'),
+          })}
+        >
+          <TextField name="description" label="Pendência" />
+          {selectActivity}
+          <Responsible workId={workId} />
+          <TextField name="dueDate" label="Prazo" type="date" />
+          <Check name="blocksTerminality" label="Bloqueia terminalidade" defaultChecked />
+          <Reason />
+        </CommandForm>
+      </span>
 
-      <CommandForm
-        title="Restrição"
-        description="Pode bloquear a execução, a terminalidade ou ambas. Restrição impeditiva não é contornada por liberação excepcional."
-        success="Restrição registrada."
-        command={d => ({
-          type: 'create_restriction',
-          wagonId,
-          activityId: value(d, 'activityId') || undefined,
-          description: value(d, 'description'),
-          responsibleId: value(d, 'responsibleId'),
-          dueDate: value(d, 'dueDate'),
-          blocksTerminality: checked(d, 'blocksTerminality'),
-          blocksExecution: checked(d, 'blocksExecution'),
-          reason: value(d, 'reason'),
-        })}
-      >
-        <TextField name="description" label="Restrição" />
-        {selectActivity}
-        <Responsible workId={workId} />
-        <TextField name="dueDate" label="Prazo" type="date" />
-        <Check name="blocksTerminality" label="Bloqueia terminalidade" defaultChecked />
-        <Check name="blocksExecution" label="Bloqueia execução" defaultChecked />
-        <Reason />
-      </CommandForm>
+      <span data-tour="vagao-nova-restricao" className="inline-flex">
+        <CommandForm
+          title="Restrição"
+          description="Pode bloquear a execução, a terminalidade ou ambas. Restrição impeditiva não é contornada por liberação excepcional."
+          success="Restrição registrada."
+          command={d => ({
+            type: 'create_restriction',
+            wagonId,
+            activityId: value(d, 'activityId') || undefined,
+            description: value(d, 'description'),
+            responsibleId: value(d, 'responsibleId'),
+            dueDate: value(d, 'dueDate'),
+            blocksTerminality: checked(d, 'blocksTerminality'),
+            blocksExecution: checked(d, 'blocksExecution'),
+            reason: value(d, 'reason'),
+          })}
+        >
+          <TextField name="description" label="Restrição" />
+          {selectActivity}
+          <Responsible workId={workId} />
+          <TextField name="dueDate" label="Prazo" type="date" />
+          <Check name="blocksTerminality" label="Bloqueia terminalidade" defaultChecked />
+          <Check name="blocksExecution" label="Bloqueia execução" defaultChecked />
+          <Reason />
+        </CommandForm>
+      </span>
 
       {/* Vagão liberado não muda de período nesta versão: a ação some em vez de falhar no servidor. */}
       {!released && (
-        <CommandForm
-          title="Editar período"
-          description="Marcos e responsável do vagão. Depois da liberação, o período não muda."
-          icon="none"
-          success="Período atualizado."
-          command={d => ({
-            type: 'edit_wagon',
-            wagonId,
-            plannedStart: value(d, 'plannedStart'),
-            plannedEnd: value(d, 'plannedEnd'),
-            responsibleId: value(d, 'responsibleId'),
-          })}
-        >
-          <TextField name="plannedStart" label="Marco inicial" type="date" defaultValue={wagon.plannedStart} />
-          <TextField name="plannedEnd" label="Marco final" type="date" defaultValue={wagon.plannedEnd} />
-          <Responsible workId={workId} defaultValue={wagon.responsibleIds[0]} />
-        </CommandForm>
+        <span data-tour="vagao-editar-periodo" className="inline-flex">
+          <CommandForm
+            title="Editar período"
+            description="Marcos e responsável do vagão. Depois da liberação, o período não muda."
+            icon="none"
+            success="Período atualizado."
+            command={d => ({
+              type: 'edit_wagon',
+              wagonId,
+              plannedStart: value(d, 'plannedStart'),
+              plannedEnd: value(d, 'plannedEnd'),
+              responsibleId: value(d, 'responsibleId'),
+            })}
+          >
+            <TextField name="plannedStart" label="Marco inicial" type="date" defaultValue={wagon.plannedStart} />
+            <TextField name="plannedEnd" label="Marco final" type="date" defaultValue={wagon.plannedEnd} />
+            <Responsible workId={workId} defaultValue={wagon.responsibleIds[0]} />
+          </CommandForm>
+        </span>
       )}
     </div>
   );
@@ -268,34 +301,37 @@ export function ReleaseForm({ workId, wagonId }: { workId: string; wagonId: stri
           ))}
         </ul>
       )}
-      <CommandForm
-        title={`Liberar vagão (${MODE_LABELS[mode]})`}
-        tone="primary"
-        icon="none"
-        submit="Registrar liberação"
-        success="Liberação registrada."
-        command={d => ({
-          type: 'release',
-          wagonId,
-          mode,
-          justification: value(d, 'justification'),
-          responsibleId: value(d, 'responsibleId'),
-          dueDate: value(d, 'dueDate'),
-        })}
-      >
-        {mode === 'exceptional' ? (
-          <>
-            <TextField name="justification" label="Justificativa da liberação excepcional" />
-            <Responsible workId={workId} />
-            <TextField name="dueDate" label="Prazo futuro de regularização" type="date" />
-            <p className="text-sm text-slate-600">
-              Todas as pendências listadas serão registradas nesta autorização. Dívidas anteriores preservam o prazo originalmente assumido.
-            </p>
-          </>
-        ) : (
-          <p className="text-sm">A liberação será registrada em seu nome.</p>
-        )}
-      </CommandForm>
+      <span data-tour="vagao-liberar" className="inline-flex">
+        <CommandForm
+          title={`Liberar vagão (${MODE_LABELS[mode]})`}
+          tone="primary"
+          icon="none"
+          submit="Registrar liberação"
+          success="Liberação registrada."
+          command={d => ({
+            type: 'release',
+            wagonId,
+            mode,
+            justification: value(d, 'justification'),
+            responsibleId: value(d, 'responsibleId'),
+            dueDate: value(d, 'dueDate'),
+          })}
+        >
+          {mode === 'exceptional' ? (
+            <>
+              <TextField name="justification" label="Justificativa da liberação excepcional" />
+              <Responsible workId={workId} />
+              <TextField name="dueDate" label="Prazo futuro de regularização" type="date" />
+              <p className="text-sm text-slate-600">
+                Todas as pendências listadas serão registradas nesta autorização. Dívidas anteriores preservam o prazo originalmente
+                assumido.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm">A liberação será registrada em seu nome.</p>
+          )}
+        </CommandForm>
+      </span>
     </div>
   );
 }

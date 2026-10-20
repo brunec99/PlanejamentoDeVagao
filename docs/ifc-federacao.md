@@ -221,3 +221,7 @@ O usuário pediu que, no modelo federado, o cliente escolha o nível de opacidad
 O usuário pediu para mudar o nome dos arquivos IFC. Em Arquivos IFC, cada modelo ganhou "Renomear", que troca o **nome e a disciplina** do modelo (comando `update_ifc_model`; nome obrigatório, até 120 caracteres, sem repetir outro modelo da obra, ignorando maiúsculas). As versões e os arquivos enviados não mudam: a coluna "Arquivo" continua com o nome original do `.ifc`, e as composições do federado passam a mostrar o nome novo. Quem tem o módulo IFC liberado pode renomear; consulta não. O nome fica no snapshot do planejamento (`ifc_models`), sem migração. Teste em `tests/ifc-model-rename.test.ts`; na tela, o "Renomear" abriu preenchido num modelo da Blentt, sem salvar.
 
 Na conferência de 15/10/2026, a Blentt já tinha 49 modelos e 75 versões enviadas (o envio voltou a funcionar com a correção do recorte por módulo de 14/10).
+
+## Tour guiado (20/10/2026)
+
+Arquivos IFC (30 passos) e Modelo federado (26) ganharam tour "Como usar" cobrindo cada botão e campo, incluindo o seccionamento (`tourId` em `section-controls.tsx`: `ifc-section` e `federation-section`). Só marcações `data-tour`, sem mudança de comportamento. Detalhes em [tour-guiado.md](tour-guiado.md).

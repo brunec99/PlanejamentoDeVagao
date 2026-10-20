@@ -73,7 +73,7 @@ export function ClosingOverview({ workId }: { workId: string }) {
         <SectionNav workId={workId} section="fechamento" />
       </TabHeader>
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600">
-        <label className="flex items-center gap-2">
+        <label data-tour="curto-fechamento-semana" className="flex items-center gap-2">
           Semana analisada
           <select className="field max-w-60 py-1.5" value={week} onChange={e => setChosen(e.target.value)}>
             {[...weeks].reverse().map(w => (
@@ -84,7 +84,12 @@ export function ClosingOverview({ workId }: { workId: string }) {
             ))}
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Recorte da série e do Pareto">
+        <div
+          data-tour="curto-fechamento-recorte"
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Recorte da série e do Pareto"
+        >
           <FilterPicker
             label="Empreiteiro"
             values={companies}
@@ -105,7 +110,8 @@ export function ClosingOverview({ workId }: { workId: string }) {
         </div>
       </div>
       <section aria-labelledby="fechamento-title">
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+        {/* Só existe nesta seção: é o alvo da abertura do fechamento no tour "Como usar". */}
+        <div data-tour="curto-fechamento" className="flex flex-wrap items-center gap-x-1 gap-y-1">
           <h2 id="fechamento-title" className="text-lg font-bold text-slate-900">
             Fechamento da semana
           </h2>
@@ -162,7 +168,7 @@ function PpcSeries({ series, week, label }: { series: WeekPpc[]; week: string; l
   const y = (percent: number) => TOP + PLOT * (1 - percent / 100);
 
   return (
-    <section className="panel p-5" aria-labelledby="ppc-serie-title">
+    <section data-tour="curto-fechamento-serie" className="panel p-5" aria-labelledby="ppc-serie-title">
       <div className="flex flex-wrap items-center gap-x-1">
         <h3 id="ppc-serie-title" className="text-sm font-bold text-slate-800">
           Série do PPC
@@ -340,7 +346,7 @@ function CausesPareto({
   const vital = tally.findIndex(item => item.accumulated >= 80) + 1;
 
   return (
-    <section className="panel p-5" aria-labelledby="pareto-title">
+    <section data-tour="curto-fechamento-pareto" className="panel p-5" aria-labelledby="pareto-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-x-1">
@@ -361,7 +367,7 @@ function CausesPareto({
           </div>
           <p className="mt-0.5 text-xs text-slate-500">Só entram as linhas com Status Não e causa apontada.</p>
         </div>
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+        <label data-tour="curto-fechamento-periodo" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
           Período
           <select className="field max-w-40 py-1.5" value={scope} onChange={e => onScope(e.target.value as 'obra' | 'semana')}>
             <option value="obra">A obra inteira</option>

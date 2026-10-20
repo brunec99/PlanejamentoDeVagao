@@ -1,3 +1,22 @@
+import { steps as campo } from './pages/campo';
+import { steps as configuracoes } from './pages/configuracoes';
+import { steps as curtoPrazo } from './pages/curto-prazo';
+import { steps as dividas } from './pages/dividas';
+import { steps as federacao } from './pages/federacao';
+import { steps as ifc } from './pages/ifc';
+import { steps as longoPrazo } from './pages/longo-prazo';
+import { steps as medioPrazo } from './pages/medio-prazo';
+import { steps as obraConfiguracoes } from './pages/obra-configuracoes';
+import { steps as obras } from './pages/obras';
+import { steps as prevision } from './pages/prevision';
+import { steps as terminalidade } from './pages/terminalidade';
+import { steps as vagao } from './pages/vagao';
+import { steps as planejamento } from './pages/vagoes';
+
+/** Tour "Como usar esta tela" (botão "?" do cabeçalho): escurece a tela e destaca, um por vez, os botões e
+ * campos dela, com a explicação ao lado. Cada tela tem o próprio arquivo em `pages/` (20/10/2026), para
+ * as telas evoluírem sem disputar um arquivo só. Passo com alvo ausente na tela (papel sem permissão,
+ * seção fechada, celular) é pulado sozinho; `tests/tour-targets.test.ts` confere que todo alvo existe. */
 export interface TourStep {
   /** Valor do atributo `data-tour` do elemento a destacar. Omitido = passo introdutório central, sem alvo. */
   target?: string;
@@ -10,327 +29,60 @@ export type TourKey =
   | 'longoPrazo'
   | 'medioPrazo'
   | 'curtoPrazo'
+  | 'terminalidade'
   | 'planejamento'
   | 'vagao'
   | 'ifc'
   | 'federacao'
   | 'prevision'
   | 'dividas'
-  | 'configuracoes';
+  | 'obraConfiguracoes'
+  | 'configuracoes'
+  | 'campo';
 
-export const tours: Record<TourKey, TourStep[]> = {
-  obras: [
-    {
-      title: 'Bem-vindo ao Obra 360',
-      body: 'Este tour explica a tela em que você está. Use "Próximo" para avançar e "Sair" a qualquer momento — ele não altera nada, é só um guia.',
-    },
-    {
-      target: 'obras-actions',
-      title: 'Cadastrar obra',
-      body: 'Cria uma nova obra no sistema. Depois disso, use Configurações para liberar o acesso de outros usuários a ela.',
-    },
-    {
-      target: 'obras-grid',
-      title: 'Suas obras',
-      body: 'Cada cartão é uma obra a que você tem acesso, com a saúde dela: o PPC da última semana apurada, as restrições com prazo vencido e os vagões com takt vencido. Clique num cartão para abrir o planejamento.',
-    },
-  ],
-  longoPrazo: [
-    {
-      title: 'Aba 1 · Cronograma de longo prazo',
-      body: 'O macro da obra em duas visões: o Planejador, onde o cronograma de longo prazo é preenchido aqui mesmo, e a visão dos vagões, com a Linha de Balanço das atividades dos vagões, o módulo de restrições, a curva de avanço e as linhas de base.',
-    },
-    {
-      target: 'work-nav',
-      title: 'As quatro abas',
-      body: 'As quatro abas numeradas seguem o planejamento do macro para a semana: longo prazo, vagões, médio prazo e curto prazo. Abaixo delas, em Apoio, ficam o modelo federado, os arquivos IFC, as dívidas, as integrações e as configurações da obra.',
-    },
-    {
-      target: 'longo-visoes',
-      title: 'Planejador ou vagões',
-      body: 'O Planejador é o cronograma de longo prazo, e é ele o responsável pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão. "Vagões e restrições" mostra essas atividades, só para leitura, junto do módulo de restrições.',
-    },
-    {
-      target: 'longo-planejador-acoes',
-      title: 'Montar o plano',
-      body: 'Cada serviço percorre uma faixa de pavimentos com duração por pavimento e ritmo. As predecessoras empurram as datas sozinhas; "Recalcular" puxa tudo para a data mínima, tirando as folgas. O plano é salvo automaticamente. "Gerar vagões" leva o plano salvo para os vagões, com prévia do que muda; vagões já liberados nunca mudam. Importar aceita o arquivo da ferramenta antiga do App-ATR.',
-    },
-    {
-      target: 'longo-planejador-canvas',
-      title: 'Fluxograma que vira Linha de Balanço',
-      body: 'No fluxograma, cada cartão é um serviço e as setas são as predecessoras. Expanda um cartão para ver os pavimentos dele, ou a obra inteira em Linha de Balanço — na Linha de Balanço, arraste um serviço para reprogramá-lo.',
-    },
-    {
-      target: 'longo-lob',
-      title: 'Linha de Balanço',
-      body: 'Cada linha é um serviço avançando pelos locais ao longo do tempo. Selecione uma linha de base para ver o traçado pontilhado de referência ao lado do planejamento atual, ou troque para a visão de tabela.',
-    },
-    {
-      target: 'longo-board',
-      title: 'Módulo de restrições',
-      body: 'Cada restrição é ligada a uma atividade e a um lead time. O limite de resolução não é digitado: sai do início previsto da atividade menos esse lead time. Abra o card para ver a descrição completa e de onde veio a data.',
-    },
-    {
-      target: 'longo-curva-s',
-      title: 'Curva de avanço',
-      body: 'O acumulado da obra no tempo, planejado contra executado, que é a leitura que responde se a obra está adiantada ou atrasada — a Linha de Balanço responde onde. O planejado vem da linha de base escolhida: comparar o executado com um planejamento já reprogramado seria comparar a obra com a desculpa dela. A linha do executado para em hoje, porque depois de hoje não há medição.',
-    },
-    {
-      target: 'longo-baselines',
-      title: 'Linhas de base',
-      body: 'Cada acionamento de "Definir linha de base" cria um registro novo e preserva os anteriores. Reprogramar o planejamento atual nunca altera uma linha de base salva.',
-    },
-  ],
-  medioPrazo: [
-    {
-      title: 'Aba 3 · Cronograma de médio prazo',
-      body: 'Um cronograma por mês, com horizonte de três meses, no layout do MS Project. O cronograma de cada mês nasce como cópia do anterior, que fica guardado como estava. As seções da aba (cronograma, janela, equipes, cobertura, histórico, recursos e linha de base) ficam no alternador do cabeçalho.',
-    },
-    {
-      target: 'medio-gantt',
-      title: 'Tabela e Gantt',
-      body: 'A tabela à esquerda e o Gantt de acompanhamento à direita andam juntos: barra azul é o previsto atual, a cinza embaixo é a linha de base, o colchete é o resumo e o losango é o marco (0 dias). A linha 0 resume o cronograma inteiro. As datas são agendadas automaticamente: mudar duração ou predecessora empurra as sucessoras. Digitar um início vira "Não iniciar antes de"; apagar o início devolve a data à rede. Barra vermelha é tarefa crítica (folga zero), como no Gantt de acompanhamento do Project; as oito restrições, o prazo final, as datas tardias e as folgas ficam em "Colunas", e o botão "Exportar para o Project" gera o .xml para conferir no próprio Project.',
-    },
-    {
-      target: 'medio-gantt',
-      title: 'Cadeado, predecessoras e datas reais',
-      body: 'A grade abre bloqueada de propósito: em reunião o risco é a edição acidental. As predecessoras usam o Id da linha, como no Project: 12, 12;14, 27TI+6 dias, 5TT-1 dia. Lançar % concluída preenche o Início real; 100% preenche o Término real. Data real prende a tarefa: a rede não a move mais. Nada vai ao banco até "Revisar e salvar", com motivo.',
-    },
-    {
-      target: 'medio-gantt',
-      title: 'Item e subitem',
-      body: 'Recue uma linha (com o botão, com Alt+Shift+→ como no MS Project ou com Cmd+Alt+→) para ela virar subitem da linha de cima. "Inserir tarefa" entra abaixo da selecionada e já abre o nome; Enter na última linha cria a próxima. O recuo leva os subitens dela junto. Um item com subitens passa a ser resumo: início, término e avanço dele são os dos subitens, e por isso essas células ficam travadas. Excluir um item exclui os subitens.',
-    },
-    {
-      title: 'Cobertura entre os níveis',
-      body: 'Na seção Cobertura, a conferência mostra quais frentes da janela de três meses não têm linha no plano do mês, e quais linhas do plano não aparecem em semana nenhuma. O pareamento é por nome, não por vínculo — é conferência, e erra quando o nome muda de um nível para o outro. É sugestão: nada aqui bloqueia nem cria linha sozinho.',
-    },
-    {
-      target: 'medio-teams',
-      title: 'Equipes e capacidade',
-      body: 'Na seção Equipes, empresa e equipe abastecem o recurso do cronograma; na planilha do curto prazo a equipe é apenas uma opção, porque lá a linha se escreve sozinha. A capacidade é o número de atividades simultâneas por semana — é o que sinaliza sobrecarga.',
-    },
-    {
-      target: 'medio-resources',
-      title: 'Alocação e superalocação',
-      body: 'Na seção Recursos, a carga de cada equipe semana a semana, contra a capacidade cadastrada: verde abaixo, âmbar no limite, vermelho acima. Clique numa célula para ver quais tarefas e atividades causam a carga daquela semana. Capacidade é número de atividades simultâneas por semana, não pessoas nem horas.',
-    },
-    {
-      target: 'medio-baseline',
-      title: 'Linha de base e atrasos',
-      body: 'Na seção Linha de base, escolha o plano e uma das linhas de base congeladas dele. A tela calcula, em dias úteis do calendário do plano, a variação de início e de término de cada tarefa, o maior atraso e quanto o término do plano se moveu. Atrasada é quem termina depois da base.',
-    },
-  ],
-  curtoPrazo: [
-    {
-      title: 'Aba 4 · Cronograma de curto prazo',
-      body: 'A planilha da semana, que se sustenta sozinha: nada aqui depende do plano do mês nem de cadastro feito em outra tela. Compromissos da semana, cumprimento, PPC e causas de não cumprimento.',
-    },
-    {
-      target: 'curto-ppc',
-      title: 'PPC da semana',
-      body: 'O PPC conta compromissos cumpridos sobre compromissos assumidos na semana. Ele não é a média dos percentuais executados dos serviços.',
-    },
-    {
-      title: 'Fechamento da semana',
-      body: 'Abaixo da planilha ficam a série do PPC e o Pareto das causas. O PPC de uma semana isolada diz pouco; o que ensina é a série, e quais poucas causas respondem pela maior parte das falhas. Uma linha com "Não" pode ser levada para a semana seguinte, sem apagar o registro do que aconteceu, e pode virar restrição no quadro do longo prazo.',
-    },
-    {
-      target: 'curto-commitments',
-      title: 'A planilha da semana',
-      body: 'Mesma estrutura da planilha que a equipe já preenche: fornecedor, semana, início, término, atividade e equipe, todos editáveis na célula — a equipe é opcional. O calendário de segunda a sábado é a única coisa que se preenche sozinha, a partir do início e do término. Ao encerrar a semana, registre Sim ou Não em cada linha: o Não exige uma causa da lista, e é dela que sai a análise do PPC. No celular, cada linha vira um cartão.',
-    },
-  ],
-  planejamento: [
-    {
-      title: 'Aba 2 · Planejamento por vagões',
-      body: 'Aqui os vagões desta obra ficam organizados em sequências de produção. Cada vagão é um período fixo (o "takt") que reúne várias atividades.',
-    },
-    {
-      target: 'planejamento-stats',
-      title: 'Indicadores gerais',
-      body: 'Resumo rápido: quantos vagões existem, quantos já viraram terminais, quantos estão com o takt vencido e quantas dívidas de terminalidade seguem abertas.',
-    },
-    {
-      target: 'work-nav',
-      title: 'Seções da obra',
-      body: 'Toda a navegação da obra fica aqui na lateral: as quatro abas de planejamento e, em Apoio, o modelo federado, os arquivos IFC, as dívidas, a integração com o Prevision e as configurações da obra.',
-    },
-    {
-      target: 'planejamento-show-past',
-      title: 'Mostrar vagões passados',
-      body: 'Por padrão, vagões cujo período já terminou ficam ocultos para deixar a lista mais limpa. Marque aqui para revê-los.',
-    },
-    {
-      target: 'planejamento-wagon-table',
-      title: 'Lista de vagões',
-      body: 'Cada linha é um vagão: período previsto, quantidade de atividades, progresso ponderado, status e o tipo de liberação já concedida. Clique no nome do vagão para abrir o detalhe.',
-    },
-  ],
-  vagao: [
-    {
-      title: 'Detalhe do vagão',
-      body: 'Esta tela reúne tudo sobre um período: atividades previstas, critérios de terminalidade, liberação, pendências e restrições.',
-    },
-    {
-      target: 'vagao-status',
-      title: 'Status do vagão',
-      body: 'Mostra a situação atual do vagão e avisa se o takt já venceu — o que não impede a terminalidade, só sinaliza atraso.',
-    },
-    {
-      target: 'vagao-actions',
-      title: 'Adicionar e registrar',
-      body: 'Cada botão abre um formulário na lateral para incluir uma atividade, um critério de terminalidade, uma pendência ou uma restrição neste período, ou para editar o período.',
-    },
-    {
-      target: 'vagao-activities',
-      title: 'Atividades do período',
-      body: 'Lista de atividades previstas para este vagão, com progresso, status e peso. O progresso do vagão é a média ponderada pelo peso de cada atividade. "Editar" abre a atividade na lateral.',
-    },
-    {
-      target: 'vagao-criteria',
-      title: 'Terminalidade',
-      body: 'Um vagão só vira terminal quando todas as atividades obrigatórias estão concluídas e todos os critérios obrigatórios estão confirmados.',
-    },
-    {
-      target: 'vagao-release',
-      title: 'Liberação deste vagão',
-      body: 'Registra a liberação que autoriza o início da execução. Pode ser inicial, normal (predecessor terminal) ou excepcional (aceitando pendências em aberto).',
-    },
-    {
-      target: 'vagao-pending',
-      title: 'Pendências',
-      body: 'Itens em aberto que podem bloquear a terminalidade deste vagão até serem resolvidos.',
-    },
-    {
-      target: 'vagao-restrictions',
-      title: 'Restrições',
-      body: 'Podem bloquear a execução, a terminalidade, ou ambas — diferente de uma pendência simples.',
-    },
-  ],
-  ifc: [
-    {
-      title: 'Arquivos IFC',
-      body: 'O IFC é uma base de dados, não um desenho. O envio parte o arquivo em duas metades: os dados viram tabelas (elemento, propriedade, quantidade) e a geometria é convertida para um formato compacto que abre rápido no navegador. As duas se reencontram pelo GlobalId. Guardar o .ifc original é opcional — o limite de tamanho do armazenamento não decide o que a obra pode planejar.',
-    },
-    {
-      target: 'ifc-models',
-      title: 'Modelos e versões',
-      body: 'Cada modelo lista suas versões, quantas linhas foram transcritas e se a geometria 3D já foi convertida. Uma versão nova nunca substitui as anteriores, e a versão sem o arquivo original continua completa como dado.',
-    },
-    {
-      target: 'ifc-quantitativo',
-      title: 'Quantitativo',
-      body: 'As quantidades declaradas no modelo, somadas por tipo, com a distribuição por classe IFC e por pavimento e a consulta elemento a elemento. A soma é feita no banco, sobre o modelo inteiro — e sai em CSV para quem ainda precisa da planilha.',
-    },
-    {
-      target: 'ifc-viewer',
-      title: 'Visualizador',
-      body: 'Desenha a geometria convertida guardada no envio, não o arquivo relido — é o que faz o modelo abrir em qualquer tamanho. Dá para colorir por pavimento ou por classe, isolar um pavimento, seccionar nos eixos X/Y/Z e clicar num elemento para ver classe IFC, nome, GlobalId e pavimento. Ative o corte, ajuste a posição e inverta o lado visível quando necessário.',
-    },
-  ],
-  federacao: [
-    {
-      title: 'Modelo federado',
-      body: 'Reúna versões dos modelos da obra numa mesma cena e explore o conjunto para a análise virtual dos projetos.',
-    },
-    {
-      target: 'federation-composition',
-      title: 'Composição do conjunto',
-      body: 'Busque modelos e disciplinas, marque os modelos que entram no conjunto e escolha suas versões. Selecionar disponíveis usa a versão mais recente pronta de cada modelo. Carregar aplica a seleção ao 3D.',
-    },
-    {
-      target: 'federation-saved',
-      title: 'Composições salvas',
-      body: 'Abra esta área para restaurar uma composição ou salvar uma nova cópia. Cada composição mantém as versões escolhidas, mesmo após novos envios de IFC.',
-    },
-    {
-      target: 'federation-viewer',
-      title: 'Explorar o conjunto',
-      body: 'Oculte ou isole modelos, recorte por pavimento e escolha as cores. Em Seccionamento, ative um corte X/Y/Z, ajuste a posição e inverta o lado visível; o mesmo plano atravessa todo o conjunto. Clique no 3D ou use Buscar elementos para selecionar pelo nome, classe ou GlobalId; o painel de detalhes mostra a origem e os dados.',
-    },
-  ],
-  prevision: [
-    {
-      title: 'Atividades do Prevision',
-      body: 'Aqui o cronograma do Prevision fica salvo no sistema; ele só é consultado de novo quando você pede. Cada atividade só entra inteira num vagão cujo período a contenha.',
-    },
-    {
-      target: 'prevision-responsible',
-      title: 'Responsável local',
-      body: 'Defina quem vai responder pelas atividades antes de importá-las — é obrigatório para adicionar qualquer atividade a um vagão.',
-    },
-    {
-      target: 'prevision-sync',
-      title: 'Atualizar do Prevision',
-      body: 'Busca o cronograma mais recente e regenera os vagões futuros ainda não liberados a partir dele. Vagões já liberados nunca são alterados, e sequências geradas pelo plano de longo prazo não são tocadas.',
-    },
-    {
-      target: 'prevision-tabs',
-      title: 'Três formas de organizar',
-      body: '"Disponíveis para vagão" mostra o que falta encaixar; "Fora do período" mostra o que não cabe em nenhum vagão existente; "Escolher por vagão" deixa você selecionar várias atividades de uma vez para um vagão específico.',
-    },
-    {
-      target: 'prevision-pool',
-      title: 'Fatiamento automático',
-      body: 'Uma atividade que atravessa mais de um vagão é dividida em fatias proporcionais aos dias de cada período, sempre somando 100%. É assim que toda atividade acaba dentro de algum vagão.',
-    },
-  ],
-  dividas: [
-    {
-      title: 'Dívidas de terminalidade',
-      body: 'Pendências que foram aceitas para permitir uma liberação excepcional, mas que ainda precisam ser resolvidas — mesmo com o vagão de origem já liberado.',
-    },
-    {
-      target: 'dividas-filter',
-      title: 'Filtrar por situação',
-      body: 'Veja só as dívidas abertas, só as vencidas, só as resolvidas, ou todas de uma vez.',
-    },
-    {
-      target: 'dividas-list',
-      title: 'Cada dívida',
-      body: 'Mostra a pendência original, o vagão onde ela surgiu e o vagão cuja liberação excepcional a aceitou. Dívidas em aberto podem ser resolvidas diretamente aqui.',
-    },
-  ],
-  configuracoes: [
-    {
-      title: 'Configurações',
-      body: 'Tela restrita a administradores: define o takt de cada obra, gerencia usuários, controla quem acessa o quê e mostra o estado do banco de dados.',
-    },
-    {
-      target: 'config-takt',
-      title: 'Takt por obra',
-      body: 'Ajusta a duração padrão (em dias) do takt de cada sequência de produção — usada para agrupar novas atividades em vagões.',
-    },
-    {
-      target: 'config-start-date',
-      title: 'Início do primeiro vagão',
-      body: 'Enquanto a sequência não tiver nenhum vagão liberado, a regeneração pelo Prevision usa essa data como ponto de partida em vez de "hoje". Depois que o primeiro vagão for liberado, deixa de valer — o limite passa a ser o próprio vagão liberado.',
-    },
-    {
-      target: 'config-invite',
-      title: 'Cadastrar usuário',
-      body: 'Cadastra o e-mail com um papel já definido (consulta, planejador, gestor ou administrador); a pessoa entra com a conta Google desse e-mail. O acesso a cada obra é liberado à parte, na lista abaixo.',
-    },
-    {
-      target: 'config-users',
-      title: 'Usuários e acessos',
-      body: 'Para cada pessoa: mude o papel, libere ou revogue o acesso a cada obra, ou remova o usuário do sistema.',
-    },
-  ],
+/** Fecho comum a todos os tours: aponta para o próprio botão, para a pessoa saber onde voltar. */
+const CLOSING: TourStep = {
+  target: 'ajuda',
+  title: 'Sempre que precisar',
+  body: 'Este botão refaz o tour da tela em que você estiver. Ele só explica: nada é alterado enquanto o tour está aberto.',
 };
+const withClosing = (steps: TourStep[]) => [...steps, CLOSING];
+
+const pages: Record<TourKey, TourStep[]> = {
+  obras,
+  longoPrazo,
+  medioPrazo,
+  curtoPrazo,
+  terminalidade,
+  planejamento,
+  vagao,
+  ifc,
+  federacao,
+  prevision,
+  dividas,
+  obraConfiguracoes,
+  configuracoes,
+  campo,
+};
+export const tours = Object.fromEntries(Object.entries(pages).map(([key, steps]) => [key, withClosing(steps)])) as Record<
+  TourKey,
+  TourStep[]
+>;
 
 export function resolveTourKey(pathname: string): TourKey | null {
   if (pathname === '/obras') return 'obras';
   if (/^\/obras\/[^/]+\/longo-prazo$/.test(pathname)) return 'longoPrazo';
   if (/^\/obras\/[^/]+\/medio-prazo$/.test(pathname)) return 'medioPrazo';
   if (/^\/obras\/[^/]+\/curto-prazo$/.test(pathname)) return 'curtoPrazo';
+  if (/^\/obras\/[^/]+\/terminalidade$/.test(pathname)) return 'terminalidade';
   if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
   if (/^\/obras\/[^/]+\/ifc$/.test(pathname)) return 'ifc';
   if (/^\/obras\/[^/]+\/federacao$/.test(pathname)) return 'federacao';
   if (/^\/obras\/[^/]+\/importar$/.test(pathname)) return 'prevision';
   if (/^\/obras\/[^/]+\/dividas$/.test(pathname)) return 'dividas';
+  if (/^\/obras\/[^/]+\/configuracoes$/.test(pathname)) return 'obraConfiguracoes';
   if (pathname === '/configuracoes') return 'configuracoes';
+  if (/^\/campo\/terminalidade\/?$/.test(pathname)) return 'campo';
   return null;
 }

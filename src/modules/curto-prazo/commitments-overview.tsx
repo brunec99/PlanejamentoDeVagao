@@ -1,6 +1,16 @@
 'use client';
 import Link from 'next/link';
-import { memo, useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type FormEvent, type ReactNode } from 'react';
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type FocusEvent,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import type { Command } from '@/application/use-cases/commands';
 import { selectWorkPlanning, type Planning } from '@/application/use-cases/get-planning';
 import { NON_FULFILLMENT_CAUSES, type Activity, type User, type Wagon, type WeeklyCommitment } from '@/domain/entities';
@@ -555,6 +565,16 @@ function Sheet({
       if (created) teamCreated(created, company);
     });
 
+  // Levar para a próxima só mexe na semana seguinte, e é ela que o servidor confere: a linha de
+  // uma semana encerrada pode ser levada por quem não é admin, desde que a próxima esteja aberta.
+  const canCarryRow = (row: WeeklyCommitment) => !viewer && canEditWeek(addDays(row.weekStart, 7), planning.today, actor.role);
+  // Tour "Como usar": cada botão da coluna Apontamento leva a marca na primeira linha da tela que o tem,
+  // para o valor do `data-tour` não se repetir.
+  const firstWith = (button: keyof FollowUp) =>
+    [...previousShown, ...rows, ...nextShown].find(
+      row => followUpOf(row, statusOf(row), canCarryRow(row), !!around, developer, viewer)[button],
+    )?.id;
+  const tourRows = { carry: firstWith('carry'), restriction: firstWith('restriction'), clear: firstWith('clear') };
   /** Tudo o que uma linha precisa, em valores simples: a linha memorizada compara por valor e só
    * redesenha a que mudou (um Status numa semana de 120 linhas redesenhava todas, 11/10/2026). */
   const rowProps = (row: WeeklyCommitment, index: number, scope: WeekScope = 'analisada'): RowProps => {
@@ -570,9 +590,7 @@ function Sheet({
       companies,
       weekOptions: weekChoices,
       nextWeek: weekNumber(addDays(row.weekStart, 7)),
-      // Levar para a próxima só mexe na semana seguinte, e é ela que o servidor confere: a linha de
-      // uma semana encerrada pode ser levada por quem não é admin, desde que a próxima esteja aberta.
-      canCarry: !viewer && canEditWeek(addDays(row.weekStart, 7), planning.today, actor.role),
+      canCarry: canCarryRow(row),
       carried: alreadyCarried(row),
       carryAny: !!around,
       muted: scope === 'anterior',
@@ -580,6 +598,12 @@ function Sheet({
       viewer,
       // A anterior só aceita apontamento e "Levar", mesmo aberta: mexer nas linhas dela é escolhê-la no seletor.
       readOnly: scope === 'anterior' ? true : scope === 'proxima' ? nextReadOnly : readOnly,
+      tour: {
+        cells: scope === 'analisada' && index === 0,
+        carry: tourRows.carry === row.id,
+        restriction: tourRows.restriction === row.id,
+        clear: tourRows.clear === row.id,
+      },
       actions,
     };
   };
@@ -666,7 +690,7 @@ function Sheet({
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600">
-        <label className="flex items-center gap-2">
+        <label data-tour="curto-semana" className="flex items-center gap-2">
           Semana analisada
           <select
             className="field max-w-60 py-1.5"
@@ -684,7 +708,7 @@ function Sheet({
             ))}
           </select>
         </label>
-        <span>
+        <span data-tour="curto-semana-atual">
           Semana atual: <span className="tabular-nums text-slate-900">{weekNumber(currentWeek)}</span>
           <Link className="text-link ml-2 font-normal" href={workPath(workId, 'configuracoes')}>
             {weekOneStart ? 'alterar semana 1' : 'definir semana 1'}
@@ -694,34 +718,42 @@ function Sheet({
           PPC: <span className="tabular-nums text-slate-900">{stats.planned ? `${Math.round(stats.percent)}%` : '—'}</span>
           {stats.pending > 0 && <span className="ml-1 font-normal text-slate-400">({stats.pending} sem status)</span>}
         </span>
-        <label className="flex items-center gap-1.5" title="Mostra a semana anterior e a próxima na mesma planilha">
+        <label
+          data-tour="curto-vizinhas"
+          className="flex items-center gap-1.5"
+          title="Mostra a semana anterior e a próxima na mesma planilha"
+        >
           <input type="checkbox" className="accent-primary" checked={neighbors} onChange={e => setNeighbors(e.target.checked)} />
           Semanas vizinhas
         </label>
         <span className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <HelpNote title="Como preencher a planilha" label="Como preencher" align="end">
-            <p>
-              Empresa e Equipe: escolha na lista ou digite um nome novo. Equipe nova entra no cadastro da empresa da linha, com capacidade
-              de {NEW_TEAM_CAPACITY} atividades por semana, ajustável nas configurações.
-            </p>
-            <p>
-              Os dias de SEG a SÁB se marcam a partir de Início e Término. No celular, os filtros de coluna ficam só na tabela de telas
-              largas.
-            </p>
-          </HelpNote>
-          <Link className="text-link" href={workPath(workId, 'configuracoes')}>
+          {/* O `HelpNote` é comum às telas: a marca do tour fica num invólucro daqui. */}
+          <span data-tour="curto-como-preencher" className="inline-flex">
+            <HelpNote title="Como preencher a planilha" label="Como preencher" align="end">
+              <p>
+                Empresa e Equipe: escolha na lista ou digite um nome novo. Equipe nova entra no cadastro da empresa da linha, com capacidade
+                de {NEW_TEAM_CAPACITY} atividades por semana, ajustável nas configurações.
+              </p>
+              <p>
+                Os dias de SEG a SÁB se marcam a partir de Início e Término. No celular, os filtros de coluna ficam só na tabela de telas
+                largas.
+              </p>
+            </HelpNote>
+          </span>
+          <Link data-tour="curto-recursos" className="text-link" href={workPath(workId, 'configuracoes')}>
             {viewer ? 'Consultar recursos' : 'Gerenciar empreiteiros e equipes'}
           </Link>
           {/* PDFs no formato da planilha da obra: antes, a janela de empreiteiros e ordem; depois, uma aba
             própria já no diálogo de impressão ("Salvar como PDF"), com o nome "PCP-<código> - Semana N". */}
-          <button type="button" className="button-secondary" onClick={() => setPrinting('planejamento')}>
+          <button data-tour="curto-pdf-planejamento" type="button" className="button-secondary" onClick={() => setPrinting('planejamento')}>
             PDF do planejamento
           </button>
-          <button type="button" className="button-secondary" onClick={() => setPrinting('fechamento')}>
+          <button data-tour="curto-pdf-fechamento" type="button" className="button-secondary" onClick={() => setPrinting('fechamento')}>
             PDF do fechamento
           </button>
           {wide && (
             <button
+              data-tour="curto-ajustar"
               type="button"
               className="text-link"
               title="Reduz as colunas para a planilha caber na largura da tela"
@@ -734,7 +766,7 @@ function Sheet({
       </div>
 
       {locked && !viewer && (
-        <div className="mt-3">
+        <div data-tour="curto-semana-encerrada" className="mt-3">
           <Callout tone={readOnly ? 'warning' : 'info'} role="status">
             {readOnly
               ? `Semana encerrada em ${formatDate(weekLockLastDay(week))}: Realizado, causa e justificativa continuam abertos; incluir, editar ou excluir linhas, só administradores.`
@@ -758,7 +790,7 @@ function Sheet({
         </div>
       )}
       {filtered && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+        <div data-tour="curto-limpar-filtros" className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
           <span>
             Mostrando {rows.length} de {weekRows.length} linhas.
           </span>
@@ -776,7 +808,7 @@ function Sheet({
       )}
 
       {weekRows.length > 1 && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+        <div data-tour="curto-ordem" className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
           <span>
             {sort
               ? 'Linhas classificadas uma vez pelo funil; marcar Status ou editar não as move, e as novas entram embaixo.'
@@ -834,7 +866,7 @@ function Sheet({
                   ))}
                   <th colSpan={showFollowUp ? 5 : 4} />
                 </tr>
-                <tr className="border-b border-slate-200">
+                <tr data-tour="curto-colunas" className="border-b border-slate-200">
                   {header('empresa', 'Empresa', 'px-2 py-1.5')}
                   {header('semana', 'Semana', 'px-2 py-1.5')}
                   {header('inicio', 'Início', 'px-2 py-1.5')}
@@ -873,7 +905,13 @@ function Sheet({
                     ))}
                   </>
                 )}
-                {around && <WeekBandRow band={band('analisada', week, rows.length, weekRows.length)} span={visibleColumns.length} />}
+                {around && (
+                  <WeekBandRow
+                    band={band('analisada', week, rows.length, weekRows.length)}
+                    span={visibleColumns.length}
+                    tourId="curto-faixa-semana"
+                  />
+                )}
                 {rows.map((row, index) => (
                   <SheetRow key={row.id} {...rowProps(row, index)} showFollowUp={showFollowUp} />
                 ))}
@@ -921,7 +959,7 @@ function Sheet({
                 ))}
               </>
             )}
-            {around && <WeekBandCard band={band('analisada', week, rows.length, weekRows.length)} />}
+            {around && <WeekBandCard band={band('analisada', week, rows.length, weekRows.length)} tourId="curto-faixa-semana" />}
             {rows.map((row, index) => (
               <SheetCard key={row.id} {...rowProps(row, index)} />
             ))}
@@ -995,8 +1033,58 @@ type RowProps = {
   developer: boolean;
   viewer: boolean;
   readOnly: boolean;
+  tour: RowTour;
   actions: RowActions;
 };
+
+type FollowUp = { carry: boolean; restriction: boolean; clear: boolean };
+/** Os botões da coluna Apontamento de uma linha. A mesma regra desenha a linha e escolhe onde ficam as
+ * marcas do tour. Apontamento é livre mesmo na semana encerrada, por isso o "Limpar" olha só o leitor. */
+const followUpOf = (
+  row: WeeklyCommitment,
+  status: string,
+  canCarry: boolean,
+  carryAny: boolean,
+  developer: boolean,
+  viewer: boolean,
+): FollowUp => ({
+  carry: canCarry && (row.fulfilled === false || carryAny),
+  restriction: row.fulfilled === false && canCarry && developer,
+  clear: !viewer && status !== '',
+});
+/** As marcas do tour "Como usar" (`data-tour`) que a linha leva: as das células e a do ✕ só na primeira
+ * linha da semana analisada; a de cada botão de Apontamento, na primeira linha da tela que tem o botão. */
+type RowTour = FollowUp & { cells: boolean };
+
+/** Peças com marca do tour. O valor vai escrito por extenso em `tourId` (o teste dos alvos lê o código) e só
+ * vira `data-tour` quando `tour` é verdadeiro, para não se repetir em cada linha da planilha. */
+function Cell({
+  tour,
+  tourId,
+  className = 'px-1 py-1',
+  children,
+}: {
+  tour: boolean;
+  tourId: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <td data-tour={tour ? tourId : undefined} className={className}>
+      {children}
+    </td>
+  );
+}
+function Mark({ tour, tourId, className, children }: { tour: boolean; tourId: string; className?: string; children: ReactNode }) {
+  return (
+    <div data-tour={tour ? tourId : undefined} className={className}>
+      {children}
+    </div>
+  );
+}
+function RowButton({ tour, tourId, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tour: boolean; tourId: string }) {
+  return <button type="button" {...props} data-tour={tour ? tourId : undefined} />;
+}
 
 /** Os controles de uma linha são os mesmos na tabela (telas largas) e no cartão (celular): só a
  * disposição muda, a gravação é uma. Os campos de texto recebem a classe de quem os monta,
@@ -1018,12 +1106,11 @@ function rowControls({
   developer,
   viewer,
   readOnly,
+  tour,
   actions,
 }: RowProps) {
   const missingCause = status === 'Não' && !row.cause;
-  // Apontamento é livre mesmo na semana encerrada, por isso o "Limpar" olha só o leitor, não `readOnly`.
-  const clearable = !viewer && status !== '';
-  const carryable = canCarry && (row.fulfilled === false || carryAny);
+  const { carry: carryable, restriction, clear: clearable } = followUpOf(row, status, canCarry, carryAny, developer, viewer);
   return {
     saving,
     missingCause,
@@ -1152,8 +1239,9 @@ function rowControls({
       carryable || clearable ? (
         <>
           {carryable && (
-            <button
-              type="button"
+            <RowButton
+              tour={tour.carry}
+              tourId="curto-levar"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
               disabled={saving}
               aria-label={`Levar ${row.name} para a próxima semana`}
@@ -1165,22 +1253,24 @@ function rowControls({
               onClick={() => actions.carry(row)}
             >
               {carried ? 'Levar de novo' : 'Levar p/ próxima'}
-            </button>
+            </RowButton>
           )}
-          {row.fulfilled === false && canCarry && developer && (
-            <button
-              type="button"
+          {restriction && (
+            <RowButton
+              tour={tour.restriction}
+              tourId="curto-gerar-restricao"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
               aria-haspopup="dialog"
               aria-label={`Gerar restrição a partir de ${row.name}`}
               onClick={() => actions.openPendency(row)}
             >
               Gerar restrição
-            </button>
+            </RowButton>
           )}
           {clearable && (
-            <button
-              type="button"
+            <RowButton
+              tour={tour.clear}
+              tourId="curto-limpar-apontamento"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs text-slate-500"
               disabled={saving}
               aria-label={`Limpar o apontamento de ${row.name}`}
@@ -1192,20 +1282,21 @@ function rowControls({
               onClick={() => actions.clearFulfillment(row)}
             >
               Limpar apontamento
-            </button>
+            </RowButton>
           )}
         </>
       ) : null,
     deleteButton: readOnly ? null : (
-      <button
-        type="button"
+      <RowButton
+        tour={tour.cells}
+        tourId="curto-linha-excluir"
         onClick={() => actions.remove(row)}
         aria-label={`Excluir a linha ${row.name}`}
         title="Excluir linha"
         className="rounded px-1.5 text-slate-300 transition-colors hover:bg-danger-soft hover:text-danger"
       >
         ✕
-      </button>
+      </RowButton>
     ),
   };
 }
@@ -1213,29 +1304,49 @@ function rowControls({
 /** Uma linha da tabela. Memorizada por valor (`sameProps`): o Status de uma linha não redesenha as
  * outras 119 com seus combos, e a recarga que troca os objetos também não. */
 const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolean }) {
-  const { row, showFollowUp, muted } = props;
+  const { row, showFollowUp, muted, tour } = props;
   const c = rowControls(props);
   return (
     <tr
       className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}`}
     >
-      <td className="px-1 py-1">{c.company}</td>
-      <td className="px-1 py-1">{c.week}</td>
-      <td className="px-1 py-1">{c.start()}</td>
-      <td className="px-1 py-1">{c.end()}</td>
-      <td className="px-1 py-1">{c.name()}</td>
-      <td className="px-1 py-1">{c.team}</td>
+      <Cell tour={tour.cells} tourId="curto-linha-empresa">
+        {c.company}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-semana">
+        {c.week}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-inicio">
+        {c.start()}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-termino">
+        {c.end()}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-atividade">
+        {c.name()}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-equipe">
+        {c.team}
+      </Cell>
       {WEEKDAYS.map(day => (
-        <td
+        <Cell
           key={day}
+          tour={tour.cells && day === 1}
+          tourId="curto-linha-dias"
           className={`border-l border-slate-100 px-1 py-1 text-center font-bold ${marked(row, day) ? 'bg-primary-soft text-primary-ink' : 'text-slate-200'}`}
         >
           {marked(row, day) ? 'x' : ''}
-        </td>
+        </Cell>
       ))}
-      <td className="px-1 py-1">{c.statusPill}</td>
-      <td className="px-1 py-1">{c.causePill}</td>
-      <td className="px-1 py-1">{c.justification()}</td>
+      <Cell tour={tour.cells} tourId="curto-linha-status">
+        {c.statusPill}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-causa">
+        {c.causePill}
+      </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-justificativa">
+        {c.justification()}
+      </Cell>
       {showFollowUp && <td className="px-1 py-1">{c.followUp && <div className="flex flex-wrap gap-1">{c.followUp}</div>}</td>}
       <td className="px-1 py-1">{c.deleteButton}</td>
     </tr>
@@ -1244,7 +1355,7 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
 
 /** A mesma linha como cartão do celular, memorizada do mesmo jeito. */
 const SheetCard = memo(function SheetCard(props: RowProps) {
-  const { row, line, muted } = props;
+  const { row, line, muted, tour } = props;
   const c = rowControls(props);
   return (
     <article
@@ -1252,37 +1363,55 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
       className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : muted ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}
     >
       <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">{c.name('field py-1.5 font-semibold')}</div>
+        <Mark tour={tour.cells} tourId="curto-linha-atividade" className="min-w-0 flex-1">
+          {c.name('field py-1.5 font-semibold')}
+        </Mark>
         {c.deleteButton}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <CardField label="Empresa">{c.company}</CardField>
-        <CardField label="Equipe">{c.team}</CardField>
+        <CardField label="Empresa" tour={tour.cells} tourId="curto-linha-empresa">
+          {c.company}
+        </CardField>
+        <CardField label="Equipe" tour={tour.cells} tourId="curto-linha-equipe">
+          {c.team}
+        </CardField>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2">
-        <CardField label="Semana">{c.week}</CardField>
-        <CardField label="Início">{c.start('field py-1.5 text-xs tabular-nums')}</CardField>
-        <CardField label="Término">{c.end('field py-1.5 text-xs tabular-nums')}</CardField>
+        <CardField label="Semana" tour={tour.cells} tourId="curto-linha-semana">
+          {c.week}
+        </CardField>
+        <CardField label="Início" tour={tour.cells} tourId="curto-linha-inicio">
+          {c.start('field py-1.5 text-xs tabular-nums')}
+        </CardField>
+        <CardField label="Término" tour={tour.cells} tourId="curto-linha-termino">
+          {c.end('field py-1.5 text-xs tabular-nums')}
+        </CardField>
       </div>
-      <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Dias da linha ${line}`}>
-        {WEEKDAYS.map(day => {
-          const on = marked(row, day);
-          return (
-            <li
-              key={day}
-              className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${on ? 'border-primary-ring bg-primary-soft text-primary-ink' : 'border-slate-200 text-slate-400'}`}
-            >
-              {NAMES[day]}
-              <span className="sr-only">{on ? ', marcado' : ', não marcado'}</span>
-            </li>
-          );
-        })}
-      </ul>
+      <Mark tour={tour.cells} tourId="curto-linha-dias" className="mt-2">
+        <ul className="flex flex-wrap gap-1" aria-label={`Dias da linha ${line}`}>
+          {WEEKDAYS.map(day => {
+            const on = marked(row, day);
+            return (
+              <li
+                key={day}
+                className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${on ? 'border-primary-ring bg-primary-soft text-primary-ink' : 'border-slate-200 text-slate-400'}`}
+              >
+                {NAMES[day]}
+                <span className="sr-only">{on ? ', marcado' : ', não marcado'}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </Mark>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <CardField label="Status">{c.statusPill}</CardField>
-        <CardField label="Causa">{c.causePill}</CardField>
+        <CardField label="Status" tour={tour.cells} tourId="curto-linha-status">
+          {c.statusPill}
+        </CardField>
+        <CardField label="Causa" tour={tour.cells} tourId="curto-linha-causa">
+          {c.causePill}
+        </CardField>
       </div>
-      <CardField label="Justificativa" className="mt-2">
+      <CardField label="Justificativa" className="mt-2" tour={tour.cells} tourId="curto-linha-justificativa">
         {c.justification('field py-1.5 text-xs')}
       </CardField>
       {c.followUp && <div className="mt-2 flex flex-wrap gap-1">{c.followUp}</div>}
@@ -1317,9 +1446,10 @@ function WeekBandContent({ band }: { band: WeekBand }) {
   );
 }
 
-function WeekBandRow({ band, span }: { band: WeekBand; span: number }) {
+/** `tourId`: a marca do tour vai só na faixa da semana analisada, que é uma só e existe com qualquer semana 1. */
+function WeekBandRow({ band, span, tourId }: { band: WeekBand; span: number; tourId?: string }) {
   return (
-    <tr className="border-t border-slate-200 bg-slate-100">
+    <tr data-tour={tourId} className="border-t border-slate-200 bg-slate-100">
       <th scope="rowgroup" colSpan={span} className="px-2 py-1.5 text-left text-xs font-normal text-slate-600">
         <WeekBandContent band={band} />
       </th>
@@ -1327,9 +1457,9 @@ function WeekBandRow({ band, span }: { band: WeekBand; span: number }) {
   );
 }
 
-function WeekBandCard({ band }: { band: WeekBand }) {
+function WeekBandCard({ band, tourId }: { band: WeekBand; tourId?: string }) {
   return (
-    <h3 className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-normal text-slate-600">
+    <h3 data-tour={tourId} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-normal text-slate-600">
       <WeekBandContent band={band} />
     </h3>
   );
@@ -1356,9 +1486,21 @@ function useStoredFlag(key: string): [boolean, (on: boolean) => void] {
 }
 
 /** Rótulo curto sobre um controle do cartão: no celular não há cabeçalho de coluna dizendo o que é. */
-function CardField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+function CardField({
+  label,
+  children,
+  className = '',
+  tour = false,
+  tourId,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+  tour?: boolean;
+  tourId?: string;
+}) {
   return (
-    <div className={`min-w-0 ${className}`}>
+    <div data-tour={tour ? tourId : undefined} className={`min-w-0 ${className}`}>
       <span className="mb-0.5 block text-xs font-semibold text-slate-500">{label}</span>
       {children}
     </div>
@@ -1636,7 +1778,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
     if (!event.currentTarget.closest('tr')?.contains(next) && !next?.closest('[data-sheet-popover]')) create(draft);
   };
   return (
-    <tr className="border-t border-slate-100 bg-primary-soft/40" onBlur={leave}>
+    <tr data-tour="curto-linha-nova" className="border-t border-slate-100 bg-primary-soft/40" onBlur={leave}>
       <td className="px-1 py-1">
         <PillCombo
           value={draft.supplier}
@@ -1719,6 +1861,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }
   const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames);
   return (
     <form
+      data-tour="curto-linha-nova"
       className="rounded-xl border border-dashed border-primary-ring bg-primary-soft/40 p-3"
       aria-label="Nova linha"
       onSubmit={event => {

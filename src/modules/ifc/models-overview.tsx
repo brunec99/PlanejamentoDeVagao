@@ -130,6 +130,8 @@ export function ModelsOverview({ workId }: { workId: string }) {
   const storeys = new Set(latest.flatMap(v => v.storeys));
   const currentElements = latest.reduce((sum, v) => sum + v.elementCount, 0);
   const stored = versions.filter(v => v.storagePath).length;
+  // A primeira versão com o .ifc guardado, na ordem da tela, é a que o tour destaca em "baixar arquivo".
+  const firstStored = versions.find(v => v.storagePath)?.id;
   const withGeometry = transcriptions ? versions.filter(v => transcriptions[v.id]?.hasGeometry).length : 0;
   const person = (id: string) => data.users.find(u => u.id === id)?.name ?? id;
   const canUpload = actor.role !== 'viewer';
@@ -157,36 +159,38 @@ export function ModelsOverview({ workId }: { workId: string }) {
             <p className="text-sm text-slate-500">
               Os modelos da obra, versão a versão: dados transcritos em tabelas e geometria convertida para o visualizador.
             </p>
-            <HelpNote compact title="Como funciona: arquivos IFC">
-              <p>
-                O IFC é tratado como o que ele é — uma base de dados. O arquivo entra aqui e sai em duas metades: os dados são transcritos
-                em tabelas (elementos, propriedades e quantidades) e a geometria é convertida para Fragments, um binário compacto que o
-                visualizador 3D abre direto no navegador.
-              </p>
-              <p>
-                As duas metades se reencontram pelo GlobalId, e é esse par que o repositório guarda. A leitura acontece neste navegador, no
-                momento do envio; nenhuma tela relê o arquivo depois.
-              </p>
-              <p>
-                Guardar o arquivo .ifc original é opcional: nem o planejamento nem o 3D dependem dele, e é só ele que pode não caber no
-                limite por arquivo do Storage.
-              </p>
-              <p>
-                Toda versão é preservada: cada envio empilha uma versão nova, sem substituir as anteriores, e o histórico fica disponível
-                para comparação. O Modelo federado reúne a versão atual de cada modelo.
-              </p>
-            </HelpNote>
+            <span data-tour="ifc-help" className="inline-flex">
+              <HelpNote compact title="Como funciona: arquivos IFC">
+                <p>
+                  O IFC é tratado como o que ele é — uma base de dados. O arquivo entra aqui e sai em duas metades: os dados são transcritos
+                  em tabelas (elementos, propriedades e quantidades) e a geometria é convertida para Fragments, um binário compacto que o
+                  visualizador 3D abre direto no navegador.
+                </p>
+                <p>
+                  As duas metades se reencontram pelo GlobalId, e é esse par que o repositório guarda. A leitura acontece neste navegador,
+                  no momento do envio; nenhuma tela relê o arquivo depois.
+                </p>
+                <p>
+                  Guardar o arquivo .ifc original é opcional: nem o planejamento nem o 3D dependem dele, e é só ele que pode não caber no
+                  limite por arquivo do Storage.
+                </p>
+                <p>
+                  Toda versão é preservada: cada envio empilha uma versão nova, sem substituir as anteriores, e o histórico fica disponível
+                  para comparação. O Modelo federado reúne a versão atual de cada modelo.
+                </p>
+              </HelpNote>
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link className="button-ghost" href={workPath(workId, 'federacao')}>
+          <Link data-tour="ifc-federation-link" className="button-ghost" href={workPath(workId, 'federacao')}>
             <Layers size={15} aria-hidden />
             Modelo federado
           </Link>
         </div>
       </header>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div data-tour="ifc-stats" className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Modelos cadastrados" value={models.length} />
         <StatCard label="Versões enviadas" value={versions.length} />
         <StatCard label="Pavimentos distintos" value={storeys.size} />
@@ -212,17 +216,19 @@ export function ModelsOverview({ workId }: { workId: string }) {
             </p>
           </div>
           {/* O formulário abre numa gaveta: a tela fica com o botão, e o cadastro não empurra a lista. */}
-          <CommandForm
-            title="Cadastrar modelo"
-            submit="Cadastrar modelo"
-            tone="primary"
-            success="Modelo cadastrado."
-            description="Um modelo por disciplina. O arquivo IFC é enviado depois, na linha do modelo."
-            command={d => ({ type: 'create_ifc_model', workId, name: value(d, 'name'), discipline: value(d, 'discipline') })}
-          >
-            <TextField name="name" label="Nome do modelo" />
-            <TextField name="discipline" label="Disciplina (arquitetura, estrutura, instalações…)" />
-          </CommandForm>
+          <span data-tour="ifc-create-model" className="inline-flex">
+            <CommandForm
+              title="Cadastrar modelo"
+              submit="Cadastrar modelo"
+              tone="primary"
+              success="Modelo cadastrado."
+              description="Um modelo por disciplina. O arquivo IFC é enviado depois, na linha do modelo."
+              command={d => ({ type: 'create_ifc_model', workId, name: value(d, 'name'), discipline: value(d, 'discipline') })}
+            >
+              <TextField name="name" label="Nome do modelo" />
+              <TextField name="discipline" label="Disciplina (arquitetura, estrutura, instalações…)" />
+            </CommandForm>
+          </span>
         </div>
         {models.length === 0 ? (
           <div className="p-5">
@@ -233,9 +239,37 @@ export function ModelsOverview({ workId }: { workId: string }) {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {models.map(model => {
+            {models.map((model, index) => {
               const list = versionsOf(model.id);
               const current = list[0];
+              // O tour destaca só o primeiro modelo: a explicação vale para todas as linhas.
+              const first = index === 0;
+              const rename = canUpload && (
+                <CommandForm
+                  title="Renomear modelo"
+                  description="O nome e a disciplina mudam em todas as versões e composições; os arquivos enviados não mudam."
+                  submit="Salvar"
+                  tone="link"
+                  icon="none"
+                  trigger={
+                    <>
+                      <Pencil size={12} aria-hidden /> Renomear
+                      <span className="sr-only"> {model.name}</span>
+                    </>
+                  }
+                  success="Modelo renomeado."
+                  command={d => ({
+                    type: 'update_ifc_model',
+                    modelId: model.id,
+                    name: value(d, 'name'),
+                    discipline: value(d, 'discipline'),
+                  })}
+                >
+                  <TextField name="name" label="Nome do modelo" defaultValue={model.name} />
+                  <TextField name="discipline" label="Disciplina" defaultValue={model.discipline} />
+                </CommandForm>
+              );
+              const upload = canUpload && <UploadVersion modelId={model.id} modelName={model.name} onDone={reload} />;
               return (
                 <div key={model.id} className="p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -244,31 +278,14 @@ export function ModelsOverview({ workId }: { workId: string }) {
                       <p className="mt-0.5 text-xs text-slate-500">
                         {model.discipline} · {list.length} {list.length === 1 ? 'versão' : 'versões'}
                       </p>
-                      {canUpload && (
-                        <CommandForm
-                          title="Renomear modelo"
-                          description="O nome e a disciplina mudam em todas as versões e composições; os arquivos enviados não mudam."
-                          submit="Salvar"
-                          tone="link"
-                          icon="none"
-                          trigger={
-                            <>
-                              <Pencil size={12} aria-hidden /> Renomear
-                              <span className="sr-only"> {model.name}</span>
-                            </>
-                          }
-                          success="Modelo renomeado."
-                          command={d => ({
-                            type: 'update_ifc_model',
-                            modelId: model.id,
-                            name: value(d, 'name'),
-                            discipline: value(d, 'discipline'),
-                          })}
-                        >
-                          <TextField name="name" label="Nome do modelo" defaultValue={model.name} />
-                          <TextField name="discipline" label="Disciplina" defaultValue={model.discipline} />
-                        </CommandForm>
-                      )}
+                      {rename &&
+                        (first ? (
+                          <span data-tour="ifc-rename" className="inline-flex">
+                            {rename}
+                          </span>
+                        ) : (
+                          rename
+                        ))}
                     </div>
                     {current && (
                       <span className="badge-muted">
@@ -314,7 +331,13 @@ export function ModelsOverview({ workId }: { workId: string }) {
                               <td className="whitespace-nowrap">
                                 <span className="tabular-nums">{formatSize(v.fileSize)}</span>
                                 {v.storagePath ? (
-                                  <DownloadFile versionId={v.id} fileName={v.fileName} />
+                                  v.id === firstStored ? (
+                                    <span data-tour="ifc-download" className="block">
+                                      <DownloadFile versionId={v.id} fileName={v.fileName} />
+                                    </span>
+                                  ) : (
+                                    <DownloadFile versionId={v.id} fileName={v.fileName} />
+                                  )
                                 ) : (
                                   <span className="mt-0.5 block text-xs font-semibold text-warning">arquivo não guardado</span>
                                 )}
@@ -343,7 +366,7 @@ export function ModelsOverview({ workId }: { workId: string }) {
                     </div>
                   )}
 
-                  {canUpload && <UploadVersion modelId={model.id} modelName={model.name} onDone={reload} />}
+                  {upload && (first ? <div data-tour="ifc-upload">{upload}</div> : upload)}
                 </div>
               );
             })}

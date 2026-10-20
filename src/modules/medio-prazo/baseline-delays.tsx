@@ -65,44 +65,46 @@ export function BaselineDelays({ workId }: { workId: string }) {
           &quot;Nova&quot; não existia na base; &quot;removida&quot; saiu do plano vivo.
         </p>
       </HelpNote>
-      {livePlans.length > 0 && (
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-          Plano
-          <select
-            className="field max-w-60 py-1.5"
-            value={plan?.id}
-            onChange={e => {
-              setPlanId(e.target.value);
-              setBaselineId('');
-            }}
-            aria-label="Plano do mês comparado"
-          >
-            {livePlans.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {p.month}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {baselines.length > 0 && (
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-          Linha de base
-          <select
-            className="field max-w-72 py-1.5"
-            value={baseline?.id}
-            onChange={e => setBaselineId(e.target.value)}
-            aria-label="Linha de base usada na comparação"
-          >
-            {baselines.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-                {b.frozenAt ? ` · ${formatTimestamp(b.frozenAt)}` : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <span data-tour="medio-baseline-seletores" className="flex flex-wrap items-center gap-2">
+        {livePlans.length > 0 && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            Plano
+            <select
+              className="field max-w-60 py-1.5"
+              value={plan?.id}
+              onChange={e => {
+                setPlanId(e.target.value);
+                setBaselineId('');
+              }}
+              aria-label="Plano do mês comparado"
+            >
+              {livePlans.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.month}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {baselines.length > 0 && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            Linha de base
+            <select
+              className="field max-w-72 py-1.5"
+              value={baseline?.id}
+              onChange={e => setBaselineId(e.target.value)}
+              aria-label="Linha de base usada na comparação"
+            >
+              {baselines.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.frozenAt ? ` · ${formatTimestamp(b.frozenAt)}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </span>
     </>
   );
 
@@ -150,7 +152,7 @@ export function BaselineDelays({ workId }: { workId: string }) {
 
   return (
     <Panel title="Linha de base e atrasos" tourId="medio-baseline" actions={actions}>
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="medio-baseline-indicadores" className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Atividades atrasadas" value={summary.lateCount} tone={summary.lateCount ? 'danger' : 'default'} />
         <StatCard
           label="Maior atraso (dias úteis)"
@@ -169,7 +171,7 @@ export function BaselineDelays({ workId }: { workId: string }) {
       {bars.length === 0 ? (
         <Callout tone="success">Nenhuma tarefa termina depois do que a linha de base &quot;{baseline.name}&quot; previa.</Callout>
       ) : (
-        <section aria-labelledby="baseline-bars-title">
+        <section data-tour="medio-baseline-barras" aria-labelledby="baseline-bars-title">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 id="baseline-bars-title" className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Tarefas atrasadas, da maior para a menor variação
@@ -242,7 +244,13 @@ export function BaselineDelays({ workId }: { workId: string }) {
         </section>
       )}
 
-      <div className="-mx-1 mt-5 max-h-[60vh] overflow-auto custom-scrollbar" role="region" aria-label="Variação por tarefa" tabIndex={0}>
+      <div
+        data-tour="medio-baseline-tabela"
+        className="-mx-1 mt-5 max-h-[60vh] overflow-auto custom-scrollbar"
+        role="region"
+        aria-label="Variação por tarefa"
+        tabIndex={0}
+      >
         <table className="data-table min-w-[900px]">
           <caption className="sr-only">
             Datas da linha de base {baseline.name} contra o plano {plan.name}, com variação em dias úteis. Positivo é atraso.

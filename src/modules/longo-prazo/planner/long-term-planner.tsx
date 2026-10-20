@@ -307,7 +307,7 @@ export function LongTermPlanner({ workId }: { workId: string }) {
   return (
     <section aria-labelledby="planejador-titulo" className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div data-tour="longo-planejador-titulo">
           <h2 id="planejador-titulo" className="text-lg font-bold text-slate-900">
             Planejador de longo prazo
           </h2>
@@ -342,6 +342,7 @@ export function LongTermPlanner({ workId }: { workId: string }) {
           </div>
         </div>
         <p
+          data-tour="longo-salvamento"
           role="status"
           className={`text-xs font-semibold ${saveState === 'error' || saveState === 'conflict' ? 'text-danger' : saveState === 'saved' ? 'text-success' : 'text-slate-500'}`}
         >
@@ -351,12 +352,13 @@ export function LongTermPlanner({ workId }: { workId: string }) {
 
       <div data-tour="longo-planejador-acoes" className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Ações do plano">
         {!readOnly && (
-          <button type="button" className="button" onClick={() => setEditing('new')}>
+          <button data-tour="longo-novo-servico" type="button" className="button" onClick={() => setEditing('new')}>
             <Plus size={16} aria-hidden="true" /> Novo serviço
           </button>
         )}
         {!readOnly && (
           <button
+            data-tour="longo-recalcular"
             type="button"
             className="button-ghost"
             disabled={!document.activities.some(a => a.predecessors.length)}
@@ -368,6 +370,7 @@ export function LongTermPlanner({ workId }: { workId: string }) {
         )}
         {!readOnly && (
           <button
+            data-tour="longo-gerar-vagoes"
             type="button"
             className="button-ghost"
             disabled={!document.activities.length}
@@ -377,23 +380,30 @@ export function LongTermPlanner({ workId }: { workId: string }) {
             <TrainFront size={15} aria-hidden="true" /> Gerar vagões
           </button>
         )}
-        <button type="button" className="button-ghost" onClick={() => setPanel('baselines')}>
+        <button data-tour="longo-plano-linhas-base" type="button" className="button-ghost" onClick={() => setPanel('baselines')}>
           <Flag size={15} aria-hidden="true" /> Linhas de base
           {document.baselines.length > 0 && <span className="badge-muted px-2 py-0">{document.baselines.length}</span>}
         </button>
-        <button type="button" className="button-ghost" onClick={() => setPanel('measurements')}>
+        <button data-tour="longo-medicoes" type="button" className="button-ghost" onClick={() => setPanel('measurements')}>
           <Ruler size={15} aria-hidden="true" /> Medições
           {document.measurements.length > 0 && <span className="badge-muted px-2 py-0">{document.measurements.length}</span>}
         </button>
-        <button type="button" className="button-ghost" onClick={() => setPanel('config')}>
+        <button data-tour="longo-pavimentos" type="button" className="button-ghost" onClick={() => setPanel('config')}>
           <Layers size={15} aria-hidden="true" /> Pavimentos
         </button>
-        <button type="button" className="button-ghost" disabled={!document.activities.length} onClick={exportFile}>
+        <button
+          data-tour="longo-exportar"
+          type="button"
+          className="button-ghost"
+          disabled={!document.activities.length}
+          onClick={exportFile}
+        >
           <Download size={15} aria-hidden="true" /> Exportar
         </button>
         {!readOnly && (
           <>
             <button
+              data-tour="longo-importar"
               type="button"
               className="button-ghost"
               onClick={() => importInput.current?.click()}
@@ -420,7 +430,7 @@ export function LongTermPlanner({ workId }: { workId: string }) {
 
       {/* Situação dos vagões numa linha compacta, não num Callout: é informação permanente, não um aviso. */}
       {document.activities.length > 0 && (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
+        <p data-tour="longo-situacao-vagoes" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
           <TrainFront
             size={14}
             aria-hidden="true"
@@ -487,27 +497,31 @@ export function LongTermPlanner({ workId }: { workId: string }) {
         <Callout tone="info">Seu perfil é de consulta: o plano aparece aqui, mas não pode ser alterado.</Callout>
       )}
       {!readOnly && !document.activities.length && (
-        <Callout tone="info">
-          Plano vazio. Cadastre o primeiro serviço, importe um arquivo exportado (inclusive da ferramenta antiga do App-ATR) ou{' '}
-          <button
-            type="button"
-            className="text-link"
-            onClick={() => update(d => ({ ...examplePlanDocument(nextMonday(today), d.floorCount), floorNames: d.floorNames }))}
-          >
-            comece por um exemplo de edifício
-          </button>{' '}
-          e ajuste.
-        </Callout>
+        <div data-tour="longo-plano-vazio">
+          <Callout tone="info">
+            Plano vazio. Cadastre o primeiro serviço, importe um arquivo exportado (inclusive da ferramenta antiga do App-ATR) ou{' '}
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => update(d => ({ ...examplePlanDocument(nextMonday(today), d.floorCount), floorNames: d.floorNames }))}
+            >
+              comece por um exemplo de edifício
+            </button>{' '}
+            e ajuste.
+          </Callout>
+        </div>
       )}
 
       <PlanStats document={document} baseline={baseline} today={today} />
       {baseline && document.activities.length > 0 && (
-        <Callout tone="warning">
-          Comparando com a linha de base <strong>{baseline.name}</strong>: os retângulos cinza são as datas dela.{' '}
-          <button type="button" className="text-link" onClick={() => setBaselineId('')}>
-            Parar de comparar
-          </button>
-        </Callout>
+        <div data-tour="longo-comparacao">
+          <Callout tone="warning">
+            Comparando com a linha de base <strong>{baseline.name}</strong>: os retângulos cinza são as datas dela.{' '}
+            <button type="button" className="text-link" onClick={() => setBaselineId('')}>
+              Parar de comparar
+            </button>
+          </Callout>
+        </div>
       )}
 
       <div data-tour="longo-planejador-canvas">

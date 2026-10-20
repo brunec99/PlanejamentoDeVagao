@@ -24,7 +24,11 @@ function switchSection(event: MouseEvent<HTMLAnchorElement>, href: string, curre
 export function SectionNav({ workId, section }: { workId: string; section: CurtoSection }) {
   const base = workPath(workId, 'curto-prazo');
   return (
-    <nav aria-label="Seções do curto prazo" className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1">
+    <nav
+      data-tour="curto-secoes"
+      aria-label="Seções do curto prazo"
+      className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1"
+    >
       {CURTO_SECTIONS.map(s => {
         const href = s.id === 'planilha' ? base : `${base}?secao=${s.id}`;
         const current = section === s.id;

@@ -210,20 +210,22 @@ export function PrevisionImport({ workId }: { workId: string }) {
           <h1 className="page-title">Integrações</h1>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="text-sm text-slate-500">Cronograma do Prevision e importação de atividades</p>
-            <HelpNote compact title="Como funciona: integrações">
-              <p>
-                O cronograma fica salvo aqui; o Prevision só é consultado quando você pede “Atualizar do Prevision”. A atualização grava as
-                atividades e refaz a cauda ainda não liberada de cada sequência — vagões já liberados nunca mudam.
-              </p>
-              <p>
-                Cada atividade só entra num vagão cujo período a contenha inteira. A que atravessa mais de um vagão é dividida em fatias
-                proporcionais aos dias de cada período, sempre somando 100%: é assim que toda atividade acaba dentro de algum vagão.
-              </p>
-              <p>
-                O responsável local é obrigatório para adicionar atividades. A integração é liberada por papel: planejadores, gestores e
-                administradores consultam o Prevision; o perfil de consulta vê o cronograma salvo, mas não dispara chamadas externas.
-              </p>
-            </HelpNote>
+            <span data-tour="prevision-help" className="inline-flex">
+              <HelpNote compact title="Como funciona: integrações">
+                <p>
+                  O cronograma fica salvo aqui; o Prevision só é consultado quando você pede “Atualizar do Prevision”. A atualização grava
+                  as atividades e refaz a cauda ainda não liberada de cada sequência — vagões já liberados nunca mudam.
+                </p>
+                <p>
+                  Cada atividade só entra num vagão cujo período a contenha inteira. A que atravessa mais de um vagão é dividida em fatias
+                  proporcionais aos dias de cada período, sempre somando 100%: é assim que toda atividade acaba dentro de algum vagão.
+                </p>
+                <p>
+                  O responsável local é obrigatório para adicionar atividades. A integração é liberada por papel: planejadores, gestores e
+                  administradores consultam o Prevision; o perfil de consulta vê o cronograma salvo, mas não dispara chamadas externas.
+                </p>
+              </HelpNote>
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -252,7 +254,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
       )}
 
       <div className="panel flex flex-wrap items-end justify-between gap-4 p-5">
-        <div>
+        <div data-tour="prevision-saved">
           <h2 className="text-sm font-bold text-slate-800">Cronograma salvo</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             {work.previsionProjectId ? `Projeto ${work.previsionProjectId}` : 'Obra ainda não vinculada'}
@@ -276,7 +278,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
       </div>
 
       {!work.previsionProjectId && (
-        <div className="panel mt-4 p-5">
+        <div data-tour="prevision-link" className="panel mt-4 p-5">
           <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
             <Link2 size={15} className="text-primary" aria-hidden />
             Vincular ao projeto do Prevision
@@ -322,22 +324,25 @@ export function PrevisionImport({ workId }: { workId: string }) {
         </div>
       ) : (
         <>
-          <div data-tour="prevision-tabs" className="mt-5 flex flex-wrap items-center gap-2">
-            <button type="button" aria-pressed={tab === 'pool'} onClick={() => setTab('pool')} className={tabClass(tab === 'pool')}>
-              Disponíveis para vagão ({placeable.length})
-            </button>
-            <button
-              type="button"
-              aria-pressed={tab === 'milestones'}
-              onClick={() => setTab('milestones')}
-              className={tabClass(tab === 'milestones')}
-            >
-              Fora do período dos vagões ({orphan.length})
-            </button>
-            <button type="button" aria-pressed={tab === 'wagon'} onClick={() => setTab('wagon')} className={tabClass(tab === 'wagon')}>
-              Escolher por vagão
-            </button>
-            <div className="relative ml-auto">
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {/* Os três botões num grupo próprio: o tour destaca as abas sem a busca, que tem passo seu. */}
+            <div data-tour="prevision-tabs" className="flex flex-wrap items-center gap-2">
+              <button type="button" aria-pressed={tab === 'pool'} onClick={() => setTab('pool')} className={tabClass(tab === 'pool')}>
+                Disponíveis para vagão ({placeable.length})
+              </button>
+              <button
+                type="button"
+                aria-pressed={tab === 'milestones'}
+                onClick={() => setTab('milestones')}
+                className={tabClass(tab === 'milestones')}
+              >
+                Fora do período dos vagões ({orphan.length})
+              </button>
+              <button type="button" aria-pressed={tab === 'wagon'} onClick={() => setTab('wagon')} className={tabClass(tab === 'wagon')}>
+                Escolher por vagão
+              </button>
+            </div>
+            <div data-tour="prevision-search" className="relative ml-auto">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
               <input
                 className="field w-64 pl-8"
@@ -377,8 +382,13 @@ export function PrevisionImport({ workId }: { workId: string }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {placeable.map(row => {
+                      {placeable.map((row, index) => {
                         const slices = slicesFor(row);
+                        const add = canImport && (
+                          <button className="button px-3 py-1.5 text-xs" disabled={busy || !responsibleId} onClick={() => addSliced(row)}>
+                            {slices.length === 1 ? 'Adicionar' : `Adicionar ${slices.length} fatias`}
+                          </button>
+                        );
                         return (
                           <tr key={row.externalId}>
                             <th scope="row">
@@ -413,15 +423,15 @@ export function PrevisionImport({ workId }: { workId: string }) {
                                     );
                                   })}
                                 </span>
-                                {canImport && (
-                                  <button
-                                    className="button px-3 py-1.5 text-xs"
-                                    disabled={busy || !responsibleId}
-                                    onClick={() => addSliced(row)}
-                                  >
-                                    {slices.length === 1 ? 'Adicionar' : `Adicionar ${slices.length} fatias`}
-                                  </button>
-                                )}
+                                {/* O tour destaca só o botão da primeira linha. */}
+                                {add &&
+                                  (index === 0 ? (
+                                    <span data-tour="prevision-add" className="inline-flex">
+                                      {add}
+                                    </span>
+                                  ) : (
+                                    add
+                                  ))}
                               </div>
                             </td>
                           </tr>
@@ -438,7 +448,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
               )}
             </section>
           ) : tab === 'milestones' ? (
-            <section className="panel mt-4 overflow-hidden">
+            <section data-tour="prevision-milestones" className="panel mt-4 overflow-hidden">
               <div className="border-b border-slate-100 px-5 py-3.5">
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
                   <Flag size={15} className="text-warning" aria-hidden />
@@ -503,13 +513,13 @@ export function PrevisionImport({ workId }: { workId: string }) {
               )}
             </section>
           ) : (
-            <section className="panel mt-4 overflow-hidden">
+            <section data-tour="prevision-wagon" className="panel mt-4 overflow-hidden">
               <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
                 <div>
                   <h2 className="text-sm font-bold text-slate-800">Escolher o vagão e marcar várias atividades</h2>
                   <p className="mt-0.5 text-xs text-slate-500">Só aparecem atividades que cabem inteiras no período do vagão.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div data-tour="prevision-wagon-pick" className="flex flex-wrap items-center gap-2">
                   <select
                     className="field w-auto min-w-72"
                     aria-label="Vagão de destino"
@@ -597,7 +607,7 @@ export function PrevisionImport({ workId }: { workId: string }) {
                     </table>
                   </div>
                   {canImport && (
-                    <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 p-5">
+                    <div data-tour="prevision-wagon-import" className="flex flex-wrap items-center gap-3 border-t border-slate-100 p-5">
                       <button
                         className="button"
                         disabled={busy || selected.length === 0 || !responsibleId}

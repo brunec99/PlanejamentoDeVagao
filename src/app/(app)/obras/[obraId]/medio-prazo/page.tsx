@@ -118,7 +118,7 @@ export default async function Page({
             ))}
           </nav>
         </div>
-        <Link className="button-ghost" href={workPath(obraId, 'configuracoes')}>
+        <Link className="button-ghost" href={workPath(obraId, 'configuracoes')} data-tour="medio-configurar-recursos">
           <Users size={16} aria-hidden />
           Configurar recursos
         </Link>

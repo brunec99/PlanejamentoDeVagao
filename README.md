@@ -17,6 +17,8 @@ A interface de cada obra é organizada em **cinco abas numeradas**: os quatro n�
    - Fica fora do snapshot (migração 0028) e é aberta a todos.
    - Veja [docs/terminalidade.md](docs/terminalidade.md).
 
+Em todas as telas, o botão **"Como usar"** (?) do cabeçalho abre um tour que escurece a tela e explica cada botão e campo, um por vez (20/10/2026) — veja [Tour guiado](docs/tour-guiado.md).
+
 Abaixo das abas, o grupo **Apoio** reúne Modelo federado, Arquivos IFC, Dívidas, Integrações e Configurações da obra. **O módulo BIM 4D foi cancelado em 02/10/2026** por decisão do usuário: o sistema se concentra nos quatro níveis de planejamento; o modelo federado continua como ferramenta de análise dos projetos. Veja [Níveis de planejamento](#níveis-de-planejamento) e a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md).
 
 ## Executar

@@ -159,7 +159,7 @@ export function IfcQuantities({ workId }: { workId: string }) {
         </div>
       ) : (
         <div className="p-5">
-          <div className="flex flex-wrap items-end gap-4">
+          <div data-tour="ifc-quant-source" className="flex flex-wrap items-end gap-4">
             <label className="block text-xs font-semibold text-slate-600">
               <span className="mb-1.5 block">Modelo</span>
               <select
@@ -337,19 +337,19 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
 
   return (
     <>
-      <div className="my-5 grid gap-4 sm:grid-cols-3">
+      <div data-tour="ifc-quant-stats" className="my-5 grid gap-4 sm:grid-cols-3">
         <StatCard label="Elementos transcritos" value={count(summary.elementos)} />
         <StatCard label="Classes IFC distintas" value={count(summary.porClasse.length)} />
         <StatCard label="Pavimentos distintos" value={count(storeys.length)} />
       </div>
 
-      <section className="panel overflow-hidden" aria-labelledby="quantitativo-somas-title">
+      <section data-tour="ifc-quant-sums" className="panel overflow-hidden" aria-labelledby="quantitativo-somas-title">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
           <h3 id="quantitativo-somas-title" className="text-sm font-bold text-slate-800">
             Quantidades do modelo
           </h3>
           {summary.quantidades.length > 0 && (
-            <button type="button" className="button-ghost" onClick={exportQuantities}>
+            <button data-tour="ifc-quant-export" type="button" className="button-ghost" onClick={exportQuantities}>
               <Download size={15} />
               Exportar CSV
             </button>
@@ -392,7 +392,7 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
         )}
       </section>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <div data-tour="ifc-quant-distribution" className="mt-5 grid gap-5 lg:grid-cols-2">
         <DistributionPanel
           title="Elementos por classe IFC"
           label="Distribuição dos elementos por classe IFC"
@@ -420,20 +420,20 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
         </div>
       )}
 
-      <section className="panel mt-5 overflow-hidden" aria-labelledby="quantitativo-elementos-title">
+      <section data-tour="ifc-elements" className="panel mt-5 overflow-hidden" aria-labelledby="quantitativo-elementos-title">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
           <h3 id="quantitativo-elementos-title" className="text-sm font-bold text-slate-800">
             Consulta de elementos
           </h3>
           {list && list.elementos.length > 0 && (
-            <button type="button" className="button-ghost" onClick={exportElements}>
+            <button data-tour="ifc-elements-export" type="button" className="button-ghost" onClick={exportElements}>
               <Download size={15} />
               Exportar esta página (CSV)
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-5 py-4">
+        <div data-tour="ifc-elements-filters" className="flex flex-wrap items-end gap-4 border-b border-slate-100 px-5 py-4">
           <label className="block text-xs font-semibold text-slate-600">
             <span className="mb-1.5 block">Pavimento</span>
             {/* Trocar o filtro muda o conjunto inteiro: manter a página atual mostraria uma faixa que talvez não exista mais. */}
@@ -536,7 +536,10 @@ function VersionQuantities({ versionId, fileStem }: { versionId: string; fileSte
                 </tbody>
               </table>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3.5">
+            <div
+              data-tour="ifc-elements-pages"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3.5"
+            >
               <p role="status" className="text-xs text-slate-500">
                 {loadingList ? (
                   'Consultando os elementos…'

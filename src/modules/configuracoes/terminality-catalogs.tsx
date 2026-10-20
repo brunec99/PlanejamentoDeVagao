@@ -163,7 +163,7 @@ export function TerminalityCatalogs({ workId }: { workId: string }) {
 
   return (
     <section className="space-y-4" aria-labelledby="terminalidade-title">
-      <div className="min-w-0">
+      <div data-tour="obra-config-terminality" className="min-w-0">
         <h2 id="terminalidade-title" className="text-base font-bold text-slate-900">
           Terminalidade
         </h2>
@@ -191,6 +191,7 @@ export function TerminalityCatalogs({ workId }: { workId: string }) {
 /** Painel recolhível. Começa aberto quando ainda não há nada cadastrado e quem vê pode cadastrar. */
 function Disclosure({
   id,
+  tourId,
   icon,
   title,
   summary,
@@ -198,6 +199,8 @@ function Disclosure({
   children,
 }: {
   id: string;
+  /** Marca do tour no cabeçalho, que fica visível com o painel aberto ou fechado. */
+  tourId?: string;
   icon: ReactNode;
   title: string;
   summary: string;
@@ -207,7 +210,7 @@ function Disclosure({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="panel overflow-hidden">
-      <h3>
+      <h3 data-tour={tourId}>
         <button
           type="button"
           className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-brand-50/60"
@@ -283,6 +286,7 @@ function FloorsSection({ workId, data, readOnly, busy, run, runMany }: SectionPr
   return (
     <Disclosure
       id="terminalidade-pavimentos"
+      tourId="obra-config-floors"
       icon={<Layers size={16} aria-hidden />}
       title="Pavimentos e unidades"
       summary={`${plural(floors.length, 'pavimento', 'pavimentos')} · ${plural(unitCount, 'unidade', 'unidades')}`}
@@ -292,6 +296,7 @@ function FloorsSection({ workId, data, readOnly, busy, run, runMany }: SectionPr
         {!readOnly && (
           <div className="flex flex-wrap gap-2">
             <button
+              data-tour="obra-config-add-floors"
               type="button"
               className={tool === 'pavimentos' ? 'button-secondary' : 'button-ghost'}
               aria-expanded={tool === 'pavimentos'}
@@ -302,6 +307,7 @@ function FloorsSection({ workId, data, readOnly, busy, run, runMany }: SectionPr
             </button>
             {floors.length > 0 && (
               <button
+                data-tour="obra-config-unit-pattern"
                 type="button"
                 className={tool === 'padrao' ? 'button-secondary' : 'button-ghost'}
                 aria-expanded={tool === 'padrao'}
@@ -350,7 +356,13 @@ function FloorsSection({ workId, data, readOnly, busy, run, runMany }: SectionPr
             {readOnly ? '' : ' Gere a sequência de pavimentos acima ou cole a lista da planilha.'}
           </Empty>
         ) : (
-          <ol className="divide-y divide-slate-100 rounded-xl border border-slate-200" aria-label="Pavimentos, de baixo para cima">
+          // As marcas do tour de cada pavimento se repetem; o tour destaca a primeira na tela (o pavimento em edição, no
+          // caso do formulário de unidades).
+          <ol
+            data-tour="obra-config-floor-list"
+            className="divide-y divide-slate-100 rounded-xl border border-slate-200"
+            aria-label="Pavimentos, de baixo para cima"
+          >
             {floors.map((floor, index) => (
               <FloorRow
                 key={floor.id}
@@ -425,7 +437,7 @@ function AddFloorsForm({
   };
 
   return (
-    <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4" onSubmit={submit}>
+    <form data-tour="obra-config-floors-form" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4" onSubmit={submit}>
       <fieldset disabled={busy} className="min-w-0 space-y-3">
         <legend className="sr-only">Adicionar pavimentos</legend>
         <ModeSwitch mode={mode} onChange={setMode} sequenceLabel="Em sequência" listLabel="Lista livre (um por linha)" />
@@ -522,7 +534,11 @@ function UnitPatternForAllForm({
   };
 
   return (
-    <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4" onSubmit={submit}>
+    <form
+      data-tour="obra-config-unit-pattern-form"
+      className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+      onSubmit={submit}
+    >
       <fieldset disabled={busy} className="min-w-0 space-y-3">
         <legend className="text-sm font-semibold text-slate-800">Mesmo padrão de unidades em todos os pavimentos</legend>
         <p className="text-xs text-slate-500">
@@ -631,7 +647,7 @@ function FloorRow({
           {itemCount > 0 && ` · ${plural(itemCount, 'pendência', 'pendências')}`}
         </span>
         {!readOnly && (
-          <div className="ml-auto flex items-center gap-0.5">
+          <div data-tour="obra-config-floor-actions" className="ml-auto flex items-center gap-0.5">
             <button
               type="button"
               className="button-ghost mr-1 px-2 py-1 text-xs"
@@ -782,7 +798,7 @@ function AddUnitsForm({
   };
 
   return (
-    <form className="mt-3 rounded-xl bg-slate-50 p-3" onSubmit={submit}>
+    <form data-tour="obra-config-unit-form" className="mt-3 rounded-xl bg-slate-50 p-3" onSubmit={submit}>
       <fieldset disabled={busy} className="min-w-0 space-y-2.5">
         <legend className="sr-only">Adicionar unidades em {floor.name}</legend>
         <ModeSwitch
@@ -837,12 +853,14 @@ function TypesSection({ workId, data, readOnly, busy, run, runMany }: SectionPro
   return (
     <Disclosure
       id="terminalidade-tipos"
+      tourId="obra-config-types"
       icon={<Tags size={16} aria-hidden />}
       title="Tipos de pendência"
       summary={`${plural(active, 'ativo', 'ativos')}${types.length > active ? ` · ${types.length - active} inativo(s)` : ''}`}
       defaultOpen={!types.length && !readOnly}
     >
       <NamedCatalog
+        tourId="obra-config-type-list"
         entries={types}
         usage={usage}
         readOnly={readOnly}
@@ -864,6 +882,7 @@ function TypesSection({ workId, data, readOnly, busy, run, runMany }: SectionPro
           !readOnly &&
           starter.length > 0 && (
             <button
+              data-tour="obra-config-type-starter"
               type="button"
               className="button-secondary"
               disabled={busy}
@@ -896,12 +915,14 @@ function PeopleSection({ workId, data, readOnly, busy, run }: Omit<SectionProps,
   return (
     <Disclosure
       id="terminalidade-responsaveis"
+      tourId="obra-config-people"
       icon={<UserRound size={16} aria-hidden />}
       title="Responsáveis ATR"
       summary={`${plural(active, 'ativo', 'ativos')}${people.length > active ? ` · ${people.length - active} inativo(s)` : ''}`}
       defaultOpen={!people.length && !readOnly}
     >
       <NamedCatalog
+        tourId="obra-config-person-list"
         entries={people}
         usage={usage}
         readOnly={readOnly}
@@ -940,6 +961,7 @@ type Entry = { id: string; name: string; active: boolean };
 
 /** Lista de nomes com inclusão, renomeação e ativação: serve aos tipos e aos responsáveis. */
 function NamedCatalog({
+  tourId,
   entries,
   usage,
   readOnly,
@@ -949,6 +971,7 @@ function NamedCatalog({
   onUpdate,
   extra,
 }: {
+  tourId: string;
   entries: Entry[];
   usage: Map<string, number>;
   readOnly: boolean;
@@ -976,7 +999,7 @@ function NamedCatalog({
   };
 
   return (
-    <div className="space-y-3">
+    <div data-tour={tourId} className="space-y-3">
       {!readOnly && (
         <div className="flex flex-wrap items-start gap-2">
           <form className="flex min-w-0 flex-1 flex-wrap gap-2" onSubmit={submit}>

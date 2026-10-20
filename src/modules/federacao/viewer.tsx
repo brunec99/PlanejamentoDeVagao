@@ -441,7 +441,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         </span>
       </div>
       <div className="flex flex-wrap items-end gap-3 border-b border-slate-100 bg-slate-50/70 p-3">
-        <label className="min-w-32 flex-1 text-xs font-semibold text-slate-600">
+        <label data-tour="federation-paint" className="min-w-32 flex-1 text-xs font-semibold text-slate-600">
           Cores
           <select
             className="field mt-1 min-h-10"
@@ -454,7 +454,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
             <option value="classe">Por classe IFC</option>
           </select>
         </label>
-        <label className="min-w-40 flex-1 text-xs font-semibold text-slate-600">
+        <label data-tour="federation-storey" className="min-w-40 flex-1 text-xs font-semibold text-slate-600">
           Pavimento
           <select
             className="field mt-1 min-h-10"
@@ -471,7 +471,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
             ))}
           </select>
         </label>
-        <div className="flex gap-2">
+        <div data-tour="federation-view-buttons" className="flex gap-2">
           <button
             type="button"
             className="button-ghost min-h-10"
@@ -493,6 +493,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
       </div>
       <div className="border-b border-slate-100 p-3">
         <SectionControls
+          tourId="federation-section"
           value={section.value}
           disabled={!usable || !section.available}
           error={section.error}
@@ -509,7 +510,12 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
           </Callout>
         </div>
       )}
-      <div ref={box} className="relative h-[360px] overflow-hidden bg-slate-100 sm:h-[480px] 2xl:h-[560px]" aria-busy={busy}>
+      <div
+        ref={box}
+        data-tour="federation-canvas"
+        className="relative h-[360px] overflow-hidden bg-slate-100 sm:h-[480px] 2xl:h-[560px]"
+        aria-busy={busy}
+      >
         <canvas
           ref={canvas}
           className="h-full w-full"
@@ -547,7 +553,10 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         )}
       </div>
       {usable && (hidden.length > 0 || storey || section.value.enabled) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-warning-ring bg-warning-soft px-4 py-2 text-xs text-amber-900">
+        <div
+          data-tour="federation-clip-bar"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-warning-ring bg-warning-soft px-4 py-2 text-xs text-amber-900"
+        >
           <span>
             {[
               hidden.length > 0 ? `${hidden.length} modelo(s) oculto(s)` : '',
@@ -565,7 +574,11 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         </div>
       )}
       <div className="border-t border-slate-200">
-        <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-3 py-2" aria-label="Painel de exploração">
+        <div
+          data-tour="federation-explorer"
+          className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-3 py-2"
+          aria-label="Painel de exploração"
+        >
           <button
             type="button"
             aria-pressed={explorer === 'modelos'}
@@ -589,7 +602,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
             {explorer === 'modelos' ? (
               <>
                 {!loaded && <p className="py-3 text-sm text-slate-500">Os modelos carregados aparecerão aqui para ocultar ou isolar.</p>}
-                <ul className="max-h-64 space-y-2 overflow-y-auto custom-scrollbar">
+                <ul data-tour="federation-scene-models" className="max-h-64 space-y-2 overflow-y-auto custom-scrollbar">
                   {loaded?.parts.map(part => (
                     <li
                       key={part.versionId}
@@ -671,7 +684,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
               </>
             ) : (
               <>
-                <label className="relative block">
+                <label data-tour="federation-element-search" className="relative block">
                   <span className="sr-only">Buscar elementos por nome, classe ou GlobalId</span>
                   <Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-400" aria-hidden />
                   <input
@@ -719,7 +732,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
               </>
             )}
           </div>
-          <aside className="min-w-0 p-4" aria-label="Dados do elemento selecionado">
+          <aside data-tour="federation-picked" className="min-w-0 p-4" aria-label="Dados do elemento selecionado">
             <div className="flex items-center justify-between gap-2">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <MousePointer2 size={16} aria-hidden />
@@ -764,7 +777,7 @@ export function FederationViewer({ job, onState }: { job: FederationJob | undefi
         </div>
       </div>
       {legend.length > 0 && (
-        <details className="border-t border-slate-100 px-4 py-2">
+        <details data-tour="federation-legend" className="border-t border-slate-100 px-4 py-2">
           <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold text-slate-600">
             Legenda do conjunto completo · {paint === 'classe' ? 'classes IFC' : 'pavimentos'}
           </summary>
@@ -812,7 +825,12 @@ function AppearanceControls({
 }) {
   const percent = Math.round(appearance.opacity * 100);
   return (
-    <div className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-white p-3" role="group" aria-label={`Aparência de ${label}`}>
+    <div
+      data-tour="federation-appearance"
+      className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-white p-3"
+      role="group"
+      aria-label={`Aparência de ${label}`}
+    >
       <fieldset disabled={disabled}>
         <legend className="mb-1.5 text-xs font-semibold text-slate-600">Cor</legend>
         <div className="flex flex-wrap items-center gap-1.5">

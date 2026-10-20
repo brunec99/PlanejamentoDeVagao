@@ -8,16 +8,23 @@ export function SectionControls({
   onChange,
   disabled,
   error,
+  tourId,
 }: {
   value: SectionCut;
   onChange: (value: SectionCut) => void;
   disabled: boolean;
   error?: string;
+  /** Alvo do tour "Como usar": o mesmo controle aparece no visualizador do IFC e no modelo federado. */
+  tourId?: string;
 }) {
   const id = useId();
   const locked = disabled || !value.enabled;
   return (
-    <fieldset className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 pb-3" aria-describedby={`${id}-help`}>
+    <fieldset
+      data-tour={tourId}
+      className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 pb-3"
+      aria-describedby={`${id}-help`}
+    >
       <legend className="flex items-center gap-2 px-1 text-xs font-bold text-slate-700">
         <Scissors size={15} aria-hidden />
         Seccionamento

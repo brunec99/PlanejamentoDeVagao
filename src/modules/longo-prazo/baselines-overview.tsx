@@ -41,16 +41,18 @@ export function BaselinesOverview({ workId }: { workId: string }) {
             Fotografias imutáveis do cronograma, para comparar o planejado de então com o atual e o realizado.
           </p>
         </div>
-        <CommandForm
-          title="Definir linha de base"
-          submit="Definir linha de base"
-          tone="primary"
-          success="Linha de base definida."
-          description="Salva as datas atuais de vagões e atividades como referência."
-          command={d => ({ type: 'create_baseline', workId, name: value(d, 'name') })}
-        >
-          <TextField name="name" label="Nome da linha de base" />
-        </CommandForm>
+        <span data-tour="longo-baselines-definir" className="inline-flex">
+          <CommandForm
+            title="Definir linha de base"
+            submit="Definir linha de base"
+            tone="primary"
+            success="Linha de base definida."
+            description="Salva as datas atuais de vagões e atividades como referência."
+            command={d => ({ type: 'create_baseline', workId, name: value(d, 'name') })}
+          >
+            <TextField name="name" label="Nome da linha de base" />
+          </CommandForm>
+        </span>
       </div>
 
       <section data-tour="longo-baselines" className="panel mt-5 overflow-hidden">

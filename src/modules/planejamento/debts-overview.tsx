@@ -6,7 +6,7 @@ import { HelpNote } from '@/modules/layout/help-note';
 import { formatDate, wagonLabel, wagonPath } from '@/shared/format';
 import { usePlanning } from './planning-provider';
 import { Empty, LoadState, Missing } from './ui';
-import { ResolveAction } from './wagon-actions';
+import { ResolveAction, TourMark } from './wagon-actions';
 
 type Situation = 'open' | 'overdue' | 'resolved';
 type Filter = Situation | 'all';
@@ -61,6 +61,8 @@ export function DebtsOverview({ workId }: { workId: string }) {
     };
   });
   const visible = rows.filter(row => matches(row.situation, filter));
+  // O tour destaca só o primeiro cartão e a primeira resolução disponível.
+  const firstOpen = visible.find(row => row.pending.status === 'open')?.debt.id;
 
   return (
     <>
@@ -71,20 +73,22 @@ export function DebtsOverview({ workId }: { workId: string }) {
         <h1 className="page-title">Dívidas de terminalidade</h1>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-sm text-slate-500">Pendências aceitas numa liberação excepcional e que continuam por resolver.</p>
-          <HelpNote title="O que é uma dívida de terminalidade" compact>
-            <p>
-              Quando um vagão é liberado sem que o anterior seja terminal (liberação excepcional), as pendências em aberto do anterior são
-              aceitas e viram dívidas: a execução segue, mas a pendência continua devida.
-            </p>
-            <p>
-              A dívida guarda o responsável e o prazo assumidos na liberação. Uma liberação seguinte não a duplica — só registra o
-              reconhecimento. Resolver a pendência de origem encerra a dívida, sem apagar de onde ela veio.
-            </p>
-            <p>
-              Vencida é a dívida aberta cujo prazo assumido já passou. Restrições impeditivas não viram dívida: elas não podem ser
-              contornadas por liberação excepcional.
-            </p>
-          </HelpNote>
+          <span data-tour="dividas-ajuda" className="inline-flex">
+            <HelpNote title="O que é uma dívida de terminalidade" compact>
+              <p>
+                Quando um vagão é liberado sem que o anterior seja terminal (liberação excepcional), as pendências em aberto do anterior são
+                aceitas e viram dívidas: a execução segue, mas a pendência continua devida.
+              </p>
+              <p>
+                A dívida guarda o responsável e o prazo assumidos na liberação. Uma liberação seguinte não a duplica — só registra o
+                reconhecimento. Resolver a pendência de origem encerra a dívida, sem apagar de onde ela veio.
+              </p>
+              <p>
+                Vencida é a dívida aberta cujo prazo assumido já passou. Restrições impeditivas não viram dívida: elas não podem ser
+                contornadas por liberação excepcional.
+              </p>
+            </HelpNote>
+          </span>
         </div>
       </header>
 
@@ -114,7 +118,7 @@ export function DebtsOverview({ workId }: { workId: string }) {
             <Empty>Nenhuma dívida nesta situação.</Empty>
           </div>
         )}
-        {visible.map(({ debt, pending, situation, origin, releasedWagon }) => (
+        {visible.map(({ debt, pending, situation, origin, releasedWagon }, index) => (
           <article key={debt.id} className="panel p-5" aria-labelledby={`debt-${debt.id}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h2 id={`debt-${debt.id}`} className="text-base font-semibold text-slate-900">
@@ -123,22 +127,26 @@ export function DebtsOverview({ workId }: { workId: string }) {
               <SituationPill situation={situation} />
             </div>
             <p className="mt-3 text-sm text-slate-600">
-              Origem:{' '}
-              <Link className="text-link" href={wagonPath(workId, origin.id)}>
-                {wagonLabel(origin.number)}
-              </Link>{' '}
-              · gerada ao liberar{' '}
-              <Link className="text-link" href={wagonPath(workId, releasedWagon.id)}>
-                {wagonLabel(releasedWagon.number)}
-              </Link>
-              .
+              <TourMark tourId="dividas-vinculos" when={index === 0} className="inline">
+                Origem:{' '}
+                <Link className="text-link" href={wagonPath(workId, origin.id)}>
+                  {wagonLabel(origin.number)}
+                </Link>{' '}
+                · gerada ao liberar{' '}
+                <Link className="text-link" href={wagonPath(workId, releasedWagon.id)}>
+                  {wagonLabel(releasedWagon.number)}
+                </Link>
+                .
+              </TourMark>
             </p>
             <p className="mt-1 text-sm text-slate-600">
               {person(debt.responsibleId)} · prazo assumido: {formatDate(debt.dueDate)}
             </p>
             {pending.status === 'open' ? (
               <div className="mt-3">
-                <ResolveAction id={pending.id} kind="pending" />
+                <TourMark tourId="dividas-resolver" when={debt.id === firstOpen}>
+                  <ResolveAction id={pending.id} kind="pending" />
+                </TourMark>
               </div>
             ) : (
               <p className="mt-3 text-sm">Resolução: {pending.resolution ?? 'Registrada'}</p>

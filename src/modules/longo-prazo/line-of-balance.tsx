@@ -130,7 +130,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
       {baselines.length > 0 && (
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+        <label data-tour="longo-lob-linha-base" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
           Linha de base
           <select className="field max-w-44 py-1.5" value={baselineId} onChange={e => setBaselineId(e.target.value)}>
             <option value="">Sem comparação</option>
@@ -142,18 +142,18 @@ export function LineOfBalance({ workId }: { workId: string }) {
           </select>
         </label>
       )}
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+      <label data-tour="longo-lob-inverter" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
         <input type="checkbox" className="accent-primary" checked={descending} onChange={e => setDescending(e.target.checked)} />
         Inverter locais
       </label>
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+      <label data-tour="longo-lob-escala" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
         Escala
         <select className="field max-w-32 py-1.5" value={zoom} onChange={e => setZoom(e.target.value as keyof typeof ZOOMS)}>
           <option value="mes">Mês</option>
           <option value="semana">Semana</option>
         </select>
       </label>
-      <button type="button" className="button-ghost" onClick={() => setAsTable(!asTable)}>
+      <button data-tour="longo-lob-tabela" type="button" className="button-ghost" onClick={() => setAsTable(!asTable)}>
         {asTable ? 'Ver gráfico' : 'Ver tabela'}
       </button>
     </div>
@@ -268,6 +268,7 @@ export function LineOfBalance({ workId }: { workId: string }) {
         </div>
       ) : (
         <div
+          data-tour="longo-lob-grafico"
           className="overflow-auto custom-scrollbar max-h-[75vh]"
           role="region"
           aria-label="Linha de Balanço: serviços por local ao longo do tempo"

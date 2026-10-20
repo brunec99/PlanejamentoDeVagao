@@ -86,7 +86,7 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
               acima; o número na célula diz o mesmo para quem não distingue as cores.
             </p>
           </HelpNote>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <label data-tour="medio-recursos-periodo" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
             Período
             <select
               className="field max-w-60 py-1.5"
@@ -108,7 +108,7 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
         </>
       }
     >
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="medio-recursos-indicadores" className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Equipes superalocadas" value={overloadedTeams} tone={overloadedTeams ? 'danger' : 'default'} />
         <StatCard
           label="Semanas com superalocação"
@@ -129,7 +129,13 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
         </Empty>
       ) : (
         <>
-          <div className="-mx-1 overflow-x-auto custom-scrollbar" role="region" aria-label="Mapa de carga semanal por equipe" tabIndex={0}>
+          <div
+            data-tour="medio-recursos-mapa"
+            className="-mx-1 overflow-x-auto custom-scrollbar"
+            role="region"
+            aria-label="Mapa de carga semanal por equipe"
+            tabIndex={0}
+          >
             <table className="data-table min-w-[720px]">
               <caption className="sr-only">
                 Carga por equipe e semana, no formato carga/capacidade. Selecione uma célula para ver os itens da semana.
@@ -258,7 +264,7 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
           )}
 
           {focus && (
-            <div className="mt-6">
+            <div data-tour="medio-recursos-histograma" className="mt-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Histograma · {focus.team.name}</h3>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
@@ -335,7 +341,11 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
       )}
 
       <div className="mt-5 flex justify-end">
-        <Link className="text-link inline-flex min-h-10 items-center gap-2 text-sm" href={workPath(workId, 'configuracoes')}>
+        <Link
+          data-tour="medio-recursos-equipes"
+          className="text-link inline-flex min-h-10 items-center gap-2 text-sm"
+          href={workPath(workId, 'configuracoes')}
+        >
           <Users size={15} aria-hidden />
           Ajustar equipes e capacidades
         </Link>
