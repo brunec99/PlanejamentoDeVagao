@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { Layers, Upload } from 'lucide-react';
+import { Layers, Pencil, Upload } from 'lucide-react';
 import { CommandForm, TextField, value } from '@/modules/planejamento/forms';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
@@ -244,6 +244,31 @@ export function ModelsOverview({ workId }: { workId: string }) {
                       <p className="mt-0.5 text-xs text-slate-500">
                         {model.discipline} · {list.length} {list.length === 1 ? 'versão' : 'versões'}
                       </p>
+                      {canUpload && (
+                        <CommandForm
+                          title="Renomear modelo"
+                          description="O nome e a disciplina mudam em todas as versões e composições; os arquivos enviados não mudam."
+                          submit="Salvar"
+                          tone="link"
+                          icon="none"
+                          trigger={
+                            <>
+                              <Pencil size={12} aria-hidden /> Renomear
+                              <span className="sr-only"> {model.name}</span>
+                            </>
+                          }
+                          success="Modelo renomeado."
+                          command={d => ({
+                            type: 'update_ifc_model',
+                            modelId: model.id,
+                            name: value(d, 'name'),
+                            discipline: value(d, 'discipline'),
+                          })}
+                        >
+                          <TextField name="name" label="Nome do modelo" defaultValue={model.name} />
+                          <TextField name="discipline" label="Disciplina" defaultValue={model.discipline} />
+                        </CommandForm>
+                      )}
                     </div>
                     {current && (
                       <span className="badge-muted">

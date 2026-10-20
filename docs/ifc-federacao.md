@@ -215,3 +215,9 @@ O usuário pediu que, no modelo federado, o cliente escolha o nível de opacidad
 
 - Tipos, lint e testes passando (`tests/federation-appearance.test.ts`: conferência do que vem do armazenamento e a regra da cor).
 - **Não validado na tela:** em 14/10/2026 nenhuma obra tem versão de modelo com geometria enviada (a tabela `ifc_model_versions` está vazia em produção; os modelos da Blentt ainda não receberam arquivo), e o sistema não tem como apagar um modelo IFC depois, então não subi um IFC de teste. Conferir quando o primeiro conjunto for carregado: opacidade baixa com várias disciplinas sobrepostas e a "Cor do IFC" em modelos que vêm sem cor (o visualizador mostraria o cinza padrão do arquivo).
+
+## Renomear modelo IFC (15/10/2026)
+
+O usuário pediu para mudar o nome dos arquivos IFC. Em Arquivos IFC, cada modelo ganhou "Renomear", que troca o **nome e a disciplina** do modelo (comando `update_ifc_model`; nome obrigatório, até 120 caracteres, sem repetir outro modelo da obra, ignorando maiúsculas). As versões e os arquivos enviados não mudam: a coluna "Arquivo" continua com o nome original do `.ifc`, e as composições do federado passam a mostrar o nome novo. Quem tem o módulo IFC liberado pode renomear; consulta não. O nome fica no snapshot do planejamento (`ifc_models`), sem migração. Teste em `tests/ifc-model-rename.test.ts`; na tela, o "Renomear" abriu preenchido num modelo da Blentt, sem salvar.
+
+Na conferência de 15/10/2026, a Blentt já tinha 49 modelos e 75 versões enviadas (o envio voltou a funcionar com a correção do recorte por módulo de 14/10).

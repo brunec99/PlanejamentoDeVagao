@@ -170,6 +170,7 @@ export type Command =
   | { type: 'unlink_activities'; dependencyId: string }
   | { type: 'set_activity_note'; activityId: string; note: string }
   | { type: 'create_ifc_model'; workId: string; name: string; discipline: string }
+  | { type: 'update_ifc_model'; modelId: string; name: string; discipline: string }
   | {
       type: 'add_ifc_version';
       modelId: string;
@@ -1491,6 +1492,22 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         throw new Error('Modelo já cadastrado nesta obra.');
       const model = { ...base(), workId: command.workId, name, discipline: requireText(command.discipline, 'Disciplina') };
       data.ifcModels.push(model);
+      entityId = model.id;
+      break;
+    }
+    case 'update_ifc_model': {
+      // Renomear o modelo (e corrigir a disciplina) não mexe nas versões: elas seguem com o nome do
+      // arquivo enviado, e as composições do federado mostram o nome novo.
+      const model = data.ifcModels.find(m => m.id === command.modelId);
+      if (!model) throw new Error('Modelo não encontrado.');
+      checkWork(model.workId);
+      const name = requireText(command.name, 'Nome do modelo');
+      if (name.length > 120) throw new Error('O nome do modelo passa de 120 caracteres.');
+      if (data.ifcModels.some(m => m.id !== model.id && m.workId === model.workId && m.name.toLowerCase() === name.toLowerCase()))
+        throw new Error('Já existe um modelo com esse nome nesta obra.');
+      model.name = name;
+      model.discipline = requireText(command.discipline, 'Disciplina');
+      touch(model);
       entityId = model.id;
       break;
     }

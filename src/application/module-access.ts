@@ -118,7 +118,7 @@ const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
     'move_restriction',
   ],
   federacao: ['create_link_rule', 'delete_link_rule'],
-  ifc: ['create_ifc_model', 'add_ifc_version'],
+  ifc: ['create_ifc_model', 'update_ifc_model', 'add_ifc_version'],
   dividas: ['create_pending', 'resolve_pending'],
   importar: ['import_activities'],
 };
