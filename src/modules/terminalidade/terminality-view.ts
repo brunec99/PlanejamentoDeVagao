@@ -275,32 +275,47 @@ export function sortItems(items: TerminalityItem[], index: TerminalityIndex, sor
     .map(entry => entry.item);
 }
 
-/** Como o PDF agrupa as pendências: por pavimento ou por responsável terceiro (empreiteiro). */
-export type TerminalityGrouping = 'pavimento' | 'empreiteiro';
+/** Como o PDF agrupa as pendências: por pavimento, por responsável terceiro (empreiteiro) ou por tipo. */
+export type TerminalityGrouping = 'pavimento' | 'empreiteiro' | 'tipo';
+export const GROUPINGS: { value: TerminalityGrouping; label: string; one: string; plural: string }[] = [
+  { value: 'pavimento', label: 'Pavimento', one: 'pavimento', plural: 'pavimentos' },
+  { value: 'empreiteiro', label: 'Responsável terceiro', one: 'empreiteiro', plural: 'empreiteiros' },
+  { value: 'tipo', label: 'Tipo', one: 'tipo', plural: 'tipos' },
+];
+export const isGrouping = (value: string): value is TerminalityGrouping => GROUPINGS.some(g => g.value === value);
 export interface TerminalityGroup {
   key: string;
   label: string;
   items: TerminalityItem[];
 }
 export const NO_CONTRACTOR_LABEL = 'Sem responsável terceiro';
+export const NO_TYPE_LABEL = 'Sem tipo';
 
-/** Grupos do PDF, mantendo a ordem dos itens recebidos dentro de cada grupo. Pavimentos na ordem da
- * obra; empreiteiros em ordem alfabética, juntando grafias equivalentes, com "sem responsável" no fim. */
+/** Chave e nome do grupo de uma pendência. A chave do empreiteiro é o nome sem acento e sem caixa, para
+ * juntar grafias equivalentes; sem valor, a chave é `NONE`. */
+export function groupOf(index: TerminalityIndex, item: TerminalityItem, by: TerminalityGrouping): { key: string; label: string } {
+  if (by === 'pavimento') return { key: item.floorId, label: floorName(index, item) || 'Pavimento removido' };
+  if (by === 'tipo') return { key: item.typeId ?? NONE, label: typeName(index, item) || NO_TYPE_LABEL };
+  const contractor = (item.contractor ?? '').trim();
+  return { key: textKey(contractor) || NONE, label: contractor || NO_CONTRACTOR_LABEL };
+}
+
+/** Grupos do PDF, mantendo a ordem dos itens recebidos dentro de cada grupo. Pavimentos e tipos na ordem
+ * cadastrada na obra; empreiteiros em ordem alfabética. O grupo sem valor ("sem tipo", "sem
+ * responsável") fica no fim. */
 export function groupItems(items: TerminalityItem[], index: TerminalityIndex, by: TerminalityGrouping): TerminalityGroup[] {
   const groups = new Map<string, TerminalityGroup>();
   for (const item of items) {
-    const contractor = (item.contractor ?? '').trim();
-    const key = by === 'pavimento' ? item.floorId : textKey(contractor) || NONE;
-    const label = by === 'pavimento' ? floorName(index, item) || 'Pavimento removido' : contractor || NO_CONTRACTOR_LABEL;
+    const { key, label } = groupOf(index, item, by);
     const group = groups.get(key) ?? { key, label, items: [] };
     group.items.push(item);
     groups.set(key, group);
   }
-  const floorOrder = (id: string) => index.floors.get(id)?.orderIndex ?? Number.MAX_SAFE_INTEGER;
-  return [...groups.values()].sort((a, b) =>
-    by === 'pavimento'
-      ? floorOrder(a.key) - floorOrder(b.key) || compareText(a.label, b.label)
-      : (a.key === NONE ? 1 : 0) - (b.key === NONE ? 1 : 0) || compareText(a.label, b.label),
+  const order = (key: string) =>
+    (by === 'pavimento' ? index.floors.get(key)?.orderIndex : by === 'tipo' ? index.types.get(key)?.orderIndex : 0) ??
+    Number.MAX_SAFE_INTEGER;
+  return [...groups.values()].sort(
+    (a, b) => (a.key === NONE ? 1 : 0) - (b.key === NONE ? 1 : 0) || order(a.key) - order(b.key) || compareText(a.label, b.label),
   );
 }
 

@@ -841,7 +841,8 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           workId={workId}
           filters={filters}
           sort={sort}
-          count={rows.length}
+          items={rows}
+          index={index}
           filtered={narrowed}
           onClose={() => setPrinting(false)}
         />

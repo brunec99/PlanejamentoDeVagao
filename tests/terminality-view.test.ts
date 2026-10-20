@@ -7,6 +7,7 @@ import {
   compareItems,
   donutSlices,
   groupItems,
+  groupOf,
   nextSort,
   sortItems,
   filterItems,
@@ -217,6 +218,18 @@ test('grupos do PDF: pavimentos na ordem da obra; empreiteiros juntam grafias e 
       ['Sem responsável terceiro', ['f', 'e']],
     ],
   );
+});
+
+test('grupos por tipo: na ordem cadastrada, com "Sem tipo" no fim', () => {
+  assert.deepEqual(
+    groupItems(sortItems(data.items, index), index, 'tipo').map(g => [g.label, ids(g.items)]),
+    [
+      ['A/C', ['a']],
+      ['Sem tipo', ['d', 'f', 'c', 'b', 'e']],
+    ],
+  );
+  assert.deepEqual(groupOf(index, data.items[0], 'tipo'), { key: 't-ac', label: 'A/C' });
+  assert.deepEqual(groupOf(index, data.items[1], 'empreiteiro'), { key: 'mz climatizacao', label: 'mz climatizacao' });
 });
 
 test('fatias da rosca: maior primeiro, vazio nomeado, e "Outros" passando do limite', () => {

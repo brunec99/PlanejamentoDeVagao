@@ -188,7 +188,7 @@ O usuário pediu um campo de texto para quem resolve descrever a correção.
 - **Onde:**
   - **Botão:** "Gerar PDF", ao lado de "Usar no celular, sem sinal", visível também para quem só consulta.
   - **Janela de opções** (`print-dialog.tsx`):
-    - agrupar por pavimento ou por responsável terceiro. Abre em empreiteiro quando a lista está filtrada por um;
+    - agrupar por pavimento, por responsável terceiro ou por tipo. Abre em empreiteiro quando a lista está filtrada por um, e em tipo quando está filtrada só por tipo;
     - com ou sem fotos;
     - cada grupo em folha nova (ligado por padrão).
   - **Página de impressão:** `/imprimir/terminalidade/<obra>` (`src/app/imprimir/terminalidade/[obraId]/page.tsx` e `print-list.tsx`), numa aba própria, como os PDFs do curto prazo.
@@ -220,6 +220,18 @@ A pedido do usuário, as mesmas três roscas do PDF ficam também no topo da aba
 - **Desenho compartilhado:** `donut-chart.tsx` (`DonutRing`, paleta e cor de "Outros"), usado pela aba e pelo PDF.
 - **O que contam:** seguem a situação escolhida (Abertas, Resolvidas, Todas) e os demais filtros. Cada rosca ignora o próprio filtro, como os quadros, para continuar mostrando as alternativas: com um tipo filtrado, a rosca de tipo segue com todos os tipos e o escolhido em destaque.
 - **Clique na legenda:** filtra a lista por aquele tipo, pavimento ou empreiteiro, e um segundo clique desfaz. "Outros" não filtra. Passando o mouse numa fatia, aparece o nome, a quantidade e a %.
+
+### Agrupar por tipo e escolher os grupos (20/10/2026)
+
+A pedido do usuário, a janela do PDF ganhou o agrupamento por **tipo**, e em todos os agrupamentos dá para escolher quais grupos entram, imprimindo só o esperado.
+
+- **Agrupamentos:** Pavimento, Responsável terceiro e Tipo (`GROUPINGS` e `groupOf` em `terminality-view.ts`). Os tipos seguem a ordem cadastrada, e "Sem tipo" vai para o fim. Com o agrupamento por tipo, a coluna Tipo sai da tabela.
+- **Escolha dos grupos:** a janela lista os grupos do agrupamento escolhido, a partir do que a lista mostra, com a quantidade de pendências de cada um. Dá para marcar e desmarcar, pesquisar, usar "Selecionar tudo" e "Limpar", como na janela do PDF do curto prazo. Cada agrupamento guarda a própria escolha enquanto a janela está aberta, e o rodapé mostra quantas pendências vão para o PDF.
+- **Na URL:** vai a lista do que entra (`grupo`, repetido), e não a do que sai, para uma pendência nova de outro grupo não aparecer sem ter sido pedida. Com tudo marcado, a lista não vai.
+- **No PDF:** só os grupos escolhidos. Os cartões e as três roscas da primeira folha contam esse mesmo recorte, e uma linha diz "Só os escolhidos: 3 de 8 tipos: …" (os nomes aparecem até 8 grupos).
+- **Conferido no navegador**, com dados de teste:
+  - a janela, montada numa página de prévia temporária que depois foi apagada;
+  - o PDF por tipo, só com três tipos.
 
 ### Validação (20/10/2026)
 

@@ -11,7 +11,9 @@ import {
   donutSlices,
   filterItems,
   floorName,
+  GROUPINGS,
   groupItems,
+  groupOf,
   indexTerminality,
   percentLabel,
   personName,
@@ -68,8 +70,12 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
 
   const ready = state.status === 'ready' ? state : undefined;
   const index = ready ? indexTerminality(ready.data) : undefined;
-  const items = ready && index ? sortItems(filterItems(ready.data.items, options.filters), index, options.sort) : [];
-  const groupLabel = options.grouping === 'pavimento' ? 'Por pavimento' : 'Por empreiteiro';
+  const grouping = GROUPINGS.find(g => g.value === options.grouping) ?? GROUPINGS[0];
+  const listed = ready && index ? sortItems(filterItems(ready.data.items, options.filters), index, options.sort) : [];
+  // Só os grupos marcados na janela; as roscas e os totais da primeira folha contam o mesmo recorte.
+  const chosen = options.groups ? new Set(options.groups) : undefined;
+  const items = chosen && index ? listed.filter(item => chosen.has(groupOf(index, item, options.grouping).key)) : listed;
+  const groupLabel = `Por ${grouping.one}`;
   const stamp = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const title = ready ? `Pendências ${ready.work.code || ready.work.name} - ${groupLabel} - ${stamp.replaceAll('/', '-')}` : 'Pendências';
 
@@ -108,6 +114,11 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
 
   const summary = summarize(items, index);
   const groups = groupItems(items, index, options.grouping);
+  const available = groupItems(listed, index, options.grouping).length;
+  const chosenNote =
+    chosen && groups.length < available
+      ? `${groups.length} de ${available} ${grouping.plural}${groups.length <= 8 ? `: ${groups.map(g => g.label).join(', ')}` : ''}`
+      : '';
   const numbers = new Map(groups.flatMap(g => g.items).map((item, i) => [item.id, i + 1]));
   const scope = describeScope(options, index);
   // Abertas, resolvidas e % só dizem algo quando o PDF tem as duas situações; com uma só, "0 resolvidas"
@@ -128,9 +139,10 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
         ];
   const showLocal = options.grouping !== 'pavimento';
   const showContractor = options.grouping !== 'empreiteiro';
+  const showType = options.grouping !== 'tipo';
   const photos = options.photos;
-  // Nº, Apto, Descrição, Tipo, Data, Responsável ATR e Situação, mais as colunas que dependem das opções.
-  const columns = 7 + (showLocal ? 1 : 0) + (showContractor ? 1 : 0) + (photos ? 2 : 0);
+  // Nº, Apto, Descrição, Data, Responsável ATR e Situação, mais as colunas que dependem das opções.
+  const columns = 6 + (showLocal ? 1 : 0) + (showType ? 1 : 0) + (showContractor ? 1 : 0) + (photos ? 2 : 0);
 
   return (
     <div className="tp-print" ref={root}>
@@ -206,6 +218,7 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
         </div>
       </header>
       {scope.filters && <p className="tp-scope">Filtros: {scope.filters}</p>}
+      {chosenNote && <p className="tp-scope">Só os escolhidos: {chosenNote}</p>}
       {scope.order && <p className="tp-scope">Ordem dentro de cada grupo: {scope.order}</p>}
 
       <div className="tp-stats">
@@ -243,7 +256,7 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
                 {showLocal && <col style={{ width: '8%' }} />}
                 <col style={{ width: '5%' }} />
                 <col />
-                <col style={{ width: '7%' }} />
+                {showType && <col style={{ width: '7%' }} />}
                 <col style={{ width: '6.5%' }} />
                 <col style={{ width: '9%' }} />
                 {showContractor && <col style={{ width: '10%' }} />}
@@ -271,7 +284,7 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
                   {showLocal && <th>Local</th>}
                   <th>Apto</th>
                   <th>Descrição da pendência</th>
-                  <th>Tipo</th>
+                  {showType && <th>Tipo</th>}
                   <th>Data observação</th>
                   <th>Responsável ATR</th>
                   {showContractor && <th>Responsável terceiro</th>}
@@ -293,6 +306,7 @@ export function TerminalityPrint({ workId, options }: { workId: string; options:
                     number={numbers.get(item.id) ?? 0}
                     showLocal={showLocal}
                     showContractor={showContractor}
+                    showType={showType}
                     photos={photos}
                   />
                 ))}
@@ -311,6 +325,7 @@ function ItemRow({
   number,
   showLocal,
   showContractor,
+  showType,
   photos,
 }: {
   item: TerminalityItem;
@@ -318,6 +333,7 @@ function ItemRow({
   number: number;
   showLocal: boolean;
   showContractor: boolean;
+  showType: boolean;
   photos: boolean;
 }) {
   const { issue, correction } = photosOf(index, item.id);
@@ -328,7 +344,7 @@ function ItemRow({
       {showLocal && <td>{floorName(index, item)}</td>}
       <td>{unitName(index, item) || '—'}</td>
       <td>{item.description}</td>
-      <td>{typeName(index, item) || '—'}</td>
+      {showType && <td>{typeName(index, item) || '—'}</td>}
       <td>{formatDate(item.observedOn)}</td>
       <td>{personName(index, item) || '—'}</td>
       {showContractor && <td>{item.contractor?.trim() || '—'}</td>}
