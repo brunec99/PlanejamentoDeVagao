@@ -208,6 +208,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'O botão "Solicitar acesso" da tela de login não registra o pedido, e a lista de pedidos em Configurações não aparece.',
     critical: false,
   },
+  {
+    migration: '0034_terminality_resolution_note',
+    label: 'Descrição da correção na terminalidade',
+    probe: { kind: 'column', table: 'terminality_items', column: 'resolution_note' },
+    effect: 'Resolver uma pendência com o texto "Como foi corrigido" não grava; sem o texto, resolve normalmente.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

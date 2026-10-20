@@ -74,6 +74,8 @@ type ItemRow = {
   corrected_on: string | null;
   resolved_at: string | null;
   resolved_by: string | null;
+  /** Migração 0034; ausente em banco sem ela. */
+  resolution_note?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -128,6 +130,8 @@ export const terminalityFromRow = {
     correctedOn: opt(r.corrected_on),
     resolvedAt: opt(r.resolved_at),
     resolvedBy: opt(r.resolved_by),
+    // Só com texto a chave existe: a gravação inclui a coluna apenas quando há o que gravar ou limpar.
+    ...(r.resolution_note ? { resolutionNote: r.resolution_note } : {}),
     createdBy: r.created_by,
     ...stamps(r),
   }),
@@ -195,6 +199,9 @@ export const terminalityToRow = {
     corrected_on: i.correctedOn ?? null,
     resolved_at: i.resolvedAt ?? null,
     resolved_by: i.resolvedBy ?? null,
+    // A coluna só entra quando a pendência traz a chave (texto escrito, ou limpeza ao reabrir): sem a
+    // migração 0034 aplicada, todo o resto da terminalidade continua gravando.
+    ...('resolutionNote' in i ? { resolution_note: i.resolutionNote ?? null } : {}),
     created_by: i.createdBy,
     created_at: i.createdAt,
     updated_at: i.updatedAt,

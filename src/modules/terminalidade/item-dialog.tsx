@@ -402,6 +402,12 @@ export function ItemDialog(props: {
                 Resolvida{live?.correctedOn ? ` em ${formatDate(live.correctedOn)}` : ''}
               </p>
             )}
+            {resolved && live?.resolutionNote && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-600">Como foi corrigido</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{live.resolutionNote}</p>
+              </div>
+            )}
 
             <fieldset disabled={locked} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">

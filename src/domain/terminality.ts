@@ -51,6 +51,8 @@ export interface TerminalityItem extends Stamped {
   correctedOn?: string;
   resolvedAt?: string;
   resolvedBy?: TerminalityId;
+  /** "Como foi corrigido": texto opcional de quem resolveu (migração 0034). Some ao reabrir. */
+  resolutionNote?: string;
   createdBy: TerminalityId;
 }
 
@@ -93,6 +95,8 @@ export const TERMINALITY_LIMITS = {
   maxThumbBytes: 300 * 1024,
   maxPhotosPerItem: 10,
   maxDescription: 1000,
+  /** "Como foi corrigido". */
+  maxResolutionNote: 1000,
   maxName: 80,
   /** Pendências numa edição em lote. */
   maxBulkItems: 500,
@@ -157,7 +161,7 @@ export type TerminalityCommand =
       contractor?: string | null;
     }
   | { type: 'delete_photo'; photoId: TerminalityId }
-  | { type: 'resolve_item'; itemId: TerminalityId; correctedOn: string }
+  | { type: 'resolve_item'; itemId: TerminalityId; correctedOn: string; resolutionNote?: string }
   | { type: 'reopen_item'; itemId: TerminalityId }
   | { type: 'delete_item'; itemId: TerminalityId };
 

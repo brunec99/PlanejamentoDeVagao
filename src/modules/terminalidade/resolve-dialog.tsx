@@ -36,6 +36,7 @@ export function ResolveDialog(props: {
   const { toast } = useToast();
   const live = data.items.find(i => i.id === item.id) ?? item;
   const [correctedOn, setCorrectedOn] = useState(() => (today < item.observedOn ? item.observedOn : today));
+  const [note, setNote] = useState('');
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +102,7 @@ export function ResolveDialog(props: {
     }
     try {
       setProgress('Dando baixa…');
-      await execute({ type: 'resolve_item', itemId: item.id, correctedOn });
+      await execute({ type: 'resolve_item', itemId: item.id, correctedOn, ...(note.trim() ? { resolutionNote: note.trim() } : {}) });
     } catch (cause) {
       setError(
         `${errorText(cause, 'Não foi possível resolver a pendência.')} As fotos da correção já estão salvas; toque em “Tentar de novo”.`,
@@ -206,6 +207,15 @@ export function ResolveDialog(props: {
                   max={today}
                   value={correctedOn}
                   onChange={e => setCorrectedOn(e.target.value)}
+                />
+              </Field>
+              <Field label="Como foi corrigido" hint="Opcional. O que foi feito, por quem, material usado.">
+                <textarea
+                  className="field min-h-20"
+                  maxLength={TERMINALITY_LIMITS.maxResolutionNote}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  placeholder="Ex.: rejunte refeito no box inteiro pela equipe da Acabamentos Silva."
                 />
               </Field>
             </fieldset>

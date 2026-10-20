@@ -491,3 +491,24 @@ test('edição em lote recusa nada a mudar, pendência de fora, item desativado 
   assert.throws(() => run({ itemIds: [ITEM, NEW_ITEM], typeId: null }), /desta obra/);
   assert.equal(parseTerminalityCommand({ type: 'update_items' }).type, 'update_items');
 });
+
+test('resolver grava "como foi corrigido" (opcional, até 1000 caracteres) e reabrir limpa o texto', () => {
+  const d = data();
+  d.photos.push(photo(2, { kind: 'correction' }));
+  const resolved = run(d, { type: 'resolve_item', itemId: ITEM, correctedOn: '2026-10-01', resolutionNote: '  Rejunte refeito no box.  ' })
+    .update.items[0];
+  assert.equal(resolved.resolutionNote, 'Rejunte refeito no box.');
+  const plain = run(d, { type: 'resolve_item', itemId: ITEM, correctedOn: '2026-10-01' }).update.items[0];
+  assert.equal('resolutionNote' in plain, false);
+  rejects(
+    d,
+    { type: 'resolve_item', itemId: ITEM, correctedOn: '2026-10-01', resolutionNote: 'x'.repeat(TERMINALITY_LIMITS.maxResolutionNote + 1) },
+    /passa de/,
+  );
+  d.items = [resolved];
+  const reopened = run(d, { type: 'reopen_item', itemId: ITEM }).update.items[0];
+  assert.equal('resolutionNote' in reopened, true);
+  assert.equal(reopened.resolutionNote, undefined);
+  d.items = [plain];
+  assert.equal('resolutionNote' in run(d, { type: 'reopen_item', itemId: ITEM }).update.items[0], false);
+});

@@ -658,6 +658,11 @@ function ItemCard({
         </span>
       </div>
       <p className="mt-1 whitespace-pre-wrap text-sm text-slate-900">{item.description}</p>
+      {item.status === 'resolved' && item.resolutionNote && (
+        <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 px-2 py-1 text-xs text-emerald-900">
+          Correção: {item.resolutionNote}
+        </p>
+      )}
       <p className="mt-1 text-xs text-slate-500">
         Observada em {dateLabel(item.observedOn)}
         {person ? ` · ATR: ${person}` : ''}
@@ -1028,6 +1033,7 @@ function ResolveSheet({
   act: (run: (pkg: FieldPackage) => Promise<void>, success: string) => Promise<boolean>;
 }) {
   const [correctedOn, setCorrectedOn] = useState(todayInSaoPaulo());
+  const [note, setNote] = useState('');
   const [photos, setPhotos] = useState<Prepared[]>([]);
   const [saving, setSaving] = useState(false);
   const hasCorrection = view.data.photos.some(p => p.itemId === item.id && p.kind === 'correction');
@@ -1041,7 +1047,10 @@ function ResolveSheet({
           setSaving(true);
           const ok = await act(async current => {
             await enqueuePhotos(current, item.id, 'correction', photos);
-            await enqueue(current, { kind: 'command', command: { type: 'resolve_item', itemId: item.id, correctedOn } });
+            await enqueue(current, {
+              kind: 'command',
+              command: { type: 'resolve_item', itemId: item.id, correctedOn, ...(note.trim() ? { resolutionNote: note.trim() } : {}) },
+            });
           }, 'Pendência resolvida.');
           setSaving(false);
           if (ok) onClose();
@@ -1057,6 +1066,16 @@ function ResolveSheet({
             className={fieldClass}
             value={correctedOn}
             onChange={e => setCorrectedOn(e.target.value)}
+          />
+        </label>
+        <label className="mt-3 block text-sm font-semibold text-slate-700">
+          Como foi corrigido <span className="font-normal text-slate-500">(opcional)</span>
+          <textarea
+            maxLength={1000}
+            className="mt-1 min-h-20 w-full rounded-xl border border-slate-300 p-3 text-base"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="O que foi feito, por quem"
           />
         </label>
         <PhotoPicker

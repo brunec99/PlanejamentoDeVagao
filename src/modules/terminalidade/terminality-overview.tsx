@@ -533,8 +533,12 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                       <td className="px-2 py-1" onClick={stop}>
                         <Thumbs photos={photos.issue} label={`do problema em ${location}`} onOpen={at => openPhotos(item, 'issue', at)} />
                       </td>
-                      <td className="px-2 py-1.5 text-center">
+                      <td
+                        className="px-2 py-1.5 text-center"
+                        title={item.resolutionNote ? `Como foi corrigido: ${item.resolutionNote}` : undefined}
+                      >
                         <ResolvedChip resolved={item.status === 'resolved'} />
+                        {item.resolutionNote && <span className="sr-only">. Como foi corrigido: {item.resolutionNote}</span>}
                       </td>
                       <td className="px-2 py-1" onClick={stop}>
                         <Thumbs
@@ -631,6 +635,11 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                       <p className="mt-1 text-xs text-slate-500">{details}</p>
                       {resolved && item.correctedOn && (
                         <p className="mt-0.5 text-xs font-semibold text-success">Corrigida em {formatDate(item.correctedOn)}</p>
+                      )}
+                      {resolved && item.resolutionNote && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-600" title={item.resolutionNote}>
+                          Correção: {item.resolutionNote}
+                        </p>
                       )}
                     </div>
                   </div>

@@ -151,3 +151,13 @@ O usuário pediu para editar várias pendências de uma vez na tela da aba 5, es
 - **Comando** `update_items` (`{ workId, itemIds, typeId?, atrPersonId?, contractor? }`; ausente = manter, `null` = limpar), numa só gravação. Regras: ao menos uma pendência e no máximo 500 (`maxBulkItems`), todas da obra, tipo e responsável ativos e da obra, nome do terceiro até 80 caracteres, e ao menos um campo a mudar. Descrição, local, datas, situação e fotos não mudam.
 - **Testes:** 2 novos em `tests/terminality-commands.test.ts`. **Navegador** (servidor de desenvolvimento, "Obra - Teste"): duas pendências marcadas com "marcar todas" receberam tipo, responsável ATR e terceiro de uma vez; depois, uma só teve o terceiro limpo e manteve o resto. Os registros de teste foram apagados (o tipo e o responsável de teste ficaram desativados, porque não se apagam).
 - O modo de campo no celular não tem edição em lote; ela fica na aba 5.
+
+## "Como foi corrigido" ao resolver (15/10/2026)
+
+O usuário pediu um campo de texto para quem resolve descrever a correção.
+
+- No diálogo "Resolver pendência" (aba 5) e no "Resolver" do modo de campo, campo opcional **"Como foi corrigido"**, até 1000 caracteres, abaixo da data da correção.
+- O texto aparece na pendência resolvida: no diálogo da pendência ("Como foi corrigido"), no cartão do celular ("Correção: …"), na dica do "Resolvido?" da tabela e no modo de campo. Reabrir limpa o texto junto com a data da correção.
+- **Banco:** coluna `terminality_items.resolution_note` (migração **0034, aplicada em 15/10/2026**). A coluna só entra na gravação quando há texto a gravar ou a limpar: sem a migração, a terminalidade continua funcionando, e só resolver **com** o texto falha. A tela de migrações avisa (sonda `terminality_items.resolution_note`).
+- Testes: regra (texto opcional, limite, reabrir limpa) em `tests/terminality-commands.test.ts`; gravação segura em `tests/terminality-repository-note.test.ts`. Na tela, o campo foi conferido no diálogo de uma pendência aberta da Blentt, sem resolver.
+- No caminho: `scripts/validate-bootstrap-sql.mjs` esperava 38 tabelas e falhava desde a 0032 (`access_requests`); passou a esperar 39, e o bootstrap foi regerado com 34 migrações.

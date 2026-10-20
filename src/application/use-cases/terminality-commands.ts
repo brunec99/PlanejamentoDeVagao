@@ -461,7 +461,20 @@ export function planTerminalityCommand(data: TerminalityData, command: Terminali
       if (correctedOn > today) fail('A data da correção não pode estar no futuro.');
       if (!data.photos.some(p => p.itemId === item.id && p.kind === 'correction'))
         fail('Envie a foto da correção para marcar como resolvida.');
-      const resolved: TerminalityItem = { ...item, status: 'resolved', correctedOn, resolvedAt: now, resolvedBy: actorId, updatedAt: now };
+      if (command.resolutionNote !== undefined && command.resolutionNote !== null && typeof command.resolutionNote !== 'string')
+        fail('Descrição da correção inválida.');
+      const note = text(command.resolutionNote);
+      if (note.length > TERMINALITY_LIMITS.maxResolutionNote)
+        fail(`A descrição da correção passa de ${TERMINALITY_LIMITS.maxResolutionNote} caracteres.`);
+      const resolved: TerminalityItem = {
+        ...item,
+        status: 'resolved',
+        correctedOn,
+        resolvedAt: now,
+        resolvedBy: actorId,
+        updatedAt: now,
+        ...(note ? { resolutionNote: note } : {}),
+      };
       return mutation(item.workId, { update: rows({ items: [resolved] }) });
     }
     case 'reopen_item': {
@@ -471,6 +484,9 @@ export function planTerminalityCommand(data: TerminalityData, command: Terminali
       delete reopened.correctedOn;
       delete reopened.resolvedAt;
       delete reopened.resolvedBy;
+      // A descrição da correção sai com a resolução. A chave fica (vazia) só se havia texto: é o que
+      // faz o repositório gravar o nulo; sem texto antes, a coluna nem entra na gravação.
+      if (reopened.resolutionNote !== undefined) reopened.resolutionNote = undefined;
       return mutation(item.workId, { update: rows({ items: [reopened] }) });
     }
     case 'delete_item': {
