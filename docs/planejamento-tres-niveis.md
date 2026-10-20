@@ -550,3 +550,43 @@ Quem testa o curto prazo pode ganhar acesso ao médio prazo (ou a qualquer outro
 - Abrir o `.xml` exportado no Project e comparar datas, folgas e críticas; cada divergência vira cenário em `tests/fixtures/cenarios-project.ts`. Primeiro ponto a conferir: a folga negativa em restrição inflexível (aqui aparece na predecessora, pela leitura do MPXJ).
 - Confirmar com o usuário o comportamento de "digitar o início numa tarefa com DIE/NIDD".
 - Recursos na exportação (`<Resources>`/`<Assignments>`), defasagem em percentual (migração), duração restante, restrição em resumo e tarefas inativas — lista completa em `docs/engenharia-reversa-project.md`.
+
+## Curto prazo: semanas vizinhas (19/10/2026)
+
+**Pedido da obra:** o Daniel (planejador da Blentt) monta o planejamento de cada empreiteiro com a semana anterior e a próxima à vista ("quando estou fazendo o planejamento do Claudiomir da RC, deixo a semana anterior e a próxima semana"). Assim ele vê a continuidade das tarefas, leva o que não foi feito e percebe o que vai continuar. A planilha mostrava uma semana por vez. O usuário aprovou a proposta.
+
+**O que foi entregue** (`src/modules/curto-prazo/commitments-overview.tsx`):
+
+- **Ligar a visão:** a caixa "Semanas vizinhas", ao lado do PPC, liga a visão. A escolha fica no `localStorage` de cada pessoa (`obra360.curto-prazo.vizinhas`), como as larguras das colunas, porque é preferência de quem lê.
+- **Disposição:**
+  - a semana anterior aparece acima da semana analisada, e a próxima abaixo, na mesma tabela e com as mesmas colunas;
+  - cada semana tem uma faixa com o nome ("Semana anterior", "Semana analisada", "Próxima semana"), o período, o número de linhas (quantas passam no filtro) e o PPC;
+  - no celular, a mesma ordem, em cartões;
+  - a linha de datas no topo do cabeçalho fica vazia nessa visão, porque cada faixa traz o próprio período.
+- **O centro é a semana escolhida no seletor**, e não a semana atual. Antes da semana 1 da obra não há semana anterior (`neighborWeeks` em `sheet-view.ts`, testado em `tests/sheet-view.test.ts`).
+- **Filtros:**
+  - os filtros de coluna valem para as três semanas. O de Empresa é o que permite planejar um empreiteiro por vez;
+  - os valores oferecidos no filtro saem das três semanas;
+  - a classificação pelo funil e a ordem presa valem só para a semana analisada. As vizinhas ficam na ordem de inclusão.
+- **Semana anterior:**
+  - só aceita apontamento (Status, causa, justificativa, Limpar) e "Levar p/ próxima", mesmo quando ainda está aberta;
+  - para editar as linhas dela, escolha essa semana no seletor;
+  - as linhas aparecem esmaecidas.
+- **Próxima semana:** é editável como a analisada, se não estiver encerrada. Não tem linha em branco: entra nela o que se leva, e para escrever uma linha nova basta escolher a semana no seletor.
+- **"Levar p/ próxima" para qualquer linha:**
+  - nessa visão, o botão aparece em qualquer linha, e não só na do Não: também na linha com Sim (atividade que continua) e na ainda sem apontamento;
+  - a linha levada entra como compromisso novo da semana seguinte, sem apontamento e sem marca de continuação, e a de origem não muda;
+  - por isso, a coluna "Apontamento" fica sempre visível nessa visão;
+  - fora dela, o comportamento antigo continua: só o Não é levado;
+  - "Gerar restrição" continua só no Não.
+- **A trava de semana encerrada não mudou.** O "Levar" confere a semana de destino, como antes.
+
+**Decisões tomadas por padrão, a confirmar com a obra:**
+- o centro da visão é a semana selecionada no seletor;
+- a linha levada depois de um Sim entra como linha normal, sem marca de continuação, e conta no PPC da semana seguinte como qualquer compromisso.
+
+**Validação:** typecheck, lint, 518 testes, `format:check` e build passaram. **Não foi aberta no navegador:** o acesso às variáveis do banco de produção para o `next dev` foi negado nesta sessão, e não há base local com dados. Falta conferir na tela com o Daniel:
+- a faixa de cada semana;
+- o filtro de Empresa nas três semanas;
+- o "Levar" da semana anterior para a analisada;
+- o celular.

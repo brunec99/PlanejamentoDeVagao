@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applySheetView, companyOptions, distinctValues, weekOptions } from '../src/modules/curto-prazo/sheet-view';
+import { applySheetView, companyOptions, distinctValues, neighborWeeks, weekOptions } from '../src/modules/curto-prazo/sheet-view';
 
 type Row = { empresa: string; inicio: string; status: string; ordem: number };
 const rows: Row[] = [
@@ -79,4 +79,9 @@ test('sortKeys ordena datas pela data, não pelo texto exibido', () => {
     applySheetView([...dated], { d: shown }, {}, { column: 'd', dir: 'asc' }, () => 0, { d: r => r.d }).map(r => r.d),
     ['2026-09-28', '2026-10-03'],
   );
+});
+
+test('neighborWeeks dá a semana anterior e a próxima, sem anterior antes da semana 1', () => {
+  assert.deepEqual(neighborWeeks('2026-10-19', '2024-07-29'), { previous: '2026-10-12', next: '2026-10-26' });
+  assert.deepEqual(neighborWeeks('2024-07-29', '2024-07-29'), { previous: undefined, next: '2024-08-05' });
 });

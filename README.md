@@ -9,7 +9,7 @@ A interface de cada obra é organizada em **cinco abas numeradas**: os quatro n�
 1. **Cronograma de longo prazo** — planejador próprio (fluxograma de serviços que se expande em Linha de Balanço) e, na visão dos vagões, Linha de Balanço das atividades e módulo de restrições (mais curva de avanço e linhas de base).
 2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
 3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt lado a lado, agendamento automático, datas reais), alocação de recursos com análise de superalocação e linha de base com cálculo de atrasos. As seções da aba ficam na URL (`?secao=`).
-4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento; no celular, cada linha vira um cartão.
+4. **Cronograma de curto prazo** — planilha semanal com listas de equipe, cumprimento (Sim/Não) e causas de não cumprimento; no celular, cada linha vira um cartão. A opção "Semanas vizinhas" (19/10/2026) mostra a semana anterior e a próxima na mesma planilha, para levar o que não foi feito ou continua.
 5. **Terminalidade** (08/10/2026): lista de pendências por pavimento, apartamento e empreiteiro, no formato da planilha "Lista de pendências". Tem modo de campo para o celular, que funciona sem sinal (`/campo/terminalidade`): baixa-se a obra com sinal, lança-se pendência, foto e resolução no canteiro, e a fila do aparelho sobe sozinha quando a conexão volta — detalhes em [Terminalidade](docs/terminalidade.md).
    - Fotos do problema e da correção, comprimidas no navegador.
    - Resolver exige a foto da correção e a data.

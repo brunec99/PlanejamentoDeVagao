@@ -27,6 +27,7 @@ import {
   companyOptions,
   compareText,
   distinctValues,
+  neighborWeeks,
   textKey,
   weekOptions,
   type Accessor,
@@ -67,6 +68,8 @@ const COLUMN_DEFAULTS: Record<string, number> = {
   excluir: 32,
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
+/** A visão "Semanas vizinhas" é preferência de quem planeja, guardada no navegador como as larguras. */
+const NEIGHBORS_KEY = 'obra360.curto-prazo.vizinhas';
 /** O mínimo legível de cada coluna no "Ajustar à tela": abaixo disso a lista de empresa ou a data cortam. */
 const COLUMN_MIN: Record<string, number> = {
   empresa: 110,
@@ -176,6 +179,7 @@ function Sheet({
   const [sort, setSort] = useState<SheetSort>();
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
   const [printing, setPrinting] = useState<PrintKind>();
+  const [neighbors, setNeighbors] = useStoredFlag(NEIGHBORS_KEY);
   const { weekOneStart } = useWorkSettings(workId);
   const columnWidths = useColumnWidths('obra360.curto-prazo.colunas', COLUMN_DEFAULTS, COLUMN_MIN);
   const wide = useWideScreen();
@@ -208,9 +212,15 @@ function Sheet({
   const weekNumber = (start: string) => weekNumberFrom(firstWeek, start);
   const weekRows = commitments.filter(c => c.weekStart === week);
   const stats = ppc(weekRows);
+  // Semanas vizinhas (pedido da obra, 19/10/2026): quem planeja vê a semana anterior, para levar o que
+  // não foi feito, e a próxima, para ver a continuidade. A trava não muda: a anterior só aceita apontamento.
+  const around = neighbors ? neighborWeeks(week, firstWeek) : undefined;
+  const previousRows = around?.previous ? commitments.filter(c => c.weekStart === around.previous) : [];
+  const nextRows = around ? commitments.filter(c => c.weekStart === around.next) : [];
+  const nextReadOnly = !around || viewer || (isWeekLocked(around.next, planning.today) && actor.role !== 'admin');
   const wagonIds = new Set(wagons.map(w => w.id));
   const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
-  const pendencyRow = weekRows.find(r => r.id === pendencyFor);
+  const pendencyRow = commitments.find(r => r.id === pendencyFor);
 
   /** O erro de gravação aparece em dois lugares de propósito: no aviso flutuante, que se vê de
    * qualquer ponto de uma planilha longa, e no Callout acima dela, que fica até a próxima ação. */
@@ -284,7 +294,9 @@ function Sheet({
 
   /** Arrastar o não cumprido cria uma linha nova na semana seguinte, sem apontamento. A linha
    * original não se move nem perde o Não: ela é o registro do que aconteceu, e é dela que saem o
-   * PPC daquela semana e a causa no Pareto. Reaproveitar a linha apagaria a série. */
+   * PPC daquela semana e a causa no Pareto. Reaproveitar a linha apagaria a série. Nas semanas
+   * vizinhas, a linha com Sim ou sem Status também pode continuar na semana seguinte: vira um
+   * compromisso novo daquela semana, sem marca de continuação, e a de origem não muda. */
   const carry = async (row: WeeklyCommitment) => {
     const target = weekNumber(addDays(row.weekStart, 7));
     const done = await run(
@@ -304,7 +316,7 @@ function Sheet({
     if (done)
       toast({
         title: `Linha levada para a semana ${target}.`,
-        description: `“${row.name}” entrou na semana ${target} sem apontamento. Esta semana continua com o Não.`,
+        description: `“${row.name}” entrou na semana ${target} sem apontamento. ${row.fulfilled === false ? 'A semana de origem continua com o Não.' : 'A linha de origem não muda.'}`,
         tone: 'success',
       });
   };
@@ -386,11 +398,17 @@ function Sheet({
     );
   };
   const rows = applySheetView([...weekRows], accessors, filters, undefined, byPin, sortKeys);
+  // As vizinhas seguem os mesmos filtros de coluna (o de empresa é o que a obra usa, um empreiteiro por
+  // vez), na ordem de inclusão; a classificação pelo funil vale só para a semana analisada.
+  const previousShown = applySheetView([...previousRows], accessors, filters, undefined, defaultOrder, sortKeys);
+  const nextShown = applySheetView([...nextRows], accessors, filters, undefined, defaultOrder, sortKeys);
+  const filterRows = around ? [...previousRows, ...weekRows, ...nextRows] : weekRows;
   const filtered = Object.values(filters).some(Boolean) || !!sort;
-  const waiting = weekRows.filter(r => awaitingCause.includes(r.id)).length;
+  const waiting = filterRows.filter(r => awaitingCause.includes(r.id)).length;
   // A coluna "Do não cumprido" só existe quando há apontamento na semana (um Não a levar, ou um
-  // Sim/Não a limpar): na semana de planejamento ela era 208 px de vazio.
-  const showFollowUp = weekRows.some(r => r.fulfilled !== undefined) || waiting > 0;
+  // Sim/Não a limpar): na semana de planejamento ela era 208 px de vazio. Nas semanas vizinhas ela
+  // fica sempre, porque qualquer linha pode ser levada para a semana seguinte.
+  const showFollowUp = !!around || weekRows.some(r => r.fulfilled !== undefined) || waiting > 0;
   const visibleColumns = showFollowUp ? COLUMN_ORDER : COLUMN_ORDER.filter(column => column !== 'seguimento');
   const tableWidth = visibleColumns.reduce((sum, column) => sum + columnWidths.widths[column], 0);
 
@@ -408,7 +426,7 @@ function Sheet({
       <ColumnFilter
         label={label}
         align={align}
-        values={distinctValues(weekRows, accessors[column])}
+        values={distinctValues(filterRows, accessors[column])}
         selected={filters[column]}
         onChange={next => setFilters(current => ({ ...current, [column]: next }))}
         sort={sort?.column === column ? sort.dir : undefined}
@@ -539,11 +557,11 @@ function Sheet({
 
   /** Tudo o que uma linha precisa, em valores simples: a linha memorizada compara por valor e só
    * redesenha a que mudou (um Status numa semana de 120 linhas redesenhava todas, 11/10/2026). */
-  const rowProps = (row: WeeklyCommitment, index: number): RowProps => {
+  const rowProps = (row: WeeklyCommitment, index: number, scope: WeekScope = 'analisada'): RowProps => {
     const company = companyOf(row);
     return {
       row,
-      index,
+      line: scope === 'analisada' ? String(index + 1) : `${index + 1} da semana ${weekNumber(row.weekStart)}`,
       saving: busy === row.id,
       status: statusOf(row),
       company,
@@ -556,12 +574,37 @@ function Sheet({
       // uma semana encerrada pode ser levada por quem não é admin, desde que a próxima esteja aberta.
       canCarry: !viewer && canEditWeek(addDays(row.weekStart, 7), planning.today, actor.role),
       carried: alreadyCarried(row),
+      carryAny: !!around,
+      muted: scope === 'anterior',
       developer,
       viewer,
-      readOnly,
+      // A anterior só aceita apontamento e "Levar", mesmo aberta: mexer nas linhas dela é escolhê-la no seletor.
+      readOnly: scope === 'anterior' ? true : scope === 'proxima' ? nextReadOnly : readOnly,
       actions,
     };
   };
+  /** As faixas das semanas vizinhas: a anterior em cima, a próxima embaixo, a analisada no meio. */
+  const neighborSections = around
+    ? {
+        previous: around.previous
+          ? { scope: 'anterior' as const, start: around.previous, rows: previousShown, total: previousRows.length }
+          : undefined,
+        next: { scope: 'proxima' as const, start: around.next, rows: nextShown, total: nextRows.length },
+      }
+    : undefined;
+  const band = (scope: WeekScope, start: string, shown: number, total: number) => ({
+    scope,
+    label: `Semana ${weekNumber(start)} · ${dayMonth(start)} a ${dayMonth(addDays(start, 5))}`,
+    stats: ppc(commitments.filter(c => c.weekStart === start)),
+    shown,
+    total,
+    note:
+      scope === 'anterior'
+        ? 'Só apontamento e "Levar p/ próxima". Para editar as linhas, escolha esta semana no seletor.'
+        : scope === 'proxima' && nextReadOnly && !viewer
+          ? 'Semana encerrada: só apontamento.'
+          : undefined,
+  });
   const sheetLabel = `Planilha da semana ${weekNumber(week)}`;
   const emptyState =
     weekRows.length === 0 ? (
@@ -596,6 +639,11 @@ function Sheet({
             <p>
               A semana fica aberta até a terça-feira seguinte. Depois disso ela é encerrada: incluir, editar ou excluir linhas, só
               administradores. Realizado, causa e justificativa podem ser lançados ou corrigidos a qualquer momento.
+            </p>
+            <p>
+              "Semanas vizinhas" mostra a semana anterior acima e a próxima abaixo, na mesma planilha e com os mesmos filtros: filtre a
+              Empresa para planejar um empreiteiro de cada vez. Da anterior, aponte o que faltar e leve para a semana analisada o que não
+              foi feito ou continua; da analisada, leve para a próxima. Nessa visão qualquer linha pode ser levada, não só a do Não.
             </p>
             <p>
               A semana 1 vem das configurações da obra; sem ela, é a primeira semana com linha na planilha. O número de cada semana é
@@ -646,6 +694,10 @@ function Sheet({
           PPC: <span className="tabular-nums text-slate-900">{stats.planned ? `${Math.round(stats.percent)}%` : '—'}</span>
           {stats.pending > 0 && <span className="ml-1 font-normal text-slate-400">({stats.pending} sem status)</span>}
         </span>
+        <label className="flex items-center gap-1.5" title="Mostra a semana anterior e a próxima na mesma planilha">
+          <input type="checkbox" className="accent-primary" checked={neighbors} onChange={e => setNeighbors(e.target.checked)} />
+          Semanas vizinhas
+        </label>
         <span className="flex flex-wrap items-center gap-2 sm:ml-auto">
           <HelpNote title="Como preencher a planilha" label="Como preencher" align="end">
             <p>
@@ -776,7 +828,8 @@ function Sheet({
                   <th colSpan={6} className="px-2 pt-1.5" />
                   {columns.map(({ day, date }) => (
                     <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">
-                      {dayMonth(date)}
+                      {/* Com as vizinhas, cada faixa traz o próprio período: a data do dia valeria só para a do meio. */}
+                      {around ? '' : dayMonth(date)}
                     </th>
                   ))}
                   <th colSpan={showFollowUp ? 5 : 4} />
@@ -804,6 +857,23 @@ function Sheet({
                 </tr>
               </thead>
               <tbody>
+                {neighborSections?.previous && (
+                  <>
+                    <WeekBandRow
+                      band={band(
+                        'anterior',
+                        neighborSections.previous.start,
+                        neighborSections.previous.rows.length,
+                        neighborSections.previous.total,
+                      )}
+                      span={visibleColumns.length}
+                    />
+                    {neighborSections.previous.rows.map((row, index) => (
+                      <SheetRow key={row.id} {...rowProps(row, index, 'anterior')} showFollowUp={showFollowUp} />
+                    ))}
+                  </>
+                )}
+                {around && <WeekBandRow band={band('analisada', week, rows.length, weekRows.length)} span={visibleColumns.length} />}
                 {rows.map((row, index) => (
                   <SheetRow key={row.id} {...rowProps(row, index)} showFollowUp={showFollowUp} />
                 ))}
@@ -818,13 +888,40 @@ function Sheet({
                     trailingSpan={showFollowUp ? 11 : 10}
                   />
                 )}
+                {neighborSections && (
+                  <>
+                    <WeekBandRow
+                      band={band('proxima', neighborSections.next.start, neighborSections.next.rows.length, neighborSections.next.total)}
+                      span={visibleColumns.length}
+                    />
+                    {neighborSections.next.rows.map((row, index) => (
+                      <SheetRow key={row.id} {...rowProps(row, index, 'proxima')} showFollowUp={showFollowUp} />
+                    ))}
+                  </>
+                )}
               </tbody>
             </table>
-            {emptyState && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
+            {emptyState && !around && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
           </div>
         ) : (
           /* No celular, uma linha é um cartão: a tabela larga só serviria para rolar de lado. */
           <div className="space-y-3" role="region" aria-label={sheetLabel}>
+            {neighborSections?.previous && (
+              <>
+                <WeekBandCard
+                  band={band(
+                    'anterior',
+                    neighborSections.previous.start,
+                    neighborSections.previous.rows.length,
+                    neighborSections.previous.total,
+                  )}
+                />
+                {neighborSections.previous.rows.map((row, index) => (
+                  <SheetCard key={row.id} {...rowProps(row, index, 'anterior')} />
+                ))}
+              </>
+            )}
+            {around && <WeekBandCard band={band('analisada', week, rows.length, weekRows.length)} />}
             {rows.map((row, index) => (
               <SheetCard key={row.id} {...rowProps(row, index)} />
             ))}
@@ -838,7 +935,17 @@ function Sheet({
                 onCreate={createRow}
               />
             )}
-            {emptyState && <div className="rounded-xl border border-slate-200 bg-white p-4">{emptyState}</div>}
+            {neighborSections && (
+              <>
+                <WeekBandCard
+                  band={band('proxima', neighborSections.next.start, neighborSections.next.rows.length, neighborSections.next.total)}
+                />
+                {neighborSections.next.rows.map((row, index) => (
+                  <SheetCard key={row.id} {...rowProps(row, index, 'proxima')} />
+                ))}
+              </>
+            )}
+            {emptyState && !around && <div className="rounded-xl border border-slate-200 bg-white p-4">{emptyState}</div>}
           </div>
         )}
       </div>
@@ -866,7 +973,8 @@ const marked = (row: WeeklyCommitment, day: number) => {
 
 type RowProps = {
   row: WeeklyCommitment;
-  index: number;
+  /** Número da linha nos rótulos de acessibilidade; nas semanas vizinhas leva a semana junto. */
+  line: string;
   /** A linha está gravando agora (realce âmbar); as outras seguem editáveis, a fila guarda a ordem. */
   saving: boolean;
   /** '' | 'Sim' | 'Não', já contando o Não pendente de causa. */
@@ -880,6 +988,10 @@ type RowProps = {
   canCarry: boolean;
   /** Já existe a mesma linha na semana seguinte. */
   carried: boolean;
+  /** Semanas vizinhas: qualquer linha pode ser levada, não só a do Não. */
+  carryAny: boolean;
+  /** Linha da semana anterior nas vizinhas, desenhada esmaecida. */
+  muted: boolean;
   developer: boolean;
   viewer: boolean;
   readOnly: boolean;
@@ -891,7 +1003,7 @@ type RowProps = {
  * porque a célula sem borda da tabela não se sustenta sozinha dentro de um cartão. */
 function rowControls({
   row,
-  index,
+  line,
   saving,
   status,
   company,
@@ -902,6 +1014,7 @@ function rowControls({
   nextWeek,
   canCarry,
   carried,
+  carryAny,
   developer,
   viewer,
   readOnly,
@@ -910,7 +1023,7 @@ function rowControls({
   const missingCause = status === 'Não' && !row.cause;
   // Apontamento é livre mesmo na semana encerrada, por isso o "Limpar" olha só o leitor, não `readOnly`.
   const clearable = !viewer && status !== '';
-  const carryable = row.fulfilled === false && canCarry;
+  const carryable = canCarry && (row.fulfilled === false || carryAny);
   return {
     saving,
     missingCause,
@@ -919,7 +1032,7 @@ function rowControls({
         value={company}
         options={companies}
         disabled={readOnly || saving}
-        ariaLabel={`Empresa da linha ${index + 1}`}
+        ariaLabel={`Empresa da linha ${line}`}
         placeholder="Empresa"
         onCommit={value => actions.assignCompany(row, value)}
       />
@@ -928,7 +1041,7 @@ function rowControls({
       <PillSelect
         value={row.weekStart}
         disabled={readOnly || saving}
-        ariaLabel={`Semana da linha ${index + 1}`}
+        ariaLabel={`Semana da linha ${line}`}
         title={`${dayMonth(row.weekStart)} a ${dayMonth(addDays(row.weekStart, 5))}`}
         options={weekOptions}
         onChange={value => actions.moveWeek(row, value)}
@@ -946,7 +1059,7 @@ function rowControls({
         disabled={readOnly}
         min={row.weekStart}
         max={row.weekEnd}
-        aria-label={`Início da linha ${index + 1}`}
+        aria-label={`Início da linha ${line}`}
         onBlur={e => {
           if (e.target.value && e.target.value !== row.startDate) actions.saveStart(row, e.target.value);
         }}
@@ -961,7 +1074,7 @@ function rowControls({
         disabled={readOnly}
         min={row.startDate}
         max={row.weekEnd}
-        aria-label={`Término da linha ${index + 1}`}
+        aria-label={`Término da linha ${line}`}
         onBlur={e => {
           if (e.target.value && e.target.value !== row.endDate) actions.saveEnd(row, e.target.value);
         }}
@@ -973,7 +1086,7 @@ function rowControls({
         className={className}
         defaultValue={row.name}
         disabled={readOnly}
-        aria-label={`Atividade da linha ${index + 1}`}
+        aria-label={`Atividade da linha ${line}`}
         onBlur={e => {
           const name = e.target.value.trim();
           // Linha sem atividade não existe: apagar o nome só devolve o que estava.
@@ -994,7 +1107,7 @@ function rowControls({
         emptyHint={company ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
         createHint={TEAM_CREATE_HINT}
         createLabel={text => `Criar equipe “${text}” em ${company}`}
-        ariaLabel={`Equipe da linha ${index + 1}`}
+        ariaLabel={`Equipe da linha ${line}`}
         placeholder="Equipe"
         onCommit={value => actions.assignTeam(row, value)}
       />
@@ -1005,7 +1118,7 @@ function rowControls({
         tone={status === 'Sim' ? 'success' : status === 'Não' ? 'danger' : 'neutral'}
         // Realizado, causa e justificativa ficam abertos mesmo na semana encerrada (09/10/2026).
         disabled={viewer || saving}
-        ariaLabel={`Status da linha ${index + 1}`}
+        ariaLabel={`Status da linha ${line}`}
         options={[
           { value: 'Sim', label: 'Sim' },
           { value: 'Não', label: 'Não' },
@@ -1018,7 +1131,7 @@ function rowControls({
         value={row.cause ?? ''}
         tone={missingCause ? 'required' : 'neutral'}
         disabled={viewer || saving || status !== 'Não'}
-        ariaLabel={`Causa da linha ${index + 1}`}
+        ariaLabel={`Causa da linha ${line}`}
         placeholder={missingCause ? 'Escolha a causa' : ''}
         title={status !== 'Não' ? 'A causa só é pedida quando o Status é Não.' : undefined}
         options={NON_FULFILLMENT_CAUSES.map(cause => ({ value: cause, label: cause }))}
@@ -1031,7 +1144,7 @@ function rowControls({
         className={className}
         defaultValue={row.justification ?? ''}
         disabled={viewer || row.fulfilled === undefined}
-        aria-label={`Justificativa da linha ${index + 1}`}
+        aria-label={`Justificativa da linha ${line}`}
         onBlur={e => actions.saveJustification(row, e.target.value)}
       />
     ),
@@ -1054,7 +1167,7 @@ function rowControls({
               {carried ? 'Levar de novo' : 'Levar p/ próxima'}
             </button>
           )}
-          {carryable && developer && (
+          {row.fulfilled === false && canCarry && developer && (
             <button
               type="button"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
@@ -1100,10 +1213,12 @@ function rowControls({
 /** Uma linha da tabela. Memorizada por valor (`sameProps`): o Status de uma linha não redesenha as
  * outras 119 com seus combos, e a recarga que troca os objetos também não. */
 const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolean }) {
-  const { row, showFollowUp } = props;
+  const { row, showFollowUp, muted } = props;
   const c = rowControls(props);
   return (
-    <tr className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : 'hover:bg-slate-50/60'}`}>
+    <tr
+      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}`}
+    >
       <td className="px-1 py-1">{c.company}</td>
       <td className="px-1 py-1">{c.week}</td>
       <td className="px-1 py-1">{c.start()}</td>
@@ -1129,12 +1244,12 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
 
 /** A mesma linha como cartão do celular, memorizada do mesmo jeito. */
 const SheetCard = memo(function SheetCard(props: RowProps) {
-  const { row, index } = props;
+  const { row, line, muted } = props;
   const c = rowControls(props);
   return (
     <article
-      aria-label={`Linha ${index + 1}: ${row.name}`}
-      className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : 'border-slate-200 bg-white'}`}
+      aria-label={`Linha ${line}: ${row.name}`}
+      className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : muted ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">{c.name('field py-1.5 font-semibold')}</div>
@@ -1149,7 +1264,7 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
         <CardField label="Início">{c.start('field py-1.5 text-xs tabular-nums')}</CardField>
         <CardField label="Término">{c.end('field py-1.5 text-xs tabular-nums')}</CardField>
       </div>
-      <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Dias da linha ${index + 1}`}>
+      <ul className="mt-2 flex flex-wrap gap-1" aria-label={`Dias da linha ${line}`}>
         {WEEKDAYS.map(day => {
           const on = marked(row, day);
           return (
@@ -1174,6 +1289,71 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
     </article>
   );
 }, sameProps);
+
+type WeekScope = 'anterior' | 'analisada' | 'proxima';
+const SCOPE_TITLES: Record<WeekScope, string> = { anterior: 'Semana anterior', analisada: 'Semana analisada', proxima: 'Próxima semana' };
+type WeekBand = { scope: WeekScope; label: string; stats: ReturnType<typeof ppc>; shown: number; total: number; note?: string };
+
+/** Cabeçalho de cada semana nas vizinhas: qual é, o período, as linhas (quantas passam no filtro) e o PPC. */
+function WeekBandContent({ band }: { band: WeekBand }) {
+  const count =
+    band.total === 0
+      ? 'sem linhas'
+      : band.shown === band.total
+        ? `${band.total} ${band.total === 1 ? 'linha' : 'linhas'}`
+        : `${band.shown} de ${band.total} linhas com esses filtros`;
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+      <span className="font-bold text-slate-800">{SCOPE_TITLES[band.scope]}</span>
+      <span className="tabular-nums">{band.label}</span>
+      <span>{count}</span>
+      {band.stats.planned > 0 && (
+        <span className="tabular-nums">
+          PPC {Math.round(band.stats.percent)}%{band.stats.pending > 0 ? ` (${band.stats.pending} sem status)` : ''}
+        </span>
+      )}
+      {band.note && <span className="text-slate-500">{band.note}</span>}
+    </span>
+  );
+}
+
+function WeekBandRow({ band, span }: { band: WeekBand; span: number }) {
+  return (
+    <tr className="border-t border-slate-200 bg-slate-100">
+      <th scope="rowgroup" colSpan={span} className="px-2 py-1.5 text-left text-xs font-normal text-slate-600">
+        <WeekBandContent band={band} />
+      </th>
+    </tr>
+  );
+}
+
+function WeekBandCard({ band }: { band: WeekBand }) {
+  return (
+    <h3 className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-normal text-slate-600">
+      <WeekBandContent band={band} />
+    </h3>
+  );
+}
+
+/** Liga/desliga guardado no navegador. Carrega depois da montagem, como as larguras das colunas: no
+ * servidor não há localStorage. Sem armazenamento (janela anônima), começa desligado e só não lembra. */
+function useStoredFlag(key: string): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem(key) === '1') setOn(true);
+    } catch {}
+  }, [key]);
+  const set = (next: boolean) => {
+    setOn(next);
+    try {
+      if (next) localStorage.setItem(key, '1');
+      else localStorage.removeItem(key);
+    } catch {}
+  };
+  return [on, set];
+}
 
 /** Rótulo curto sobre um controle do cartão: no celular não há cabeçalho de coluna dizendo o que é. */
 function CardField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {

@@ -59,6 +59,14 @@ export function weekOptions(firstWeek: string, currentWeek: string, ahead = 4): 
   return weeks;
 }
 
+/** As semanas mostradas em volta da analisada na visão "Semanas vizinhas" (pedido da obra, 19/10/2026):
+ * a anterior, para levar o que não foi feito, e a próxima, para ver a continuidade. Antes da semana 1
+ * da obra não há semana anterior. */
+export function neighborWeeks(week: string, firstWeek: string): { previous?: string; next: string } {
+  const previous = addDays(week, -7);
+  return { previous: previous >= firstWeek ? previous : undefined, next: addDays(week, 7) };
+}
+
 /** Empresas oferecidas: as do cadastro e as já escritas na planilha, sem repetir grafias equivalentes.
  * Prevalece a grafia do cadastro, que é a que alguém conferiu. */
 export function companyOptions(registered: string[], typed: string[]): string[] {
