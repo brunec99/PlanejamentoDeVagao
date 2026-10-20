@@ -13,6 +13,7 @@ A interface de cada obra é organizada em **cinco abas numeradas**: os quatro n�
 5. **Terminalidade** (08/10/2026): lista de pendências por pavimento, apartamento e empreiteiro, no formato da planilha "Lista de pendências". Tem modo de campo para o celular, que funciona sem sinal (`/campo/terminalidade`): baixa-se a obra com sinal, lança-se pendência, foto e resolução no canteiro, e a fila do aparelho sobe sozinha quando a conexão volta — detalhes em [Terminalidade](docs/terminalidade.md).
    - Fotos do problema e da correção, comprimidas no navegador.
    - Resolver exige a foto da correção e a data.
+   - Lista classificável por qualquer coluna, como no Excel, e PDF (20/10/2026) agrupado por pavimento ou por empreiteiro, com fotos, responsáveis e três gráficos de rosca na primeira folha; as mesmas roscas ficam no topo da aba e filtram a lista.
    - Fica fora do snapshot (migração 0028) e é aberta a todos.
    - Veja [docs/terminalidade.md](docs/terminalidade.md).
 

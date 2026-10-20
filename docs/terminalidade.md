@@ -161,3 +161,71 @@ O usuário pediu um campo de texto para quem resolve descrever a correção.
 - **Banco:** coluna `terminality_items.resolution_note` (migração **0034, aplicada em 15/10/2026**). A coluna só entra na gravação quando há texto a gravar ou a limpar: sem a migração, a terminalidade continua funcionando, e só resolver **com** o texto falha. A tela de migrações avisa (sonda `terminality_items.resolution_note`).
 - Testes: regra (texto opcional, limite, reabrir limpa) em `tests/terminality-commands.test.ts`; gravação segura em `tests/terminality-repository-note.test.ts`. Na tela, o campo foi conferido no diálogo de uma pendência aberta da Blentt, sem resolver.
 - No caminho: `scripts/validate-bootstrap-sql.mjs` esperava 38 tabelas e falhava desde a 0032 (`access_requests`); passou a esperar 39, e o bootstrap foi regerado com 34 migrações.
+
+## Classificação por coluna e PDF da lista (20/10/2026)
+
+**Pedidos do usuário:**
+- PDFs das pendências por pavimento e por empreiteiro, com as fotos e os responsáveis;
+- no início do PDF, três gráficos de rosca: por tipo, por pavimento e por responsável terceiro;
+- na lista, classificar por qualquer coluna, como no Excel.
+
+### Classificação por coluna (aba 5)
+
+- **No computador**, cada um dos onze cabeçalhos de dados da tabela é um botão (`SortHeader` em `terminality-overview.tsx`):
+  - o primeiro clique classifica em ordem crescente, o segundo em decrescente e o terceiro volta à ordem padrão (pavimento, apto, data);
+  - a seta mostra a coluna ativa, e o `<th>` tem `aria-sort`.
+- **No celular**, o seletor "Classificar por", acima dos cartões, e um botão que alterna entre crescente e decrescente.
+- **Regras** (`sortItems`, `nextSort` e `SORT_COLUMNS` em `terminality-view.ts`):
+  - célula vazia fica no fim nos dois sentidos, e o empate cai na ordem padrão;
+  - "Local" segue a ordem cadastrada dos pavimentos, e não a alfabética ("Térreo" antes de "2° pavto");
+  - "Apto" e os textos usam ordem natural ("402" antes de "1001");
+  - as colunas de foto classificam pela quantidade de fotos;
+  - "Resolvido?" põe as abertas primeiro.
+- **Na tela:** ao lado de "Mostrando X de Y", aparece "Classificada por … (crescente)" com "Voltar à ordem padrão". "Limpar filtros" não desfaz a classificação.
+
+### PDF da lista
+
+- **Onde:**
+  - **Botão:** "Gerar PDF", ao lado de "Usar no celular, sem sinal", visível também para quem só consulta.
+  - **Janela de opções** (`print-dialog.tsx`):
+    - agrupar por pavimento ou por responsável terceiro. Abre em empreiteiro quando a lista está filtrada por um;
+    - com ou sem fotos;
+    - cada grupo em folha nova (ligado por padrão).
+  - **Página de impressão:** `/imprimir/terminalidade/<obra>` (`src/app/imprimir/terminalidade/[obraId]/page.tsx` e `print-list.tsx`), numa aba própria, como os PDFs do curto prazo.
+- **O que entra:** o que a lista mostra no momento, com os mesmos filtros (situação, pavimento, apto, tipo, responsáveis, busca) e a mesma classificação, aplicada dentro de cada grupo. As opções vão pela URL (`print-options.ts`, testado em `tests/terminality-print-options.test.ts`).
+- **Primeira folha:**
+  - **Cabeçalho:** os logos da ATR e da Takt, o título "LISTA DE PENDÊNCIAS <OBRA>", o agrupamento, a situação e a data. Abaixo, os filtros e a ordem aplicados.
+  - **Cartões:** com abertas e resolvidas juntas, mostram o total, as abertas, as resolvidas e a % resolvida. Com uma só situação, "0 resolvidas" enganaria, então mostram o total, os pavimentos com pendência, os empreiteiros com pendência e as pendências sem responsável terceiro.
+  - **Três roscas** (`donutSlices`): por tipo, por pavimento e por responsável terceiro, com o total no centro e a legenda ao lado (cor, nome, quantidade e %).
+- **Regras das roscas** (guia de gráficos do projeto):
+  - no máximo 6 fatias: passando disso, as 5 maiores ficam e o resto vira "Outros (N …)", em cinza;
+  - espaço branco entre fatias;
+  - a cor nunca é a única leitura, porque a legenda traz os números;
+  - paleta categórica de referência validada pelo script do guia: os pares vizinhos, a emenda (última fatia com a primeira) e o cinza de "Outros" contra os dois vizinhos. Três cores têm contraste abaixo de 3:1 no branco, e a legenda com números atende à exigência de rótulo visível.
+- **Grupos:**
+  - **Ordem:** pavimentos na ordem da obra; empreiteiros em ordem alfabética, juntando grafias equivalentes, com "Sem responsável terceiro" no fim (`groupItems`).
+  - **Título:** fica no cabeçalho da tabela, para repetir em cada folha do grupo.
+  - **Colunas:** Nº (contínuo no documento), Local (some quando se agrupa por pavimento), Apto, Descrição, Tipo, Data observação, Responsável ATR, Responsável terceiro (some quando se agrupa por empreiteiro), Situação (Aberta ou "Resolvida em …", com "Correção: …" quando houver), Foto e Foto da correção.
+  - **Fotos:** até duas por célula, lado a lado, e "+N" para o resto. São as miniaturas de ~320 px, que bastam para o tamanho impresso e deixam o PDF leve.
+- **Impressão:**
+  - a página espera as fotos carregarem (no máximo 20 s) antes de abrir o diálogo do navegador;
+  - o nome do arquivo sai do título, por exemplo "Pendências BLT - Por empreiteiro - 20-10-2026";
+  - A4 paisagem.
+- **Dados:** vêm de `GET /api/terminalidade/campo?workId=`, a rota do modo de campo, que traz a obra e as pendências com as URLs das fotos sem baixar o planejamento inteiro, e que confere o acesso à obra. As URLs valem 1 h, mais do que o tempo de gerar o PDF.
+
+### Roscas no topo da aba (20/10/2026)
+
+A pedido do usuário, as mesmas três roscas do PDF ficam também no topo da aba 5, abaixo dos cartões de totais e acima dos quadros "Abertas por responsável terceiro" e "Abertas por pavimento", que continuam.
+
+- **Desenho compartilhado:** `donut-chart.tsx` (`DonutRing`, paleta e cor de "Outros"), usado pela aba e pelo PDF.
+- **O que contam:** seguem a situação escolhida (Abertas, Resolvidas, Todas) e os demais filtros. Cada rosca ignora o próprio filtro, como os quadros, para continuar mostrando as alternativas: com um tipo filtrado, a rosca de tipo segue com todos os tipos e o escolhido em destaque.
+- **Clique na legenda:** filtra a lista por aquele tipo, pavimento ou empreiteiro, e um segundo clique desfaz. "Outros" não filtra. Passando o mouse numa fatia, aparece o nome, a quantidade e a %.
+
+### Validação (20/10/2026)
+
+- **Testes:** os de `tests/terminality-view.test.ts` cobrem classificação, ciclo do cabeçalho, grupos e fatias, e os de `tests/terminality-print-options.test.ts` cobrem as opções na URL.
+- **Checagens:** typecheck, lint e Prettier.
+- **PDF no navegador:** a página de impressão foi aberta no `next dev`, com o acesso local sem login e a rota da API respondida pelo Playwright com uma obra de teste (9 pavimentos, 37 pendências, fotos simuladas). Saíram os dois agrupamentos, com e sem quebra de folha e com a classificação por data, sem erro no console, e a impressão só foi chamada depois de as fotos carregarem.
+- **Não conferido no navegador:**
+  - a tela da aba 5 com as roscas, os cabeçalhos classificáveis, o seletor do celular e o botão "Gerar PDF". O layout do sistema lê o perfil no banco, e não havia banco local;
+  - o PDF com dados e fotos reais em produção, e a saída num celular.

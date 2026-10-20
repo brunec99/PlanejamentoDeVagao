@@ -197,3 +197,161 @@ export function percentLabel(summary: Pick<TerminalitySummary, 'percent' | 'open
   const rounded = Math.round(summary.percent);
   return `${summary.open > 0 && rounded === 100 ? 99 : rounded}%`;
 }
+
+/** Classificação por coluna, como no Excel (pedido do usuário, 20/10/2026): cada coluna da lista
+ * classifica do menor para o maior ou ao contrário. Célula vazia fica por último nos dois sentidos, e o
+ * empate cai na ordem padrão (pavimento, apto, data). "Local" segue a ordem cadastrada dos pavimentos,
+ * não a alfabética ("Térreo" antes de "2° pavto"); as colunas de foto classificam pela quantidade. */
+export type TerminalitySortColumn =
+  'local' | 'apto' | 'descricao' | 'tipo' | 'observacao' | 'correcao' | 'atr' | 'terceiro' | 'foto' | 'resolvido' | 'fotoCorrecao';
+export type TerminalitySort = { column: TerminalitySortColumn; dir: 'asc' | 'desc' };
+export const SORT_COLUMNS: { value: TerminalitySortColumn; label: string }[] = [
+  { value: 'local', label: 'Local' },
+  { value: 'apto', label: 'Apto' },
+  { value: 'descricao', label: 'Descrição da pendência' },
+  { value: 'tipo', label: 'Tipo' },
+  { value: 'observacao', label: 'Data observação' },
+  { value: 'correcao', label: 'Data correção' },
+  { value: 'atr', label: 'Responsável ATR' },
+  { value: 'terceiro', label: 'Responsável terceiro' },
+  { value: 'foto', label: 'Foto' },
+  { value: 'resolvido', label: 'Resolvido?' },
+  { value: 'fotoCorrecao', label: 'Foto da correção' },
+];
+export const isSortColumn = (value: string): value is TerminalitySortColumn => SORT_COLUMNS.some(c => c.value === value);
+
+/** O próximo estado do cabeçalho clicado: sem classificação → crescente → decrescente → sem classificação. */
+export function nextSort(current: TerminalitySort | undefined, column: TerminalitySortColumn): TerminalitySort | undefined {
+  if (current?.column !== column) return { column, dir: 'asc' };
+  return current.dir === 'asc' ? { column, dir: 'desc' } : undefined;
+}
+
+/** Valor da célula para classificar; `undefined` é a célula vazia. */
+function sortValue(index: TerminalityIndex, item: TerminalityItem, column: TerminalitySortColumn): string | number | undefined {
+  const text = (value: string) => value.trim() || undefined;
+  const count = (n: number) => n || undefined;
+  switch (column) {
+    case 'local':
+      return index.floors.get(item.floorId)?.orderIndex;
+    case 'apto':
+      return text(unitName(index, item));
+    case 'descricao':
+      return text(item.description);
+    case 'tipo':
+      return text(typeName(index, item));
+    case 'observacao':
+      return item.observedOn;
+    case 'correcao':
+      return item.correctedOn;
+    case 'atr':
+      return text(personName(index, item));
+    case 'terceiro':
+      return text(item.contractor ?? '');
+    case 'foto':
+      return count(photosOf(index, item.id).issue.length);
+    case 'resolvido':
+      return item.status === 'resolved' ? 1 : 0;
+    case 'fotoCorrecao':
+      return count(photosOf(index, item.id).correction.length);
+  }
+}
+
+/** Itens na ordem pedida; sem classificação, a ordem padrão. Não altera a lista recebida. */
+export function sortItems(items: TerminalityItem[], index: TerminalityIndex, sort?: TerminalitySort): TerminalityItem[] {
+  const fallback = compareItems(index);
+  if (!sort) return [...items].sort(fallback);
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  const keyed = items.map(item => ({ item, value: sortValue(index, item, sort.column) }));
+  return keyed
+    .sort((a, b) => {
+      if ((a.value === undefined) !== (b.value === undefined)) return a.value === undefined ? 1 : -1;
+      if (a.value !== undefined && b.value !== undefined) {
+        const byValue =
+          typeof a.value === 'number' && typeof b.value === 'number' ? a.value - b.value : compareText(String(a.value), String(b.value));
+        if (byValue) return byValue * sign;
+      }
+      return fallback(a.item, b.item);
+    })
+    .map(entry => entry.item);
+}
+
+/** Como o PDF agrupa as pendências: por pavimento ou por responsável terceiro (empreiteiro). */
+export type TerminalityGrouping = 'pavimento' | 'empreiteiro';
+export interface TerminalityGroup {
+  key: string;
+  label: string;
+  items: TerminalityItem[];
+}
+export const NO_CONTRACTOR_LABEL = 'Sem responsável terceiro';
+
+/** Grupos do PDF, mantendo a ordem dos itens recebidos dentro de cada grupo. Pavimentos na ordem da
+ * obra; empreiteiros em ordem alfabética, juntando grafias equivalentes, com "sem responsável" no fim. */
+export function groupItems(items: TerminalityItem[], index: TerminalityIndex, by: TerminalityGrouping): TerminalityGroup[] {
+  const groups = new Map<string, TerminalityGroup>();
+  for (const item of items) {
+    const contractor = (item.contractor ?? '').trim();
+    const key = by === 'pavimento' ? item.floorId : textKey(contractor) || NONE;
+    const label = by === 'pavimento' ? floorName(index, item) || 'Pavimento removido' : contractor || NO_CONTRACTOR_LABEL;
+    const group = groups.get(key) ?? { key, label, items: [] };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  const floorOrder = (id: string) => index.floors.get(id)?.orderIndex ?? Number.MAX_SAFE_INTEGER;
+  return [...groups.values()].sort((a, b) =>
+    by === 'pavimento'
+      ? floorOrder(a.key) - floorOrder(b.key) || compareText(a.label, b.label)
+      : (a.key === NONE ? 1 : 0) - (b.key === NONE ? 1 : 0) || compareText(a.label, b.label),
+  );
+}
+
+/** Fatias de um gráfico de rosca do PDF. Uma rosca só se lê com poucas fatias: passando de `max`
+ * categorias, as maiores ficam e o resto vira "Outros", com a quantidade de categorias juntadas. */
+export type DonutField = 'tipo' | 'pavimento' | 'terceiro';
+export interface DonutSlice {
+  key: string;
+  label: string;
+  count: number;
+  /** Fração do total, de 0 a 1. */
+  share: number;
+  /** Fatia "Outros": quantas categorias ela junta. */
+  others?: number;
+}
+export function donutSlices(items: TerminalityItem[], index: TerminalityIndex, field: DonutField, max = 6): DonutSlice[] {
+  const counts = new Map<string, { key: string; label: string; count: number; order: number }>();
+  for (const item of items) {
+    const contractor = (item.contractor ?? '').trim();
+    const entry =
+      field === 'pavimento'
+        ? {
+            key: item.floorId,
+            label: floorName(index, item) || 'Pavimento removido',
+            order: index.floors.get(item.floorId)?.orderIndex ?? 0,
+          }
+        : field === 'tipo'
+          ? { key: item.typeId ?? NONE, label: typeName(index, item) || 'Sem tipo', order: 0 }
+          : { key: textKey(contractor) || NONE, label: contractor || NO_CONTRACTOR_LABEL, order: 0 };
+    const current = counts.get(entry.key) ?? { ...entry, count: 0 };
+    current.count++;
+    counts.set(entry.key, current);
+  }
+  const total = items.length;
+  // Maior primeiro; no empate, a ordem da obra (pavimentos) ou a alfabética, com o vazio por último.
+  const sorted = [...counts.values()].sort(
+    (a, b) =>
+      b.count - a.count || (a.key === NONE ? 1 : 0) - (b.key === NONE ? 1 : 0) || a.order - b.order || compareText(a.label, b.label),
+  );
+  const slice = (entry: { key: string; label: string; count: number }): DonutSlice => ({
+    key: entry.key,
+    label: entry.label,
+    count: entry.count,
+    share: total ? entry.count / total : 0,
+  });
+  if (sorted.length <= max) return sorted.map(slice);
+  const kept = sorted.slice(0, max - 1);
+  const rest = sorted.slice(max - 1);
+  const others = rest.reduce((sum, entry) => sum + entry.count, 0);
+  return [
+    ...kept.map(slice),
+    { key: '__outros__', label: 'Outros', count: others, share: total ? others / total : 0, others: rest.length },
+  ];
+}

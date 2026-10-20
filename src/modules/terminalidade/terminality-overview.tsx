@@ -1,7 +1,20 @@
 'use client';
 import Link from 'next/link';
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Camera, ListFilter, PencilLine, Plus, RefreshCw, Search, Smartphone, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Camera,
+  FileDown,
+  ListFilter,
+  PencilLine,
+  Plus,
+  RefreshCw,
+  Search,
+  Smartphone,
+  X,
+} from 'lucide-react';
 import type { TerminalityCommand, TerminalityItem, TerminalityPhoto } from '@/domain/terminality';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
@@ -17,25 +30,35 @@ import { ResolveDialog } from './resolve-dialog';
 import { BulkEditDialog } from './bulk-edit-dialog';
 import { PhotoViewer } from './photo-viewer';
 import { refreshPhotos } from './photo-refresh';
+import { TerminalityPrintDialog } from './print-dialog';
+import { DonutRing, donutColor, sharePercent } from './donut-chart';
 import {
   DEFAULT_FILTERS,
   NONE,
+  SORT_COLUMNS,
+  donutSlices,
   filterItems,
   floorName,
   hasActiveFilters,
   indexTerminality,
+  isSortColumn,
   locationLabel,
+  nextSort,
   percentLabel,
   personName,
   photosOf,
+  sortItems,
   summarize,
   typeName,
   unitName,
   unitOptions,
-  visibleItems,
   type Breakdown,
+  type DonutField,
+  type DonutSlice,
   type TerminalityFilters,
   type TerminalitySituation,
+  type TerminalitySort,
+  type TerminalitySortColumn,
 } from './terminality-view';
 
 type DialogState = { kind: 'new' } | { kind: 'edit'; itemId: string } | { kind: 'resolve'; itemId: string } | { kind: 'bulk' };
@@ -47,6 +70,8 @@ const SITUATIONS: { value: TerminalitySituation; label: string }[] = [
   { value: 'all', label: 'Todas' },
 ];
 const stop = (event: MouseEvent) => event.stopPropagation();
+const SORT_LABEL = Object.fromEntries(SORT_COLUMNS.map(c => [c.value, c.label])) as Record<TerminalitySortColumn, string>;
+const DIR_LABEL = { asc: 'crescente', desc: 'decrescente' } as const;
 
 export function TerminalityOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -61,6 +86,9 @@ export function TerminalityOverview({ workId }: { workId: string }) {
   const [showFilters, setShowFilters] = useState(false);
   // Pendências marcadas para a edição em lote (tipo, responsável ATR e responsável terceiro).
   const [checked, setChecked] = useState<string[]>([]);
+  // Classificação por coluna, à parte dos filtros: "Limpar filtros" não desfaz a ordem escolhida.
+  const [sort, setSort] = useState<TerminalitySort>();
+  const [printing, setPrinting] = useState(false);
 
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
@@ -161,7 +189,7 @@ export function TerminalityOverview({ workId }: { workId: string }) {
     teams.map(t => t.company),
     data.items.map(i => i.contractor ?? ''),
   );
-  const rows = visibleItems(data, index, filters);
+  const rows = sortItems(filterItems(data.items, filters), index, sort);
   // A seleção vale só para o que está na lista: filtrar some com as marcadas que saíram de vista.
   const visibleIds = new Set(rows.map(item => item.id));
   const selection = checked.filter(id => visibleIds.has(id));
@@ -178,9 +206,39 @@ export function TerminalityOverview({ workId }: { workId: string }) {
   const byContractor = summarize(filterItems(data.items, filters, ['situation', 'contractor']), index).openByContractor;
   const byFloor = summarize(filterItems(data.items, filters, ['situation', 'floorId', 'unitId']), index).openByFloor;
   const narrowed = hasActiveFilters({ ...filters, situation: DEFAULT_FILTERS.situation });
+  // Roscas do topo (20/10/2026): seguem a situação e os demais filtros, mas cada uma ignora o próprio,
+  // como os quadros abaixo, para continuar mostrando as alternativas; clicar na legenda filtra a lista.
+  const donuts = (
+    [
+      { field: 'tipo', title: 'Por tipo', plural: 'tipos', ignore: ['typeId'] },
+      { field: 'pavimento', title: 'Por pavimento', plural: 'pavimentos', ignore: ['floorId', 'unitId'] },
+      { field: 'terceiro', title: 'Por responsável terceiro', plural: 'empreiteiros', ignore: ['contractor'] },
+    ] as const
+  ).map(donut => {
+    const scoped = filterItems(data.items, filters, [...donut.ignore]);
+    return { ...donut, total: scoped.length, slices: donutSlices(scoped, index, donut.field) };
+  });
+  /** O valor que a fatia põe no filtro; o empreiteiro vai com a grafia exibida, não com a chave. */
+  const donutFilter = (field: DonutField, slice: DonutSlice): Partial<TerminalityFilters> =>
+    field === 'tipo'
+      ? { typeId: slice.key }
+      : field === 'pavimento'
+        ? { floorId: slice.key, unitId: '' }
+        : { contractor: slice.key === NONE ? NONE : slice.label };
+  const donutSelected = (field: DonutField, slice: DonutSlice) =>
+    field === 'tipo'
+      ? filters.typeId === slice.key
+      : field === 'pavimento'
+        ? filters.floorId === slice.key
+        : !!filters.contractor && (filters.contractor === NONE ? slice.key === NONE : textKey(filters.contractor) === slice.key);
+  const pickSlice = (field: DonutField, slice: DonutSlice) => {
+    const next = donutFilter(field, slice);
+    patch(donutSelected(field, slice) ? Object.fromEntries(Object.keys(next).map(key => [key, ''])) : next);
+  };
   const activeCount = (['floorId', 'unitId', 'typeId', 'contractor', 'atrPersonId', 'search'] as const).filter(k => filters[k]).length;
 
   const patch = (next: Partial<TerminalityFilters>) => setFilters(current => ({ ...current, ...next }));
+  const sortBy = (column: TerminalitySortColumn) => setSort(current => nextSort(current, column));
   /** Clicar numa quebra filtra por ela (de novo, desfaz). Como a quebra conta abertas, sai de "Resolvidas". */
   const pick = (next: Partial<TerminalityFilters>, same: boolean) =>
     setFilters(current => ({
@@ -265,6 +323,22 @@ export function TerminalityOverview({ workId }: { workId: string }) {
         <StatCard label="% resolvida" value={percentLabel(scope)} hint={scope.total ? `de ${scope.total} pendências` : 'sem pendências'} />
       </div>
 
+      {donuts.some(donut => donut.total > 0) && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-3" aria-label="Pendências por tipo, pavimento e responsável terceiro">
+          {donuts.map(donut => (
+            <DonutPanel
+              key={donut.field}
+              title={donut.title}
+              plural={donut.plural}
+              total={donut.total}
+              slices={donut.slices}
+              selected={slice => donutSelected(donut.field, slice)}
+              onPick={slice => pickSlice(donut.field, slice)}
+            />
+          ))}
+        </div>
+      )}
+
       {(byContractor.length > 0 || byFloor.length > 0) && (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <BreakdownPanel
@@ -290,6 +364,13 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           <HelpNote title="Como usar a lista" label="Como usar a lista" compact>
             <p>A lista abre nas pendências abertas, na ordem da obra: pavimento, apartamento e data de observação.</p>
             <p>
+              Clique no título de uma coluna para classificar por ela, como no Excel: o primeiro clique põe em ordem crescente, o segundo em
+              decrescente e o terceiro volta à ordem padrão. Células vazias ficam no fim nos dois sentidos. “Local” segue a ordem dos
+              pavimentos da obra, não a alfabética, e as colunas de foto classificam pela quantidade de fotos. No celular, use “Classificar
+              por”, acima dos cartões.
+            </p>
+            <p>“Gerar PDF” leva o que a lista mostra, com os filtros e a classificação de agora.</p>
+            <p>
               Clique numa linha para ver ou editar a pendência e as fotos. Clique numa miniatura para ampliar a foto. Clicar num empreiteiro
               ou pavimento nos quadros acima filtra a lista por ele.
             </p>
@@ -302,6 +383,17 @@ export function TerminalityOverview({ workId }: { workId: string }) {
           >
             <Smartphone size={14} aria-hidden /> Usar no celular, sem sinal
           </a>
+          {/* Leitura também: quem só acompanha a obra é quem mais leva a lista impressa para a reunião. */}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
+            disabled={data.items.length === 0}
+            aria-haspopup="dialog"
+            title="Gera um PDF com as pendências que a lista mostra, com os filtros e a classificação de agora"
+            onClick={() => setPrinting(true)}
+          >
+            <FileDown size={14} aria-hidden /> Gerar PDF
+          </button>
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div role="group" aria-label="Situação" className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
               {SITUATIONS.map(option => {
@@ -401,6 +493,16 @@ export function TerminalityOverview({ workId }: { workId: string }) {
               Limpar filtros
             </button>
           )}
+          {sort && (
+            <>
+              <span>
+                Classificada por {SORT_LABEL[sort.column]} ({DIR_LABEL[sort.dir]}).
+              </span>
+              <button type="button" className="text-link" onClick={() => setSort(undefined)}>
+                Voltar à ordem padrão
+              </button>
+            </>
+          )}
         </div>
 
         {selectable && selection.length > 0 && (
@@ -447,39 +549,17 @@ export function TerminalityOverview({ workId }: { workId: string }) {
                       />
                     </th>
                   )}
-                  <th scope="col" className="w-28 px-2 py-2">
-                    Local
-                  </th>
-                  <th scope="col" className="w-16 px-2 py-2">
-                    Apto
-                  </th>
-                  <th scope="col" className="min-w-72 px-2 py-2">
-                    Descrição da pendência
-                  </th>
-                  <th scope="col" className="w-24 px-2 py-2">
-                    Tipo
-                  </th>
-                  <th scope="col" className="w-24 px-2 py-2">
-                    Data observação
-                  </th>
-                  <th scope="col" className="w-24 px-2 py-2">
-                    Data correção
-                  </th>
-                  <th scope="col" className="w-32 px-2 py-2">
-                    Responsável ATR
-                  </th>
-                  <th scope="col" className="w-40 px-2 py-2">
-                    Responsável terceiro
-                  </th>
-                  <th scope="col" className="w-20 px-2 py-2">
-                    Foto
-                  </th>
-                  <th scope="col" className="w-20 px-2 py-2 text-center">
-                    Resolvido?
-                  </th>
-                  <th scope="col" className="w-20 px-2 py-2">
-                    Foto da correção
-                  </th>
+                  <SortHeader column="local" sort={sort} onSort={sortBy} className="w-28" />
+                  <SortHeader column="apto" sort={sort} onSort={sortBy} className="w-16" />
+                  <SortHeader column="descricao" sort={sort} onSort={sortBy} className="min-w-72" />
+                  <SortHeader column="tipo" sort={sort} onSort={sortBy} className="w-24" />
+                  <SortHeader column="observacao" sort={sort} onSort={sortBy} className="w-24" />
+                  <SortHeader column="correcao" sort={sort} onSort={sortBy} className="w-24" />
+                  <SortHeader column="atr" sort={sort} onSort={sortBy} className="w-32" />
+                  <SortHeader column="terceiro" sort={sort} onSort={sortBy} className="w-40" />
+                  <SortHeader column="foto" sort={sort} onSort={sortBy} className="w-20" />
+                  <SortHeader column="resolvido" sort={sort} onSort={sortBy} className="w-20" center />
+                  <SortHeader column="fotoCorrecao" sort={sort} onSort={sortBy} className="w-20" />
                   <th scope="col" className="w-32 px-2 py-2">
                     <span className="sr-only">Ações</span>
                   </th>
@@ -592,6 +672,45 @@ export function TerminalityOverview({ workId }: { workId: string }) {
             </table>
             {emptyState && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
           </div>
+
+          {/* No celular não há cabeçalho de coluna para clicar: a classificação vira um select. */}
+          {data.items.length > 0 && (
+            <div className="mb-3 flex items-end gap-2 md:hidden">
+              <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">
+                Classificar por
+                <select
+                  className="field mt-1 py-1.5"
+                  value={sort?.column ?? ''}
+                  onChange={e => {
+                    const column = e.target.value;
+                    setSort(current => (isSortColumn(column) ? { column, dir: current?.dir ?? 'asc' } : undefined));
+                  }}
+                >
+                  <option value="">Ordem padrão</option>
+                  {SORT_COLUMNS.map(c => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="button-ghost shrink-0 py-1.5"
+                disabled={!sort}
+                aria-label={
+                  sort
+                    ? `${sort.dir === 'asc' ? 'Crescente' : 'Decrescente'}. Toque para ${sort.dir === 'asc' ? 'decrescente' : 'crescente'}`
+                    : undefined
+                }
+                title={sort ? undefined : 'Escolha antes a coluna para classificar'}
+                onClick={() => setSort(current => current && { ...current, dir: current.dir === 'asc' ? 'desc' : 'asc' })}
+              >
+                {sort?.dir === 'desc' ? <ArrowDown size={15} aria-hidden /> : <ArrowUp size={15} aria-hidden />}
+                {sort?.dir === 'desc' ? 'Decrescente' : 'Crescente'}
+              </button>
+            </div>
+          )}
 
           {/* No celular, cada pendência é um cartão: a tabela de onze colunas só serviria para rolar de lado. */}
           <div className="space-y-3 md:hidden" role="region" aria-label="Lista de pendências">
@@ -717,11 +836,69 @@ export function TerminalityOverview({ workId }: { workId: string }) {
       {viewer && (
         <PhotoViewer photos={refreshPhotos(viewer.photos, data.photos)} startIndex={viewer.start} onClose={() => setViewer(undefined)} />
       )}
+      {printing && (
+        <TerminalityPrintDialog
+          workId={workId}
+          filters={filters}
+          sort={sort}
+          count={rows.length}
+          filtered={narrowed}
+          onClose={() => setPrinting(false)}
+        />
+      )}
     </>
   );
 }
 
 const Dash = () => <span className="text-slate-300">—</span>;
+
+/** Cabeçalho que classifica a lista, como no Excel: cada clique passa de crescente para decrescente e
+ * de volta à ordem padrão. A seta fraca avisa que a coluna é clicável. */
+function SortHeader({
+  column,
+  sort,
+  onSort,
+  className,
+  center,
+}: {
+  column: TerminalitySortColumn;
+  sort?: TerminalitySort;
+  onSort: (column: TerminalitySortColumn) => void;
+  className: string;
+  center?: boolean;
+}) {
+  const label = SORT_LABEL[column];
+  const dir = sort?.column === column ? sort.dir : undefined;
+  const Icon = dir === 'asc' ? ArrowUp : dir === 'desc' ? ArrowDown : ArrowUpDown;
+  const hint =
+    dir === 'asc'
+      ? `Classificado por ${label}, crescente. Clique para decrescente`
+      : dir === 'desc'
+        ? `Classificado por ${label}, decrescente. Clique para voltar à ordem padrão`
+        : `Classificar por ${label}`;
+  return (
+    <th
+      scope="col"
+      className={`${className} px-2 py-2 ${center ? 'text-center' : ''}`}
+      aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        title={hint}
+        aria-label={hint}
+        className={`group inline-flex items-center gap-1 rounded uppercase tracking-wider transition-colors hover:text-slate-800 ${center ? 'text-center' : 'text-left'} ${dir ? 'text-slate-800' : ''}`}
+      >
+        {label}
+        <Icon
+          size={12}
+          aria-hidden
+          className={`shrink-0 ${dir ? 'text-primary' : 'text-slate-300 group-hover:text-slate-500 group-focus-visible:text-slate-500'}`}
+        />
+      </button>
+    </th>
+  );
+}
 
 function ResolvedChip({ resolved }: { resolved: boolean }) {
   return (
@@ -811,6 +988,70 @@ function FilterSelect({
 
 /** Quebra das abertas por uma dimensão, com barra proporcional. Clicar filtra a lista; o item
  * escolhido fica marcado e clicar nele de novo desfaz. */
+/** Rosca com a legenda ao lado (cor, nome, quantidade e %). A legenda é a leitura de verdade e também o
+ * filtro: clicar num item filtra a lista por ele, e clicar de novo desfaz. "Outros" não filtra. */
+function DonutPanel({
+  title,
+  plural,
+  total,
+  slices,
+  selected,
+  onPick,
+}: {
+  title: string;
+  plural: string;
+  total: number;
+  slices: DonutSlice[];
+  selected: (slice: DonutSlice) => boolean;
+  onPick: (slice: DonutSlice) => void;
+}) {
+  return (
+    <section className="panel p-4" aria-label={title}>
+      <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      {total === 0 ? (
+        <p className="mt-2 text-xs text-slate-500">Nenhuma pendência nesta seleção.</p>
+      ) : (
+        <div className="mt-2 flex items-center gap-4">
+          <DonutRing slices={slices} total={total} title={title} className="h-28 w-28 shrink-0" />
+          <ul className="min-w-0 flex-1 space-y-0.5">
+            {slices.map((slice, i) => {
+              const active = selected(slice);
+              const label = slice.others ? `Outros (${slice.others} ${plural})` : slice.label;
+              const content = (
+                <>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: donutColor(slice, i) }} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate" title={label}>
+                    {label}
+                  </span>
+                  <span className="font-semibold tabular-nums">{slice.count}</span>
+                  <span className="w-9 text-right tabular-nums text-slate-500">{sharePercent(slice)}</span>
+                </>
+              );
+              return (
+                <li key={slice.key}>
+                  {slice.others ? (
+                    <div className="flex items-center gap-2 px-2 py-1 text-xs text-slate-600">{content}</div>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-pressed={active}
+                      title={active ? 'Clique para tirar o filtro' : `Filtrar a lista por ${label}`}
+                      onClick={() => onPick(slice)}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors ${active ? 'bg-primary-soft font-bold text-primary-ink ring-1 ring-primary-ring' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      {content}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function BreakdownPanel({
   title,
   items,

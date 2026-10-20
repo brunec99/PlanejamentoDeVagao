@@ -5,6 +5,10 @@ import {
   DEFAULT_FILTERS,
   NONE,
   compareItems,
+  donutSlices,
+  groupItems,
+  nextSort,
+  sortItems,
   filterItems,
   hasActiveFilters,
   indexTerminality,
@@ -166,5 +170,81 @@ test('opções de apto seguem o pavimento escolhido, na ordem da obra', () => {
   assert.deepEqual(
     unitOptions(data, '').map(u => u.name),
     ['401', '402', '410', '1001'],
+  );
+});
+
+test('classificar por coluna: vazio por último nos dois sentidos, empate na ordem padrão', () => {
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'terceiro', dir: 'asc' })), ['d', 'c', 'b', 'a', 'f', 'e']);
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'terceiro', dir: 'desc' })), ['b', 'a', 'd', 'c', 'f', 'e']);
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'observacao', dir: 'asc' })), ['c', 'a', 'b', 'd', 'f', 'e']);
+  // Data de correção: só a resolvida tem; as demais, vazias, seguem na ordem padrão.
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'correcao', dir: 'desc' })), ['d', 'f', 'c', 'b', 'a', 'e']);
+});
+
+test('classificar por local segue a ordem da obra, e apto em ordem natural', () => {
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'local', dir: 'desc' })), ['e', 'f', 'c', 'b', 'a', 'd']);
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'apto', dir: 'asc' })), ['c', 'b', 'a', 'e', 'd', 'f']);
+});
+
+test('classificar pela quantidade de fotos e sem classificação devolve a ordem padrão', () => {
+  assert.deepEqual(ids(sortItems(data.items, index, { column: 'foto', dir: 'desc' })).slice(0, 1), ['a']);
+  assert.deepEqual(ids(sortItems(data.items, index)), ids([...data.items].sort(compareItems(index))));
+});
+
+test('cabeçalho: crescente, decrescente e volta à ordem padrão; outra coluna recomeça no crescente', () => {
+  const asc = nextSort(undefined, 'tipo');
+  assert.deepEqual(asc, { column: 'tipo', dir: 'asc' });
+  assert.deepEqual(nextSort(asc, 'tipo'), { column: 'tipo', dir: 'desc' });
+  assert.equal(nextSort({ column: 'tipo', dir: 'desc' }, 'tipo'), undefined);
+  assert.deepEqual(nextSort({ column: 'tipo', dir: 'desc' }, 'atr'), { column: 'atr', dir: 'asc' });
+});
+
+test('grupos do PDF: pavimentos na ordem da obra; empreiteiros juntam grafias e "sem responsável" fica no fim', () => {
+  const sorted = sortItems(data.items, index);
+  assert.deepEqual(
+    groupItems(sorted, index, 'pavimento').map(g => [g.label, ids(g.items)]),
+    [
+      ['Térreo', ['d']],
+      ['4° pavto', ['f', 'c', 'b', 'a']],
+      ['10° pavto', ['e']],
+    ],
+  );
+  assert.deepEqual(
+    groupItems(sorted, index, 'empreiteiro').map(g => [g.label, ids(g.items)]),
+    [
+      ['HIDROTEC', ['d', 'c']],
+      ['mz climatizacao', ['b', 'a']],
+      ['Sem responsável terceiro', ['f', 'e']],
+    ],
+  );
+});
+
+test('fatias da rosca: maior primeiro, vazio nomeado, e "Outros" passando do limite', () => {
+  assert.deepEqual(
+    donutSlices(data.items, index, 'terceiro').map(s => [s.label, s.count]),
+    [
+      ['HIDROTEC', 2],
+      ['MZ CLIMATIZAÇÃO', 2],
+      ['Sem responsável terceiro', 2],
+    ],
+  );
+  assert.deepEqual(
+    donutSlices(data.items, index, 'tipo').map(s => [s.label, s.count]),
+    [
+      ['Sem tipo', 5],
+      ['A/C', 1],
+    ],
+  );
+  const capped = donutSlices(data.items, index, 'pavimento', 2);
+  assert.deepEqual(
+    capped.map(s => [s.label, s.count, s.others]),
+    [
+      ['4° pavto', 4, undefined],
+      ['Outros', 2, 2],
+    ],
+  );
+  assert.equal(
+    capped.reduce((sum, s) => sum + s.share, 0),
+    1,
   );
 });
