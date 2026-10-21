@@ -2,26 +2,48 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GANTT_DAY_PX,
+  addWorkingDays,
   arrowHead,
+  barDragAbilities,
+  barSegments,
   barSpan,
+  barSpanEdges,
   barTone,
+  dateAtX,
   dateX,
+  dayDelta,
+  dayEdgeX,
   deadlineLabel,
   deadlineX,
+  dragModeAt,
+  dragTooltip,
+  edgeScrollDelta,
   ganttRange,
   ganttRowMetrics,
   ganttTooltip,
+  isWorkingDay,
   layoutLinks,
   linkPoints,
+  linkTargetAt,
   linkTone,
   milestoneX,
   monthLabel,
+  movedDates,
   nonWorkingRuns,
+  progressAtX,
+  progressFill,
+  progressX,
+  resizedEnd,
   shortDate,
+  slackLine,
   slackSpan,
+  snapToWorkingDay,
+  spanDays,
   timescaleTiers,
   weekdayOf,
+  workingDaysBetween,
   type GanttRow,
+  type GanttZoom,
   type LinkAnchor,
 } from '../src/modules/medio-prazo/gantt-chart';
 import { CHART, SERIES_COLORS } from '../src/shared/palette';
@@ -382,4 +404,376 @@ test('período inclui o prazo final sempre e o término tardio só com a folga �
     ganttRange([row({ deadline: 'nd', lateFinish: '' })], window, 'dia', { showSlack: true }),
     ganttRange([row()], window, 'dia'),
   );
+});
+
+// ————— Bordas do dia, tarefa dividida e arrasto —————
+
+/* 24/08/26 é segunda: é o início do período nestes testes, então o dia N do período é 24/08 + N.
+ * 07/09 é o dia 14, 11/09 (sexta) o 18, 14/09 (segunda) o 21. */
+const RANGE = '2026-08-24';
+const WEEK = { weekdays: [1, 2, 3, 4, 5], holidays: [] as string[] };
+const lines = (tip: { lines: [string, string][] }) => tip.lines.map(([label, value]) => `${label}: ${value}`);
+
+test('bordas do dia: começo à esquerda, fim à direita, e as bordas padrão são a barSpan', () => {
+  assert.equal(dayEdgeX('2026-08-25', 'start', RANGE, 'dia'), 28);
+  assert.equal(dayEdgeX('2026-08-25', 'end', RANGE, 'dia'), 56);
+  for (const zoom of ['dia', 'semana', 'mes'] as GanttZoom[])
+    for (const [start, end] of [
+      ['2026-08-24', '2026-08-28'],
+      ['2026-08-28', '2026-08-24'],
+      ['2026-08-24', '2026-08-24'],
+      ['2026-09-03', '2026-10-09'],
+    ])
+      assert.deepEqual(barSpanEdges(start, end, RANGE, zoom), barSpan(start, end, RANGE, zoom), `${start} a ${end} em ${zoom}`);
+});
+
+test('IT sem defasagem termina na borda esquerda da segunda e dias corridos acabam às 08:00', () => {
+  // Seg 07/09 a seg 14/09 às 08:00: a tabela mostra a segunda, mas a barra não cobre o dia 14.
+  const it = barSpanEdges('2026-09-07', '2026-09-14', RANGE, 'dia', 'start', 'start');
+  assert.equal(it.left, 14 * 28);
+  assert.equal(it.right, dateX('2026-09-14', RANGE, 'dia'));
+  assert.equal(it.width, 7 * 28);
+  // A sucessora que começa seg 14/09 às 08:00 encosta na mesma borda.
+  assert.equal(barSpanEdges('2026-09-14', '2026-09-18', RANGE, 'dia').left, it.right);
+  // 5 dias corridos a partir de sex 04/09 às 08:00 terminam qua 09/09 às 08:00: cinco colunas.
+  const elapsed = barSpanEdges('2026-09-04', '2026-09-09', RANGE, 'dia', 'start', 'start');
+  assert.equal(elapsed.left, 11 * 28);
+  assert.equal(elapsed.width, 5 * 28);
+  // Começando às 17:00 (dias corridos depois de uma predecessora), a barra nasce na borda direita.
+  assert.equal(barSpanEdges('2026-09-04', '2026-09-09', RANGE, 'dia', 'end', 'end').left, 12 * 28);
+  // Começo e término na mesma borda ainda deixam 2 px à mostra.
+  assert.equal(barSpanEdges('2026-09-14', '2026-09-14', RANGE, 'dia', 'start', 'start').width, 2);
+  // Marco empurrado por TI fica no fim do dia; com data digitada, no começo.
+  assert.equal(dayEdgeX('2026-09-29', 'end', RANGE, 'dia'), 37 * 28);
+  assert.equal(dayEdgeX('2026-09-29', 'start', RANGE, 'dia'), 36 * 28);
+});
+
+test('tarefa dividida: trecho feito até o fim do stop, pontilhado e restante desde o resume', () => {
+  const split = barSegments({ start: '2026-09-07', end: '2026-09-18', stop: '2026-09-08', resume: '2026-09-14' }, RANGE, 'dia');
+  assert.deepEqual(split.segments, [
+    { left: 14 * 28, right: 16 * 28, width: 2 * 28 },
+    { left: 21 * 28, right: 26 * 28, width: 5 * 28 },
+  ]);
+  assert.deepEqual(split.gaps, [{ left: 16 * 28, right: 21 * 28 }]);
+  // O restante respeita a borda do término.
+  const itEnd = barSegments(
+    { start: '2026-09-07', end: '2026-09-21', endEdge: 'start', stop: '2026-09-08', resume: '2026-09-14' },
+    RANGE,
+    'dia',
+  );
+  assert.equal(itEnd.segments[1].right, dateX('2026-09-21', RANGE, 'dia'));
+  // Sem divisão válida, um trecho só, igual à barra inteira.
+  const whole = barSpanEdges('2026-09-07', '2026-09-18', RANGE, 'dia');
+  for (const extra of [
+    {},
+    { stop: '2026-09-08' },
+    { stop: '2026-09-08', resume: 'nd' },
+    { stop: '2026-09-10', resume: '2026-09-09' },
+    { stop: '2026-09-01', resume: '2026-09-14' },
+    { stop: '2026-09-08', resume: '2026-09-21' },
+    { stop: '2026-09-08', resume: '2026-09-09' },
+  ]) {
+    const shape = barSegments({ start: '2026-09-07', end: '2026-09-18', ...extra }, RANGE, 'dia');
+    assert.deepEqual(shape, { segments: [whole], gaps: [] }, JSON.stringify(extra));
+  }
+});
+
+test('avanço enche os trechos sem contar a interrupção, e a alça volta ao mesmo %', () => {
+  const single = barSegments({ start: '2026-08-24', end: '2026-08-28' }, RANGE, 'dia').segments;
+  assert.deepEqual(progressFill(single, 40), [56]);
+  assert.deepEqual(progressFill(single, 150), [140]);
+  assert.deepEqual(progressFill(single, Number.NaN), [0]);
+  assert.equal(progressX(single, 40), 56);
+  assert.equal(progressX(single, 0), 0);
+  assert.equal(progressAtX(56, single), 40);
+  assert.equal(progressAtX(-10, single), 0);
+  assert.equal(progressAtX(1000, single), 100);
+  // Dividida: 56 px feitos + 140 px restantes; 50% são 98 px, 56 no primeiro trecho e 42 no segundo.
+  const split = barSegments({ start: '2026-09-07', end: '2026-09-18', stop: '2026-09-08', resume: '2026-09-14' }, RANGE, 'dia').segments;
+  assert.deepEqual(progressFill(split, 50), [56, 42]);
+  assert.equal(progressX(split, 50), 21 * 28 + 42);
+  assert.equal(progressAtX(21 * 28 + 42, split), 50);
+  // Na interrupção, conta o trecho feito inteiro: 56 de 196 px.
+  assert.equal(progressAtX(18 * 28, split), 29);
+  assert.equal(progressX(split, 0), 14 * 28);
+  assert.equal(progressAtX(0, []), 0);
+});
+
+test('dia sob o ponteiro e deslocamento em dias inteiros', () => {
+  assert.equal(dateAtX(0, RANGE, 'dia'), '2026-08-24');
+  assert.equal(dateAtX(27.9, RANGE, 'dia'), '2026-08-24');
+  assert.equal(dateAtX(28, RANGE, 'dia'), '2026-08-25');
+  assert.equal(dateAtX(-1, RANGE, 'dia'), '2026-08-23');
+  assert.equal(dateAtX(7 * 6 + 3, RANGE, 'semana'), '2026-08-31');
+  assert.equal(dayDelta(13, 'dia'), 0);
+  assert.equal(dayDelta(15, 'dia'), 1);
+  assert.equal(dayDelta(-15, 'dia'), -1);
+  assert.ok(Object.is(dayDelta(-3, 'dia'), 0), 'sem -0');
+  assert.equal(dayDelta(7 * 6, 'semana'), 7);
+});
+
+test('calendário: dia útil, encaixe para a frente e para trás e contagem de dias úteis', () => {
+  const holiday = { weekdays: [1, 2, 3, 4, 5], holidays: ['2026-09-07'] };
+  assert.equal(isWorkingDay('2026-09-05', holiday), false);
+  assert.equal(isWorkingDay('2026-09-07', holiday), false);
+  assert.equal(isWorkingDay('2026-09-08', holiday), true);
+  // Sábado vai à terça (segunda é feriado); feriado para trás vai à sexta.
+  assert.equal(snapToWorkingDay('2026-09-05', holiday, 1), '2026-09-08');
+  assert.equal(snapToWorkingDay('2026-09-07', holiday, -1), '2026-09-04');
+  assert.equal(snapToWorkingDay('2026-09-08', holiday, 1), '2026-09-08');
+  // Sex 04 até qui 10, sem o dia 10: sexta, terça e quarta.
+  assert.equal(workingDaysBetween('2026-09-04', '2026-09-10', holiday), 3);
+  assert.equal(workingDaysBetween('2026-09-10', '2026-09-04', holiday), 0);
+  assert.equal(addWorkingDays('2026-09-04', 1, holiday), '2026-09-08');
+  assert.equal(addWorkingDays('2026-09-04', 0, holiday), '2026-09-04');
+  assert.equal(spanDays('2026-09-04', '2026-09-08', holiday), 2);
+  assert.equal(spanDays('2026-09-04', '2026-09-08', holiday, true), 5);
+  assert.equal(spanDays('2026-09-08', '2026-09-04', holiday), 0);
+  // Calendário sem dia útil não trava: devolve o próprio dia e anda em dias corridos.
+  const none = { weekdays: [], holidays: [] };
+  assert.equal(snapToWorkingDay('2026-09-05', none, 1), '2026-09-05');
+  assert.equal(addWorkingDays('2026-09-05', 2, none), '2026-09-07');
+});
+
+test('mover encaixa o início em dia útil e mantém os dias trabalhados e a borda do término', () => {
+  const task = { start: '2026-09-07', end: '2026-09-11', milestone: false }; // seg a sex
+  assert.deepEqual(movedDates(task, 2, WEEK), { start: '2026-09-09', end: '2026-09-15', startEdge: 'start', endEdge: 'end' });
+  // Solto no sábado: começa segunda, como o "Não iniciar antes de" agenda.
+  assert.deepEqual(movedDates(task, 5, WEEK), { start: '2026-09-14', end: '2026-09-18', startEdge: 'start', endEdge: 'end' });
+  assert.equal(movedDates(task, -1, WEEK).start, '2026-09-07');
+  assert.equal(movedDates(task, -3, WEEK).start, '2026-09-04');
+  // Sem deslocamento, nada muda, nem as bordas.
+  assert.deepEqual(movedDates({ ...task, startEdge: 'end', endEdge: 'start' }, 0, WEEK), {
+    start: '2026-09-07',
+    end: '2026-09-11',
+    startEdge: 'end',
+    endEdge: 'start',
+  });
+  // Término às 08:00 (IT sem defasagem) continua às 08:00, cinco dias úteis depois do novo início.
+  assert.deepEqual(movedDates({ start: '2026-09-07', end: '2026-09-14', endEdge: 'start', milestone: false }, 2, WEEK), {
+    start: '2026-09-09',
+    end: '2026-09-16',
+    startEdge: 'start',
+    endEdge: 'start',
+  });
+  // Dias corridos aceitam o sábado e andam o término em dias corridos.
+  assert.deepEqual(movedDates({ start: '2026-09-04', end: '2026-09-09', endEdge: 'start', elapsed: true, milestone: false }, 1, WEEK), {
+    start: '2026-09-05',
+    end: '2026-09-10',
+    startEdge: 'start',
+    endEdge: 'start',
+  });
+  // Marco empurrado por TI (sex às 17:00) movido um dia: segunda às 08:00.
+  assert.deepEqual(movedDates({ start: '2026-09-11', end: '2026-09-11', milestone: true, startEdge: 'end', endEdge: 'end' }, 1, WEEK), {
+    start: '2026-09-14',
+    end: '2026-09-14',
+    startEdge: 'start',
+    endEdge: 'start',
+  });
+});
+
+test('esticar a ponta direita encaixa no dia mais próximo e volta ao último dia útil', () => {
+  const task = { start: '2026-09-07', end: '2026-09-11' };
+  const right = barSpanEdges(task.start, task.end, RANGE, 'dia').right; // borda entre sex 11 e sáb 12
+  assert.equal(resizedEnd(task, right, RANGE, 'dia', WEEK), '2026-09-11');
+  // Até o sábado: o término fica na sexta, porque no sábado não há trabalho.
+  assert.equal(resizedEnd(task, right + 28, RANGE, 'dia', WEEK), '2026-09-11');
+  assert.equal(resizedEnd(task, right + 3 * 28, RANGE, 'dia', WEEK), '2026-09-14');
+  // Encaixe pela borda mais próxima: 13 px antes da borda da segunda ainda é segunda.
+  assert.equal(resizedEnd(task, right + 3 * 28 - 13, RANGE, 'dia', WEEK), '2026-09-14');
+  assert.equal(resizedEnd(task, right + 3 * 28 - 15, RANGE, 'dia', WEEK), '2026-09-11');
+  // Nunca antes do início.
+  assert.equal(resizedEnd(task, right - 10 * 28, RANGE, 'dia', WEEK), '2026-09-07');
+  // Término às 08:00 de segunda: sem arrasto, o término equivalente é sexta às 17:00.
+  assert.equal(resizedEnd({ start: '2026-09-07', end: '2026-09-14' }, 21 * 28, RANGE, 'dia', WEEK), '2026-09-11');
+  assert.equal(resizedEnd({ start: '2026-09-07', end: '2026-09-14' }, 22 * 28, RANGE, 'dia', WEEK), '2026-09-14');
+  // Dias corridos aceitam o domingo.
+  assert.equal(resizedEnd({ start: '2026-09-04', end: '2026-09-09', elapsed: true }, 21 * 28, RANGE, 'dia', WEEK), '2026-09-13');
+  // Dividida: nunca antes da retomada.
+  assert.equal(
+    resizedEnd({ start: '2026-09-07', end: '2026-09-18', stop: '2026-09-08', resume: '2026-09-14' }, 0, RANGE, 'dia', WEEK),
+    '2026-09-14',
+  );
+});
+
+test('modo do arrasto: sair da linha na vertical vincula, como no Project', () => {
+  // A linha 1 vai de 30 a 60 px.
+  assert.equal(dragModeAt('move', 45, 1, 30, true), 'move');
+  assert.equal(dragModeAt('move', 29, 1, 30, true), 'link');
+  assert.equal(dragModeAt('move', 60, 1, 30, true), 'link');
+  assert.equal(dragModeAt('move', 90, 1, 30, false), 'move');
+  assert.equal(dragModeAt('resize', 200, 1, 30, true), 'resize');
+  assert.equal(dragModeAt('progress', -5, 1, 30, true), 'progress');
+});
+
+test('alvo do vínculo: barra da linha sob o ponteiro, sem resumo e sem a própria tarefa', () => {
+  const list = [
+    { id: 'a', summary: false },
+    { id: 'r', summary: true },
+    { id: 'b', summary: false },
+  ];
+  const bars = [
+    { left: 0, right: 50 },
+    { left: 0, right: 200 },
+    { left: 100, right: 160 },
+  ];
+  assert.equal(linkTargetAt({ x: 120, y: 75 }, list, bars, 30, 'a'), 'b');
+  assert.equal(linkTargetAt({ x: 90, y: 75 }, list, bars, 30, 'a'), 'b');
+  assert.equal(linkTargetAt({ x: 172, y: 75 }, list, bars, 30, 'a'), 'b');
+  assert.equal(linkTargetAt({ x: 80, y: 75 }, list, bars, 30, 'a'), undefined);
+  assert.equal(linkTargetAt({ x: 20, y: 45 }, list, bars, 30, 'a'), undefined);
+  assert.equal(linkTargetAt({ x: 20, y: 15 }, list, bars, 30, 'a'), undefined);
+  assert.equal(linkTargetAt({ x: 20, y: -5 }, list, bars, 30, 'b'), undefined);
+  assert.equal(linkTargetAt({ x: 120, y: 95 }, list, bars, 30, 'a'), undefined);
+  assert.equal(linkTargetAt({ x: 20, y: 15 }, list, bars, 30, 'b'), 'a');
+});
+
+test('o que cada barra aceita arrastar', () => {
+  const all = { canEdit: true, move: true, resize: true, progress: true, link: true };
+  const none = { move: false, resize: false, progress: false, link: false };
+  assert.deepEqual(barDragAbilities(row(), all), { move: true, resize: true, progress: true, link: true });
+  assert.deepEqual(barDragAbilities(row({ summary: true }), all), none);
+  assert.deepEqual(barDragAbilities(row(), { ...all, canEdit: false }), none);
+  assert.deepEqual(barDragAbilities(row({ milestone: true }), all), { move: true, resize: false, progress: false, link: true });
+  // Iniciada: o início real não se move; concluída: o término real não se estica.
+  assert.deepEqual(barDragAbilities(row({ actualStart: '2026-08-24' }), all), { move: false, resize: true, progress: true, link: true });
+  assert.deepEqual(barDragAbilities(row({ actualStart: '2026-08-24', actualEnd: '2026-10-09' }), all), {
+    move: false,
+    resize: false,
+    progress: true,
+    link: true,
+  });
+  // Cada ação exige o callback dela.
+  assert.deepEqual(barDragAbilities(row(), { canEdit: true, link: true }), { ...none, link: true });
+});
+
+test('dica do arrasto no texto do Project', () => {
+  assert.deepEqual(lines(dragTooltip({ mode: 'move', name: 'Alvenaria', start: '2026-09-14', end: '2026-09-18' })), [
+    'Tarefa: Alvenaria',
+    'Início: Seg 14/09/26',
+    'Término: Sex 18/09/26',
+  ]);
+  assert.deepEqual(lines(dragTooltip({ mode: 'move', name: 'Vistoria', milestone: true, start: '2026-09-29' })), [
+    'Marco: Vistoria',
+    'Data: Ter 29/09/26',
+  ]);
+  assert.deepEqual(lines(dragTooltip({ mode: 'resize', name: 'Alvenaria', end: '2026-09-14', days: 6 })), [
+    'Tarefa: Alvenaria',
+    'Término: Seg 14/09/26',
+    'Duração: 6 dias',
+  ]);
+  assert.equal(
+    lines(dragTooltip({ mode: 'resize', name: 'Cura', end: '2026-09-14', days: 1, elapsed: true }))[2],
+    'Duração: 1 dia corrido',
+  );
+  assert.deepEqual(lines(dragTooltip({ mode: 'progress', name: '  ', progress: 40 })), ['Tarefa: Sem nome', '% concluído: 40%']);
+  const loose = dragTooltip({ mode: 'link', name: 'Alvenaria' });
+  assert.deepEqual(lines(loose), ['Vínculo: Término-a-início (TI)', 'De: Alvenaria', 'Para: —']);
+  assert.equal(loose.note, 'Solte sobre a barra da sucessora.');
+  const target = dragTooltip({ mode: 'link', name: 'Alvenaria', target: 'Reboco' });
+  assert.equal(lines(target)[2], 'Para: Reboco');
+  assert.equal(target.note, undefined);
+  assert.equal(dragTooltip({ mode: 'link', name: 'Alvenaria', target: 'Reboco', linked: true }).note, 'As duas já estão vinculadas.');
+  const locked = dragTooltip({ mode: 'move', name: 'Alvenaria', locked: '2026-09-07' });
+  assert.deepEqual(lines(locked), ['Tarefa: Alvenaria', 'Início real: Seg 07/09/26']);
+  assert.match(locked.note ?? '', /início real não se arrasta/);
+});
+
+test('rolagem automática perto das bordas, proporcional à distância', () => {
+  const viewport = { left: 0, top: 50, right: 500, bottom: 400 };
+  assert.deepEqual(edgeScrollDelta({ x: 250, y: 200 }, viewport), { dx: 0, dy: 0 });
+  assert.deepEqual(edgeScrollDelta({ x: 500, y: 200 }, viewport), { dx: 16, dy: 0 });
+  assert.deepEqual(edgeScrollDelta({ x: 600, y: 200 }, viewport), { dx: 16, dy: 0 });
+  assert.deepEqual(edgeScrollDelta({ x: 484, y: 200 }, viewport), { dx: 8, dy: 0 });
+  assert.deepEqual(edgeScrollDelta({ x: 0, y: 50 }, viewport), { dx: -16, dy: -16 });
+  assert.deepEqual(edgeScrollDelta({ x: 31.9, y: 200 }, viewport), { dx: 0, dy: 0 });
+  assert.deepEqual(edgeScrollDelta({ x: 0, y: 400 }, viewport, { vertical: false }), { dx: -16, dy: 0 });
+});
+
+test('linha de folga com bordas: do fim da barra até a borda do término tardio', () => {
+  // Término seg 14/09 às 08:00 e término tardio qua 16/09 às 08:00: dois dias de folga.
+  const itRight = dateX('2026-09-14', RANGE, 'dia');
+  assert.deepEqual(slackLine(itRight, '2026-09-16', RANGE, 'dia', 'start'), { left: itRight, width: 2 * 28 });
+  // Com as bordas padrão, igual à slackSpan.
+  const right = barSpan(RANGE, '2026-08-28', RANGE, 'dia').right;
+  assert.deepEqual(slackLine(right, '2026-09-02', RANGE, 'dia'), slackSpan('2026-08-28', '2026-09-02', RANGE, 'dia'));
+  // Folga zero, negativa, ausente ou inválida: nada.
+  assert.equal(slackLine(right, '2026-08-28', RANGE, 'dia'), undefined);
+  assert.equal(slackLine(right, '2026-08-26', RANGE, 'dia'), undefined);
+  assert.equal(slackLine(right, undefined, RANGE, 'dia'), undefined);
+  assert.equal(slackLine(right, 'nd', RANGE, 'dia'), undefined);
+});
+
+test('dica e rótulo acessível dizem a interrupção e os recursos', () => {
+  assert.equal(
+    ganttTooltip(
+      row({
+        start: '2026-09-07',
+        end: '2026-09-18',
+        actualStart: '2026-09-07',
+        stop: '2026-09-08',
+        resume: '2026-09-14',
+        resourceLabel: 'Equipe Alvenaria',
+      }),
+    ),
+    'Alvenaria · Seg 07/09/26 a Sex 18/09/26 · 40% · Real: iniciada em Seg 07/09/26 · Interrompida: trabalhou até Ter 08/09/26 e retoma em Seg 14/09/26 · Recursos: Equipe Alvenaria',
+  );
+  // Divisão inválida e recurso em branco não entram.
+  assert.equal(ganttTooltip(row({ stop: '2026-09-08', resume: '2026-09-01', resourceLabel: '  ' })), ganttTooltip(row()));
+  // Marco não se divide.
+  assert.doesNotMatch(
+    ganttTooltip(row({ milestone: true, start: '2026-09-07', end: '2026-09-07', stop: '2026-09-07', resume: '2026-09-08' })),
+    /Interrompida/,
+  );
+});
+
+test('avanço conta dias de trabalho: pula fins de semana, feriados e a pausa da dividida', () => {
+  const scale = { rangeStart: RANGE, zoom: 'dia' as GanttZoom, calendar: WEEK };
+  // Sex 11/09 a qui 17/09: cinco dias úteis em sete colunas (18 a 24).
+  const bar = barSegments({ start: '2026-09-11', end: '2026-09-17' }, RANGE, 'dia').segments;
+  // 40% são dois dias úteis, sexta e segunda: o avanço acaba no fim da segunda, não no domingo.
+  assert.equal(progressX(bar, 40, scale), 22 * 28);
+  assert.deepEqual(progressFill(bar, 40, scale), [4 * 28]);
+  assert.ok(progressX(bar, 40) < 21 * 28, 'pelo comprimento, cairia no domingo');
+  // 20% é só a sexta: não invade o fim de semana seguinte.
+  assert.equal(progressX(bar, 20, scale), 19 * 28);
+  // 50%: dois dias e meio, até o meio da terça.
+  assert.equal(progressX(bar, 50, scale), 22 * 28 + 14);
+  assert.equal(progressX(bar, 0, scale), 18 * 28);
+  assert.equal(progressX(bar, 100, scale), 25 * 28);
+  // A alça grava o mesmo %; sobre o fim de semana vale o que foi feito até sexta.
+  assert.equal(progressAtX(22 * 28, bar, scale), 40);
+  assert.equal(progressAtX(22 * 28 + 14, bar, scale), 50);
+  assert.equal(progressAtX(19.5 * 28, bar, scale), 20);
+  assert.equal(progressAtX(20.9 * 28, bar, scale), 20);
+  // Feriado na segunda 14: quatro dias úteis; 40% são 1,6 dia, a sexta e 60% da terça.
+  const holiday = { ...scale, calendar: { weekdays: [1, 2, 3, 4, 5], holidays: ['2026-09-14'] } };
+  assert.ok(Math.abs(progressX(bar, 40, holiday) - (22 * 28 + 0.6 * 28)) < 1e-9);
+  assert.equal(progressAtX(22 * 28, bar, holiday), 25);
+  // Dias corridos contam o fim de semana: o mesmo que pelo comprimento.
+  const elapsed = { ...scale, elapsed: true };
+  assert.equal(progressX(bar, 40, elapsed), progressX(bar, 40));
+  assert.equal(progressAtX(20 * 28, bar, elapsed), 29);
+  // Término às 08:00 de segunda (a barra cobre o fim de semana): 80% vão até o fim de quinta e
+  // 100% enchem a barra inteira.
+  const itBar = barSegments({ start: '2026-09-07', end: '2026-09-14', endEdge: 'start' }, RANGE, 'dia').segments;
+  assert.equal(progressX(itBar, 80, scale), 18 * 28);
+  assert.deepEqual(progressFill(itBar, 100, scale), [7 * 28]);
+  // Dividida: qui 10 a seg 14 feitos (três dias úteis em cinco colunas), pausa na terça, restante
+  // qua 16 e qui 17. 60% são os três dias feitos: o primeiro trecho inteiro e nada do retomado.
+  const split = barSegments({ start: '2026-09-10', end: '2026-09-17', stop: '2026-09-14', resume: '2026-09-16' }, RANGE, 'dia').segments;
+  assert.deepEqual(progressFill(split, 60, scale), [5 * 28, 0]);
+  assert.deepEqual(progressFill(split, 80, scale), [5 * 28, 28]);
+  assert.equal(progressAtX(22 * 28 + 10, split, scale), 60);
+  // Sem nenhum dia útil na barra (só o fim de semana), volta ao comprimento.
+  const weekend = barSegments({ start: '2026-09-12', end: '2026-09-13' }, RANGE, 'dia').segments;
+  assert.equal(progressX(weekend, 50, scale), 19 * 28 + 28);
+});
+
+test('folga fracionária com vírgula e até duas casas; inteira sem casas', () => {
+  assert.match(ganttTooltip(row({ freeSlack: 17.375, totalSlack: 2.5 })), /Folga livre: 17,38 dias · Folga total: 2,5 dias$/);
+  assert.match(ganttTooltip(row({ totalSlack: 1.001 })), /Folga total: 1 dia$/);
+  assert.match(ganttTooltip(row({ totalSlack: -0.001 })), /Folga total: 0 dias$/);
+  assert.match(ganttTooltip(row({ totalSlack: -1.25 })), /Folga total: -1,25 dias$/);
+  assert.match(ganttTooltip(row({ totalSlack: 4 })), /Folga total: 4 dias$/);
 });

@@ -4,14 +4,17 @@ import {
   constraintOf,
   countedDays,
   durationDays,
+  endFor,
   isMilestone,
   planWindow,
   signedWorkingDays,
+  type DayEdge,
   type ScheduleAnalysis,
   type TaskConstraint,
   type WorkCalendar,
 } from './plan-schedule';
 import { rollUpPlan } from './rules';
+import { addDays } from './validation';
 
 /** Exportação do plano do mês para MSPDI, o XML que o Microsoft Project (2016+) abre direto.
  * É o canal pelo qual a equipe, que trabalha no Project, confere que o nosso motor reproduz o
@@ -21,8 +24,10 @@ import { rollUpPlan } from './rules';
  *
  * O Project pensa em horas e minutos; o plano pensa em dias. A conversão fixa a jornada em
  * 08:00–12:00 e 13:00–17:00 (8 h) e, quando `hoursPerDay` é outro, mantém as 08:00 e estica ou
- * encurta a tarde para fechar a jornada (9 h → 18:00). Datas de início saem às 08:00, de
- * término no fim da tarde; marco fica nos dois no mesmo instante do fim da tarde. Durações em
+ * encurta a tarde para fechar a jornada (9 h → 18:00). Cada data sai na ponta do dia que o motor
+ * calculou (`TaskSchedule.edges`): começo às 08:00, fim no fim da tarde — o marco empurrado por TI
+ * fica no fim do dia, o de data digitada no começo; o término puxado por IT sem defasagem e o de
+ * duração em dias corridos ficam às 08:00, como o Project mostra. Durações em
  * dias úteis viram `dias × hoursPerDay` horas (`DurationFormat` 7); corridos, `dias × 24` com
  * formato 8 (decorrido); horas vão como estão (formato 5); meses viram dias úteis antes. Folgas,
  * variações e defasagens vão em décimos de minuto, como o XSD pede.
@@ -32,9 +37,15 @@ import { rollUpPlan } from './rules';
  * `ResourceNames` no XML, os nomes só entram por `<Resources>` + `<Assignments>` (próxima
  * etapa); restrição em tarefa-resumo (o motor não a aplica, então vai como "O mais breve
  * possível"); e jornadas acima de 15 h, que não cabem nas duas faixas do dia e ficam truncadas
- * às 23:59. Tarefa em dias corridos termina aqui no fim do último dia, mas o Project, ao
- * reagendar `n` dias decorridos a partir das 08:00, termina às 08:00 do dia seguinte — diferença
- * de modelo, não da exportação. */
+ * às 23:59.
+ *
+ * Três armadilhas medidas no Project 2019 real (docs/engenharia-reversa-project.md):
+ * `<HonorConstraints>` é lido invertido (1 desliga "as tarefas sempre respeitam as datas de
+ * restrição"), então o elemento não vai e vale o padrão, ligado; o `<StartDate>` tem de ser o
+ * início das tarefas sem predecessora, porque toda tarefa "o mais breve possível" sem
+ * predecessora vai para ele (o menor início de todas jogaria o cronograma para antes quando um
+ * TT, IT ou antecipação puxa uma tarefa); e a tarefa sem predecessora que começa depois desse
+ * início sai como "Não iniciar antes de" na data dela, senão o Project a puxa para o início. */
 export interface MspdiInput {
   plan: MediumTermPlan;
   /** Na ordem do plano (campo `order`); resumo é a linha cujo próximo nível é maior. */
@@ -210,6 +221,14 @@ export function buildMspdi(input: MspdiInput): string {
     analysis.projectStart && analysis.projectFinish
       ? { start: analysis.projectStart, end: analysis.projectFinish }
       : planWindow(plan.month);
+  // O início do projeto do Project: o primeiro início entre as folhas sem predecessora.
+  const leafRows = rows.filter(t => !rollUp.get(t.id)?.summary);
+  const anchor = leafRows
+    .filter(t => !incoming.has(t.id))
+    .map(t => t.actualStart ?? t.plannedStart)
+    .sort()[0];
+  const projectStart = anchor ?? bounds.start;
+  const time = (edge: DayEdge | undefined, fallback: 'start' | 'end') => ((edge ?? fallback) === 'start' ? START_TIME : journey.finishTime);
   const title = [input.workName?.trim(), plan.name?.trim()].filter(Boolean).join(' · ') || 'Plano';
 
   const linkNode = (link: PlanDependency) =>
@@ -226,8 +245,21 @@ export function buildMspdi(input: MspdiInput): string {
     const roll = rollUp.get(task.id)!;
     const info = analysis.info.get(task.id);
     const milestone = !roll.summary && isMilestone(task);
-    const startTime = milestone ? journey.finishTime : START_TIME;
-    const { plannedStart: start, plannedEnd: end } = roll;
+    const edges = info?.edges;
+    const startTime = time(edges?.earlyStart, milestone ? 'end' : 'start');
+    let finishTime = time(edges?.earlyFinish, 'end');
+    const { plannedStart: start } = roll;
+    // Tarefa dividida (iniciada, com o restante empurrado por predecessora aberta): o .xml leva o
+    // término sem o empurrão — início real mais a duração inteira — e o Project divide de novo ao
+    // abrir. Com o término já empurrado ele empurra outra vez (medido no Project 2019).
+    const split = !roll.summary && !!info?.resume && !!task.actualStart && !task.actualEnd;
+    const natural = split ? leafSpan(task, c) : undefined;
+    const end = !natural
+      ? roll.plannedEnd
+      : natural.format === FORMAT.elapsed
+        ? addDays(task.actualStart!, natural.hours / 24)
+        : endFor(task.actualStart!, task.duration!, c).end;
+    if (natural) finishTime = natural.format === FORMAT.elapsed ? START_TIME : journey.finishTime;
     // Resumo: duração é o que há de dias úteis no envelope dos filhos, como o Project resume.
     const span: Span = roll.summary ? { hours: countedDays(start, end, true, c) * c.hoursPerDay, format: FORMAT.days } : leafSpan(task, c);
     const earlyStart = info?.earlyStart ?? start,
@@ -235,7 +267,13 @@ export function buildMspdi(input: MspdiInput): string {
       lateStart = info?.lateStart ?? start,
       lateFinish = info?.lateFinish ?? end;
     const percent = Math.round(Math.min(100, Math.max(0, roll.progress || 0)));
-    const constraint: TaskConstraint = roll.summary ? { type: 'ASAP' } : constraintOf(task);
+    const own: TaskConstraint = roll.summary ? { type: 'ASAP' } : constraintOf(task);
+    // Sem predecessora, começando depois do início do projeto: no Project isso é um NIAD na data.
+    const constraint: TaskConstraint =
+      own.type === 'ASAP' && !roll.summary && !incoming.has(task.id) && !roll.actualStart && start > projectStart
+        ? { type: 'SNET', date: start }
+        : own;
+    const slackHours = span.format === FORMAT.elapsed ? 24 : c.hoursPerDay;
     const base = input.baseline?.get(task.id);
     const baseHours = !base
       ? 0
@@ -259,7 +297,7 @@ export function buildMspdi(input: MspdiInput): string {
       leaf('OutlineLevel', roll.number.split('.').length),
       leaf('Priority', 500),
       leaf('Start', at(start, startTime)),
-      leaf('Finish', at(end, journey.finishTime)),
+      leaf('Finish', at(end, finishTime)),
       leaf('Duration', xsdDuration(span.hours)),
       leaf('DurationFormat', span.format),
       leaf('Estimated', 0),
@@ -267,18 +305,19 @@ export function buildMspdi(input: MspdiInput): string {
       leaf('Summary', roll.summary ? 1 : 0),
       leaf('Critical', info?.critical ? 1 : 0),
       leaf('EarlyStart', at(earlyStart, startTime)),
-      leaf('EarlyFinish', at(earlyFinish, journey.finishTime)),
-      leaf('LateStart', at(lateStart, startTime)),
-      leaf('LateFinish', at(lateFinish, journey.finishTime)),
+      leaf('EarlyFinish', at(split ? end : earlyFinish, finishTime)),
+      leaf('LateStart', at(lateStart, time(edges?.lateStart, milestone ? 'end' : 'start'))),
+      leaf('LateFinish', at(split ? end : lateFinish, split ? finishTime : time(edges?.lateFinish, 'end'))),
       base && leaf('StartVariance', tenthsOfMinutes(signedWorkingDays(base.start, start, c), c.hoursPerDay)),
-      base && leaf('FinishVariance', tenthsOfMinutes(signedWorkingDays(base.end, end, c), c.hoursPerDay)),
-      leaf('FreeSlack', tenthsOfMinutes(info?.freeSlack ?? 0, c.hoursPerDay)),
-      leaf('TotalSlack', tenthsOfMinutes(info?.totalSlack ?? 0, c.hoursPerDay)),
+      base && leaf('FinishVariance', tenthsOfMinutes(signedWorkingDays(base.end, roll.plannedEnd, c), c.hoursPerDay)),
+      // Folga de tarefa em dias corridos vem do motor em dias de 24 h, como o Project a guarda.
+      leaf('FreeSlack', tenthsOfMinutes(info?.freeSlack ?? 0, slackHours)),
+      leaf('TotalSlack', tenthsOfMinutes(info?.totalSlack ?? 0, slackHours)),
       leaf('StartSlack', tenthsOfMinutes(signedWorkingDays(earlyStart, lateStart, c), c.hoursPerDay)),
       leaf('FinishSlack', tenthsOfMinutes(signedWorkingDays(earlyFinish, lateFinish, c), c.hoursPerDay)),
       leaf('PercentComplete', percent),
-      roll.actualStart && leaf('ActualStart', at(roll.actualStart, startTime)),
-      roll.actualEnd && leaf('ActualFinish', at(roll.actualEnd, journey.finishTime)),
+      roll.actualStart && leaf('ActualStart', at(roll.actualStart, milestone ? startTime : START_TIME)),
+      roll.actualEnd && leaf('ActualFinish', at(roll.actualEnd, milestone ? startTime : journey.finishTime)),
       leaf('ActualDuration', xsdDuration((span.hours * percent) / 100)),
       leaf('RemainingDuration', xsdDuration((span.hours * (100 - percent)) / 100)),
       leaf('ConstraintType', CONSTRAINT_CODES[constraint.type]),
@@ -292,7 +331,7 @@ export function buildMspdi(input: MspdiInput): string {
         branch('Baseline', [
           leaf('Number', 0),
           leaf('Start', at(base.start, startTime)),
-          leaf('Finish', at(base.end, journey.finishTime)),
+          leaf('Finish', at(base.end, milestone ? startTime : journey.finishTime)),
           leaf('Duration', xsdDuration(baseHours)),
           leaf('DurationFormat', span.format),
         ]),
@@ -306,7 +345,7 @@ export function buildMspdi(input: MspdiInput): string {
     stamp(plan.createdAt) && leaf('CreationDate', stamp(plan.createdAt)!),
     stamp(plan.updatedAt) && leaf('LastSaved', stamp(plan.updatedAt)!),
     leaf('ScheduleFromStart', 1),
-    leaf('StartDate', at(bounds.start, START_TIME)),
+    leaf('StartDate', at(projectStart, START_TIME)),
     leaf('FinishDate', at(bounds.end, journey.finishTime)),
     leaf('CriticalSlackLimit', 0),
     leaf('CurrencyDigits', 2),
@@ -322,7 +361,6 @@ export function buildMspdi(input: MspdiInput): string {
     leaf('DefaultTaskType', 0),
     leaf('DurationFormat', FORMAT.days),
     leaf('WorkFormat', 2),
-    leaf('HonorConstraints', 1),
     leaf('NewTasksEstimated', 0),
     leaf('WeekStartDay', 0),
     leaf('NewTasksAreManual', 0),

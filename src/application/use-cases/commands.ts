@@ -1172,6 +1172,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
           deadline: input.deadline || undefined,
           actualStart: input.actualStart || undefined,
           actualEnd: input.actualEnd || undefined,
+          timeline: input.timeline === true || undefined,
           version: (old?.version ?? 0) + 1,
           updatedAt: now,
         };

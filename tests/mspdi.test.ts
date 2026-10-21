@@ -120,7 +120,6 @@ test('declaração, namespace, cabeçalho na ordem do XSD e XML bem formado', ()
     'DaysPerMonth',
     'DurationFormat',
     'WorkFormat',
-    'HonorConstraints',
     'WeekStartDay',
     'NewTasksAreManual',
     'Calendars',
@@ -320,16 +319,18 @@ test('restrições com data, prazo final, datas reais, % concluída e folgas', (
   assert.equal(field(done, 'ActualFinish'), '2026-09-03T17:00:00');
   assert.equal(field(done, 'RemainingDuration'), 'PT0H0M0S');
   assert.equal(field(done, 'Critical'), '0');
-  // Folgas em décimos de minuto: dias úteis × 8 h × 60 × 10, e as datas cedo/tardias do motor.
+  // Folgas em décimos de minuto: dias úteis × 8 h × 60 × 10 (a tarefa em dias corridos, `b`, em
+  // dias de 24 h, como o Project guarda), e as datas cedo/tardias do motor na ponta do dia certa.
   for (const name of ['a', 'b', 'c', 'm', 'dl', 'alap', 'half']) {
     const t = taskNamed(xml, name),
       info = analysis.info.get(name)!;
-    assert.equal(field(t, 'TotalSlack'), String(info.totalSlack * 4800), name);
-    assert.equal(field(t, 'FreeSlack'), String(info.freeSlack * 4800), name);
+    const perDay = name === 'b' ? 14400 : 4800;
+    assert.equal(field(t, 'TotalSlack'), String(Math.round(info.totalSlack * perDay)), name);
+    assert.equal(field(t, 'FreeSlack'), String(Math.round(info.freeSlack * perDay)), name);
     assert.match(field(t, 'StartSlack')!, /^-?\d+$/);
     assert.match(field(t, 'FinishSlack')!, /^-?\d+$/);
     assert.equal(field(t, 'EarlyStart')!.slice(0, 10), info.earlyStart, name);
-    assert.equal(field(t, 'LateFinish'), `${info.lateFinish}T17:00:00`, name);
+    assert.equal(field(t, 'LateFinish'), `${info.lateFinish}T${info.edges.lateFinish === 'start' ? '08' : '17'}:00:00`, name);
     assert.equal(field(t, 'Critical'), info.critical ? '1' : '0', name);
   }
   assert.equal(field(taskNamed(xml, 'dl'), 'TotalSlack'), String(analysis.info.get('dl')!.totalSlack * 4800));
@@ -441,4 +442,37 @@ test('resumo com filhos iniciados e concluídos carrega as datas reais e o % do 
   assert.equal(field(r, 'ActualFinish'), undefined, 'o resumo só termina quando todos os filhos terminam');
   assert.equal(field(r, 'Critical'), '1');
   assertWellFormed(xml);
+});
+
+test('Project real: sem HonorConstraints, início do projeto nas tarefas sem predecessora e NIAD para quem começa depois', () => {
+  // Medido no Project 2019 (docs/engenharia-reversa-project.md): <HonorConstraints>1 desliga a
+  // opção; o <StartDate> é para onde vai toda tarefa "o mais breve possível" sem predecessora.
+  const rows = [
+    task('a', 1, 0, '2026-09-07', '2d'),
+    task('b', 2, 0, '2026-09-07', '3d'),
+    task('p', 3, 0, '2026-09-09', '2d'),
+    task('m', 4, 0, '2026-09-11', '0d', { constraintType: 'SNET', constraintDate: '2026-09-11' }),
+  ];
+  const it = [link('l1', 'a', 'b', 'IT', 0)];
+  // Calendário sem o feriado de 07/09 que o resto deste arquivo usa.
+  const xml = buildMspdi({
+    plan,
+    tasks: rows,
+    links: it,
+    calendar: DEFAULT_CALENDAR,
+    analysis: analyzeSchedule(rows, it, DEFAULT_CALENDAR),
+  });
+  const header = xml.slice(0, xml.indexOf('<Calendars>'));
+  assert.equal(field(header, 'HonorConstraints'), undefined);
+  // `b` (3 dias) é puxada por IT para 02/09, antes de `a`; o início do projeto continua sendo o de `a`.
+  assert.equal(field(header, 'StartDate'), '2026-09-07T08:00:00');
+  const b = taskNamed(xml, 'b');
+  assert.equal(field(b, 'Start'), '2026-09-02T08:00:00');
+  assert.equal(field(b, 'Finish'), '2026-09-07T08:00:00', 'IT sem defasagem termina às 08:00 do dia em que a predecessora começa');
+  const p = taskNamed(xml, 'p');
+  assert.equal(field(p, 'ConstraintType'), '4');
+  assert.equal(field(p, 'ConstraintDate'), '2026-09-09T08:00:00');
+  assert.equal(field(taskNamed(xml, 'a'), 'ConstraintType'), '0');
+  // Marco com data digitada fica no começo do dia.
+  assert.equal(field(taskNamed(xml, 'm'), 'Start'), '2026-09-11T08:00:00');
 });

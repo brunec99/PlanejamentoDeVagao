@@ -119,9 +119,10 @@ test('marco: início igual ao término, no dia em que a predecessora TI termina,
   // Marco ligado por TT fica no término da predecessora, sem recuar duração.
   const tt = scheduleTasks([task('1'), task('2', '2026-09-01', '0')], [link('1', '2', 'TT')]);
   assert.deepEqual([byId(tt, '2').plannedStart, byId(tt, '2').plannedEnd], ['2026-09-08', '2026-09-08']);
-  // Marco numa sexta com sucessora TI: a sucessora vai para segunda.
+  // Marco sem predecessora numa sexta fica às 08:00 da sexta, e a sucessora TI começa no mesmo dia
+  // (medido no Project 2019: cenário V5 da bancada).
   const friday = scheduleTasks([task('1', '2026-09-04', '0'), task('2', '2026-09-01', '2d')], [link('1', '2')]);
-  assert.deepEqual([byId(friday, '2').plannedStart, byId(friday, '2').plannedEnd], ['2026-09-07', '2026-09-08']);
+  assert.deepEqual([byId(friday, '2').plannedStart, byId(friday, '2').plannedEnd], ['2026-09-04', '2026-09-07']);
   // Resumo com marco não divide por zero.
   const roll = rollUpPlan([task('1'), { ...task('2', '2026-09-09', '0'), level: 1 }, { ...task('3', '2026-09-09', '0'), level: 1 }]);
   assert.equal(roll.get('1')!.summary, true);
@@ -139,7 +140,9 @@ test('restrição "Não iniciar antes de" vale junto com as predecessoras: ganha
   assert.equal(scheduleTasks([task('1', '2026-09-07')], [])[0].plannedStart, '2026-09-07');
 });
 
-test('início e término reais prendem as datas e ignoram vínculo e restrição', () => {
+test('início real prende o início e ignora a restrição; o restante espera a predecessora; término real prende tudo', () => {
+  // Iniciada antes de a predecessora terminar: como o "dividir tarefas em andamento" do Project, o
+  // restante (90% de 2 dias, arredondado para 2) retoma depois da 1 e empurra a 3 (cenário V2).
   const started = scheduleTasks(
     [
       task('1'),
@@ -148,8 +151,8 @@ test('início e término reais prendem as datas e ignoram vínculo e restrição
     ],
     [link('1', '2'), link('2', '3')],
   );
-  assert.deepEqual([byId(started, '2').plannedStart, byId(started, '2').plannedEnd], ['2026-09-03', '2026-09-04']);
-  assert.equal(byId(started, '3').plannedStart, '2026-09-07');
+  assert.deepEqual([byId(started, '2').plannedStart, byId(started, '2').plannedEnd], ['2026-09-03', '2026-09-10']);
+  assert.equal(byId(started, '3').plannedStart, '2026-09-11');
   const finished = scheduleTasks(
     [
       task('1'),

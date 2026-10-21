@@ -111,6 +111,8 @@ export interface PlanTask extends RecordBase {
   teamId?: Id;
   activityId?: Id;
   notes?: string;
+  /** "Adicionar à Linha do Tempo" do Project: a tarefa aparece na faixa da linha do tempo acima do Gantt. */
+  timeline?: boolean;
   progress: number;
   order: number;
   level: number;

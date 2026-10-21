@@ -46,6 +46,16 @@ export const steps: TourStep[] = [
     body: 'Toda edição fica em rascunho, e o contador diz quantas tarefas mudaram. "Revisar e salvar" lista cada mudança, de antes para depois, e pede o motivo, que fica no histórico da tarefa. Se outra pessoa salvou antes, nada é gravado.',
   },
   {
+    target: 'medio-modo-exibicao',
+    title: 'Modo de exibição',
+    body: 'Troca a visão principal, como no Project: Gráfico de Gantt (tabela e Gantt), Planejador de Equipe, Uso dos Recursos e Planilha de Recursos. O nome da visão aberta fica em pé na borda esquerda, e a escolha fica salva para a próxima vez.',
+  },
+  {
+    target: 'medio-linha-tempo-exibir',
+    title: 'Mostrar a Linha do Tempo',
+    body: 'Liga ou desliga a faixa da Linha do Tempo acima da visão, como a caixa "Linha do Tempo" da guia Exibir do Project. Vem ligada, vale para todas as visões e a escolha fica salva.',
+  },
+  {
     target: 'medio-edicao',
     title: 'Liberar edição',
     body: 'A grade abre bloqueada, contra alteração acidental em reunião: "Liberar edição" destrava as células e "Bloquear" trava de novo. As setas ao lado desfazem e refazem as edições do rascunho (Ctrl+Z e Ctrl+Y).',
@@ -71,6 +81,21 @@ export const steps: TourStep[] = [
     body: 'Exclui a tarefa selecionada e os subitens dela, depois de confirmar. A exclusão fica no rascunho, dá para desfazer com Ctrl+Z e só vai ao banco em "Revisar e salvar".',
   },
   {
+    target: 'medio-informacoes',
+    title: 'Informações da tarefa',
+    body: 'Abre o diálogo do Project com as abas Geral, Predecessoras, Recursos, Avançado e Anotações da tarefa selecionada. OK aplica tudo de uma vez no rascunho, num passo só do desfazer. Atalhos: Shift+F2, duplo clique na barra ou numa célula que não se edita.',
+  },
+  {
+    target: 'medio-linha-tempo-adicionar',
+    title: 'Adicionar à Linha do Tempo',
+    body: 'Põe as tarefas selecionadas na Linha do Tempo, ou as tira, se a ativa já estiver nela; resumos e marcos também entram. É edição do rascunho: desfaz com Ctrl+Z e vai ao banco em "Revisar e salvar".',
+  },
+  {
+    target: 'medio-rolar-tarefa',
+    title: 'Rolar até a tarefa',
+    body: 'Leva o Gantt até a barra da linha selecionada, como o "Rolar até a Tarefa" do Project, e traz a linha para a vista se ela estiver longe. Atalho: Ctrl+Shift+F5.',
+  },
+  {
     target: 'medio-base-exibida',
     title: 'Linha de base exibida',
     body: 'Escolhe qual linha de base congelada deste plano entra na comparação: as colunas da linha de base, a barra cinza do Gantt e a variação. Abre na mais recente; "Nenhuma" esconde a comparação.',
@@ -89,6 +114,11 @@ export const steps: TourStep[] = [
     target: 'medio-critico',
     title: 'Caminho crítico e folga',
     body: '"Caminho crítico" pinta de vermelho, no Gantt, as tarefas sem folga, que atrasam o fim do plano se atrasarem. "Folga" desenha uma linha fina depois de cada barra, até o término tardio: o quanto a tarefa pode escorregar.',
+  },
+  {
+    target: 'medio-nomes-recursos',
+    title: 'Recursos nas barras',
+    body: 'Escreve ao lado de cada barra do Gantt o nome da equipe da tarefa, como o Gantt do Project; a empresa só aparece quando duas equipes têm o mesmo nome. Vem ligado e a escolha fica salva.',
   },
   {
     target: 'medio-caminho',
@@ -113,12 +143,17 @@ export const steps: TourStep[] = [
   {
     target: 'medio-atalhos',
     title: 'Atalhos do teclado',
-    body: 'O "?" lista os atalhos da grade, no jeito do Project: F2 ou Enter edita, Insert insere, Alt+Shift+setas recua, Ctrl+F2 vincula, Ctrl+C e Ctrl+V copiam e colam, Ctrl+D preenche abaixo, Ctrl+Z e Ctrl+Y desfazem e refazem.',
+    body: 'O "?" lista os atalhos da grade, no jeito do Project: F2 ou Enter edita, Insert insere, Alt+Shift+setas recua, Ctrl+F2 vincula, Shift+F2 abre as Informações, Ctrl+Shift+F5 rola até a tarefa, Ctrl+C e Ctrl+V copiam e colam, Ctrl+Z e Ctrl+Y desfazem e refazem.',
+  },
+  {
+    target: 'medio-linha-do-tempo',
+    title: 'Linha do Tempo',
+    body: 'As tarefas marcadas, com Início e Término do projeto nas pontas e os marcos embaixo. A moldura é o trecho que o Gantt mostra: arraste-a para rolar o Gantt. Clique numa tarefa para selecioná-la; o botão direito rola até ela ou a tira da faixa.',
   },
   {
     target: 'medio-tabela',
     title: 'Editar na grade',
-    body: 'Funciona como planilha: clique para selecionar, Shift+setas para um intervalo, duplo clique, F2 ou digitar direto para editar, Esc cancela. Dá para colar do Excel ou do Project. Célula alterada fica marcada até salvar.',
+    body: 'Funciona como planilha: clique para selecionar, Shift+setas para um intervalo, duplo clique, F2 ou digitar direto para editar, Esc cancela. Duplo clique numa célula calculada, ou com a grade bloqueada, abre as Informações da tarefa. Dá para colar do Excel ou do Project.',
   },
   {
     target: 'medio-linha-resumo',
@@ -201,9 +236,59 @@ export const steps: TourStep[] = [
     body: 'A linha âmbar é hoje; as tracejadas limitam o horizonte de três meses, e o fundo acinzentado marca o que fica fora dele e os dias não úteis. Borda tracejada é vínculo desrespeitado; o traço vertical na barra é o início real.',
   },
   {
+    target: 'medio-gantt-grafico',
+    title: 'Editar pelas barras',
+    body: 'Com a edição liberada, como no Project: arrastar a barra muda o início (cria "Não iniciar antes de"), esticar a ponta muda a duração, puxar o avanço muda o % concluída e ligar uma barra a outra cria vínculo Término-Início. Duplo clique abre as Informações.',
+  },
+  {
+    target: 'medio-planejador',
+    title: 'Planejador de Equipe',
+    body: 'Uma linha por equipe da obra, com as tarefas dela no tempo; equipe superalocada fica em vermelho, e "Tarefas não atribuídas" fica embaixo. Com a edição liberada, arraste a tarefa para outra equipe para trocar o recurso, ou para o lado para mudar o início. Duplo clique abre as Informações.',
+  },
+  {
+    target: 'medio-planejador-atribuir',
+    title: 'Atribuir a',
+    body: 'O mesmo que arrastar entre as linhas, pelo teclado: escolhe a equipe da tarefa selecionada, ou "Sem equipe". Com a edição liberada, a troca entra no rascunho e se desfaz com Ctrl+Z.',
+  },
+  {
+    target: 'medio-planejador-nao-atribuidas',
+    title: 'Tarefas não atribuídas',
+    body: 'Embaixo desta barra ficam as tarefas sem equipe; arraste uma delas para a linha de uma equipe para atribuí-la. Arraste a barra, ou use as setas com o foco nela, para dar mais ou menos altura à faixa.',
+  },
+  {
+    target: 'medio-uso-recursos',
+    title: 'Uso dos Recursos',
+    body: 'Cada equipe com as tarefas dela embaixo e as horas de trabalho por período, na escala do zoom ("Sem alocação" junta as tarefas sem equipe). Passou da capacidade, fica vermelho. É leitura: a seleção é a mesma da tabela, e o duplo clique numa tarefa abre as Informações.',
+  },
+  {
+    target: 'medio-planilha-recursos',
+    title: 'Planilha de Recursos',
+    body: 'As equipes da obra como recursos do Project: nome, iniciais, grupo (a empresa), unidades máximas (a capacidade), pico, trabalho e tarefas no plano. É leitura; equipes e capacidades se ajustam nas configurações da obra.',
+  },
+  {
+    target: 'medio-planilha-configurar',
+    title: 'Configurar recursos',
+    body: 'Leva às configurações da obra, onde se cadastram empreiteiros, equipes e capacidades: a Planilha de Recursos só lê esse cadastro. Com rascunho não salvo, a tela pergunta antes de sair.',
+  },
+  {
     target: 'medio-status',
     title: 'Barra de status',
-    body: 'Conta tarefas, vínculos e críticas e mostra o fim do projeto, já com o rascunho. À direita, os ícones alternam tabela e Gantt, só tabela ou só Gantt, e Dias, Semanas e Meses mudam a escala. Arraste a faixa entre tabela e Gantt para dividir o espaço.',
+    body: 'À esquerda, "Pronto" (ou "Alterações não salvas", "Editando", "Salvando…"), o modo das tarefas novas e as contagens de tarefas, vínculos e críticas, com o fim do projeto já com o rascunho.',
+  },
+  {
+    target: 'medio-status-visoes',
+    title: 'Atalhos das visões',
+    body: 'Os mesmos modos de exibição do seletor da barra de ferramentas, em um clique: Gráfico de Gantt, Planejador de Equipe, Uso dos Recursos e Planilha de Recursos, como os ícones do rodapé do Project.',
+  },
+  {
+    target: 'medio-apresentacao',
+    title: 'Tabela e Gantt',
+    body: 'No Gráfico de Gantt, alterna tabela e Gantt lado a lado, só a tabela ou só o Gantt. Arraste a faixa entre os dois para dividir o espaço.',
+  },
+  {
+    target: 'medio-zoom',
+    title: 'Zoom',
+    body: 'O controle deslizante muda a escala de tempo entre Meses, Semanas e Dias: − abre, + aproxima. Vale para o Gantt, o Planejador de Equipe e o Uso dos Recursos, e fica salvo.',
   },
   {
     target: 'medio-detalhes',

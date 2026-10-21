@@ -40,8 +40,9 @@ for (const [type, start, end] of [
   ['TI', '2026-09-09', '2026-09-10'],
   ['II', '2026-09-07', '2026-09-08'],
   ['TT', '2026-09-07', '2026-09-08'],
-  // IT: terminar quando a predecessora começa (08:00 de segunda) é terminar na sexta anterior, como no Project.
-  ['IT', '2026-09-03', '2026-09-04'],
+  // IT: termina no instante em que a predecessora começa (seg 08:00); o trabalho ocupa qui e sex, e a
+  // tabela do Project mostra o término na segunda (medido no Project 2019, cenário 8 da bancada).
+  ['IT', '2026-09-03', '2026-09-07'],
 ] as const)
   test(`motor calcula ${type}`, () => {
     const result = scheduleTasks([task('1'), task('2')], [link(type)]);
@@ -60,8 +61,11 @@ test('calendário considera feriados, horas, meses úteis e corridos', () => {
 });
 test('múltiplas predecessoras e defasagens positivas e negativas', () => {
   const tasks = [task('1'), task('2'), task('3', '2026-09-10')];
+  // O TT +2 dias corridos exige término às 17:00 de domingo; o Project deixa o término lá, com o
+  // trabalho na quinta e na sexta (cenário V1 da bancada).
   const result = scheduleTasks(tasks, [link('II', -1), { ...link('TT', 2, false), id: 'l2', predecessorId: '3' }]);
-  assert.equal(result.find(t => t.id === '2')!.plannedEnd, '2026-09-14');
+  assert.equal(result.find(t => t.id === '2')!.plannedStart, '2026-09-10');
+  assert.equal(result.find(t => t.id === '2')!.plannedEnd, '2026-09-13');
 });
 test('ciclos, autorreferência, inexistentes e duplicadas são rejeitados sem mutação', () => {
   const tasks = [task('1'), task('2')],

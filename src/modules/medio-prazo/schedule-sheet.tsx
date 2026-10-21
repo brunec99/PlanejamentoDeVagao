@@ -1,8 +1,9 @@
 'use client';
 import { encodeGrid, decodeGrid } from './clipboard';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  BookUser,
   CalendarClock,
   ChartGantt,
   Check,
@@ -11,21 +12,29 @@ import {
   CircleAlert,
   Download,
   Flag,
+  GalleryHorizontalEnd,
   IndentDecrease,
   IndentIncrease,
+  Info,
   Link2,
   Link2Off,
   ListPlus,
+  LocateFixed,
   Lock,
   LockOpen,
+  Minus,
   PanelLeft,
+  Plus,
   Redo2,
+  SquareChartGantt,
   StickyNote,
   Table2,
+  TableProperties,
   Trash2,
   TriangleAlert,
   Undo2,
   Unlink2,
+  UsersRound,
 } from 'lucide-react';
 import {
   CONSTRAINT_TYPES,
@@ -41,6 +50,7 @@ import {
   CONSTRAINT_LABELS,
   DEFAULT_CALENDAR,
   analyzeSchedule,
+  businessDuration,
   constraintFlexibility,
   constraintNeedsDate,
   constraintOf,
@@ -70,13 +80,69 @@ import { useConfirm } from '@/modules/layout/confirm';
 import { useToast } from '@/modules/layout/toast';
 import { HelpNote } from '@/modules/layout/help-note';
 import { formatDate } from '@/shared/format';
-import { GanttChart, type GanttLink, type GanttRow, type GanttZoom } from './gantt-chart';
+import {
+  GANTT_DAY_PX,
+  GanttChart,
+  addUtcDays,
+  dateX,
+  ganttRange,
+  milestoneX,
+  type GanttLink,
+  type GanttRow,
+  type GanttZoom,
+} from './gantt-chart';
+import { TimelineBand, type TimelineBandProps, type TimelineItem } from './timeline-band';
+import { TeamPlanner } from './team-planner';
+import { ResourceUsageView } from './resource-usage-view';
+import { ResourceSheetView } from './resource-sheet-view';
+import { TaskInfoDialog, type TaskInfoChange, type TaskInfoTab, type TaskInfoValues } from './task-info-dialog';
 
 /* Cronograma do mês no layout do MS Project: tabela à esquerda, Gantt de acompanhamento à direita,
  * as duas com a mesma linha e a mesma rolagem vertical. As datas são agendadas automaticamente pela
- * rede (scheduleTasks) a cada edição do rascunho, e o servidor refaz o cálculo ao gravar. */
+ * rede (scheduleTasks) a cada edição do rascunho, e o servidor refaz o cálculo ao gravar.
+ *
+ * Como no Project, o "Modo de exibição" troca a visão principal (Gráfico de Gantt, Planejador de
+ * Equipe, Uso dos Recursos e Planilha de Recursos), com o nome dela em pé na borda esquerda; a
+ * Linha do Tempo fica por cima de qualquer visão, e a barra de status embaixo tem os atalhos das
+ * visões e o controle de zoom. Toda alteração feita nas visões, no Gantt (arrastar, esticar, ligar
+ * barras) ou no diálogo "Informações da tarefa" passa pela mesma edição de célula da grade: mesmas
+ * validações, mesmo rascunho, mesmo desfazer. */
 
 type Draft = { tasks: PlanTask[]; links: PlanDependency[]; calendar: WorkCalendar };
+/** As visões do "Modo de exibição" do Project que o cronograma oferece. */
+type View = 'gantt' | 'team' | 'usage' | 'resources';
+const VIEWS: { id: View; label: string; Icon: typeof Check }[] = [
+  { id: 'gantt', label: 'Gráfico de Gantt', Icon: SquareChartGantt },
+  { id: 'team', label: 'Planejador de Equipe', Icon: UsersRound },
+  { id: 'usage', label: 'Uso dos Recursos', Icon: TableProperties },
+  { id: 'resources', label: 'Planilha de Recursos', Icon: BookUser },
+];
+/** Altura mínima da visão (tabela e Gantt, Planejador…) quando a janela é baixa demais para tudo. */
+const MIN_VIEW = 200;
+/** O ancestral que rola na vertical (o miolo do layout do app); sem nenhum, a própria janela. */
+function scrollParent(node: HTMLElement): HTMLElement | null {
+  for (let el = node.parentElement; el && el !== document.body; el = el.parentElement)
+    if (/(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight) return el;
+  return null;
+}
+/** Do zoom mais aberto ao mais fechado, na ordem do controle deslizante do Project (− à esquerda). */
+const ZOOMS: GanttZoom[] = ['mes', 'semana', 'dia'];
+const ZOOM_LABELS: Record<GanttZoom, string> = { mes: 'Meses', semana: 'Semanas', dia: 'Dias' };
+/** "Adicionar à Linha do Tempo" grava `timeline: true`; tirar apaga o campo, para a tarefa voltar a
+ * ser igual à gravada quando a pessoa desfaz pela mesma ação. */
+const withTimeline = (t: PlanTask, on: boolean): PlanTask => {
+  const { timeline: _timeline, ...rest } = t;
+  return on ? { ...rest, timeline: true } : rest;
+};
+/** Duração em dias corridos: unidade corrida, ou tarefa sem duração gravada, que o motor mede em
+ * corridos. É o que o Gantt usa para encaixar o arrasto e contar a dica. */
+const elapsedOf = (t: Pick<PlanTask, 'duration'>) => (t.duration ? !businessDuration(t.duration) : true);
+/** Interrupção da tarefa dividida, como o Gantt a desenha: parou em `stop` e retoma em `resume`,
+ * os dois dentro da barra; fora disso, a tarefa não está dividida. */
+function splitOf(t: Pick<PlanTask, 'plannedStart' | 'plannedEnd'>, s?: Pick<TaskSchedule, 'stop' | 'resume'>) {
+  const { stop, resume } = s ?? {};
+  return stop && resume && stop >= t.plannedStart && resume > stop && resume <= t.plannedEnd ? { stop, resume } : undefined;
+}
 type Col =
   | 'id'
   | 'ind'
@@ -250,9 +316,19 @@ const fieldLabels: Record<string, string> = {
   teamId: 'Recurso',
   progress: '% concluída',
   notes: 'Anotações',
+  timeline: 'Linha do tempo',
   level: 'Nível',
   order: 'Ordem',
   predecessors: 'Predecessoras',
+};
+/** Ao abrir as Informações pelo duplo clique numa célula, a aba que trata daquela coluna. */
+const INFO_TAB: Partial<Record<Col, TaskInfoTab>> = {
+  links: 'predecessoras',
+  team: 'recursos',
+  constraintType: 'avancado',
+  constraintDate: 'avancado',
+  deadline: 'avancado',
+  notes: 'anotacoes',
 };
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -287,7 +363,10 @@ function constraintInput(raw: string): ConstraintType {
 }
 const startConstraint = (type: ConstraintType) => type === 'SNET' || type === 'SNLT' || type === 'MSO';
 /** Folga como o Project escreve: "3 dias", "1 dia", "-2 dias". */
-const slackText = (n?: number) => (n === undefined ? '' : `${n} ${Math.abs(n) === 1 ? 'dia' : 'dias'}`);
+const SLACK_NUMBER = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+/** Folga fracionária (tarefa em horas, término no começo do dia) sai com vírgula e até duas casas:
+ * "17,38 dias"; a inteira continua sem casas. */
+const slackText = (n?: number) => (n === undefined ? '' : `${SLACK_NUMBER.format(n)} ${Math.abs(n) === 1 ? 'dia' : 'dias'}`);
 const constraintText = (c: { type: ConstraintType; date?: string }) =>
   `${CONSTRAINT_LABELS[c.type]}${c.date && constraintNeedsDate(c.type) ? ` ${projectDate(c.date)}` : ''}`;
 /** Alcançáveis a partir de `from` seguindo `step`, sem o próprio `from` (busca em largura). */
@@ -495,6 +574,26 @@ export function Sheet({
   const [presentation, setPresentation] = useState<Presentation>('split'),
     [zoom, setZoom] = useState<GanttZoom>('semana'),
     [tableWidth, setTableWidth] = useState(720);
+  // "Modo de exibição" e a Linha do Tempo, ligada por padrão como no Project ao abrir um plano novo.
+  const [view, setView] = useState<View>('gantt'),
+    [showTimeline, setShowTimeline] = useState(true),
+    [showResourceNames, setShowResourceNames] = useState(true);
+  // Informações da tarefa (Shift+F2): a linha aberta e a aba em que o diálogo abre.
+  const [infoOpen, setInfoOpen] = useState<{ id: string; tab?: TaskInfoTab } | null>(null);
+  // Selecionar uma tarefa escondida (resumo recolhido ou filtro) abre o caminho até ela; a rolagem
+  // até a barra espera a pintura em que a linha aparece.
+  const pendingScroll = useRef<string | null>(null);
+  // Rascunho preparado por uma edição ainda não pintada: a próxima edição do mesmo evento parte dele.
+  const staged = useRef<Draft | null>(null);
+  const infoOpener = useRef<HTMLElement | null>(null);
+  // A área de trabalho (barras, Linha do Tempo, visão e barra de status) cabe na janela; a visão é a
+  // parte flexível. `fit` é a altura medida; `viewArea` fica de fora da soma do que é fixo.
+  const workspaceRef = useRef<HTMLDivElement>(null),
+    viewArea = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<number | null>(null);
+  useEffect(() => {
+    staged.current = null;
+  });
   // "Exibir" do Gantt: o caminho crítico vem ligado, como no Gantt de acompanhamento do Project.
   const [showCritical, setShowCritical] = useState(true),
     [showSlack, setShowSlack] = useState(false),
@@ -528,6 +627,13 @@ export function Sheet({
   const teamLabel = (id?: string) => {
     const e = teams.find(t => t.id === id);
     return e ? `${e.company} · ${e.name}` : '';
+  };
+  /** Nome do recurso ao lado da barra, como o Project escreve: só a equipe, com a empresa apenas
+   * quando outra equipe da obra tem o mesmo nome. */
+  const resourceName = (id?: string) => {
+    const e = teams.find(t => t.id === id);
+    if (!e) return undefined;
+    return teams.some(t => t.id !== e.id && normalize(t.name) === normalize(e.name)) ? `${e.company} · ${e.name}` : e.name;
   };
   const win = useMemo(() => planWindow(plan.month), [plan.month]);
   const roll = useMemo(() => rollUpPlan(draft.tasks), [draft.tasks]);
@@ -589,6 +695,7 @@ export function Sheet({
   const rows = draft.tasks.filter(t => included.has(t.id));
   const active = rows[selected.row];
   const activeIndex = active ? draft.tasks.indexOf(active) : -1;
+  const infoTask = infoOpen ? draft.tasks.find(t => t.id === infoOpen.id) : undefined;
   const bounds = {
     r0: Math.min(anchor.row, selected.row),
     r1: Math.max(anchor.row, selected.row),
@@ -650,6 +757,9 @@ export function Sheet({
       if (typeof p.showCritical === 'boolean') setShowCritical(p.showCritical);
       if (typeof p.showSlack === 'boolean') setShowSlack(p.showSlack);
       if (typeof p.showPath === 'boolean') setShowPath(p.showPath);
+      if (VIEWS.some(v => v.id === p.view)) setView(p.view);
+      if (typeof p.showTimeline === 'boolean') setShowTimeline(p.showTimeline);
+      if (typeof p.showResourceNames === 'boolean') setShowResourceNames(p.showResourceNames);
     } catch {}
     setPreferencesLoaded(true);
   }, [prefKey]);
@@ -658,10 +768,40 @@ export function Sheet({
       try {
         localStorage.setItem(
           prefKey,
-          JSON.stringify({ folded, hidden, order, widths, presentation, zoom, tableWidth, showCritical, showSlack, showPath }),
+          JSON.stringify({
+            folded,
+            hidden,
+            order,
+            widths,
+            presentation,
+            zoom,
+            tableWidth,
+            showCritical,
+            showSlack,
+            showPath,
+            view,
+            showTimeline,
+            showResourceNames,
+          }),
         );
       } catch {}
-  }, [prefKey, folded, hidden, order, widths, presentation, zoom, tableWidth, showCritical, showSlack, showPath, preferencesLoaded]);
+  }, [
+    prefKey,
+    folded,
+    hidden,
+    order,
+    widths,
+    presentation,
+    zoom,
+    tableWidth,
+    showCritical,
+    showSlack,
+    showPath,
+    view,
+    showTimeline,
+    showResourceNames,
+    preferencesLoaded,
+  ]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (dirty || editor) {
@@ -730,17 +870,23 @@ export function Sheet({
     const observer = new ResizeObserver(measure);
     observer.observe(table);
     return () => observer.disconnect();
-  }, [presentation, rows.length > 0]);
+    // A tabela só existe no Gráfico de Gantt: voltar de outra visão monta uma tabela nova a medir.
+  }, [presentation, view, rows.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function sync(from: HTMLDivElement, to: HTMLDivElement | null) {
     if (to && Math.abs(to.scrollTop - from.scrollTop) > 1) to.scrollTop = from.scrollTop;
   }
   function stage(next: Draft) {
-    setPast(p => [...p.slice(-49), draft]);
+    // Segunda edição no mesmo evento (o arrasto na diagonal do Planejador de Equipe troca a equipe e
+    // o início de uma vez): entra sobre a primeira e as duas viram um passo só do desfazer.
+    if (!staged.current) setPast(p => [...p.slice(-49), draft]);
+    staged.current = next;
     setFuture([]);
     setDraft(next);
     setError('');
   }
+  /** O rascunho mais novo: o desta pintura, ou o que outra edição do mesmo evento acabou de preparar. */
+  const latest = () => staged.current ?? draft;
   function undo() {
     if (!past.length) return;
     setFuture(f => [draft, ...f]);
@@ -893,7 +1039,7 @@ export function Sheet({
     if (constraintNeedsDate(type)) t.constraintDate = date;
   }
   function applyCells(entries: { id: string; key: Col; text: string }[]) {
-    stage(applyCellsTo(draft, entries));
+    stage(applyCellsTo(latest(), entries));
   }
   /** As células aplicadas sobre `base`, já reagendadas, sem mexer no rascunho: quem chama decide se
    * grava direto ou se encadeia outra operação (Enter na última linha edita e insere de uma vez). */
@@ -1232,83 +1378,6 @@ export function Sheet({
       setError((e as Error).message);
     }
   }
-  function keyDown(e: React.KeyboardEvent, t: PlanTask, r: number, c: number) {
-    if (editor) return;
-    const cmd = e.ctrlKey || e.metaKey;
-    if (cmd && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      if (canEdit) {
-        if (e.shiftKey) redo();
-        else undo();
-      }
-      return;
-    }
-    if (cmd && e.key.toLowerCase() === 'y') {
-      e.preventDefault();
-      if (canEdit) redo();
-      return;
-    }
-    if (cmd && e.key === 'F2') {
-      e.preventDefault();
-      structural(e.shiftKey ? 'unlink' : 'link');
-      return;
-    }
-    if (e.key === 'Insert') {
-      e.preventDefault();
-      structural('insert');
-      return;
-    }
-    // Alt+Shift+setas é o atalho do Project; Cmd/Ctrl+Alt+setas, o pedido pela equipe no Mac.
-    if (e.altKey && (e.shiftKey || cmd) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-      e.preventDefault();
-      structural(e.key === 'ArrowRight' ? 'indent' : 'outdent');
-      return;
-    }
-    if (cmd && e.key.toLowerCase() === 'd') {
-      e.preventDefault();
-      try {
-        const entries = [];
-        for (let row = bounds.r0 + 1; row <= bounds.r1; row++)
-          for (let col = bounds.c0; col <= bounds.c1; col++)
-            entries.push({ id: rows[row].id, key: visibleCols[col].key, text: raw(rows[bounds.r0], visibleCols[col].key) });
-        applyCells(entries);
-      } catch (err) {
-        setError((err as Error).message);
-      }
-      return;
-    }
-    if (e.key === 'F2' || e.key === 'Enter') {
-      e.preventDefault();
-      begin(t, visibleCols[c].key);
-      return;
-    }
-    const moves: Record<string, [number, number]> = {
-      ArrowDown: [r + 1, c],
-      ArrowUp: [r - 1, c],
-      ArrowLeft: [r, c - 1],
-      ArrowRight: [r, c + 1],
-      Home: [cmd ? 0 : r, 0],
-      End: [cmd ? rows.length - 1 : r, visibleCols.length - 1],
-    };
-    if (moves[e.key]) {
-      e.preventDefault();
-      focus(...moves[e.key], e.shiftKey);
-      return;
-    }
-    if (e.key === 'Tab') {
-      const col = c + (e.shiftKey ? -1 : 1);
-      const row = r + (col < 0 ? -1 : col >= visibleCols.length ? 1 : 0);
-      if (row >= 0 && row < rows.length) {
-        e.preventDefault();
-        focus(row, (col + visibleCols.length) % visibleCols.length);
-      }
-      return;
-    }
-    if (e.key.length === 1 && !cmd && !e.altKey) {
-      e.preventDefault();
-      begin(t, visibleCols[c].key, e.key);
-    }
-  }
   function editorKey(e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, r: number, c: number) {
     e.stopPropagation();
     if (e.key === 'Escape') {
@@ -1360,17 +1429,21 @@ export function Sheet({
   const show = (key: string, v: unknown) =>
     key === 'constraintType'
       ? (CONSTRAINT_LABELS[(v || 'ASAP') as ConstraintType] ?? String(v))
-      : v === undefined || v === null || v === ''
-        ? '—'
-        : ['plannedStart', 'plannedEnd', 'anchorStart', 'constraintDate', 'deadline', 'actualStart', 'actualEnd'].includes(key)
-          ? projectDate(String(v))
-          : key === 'duration'
-            ? formatDuration(v as TaskDuration)
-            : key === 'teamId'
-              ? teamLabel(String(v)) || '—'
-              : key === 'progress'
-                ? `${v}%`
-                : String(v);
+      : key === 'timeline'
+        ? v
+          ? 'Sim'
+          : 'Não'
+        : v === undefined || v === null || v === ''
+          ? '—'
+          : ['plannedStart', 'plannedEnd', 'anchorStart', 'constraintDate', 'deadline', 'actualStart', 'actualEnd'].includes(key)
+            ? projectDate(String(v))
+            : key === 'duration'
+              ? formatDuration(v as TaskDuration)
+              : key === 'teamId'
+                ? teamLabel(String(v)) || '—'
+                : key === 'progress'
+                  ? `${v}%`
+                  : String(v);
 
   // Sem memo de propósito: `rows` já muda a cada render, e a busca é barata.
   const activeId = active?.id;
@@ -1437,11 +1510,42 @@ export function Sheet({
           freeSlack: ai?.freeSlack,
           conflict: ai?.conflict,
           pathRole: pathRole(t.id),
+          startEdge: ai?.edges.earlyStart,
+          endEdge: ai?.edges.earlyFinish,
+          stop: ai?.stop,
+          resume: ai?.resume,
+          lateFinishEdge: ai?.edges.lateFinish,
+          // Tarefa em dias corridos encaixa em qualquer dia ao arrastar; as demais, em dia útil.
+          // A mesma regra do esticar (`resizeTask`): a dica do arrasto e a duração gravada batem.
+          elapsed: !v.summary && elapsedOf(t),
+          resourceLabel: v.summary ? undefined : resourceName(t.teamId),
         };
       }),
     ],
-    [rows, roll, planRow, baseId, baselineTasks, baselineRoll, analysis, path],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, roll, planRow, baseId, baselineTasks, baselineRoll, analysis, path, teams],
+  );
+  // A mesma escala que o Gantt desenha: converte a rolagem dele em dias para a Linha do Tempo e o
+  // "Rolar até a tarefa".
+  const chartRange = ganttRange(ganttRows, win, zoom, { showSlack });
+  const timelineItems: TimelineItem[] = draft.tasks
+    .filter(t => t.timeline)
+    .map(t => {
+      const v = roll.get(t.id)!;
+      const ai = info(t.id);
+      return {
+        id: t.id,
+        name: t.name,
+        start: v.plannedStart,
+        end: v.plannedEnd,
+        startEdge: ai?.edges.earlyStart,
+        endEdge: ai?.edges.earlyFinish,
+        milestone: v.milestone,
+        summary: v.summary,
+        progress: v.progress,
+        critical: ai?.critical,
+      };
+    });
   const ganttLinks: GanttLink[] = useMemo(
     () =>
       draft.links.map(l => ({
@@ -1459,7 +1563,334 @@ export function Sheet({
     return original.tasks.filter(t => JSON.stringify(t) !== JSON.stringify(raw.find(r => r.id === t.id))).length;
   }, [data, plan, original]);
   const tableTotal = visibleCols.reduce((n, c) => n + (widths[c.key] ?? c.width), 0);
+  // As linhas fixas da área de trabalho mudam com a visão, a Linha do Tempo e os avisos.
+  const workspaceRows = `${view}:${showTimeline}:${!!error}:${normalized > 0}:${outside > 0}`;
+  /* A área de trabalho ocupa da posição dela até o pé da janela, para a barra de status ficar à
+   * vista sem rolar a página; a visão é quem cresce e encolhe. A altura é fixa enquanto a janela não
+   * muda: esconder as linhas Exibir e de filtros ao trocar de visão dá o espaço à visão, e a barra de
+   * status não pula. Em janela baixa, a visão fica com pelo menos MIN_VIEW e a página rola. */
+  useEffect(() => {
+    const node = workspaceRef.current;
+    if (!node) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const fixed = Array.from(node.children).reduce((n, el) => (el === viewArea.current ? n : n + el.getBoundingClientRect().height), 0);
+        // A página rola num contêiner do layout, não na janela: a posição é medida dentro dele, e
+        // assim não muda com a rolagem.
+        const scroller = scrollParent(node);
+        const box = scroller?.getBoundingClientRect();
+        const top = node.getBoundingClientRect().top - (box?.top ?? 0) + (scroller ? scroller.scrollTop : window.scrollY);
+        const height = scroller ? scroller.clientHeight : window.innerHeight;
+        const next = Math.round(Math.max(fixed + MIN_VIEW, height - top - 12));
+        setFit(f => (f === next ? f : next));
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const el of Array.from(node.children)) if (el !== viewArea.current) observer.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [workspaceRows]);
 
+  /** Edição vinda de fora da grade (Gantt, Planejador de Equipe, Informações da tarefa): o erro vai
+   * para a mesma faixa de aviso da grade. */
+  function attempt(action: () => void) {
+    try {
+      action();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  /** "Rolar até a Tarefa" do Project (Ctrl+Shift+F5): a escala do Gantt vai até o começo da barra e,
+   * se a linha estiver fora da vista, a rolagem vertical a traz para o terço de cima. Sem Gantt (só
+   * a tabela), só a rolagem vertical. */
+  function scrollToTask(id = active?.id) {
+    const index = id ? ganttRows.findIndex(r => r.id === id) : -1;
+    if (index < 0) return;
+    const chart = chartScroll.current;
+    if (chart) {
+      const row = ganttRows[index];
+      const left = row.milestone ? milestoneX(row.start, chartRange.start, zoom) : dateX(row.start, chartRange.start, zoom);
+      chart.scrollLeft = Math.max(0, left - 2 * GANTT_DAY_PX[zoom] - 24);
+    }
+    const body = chart ?? tableScroll.current;
+    if (!body) return;
+    // A tabela tem a linha 0 no `tbody`, como o Gantt: a mesma conta vale para as duas.
+    const top = index * metrics.row,
+      height = body.clientHeight - metrics.head;
+    if (top < body.scrollTop || top + metrics.row > body.scrollTop + height) body.scrollTop = Math.max(0, top - height / 3);
+  }
+  /** Seleção compartilhada entre as visões: a linha da tabela é a fonte. Tarefa escondida por resumo
+   * recolhido ou por filtro reaparece (os resumos acima dela abrem, o filtro sai) e já fica
+   * selecionada; `scroll` rola o Gantt até a barra dela — na hora, se ela já está na tela, ou
+   * depois da pintura que a mostra. */
+  function selectTask(id: string, scroll = false) {
+    if (id === PLAN_ROW || (editor && !commit())) return;
+    let r = rows.findIndex(t => t.id === id);
+    if (r >= 0) {
+      if (scroll) scrollToTask(id);
+    } else {
+      const at = draft.tasks.findIndex(t => t.id === id);
+      if (at < 0) return;
+      const ancestors = new Set<string>();
+      for (let i = at - 1, level = draft.tasks[at].level; i >= 0 && level > 0; i--)
+        if (draft.tasks[i].level < level) {
+          ancestors.add(draft.tasks[i].id);
+          level = draft.tasks[i].level;
+        }
+      const open = folded.filter(x => !ancestors.has(x));
+      setFolded(open);
+      if (filtering) {
+        setQuery('');
+        setStatus('all');
+        setTeam('');
+      }
+      // Sem filtro, as linhas da tabela são as que nenhum resumo recolhido esconde.
+      r = unfoldedRows(draft.tasks, open).findIndex(t => t.id === id);
+      if (r < 0) return;
+      if (scroll) pendingScroll.current = id;
+    }
+    setSelected({ row: r, col: selected.col });
+    setAnchor({ row: r, col: selected.col });
+  }
+  // A rolagem pedida para uma linha que só aparece nesta pintura: o DOM já tem a linha.
+  useEffect(() => {
+    const id = pendingScroll.current;
+    if (!id) return;
+    pendingScroll.current = null;
+    scrollToTask(id);
+  });
+  /** Linhas selecionadas (intervalo de Shift+setas), em ordem; sem tabela, só a ativa. */
+  const selectedTasks = active ? rows.slice(bounds.r0, bounds.r1 + 1) : [];
+  const onTimeline = !!active?.timeline;
+  /** "Adicionar à Linha do Tempo" / "Remover da Linha do Tempo": muda o rascunho como qualquer edição. */
+  function setTimeline(ids: string[], on: boolean) {
+    if (!canEdit || !ids.length) return;
+    const base = latest(),
+      chosen = new Set(ids);
+    if (base.tasks.every(t => !chosen.has(t.id) || !!t.timeline === on)) return;
+    stage({ ...base, tasks: base.tasks.map(t => (chosen.has(t.id) ? withTimeline(t, on) : t)) });
+  }
+  const summaryOf = (id: string) => !!roll.get(id)?.summary;
+  /** Arrastar a barra (Gantt ou Planejador de Equipe): é digitar o início na célula, que grava "Não
+   * iniciar antes de" nessa data. */
+  function moveTask(id: string, start: string) {
+    if (id === PLAN_ROW) return;
+    if (summaryOf(id)) return setError('Resumo não se arrasta: as datas vêm das subtarefas.');
+    attempt(() => applyCells([{ id, key: 'start', text: start }]));
+  }
+  /** Esticar a ponta direita da barra: a duração passa a caber até o novo término, nos dias úteis do
+   * calendário (ou corridos, se a tarefa é medida em corridos ou não tem duração, como o motor
+   * conta; em horas, continua em horas). A tarefa dividida conta só o trabalhado: do início ao dia
+   * em que parou mais da retomada ao novo término, sem a interrupção — a mesma conta da dica do
+   * Gantt. Não cria restrição: é o mesmo que digitar a duração. */
+  function resizeTask(id: string, end: string) {
+    if (id === PLAN_ROW) return;
+    const base = latest(),
+      t = base.tasks.find(x => x.id === id);
+    if (!t) return;
+    if (summaryOf(id)) return setError('Resumo não se estica: as datas vêm das subtarefas.');
+    attempt(() => {
+      const business = !elapsedOf(t);
+      const split = splitOf(t, info(id));
+      const days =
+        split && end >= split.resume
+          ? countedDays(t.plannedStart, split.stop, business, base.calendar) + countedDays(split.resume, end, business, base.calendar)
+          : countedDays(t.plannedStart, end, business, base.calendar);
+      if (!days) throw new Error('Período sem dia de trabalho.');
+      const duration: TaskDuration = !business
+        ? { value: days, unit: 'dd' }
+        : t.duration?.unit === 'h'
+          ? { value: days * base.calendar.hoursPerDay, unit: 'h' }
+          : { value: days, unit: 'd' };
+      applyCells([{ id, key: 'duration', text: formatDuration(duration) }]);
+    });
+  }
+  /** Arrastar dentro da barra para o lado: o % concluída, com as regras de datas reais da célula. */
+  function progressTask(id: string, progress: number) {
+    if (id === PLAN_ROW) return;
+    attempt(() => applyCells([{ id, key: 'progress', text: String(Math.round(Math.min(100, Math.max(0, progress)))) }]));
+  }
+  /** Ligar uma barra a outra: vínculo Término-Início, escrito na coluna Predecessoras da sucessora
+   * como se fosse digitado — o ciclo é recusado com a mesma mensagem da coluna. */
+  function linkTasks(fromId: string, toId: string) {
+    if (fromId === toId || fromId === PLAN_ROW || toId === PLAN_ROW) return;
+    if (summaryOf(fromId) || summaryOf(toId)) return setError('Vínculos ficam nas subtarefas, não nos resumos.');
+    const base = latest();
+    if (base.links.some(l => l.predecessorId === fromId && l.successorId === toId)) return;
+    const number = base.tasks.findIndex(t => t.id === fromId) + 1;
+    const current = linkText(base.tasks, base.links, toId);
+    attempt(() => applyCells([{ id: toId, key: 'links', text: current ? `${current};${number}` : String(number) }]));
+  }
+  /** Planejador de Equipe: soltar a tarefa na linha de outra equipe (ou em "Não atribuídas"). */
+  function assignTeam(id: string, teamId: string | undefined) {
+    attempt(() => applyCells([{ id, key: 'team', text: teamId ?? '' }]));
+  }
+  function openInfo(id: string, tab?: TaskInfoTab) {
+    if (id === PLAN_ROW || !draft.tasks.some(t => t.id === id)) return;
+    if (editor && !commit()) return;
+    // Quem abriu (célula, barra, bloco do Planejador, botão) recebe o foco de volta ao fechar.
+    infoOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    selectTask(id);
+    setInfoOpen({ id, tab });
+  }
+  function closeInfo() {
+    setInfoOpen(null);
+    const opener = infoOpener.current;
+    infoOpener.current = null;
+    // Depois que o diálogo sai da tela: o foco volta a quem o abriu e, se esse elemento sumiu (a linha
+    // foi refeita), à célula selecionada da grade.
+    requestAnimationFrame(() => {
+      if (opener?.isConnected && opener !== document.body) opener.focus();
+      else if (view === 'gantt') focus(selected.row, selected.col);
+    });
+  }
+  /** Valores do diálogo a partir da linha, no mesmo texto que a grade mostra. */
+  function infoValues(t: PlanTask): TaskInfoValues {
+    const v = roll.get(t.id)!;
+    const c = constraintOf(t);
+    return {
+      name: t.name,
+      duration: durationText(t),
+      progress: String(Math.round(v.progress)),
+      start: v.plannedStart,
+      end: v.plannedEnd,
+      timeline: !!t.timeline,
+      predecessors: draft.links
+        .filter(l => l.successorId === t.id)
+        .map(l => ({
+          number: String(draft.tasks.findIndex(p => p.id === l.predecessorId) + 1),
+          type: l.type,
+          lag: l.lagDays ? String(l.lagDays) : '',
+          lagBusiness: l.lagBusiness,
+        })),
+      teamId: t.teamId ?? '',
+      constraintType: v.summary ? 'ASAP' : c.type,
+      constraintDate: c.date ?? '',
+      deadline: t.deadline ?? '',
+      notes: t.notes ?? '',
+    };
+  }
+  /** OK do diálogo: todas as células de uma vez, mais a Linha do Tempo, num passo só do desfazer. */
+  function applyInfo(id: string, changes: TaskInfoChange[], timeline: boolean): string | undefined {
+    if (!canEdit) return 'Libere a edição da grade para alterar a tarefa.';
+    try {
+      const base = latest();
+      let next = changes.length
+        ? applyCellsTo(
+            base,
+            changes.map(c => ({ id, key: c.key, text: c.text })),
+          )
+        : base;
+      const task = next.tasks.find(t => t.id === id);
+      if (task && !!task.timeline !== timeline)
+        next = { ...next, tasks: next.tasks.map(t => (t.id === id ? withTimeline(t, timeline) : t)) };
+      if (next !== base) stage(next);
+      return undefined;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
+  function switchView(next: View) {
+    if (next === view || (editor && !commit())) return;
+    setView(next);
+  }
+  /** Ctrl+Z (Cmd+Z) desfaz e Ctrl+Y (Shift+Cmd+Z) refaz em qualquer ponto da tela: na grade, na barra
+   * do Gantt ou no bloco do Planejador depois de arrastar, num botão. Campo de texto e lista ficam com
+   * o desfazer deles, e com um diálogo aberto o rascunho não muda por baixo dele. */
+  function screenKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    const key = e.key.toLowerCase();
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || (key !== 'z' && key !== 'y') || e.defaultPrevented) return;
+    const target = e.target as HTMLElement;
+    if (editor || infoOpen || review || target.isContentEditable || target.closest('input, textarea, select, dialog')) return;
+    e.preventDefault();
+    if (!canEdit) return;
+    if (key === 'y' || e.shiftKey) redo();
+    else undo();
+  }
+  function keyDown(e: React.KeyboardEvent, t: PlanTask, r: number, c: number) {
+    if (editor) return;
+    const cmd = e.ctrlKey || e.metaKey;
+    // Shift+F2 abre as Informações da tarefa, como no Project.
+    if (e.shiftKey && !cmd && e.key === 'F2') {
+      e.preventDefault();
+      openInfo(t.id, INFO_TAB[visibleCols[c].key]);
+      return;
+    }
+    // Ctrl+Shift+F5: "Rolar até a Tarefa".
+    if (cmd && e.shiftKey && e.key === 'F5') {
+      e.preventDefault();
+      scrollToTask(t.id);
+      return;
+    }
+    // Ctrl+Z e Ctrl+Y sobem até `screenKey`, que vale para a tela inteira.
+    if (cmd && e.key === 'F2') {
+      e.preventDefault();
+      structural(e.shiftKey ? 'unlink' : 'link');
+      return;
+    }
+    if (e.key === 'Insert') {
+      e.preventDefault();
+      structural('insert');
+      return;
+    }
+    // Alt+Shift+setas é o atalho do Project; Cmd/Ctrl+Alt+setas, o pedido pela equipe no Mac.
+    if (e.altKey && (e.shiftKey || cmd) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      structural(e.key === 'ArrowRight' ? 'indent' : 'outdent');
+      return;
+    }
+    if (cmd && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      try {
+        const entries = [];
+        for (let row = bounds.r0 + 1; row <= bounds.r1; row++)
+          for (let col = bounds.c0; col <= bounds.c1; col++)
+            entries.push({ id: rows[row].id, key: visibleCols[col].key, text: raw(rows[bounds.r0], visibleCols[col].key) });
+        applyCells(entries);
+      } catch (err) {
+        setError((err as Error).message);
+      }
+      return;
+    }
+    if (e.key === 'F2' || e.key === 'Enter') {
+      e.preventDefault();
+      begin(t, visibleCols[c].key);
+      return;
+    }
+    const moves: Record<string, [number, number]> = {
+      ArrowDown: [r + 1, c],
+      ArrowUp: [r - 1, c],
+      ArrowLeft: [r, c - 1],
+      ArrowRight: [r, c + 1],
+      Home: [cmd ? 0 : r, 0],
+      End: [cmd ? rows.length - 1 : r, visibleCols.length - 1],
+    };
+    if (moves[e.key]) {
+      e.preventDefault();
+      focus(...moves[e.key], e.shiftKey);
+      return;
+    }
+    if (e.key === 'Tab') {
+      const col = c + (e.shiftKey ? -1 : 1);
+      const row = r + (col < 0 ? -1 : col >= visibleCols.length ? 1 : 0);
+      if (row >= 0 && row < rows.length) {
+        e.preventDefault();
+        focus(row, (col + visibleCols.length) % visibleCols.length);
+      }
+      return;
+    }
+    if (e.key.length === 1 && !cmd && !e.altKey) {
+      e.preventDefault();
+      begin(t, visibleCols[c].key, e.key);
+    }
+  }
   const tool =
     'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40';
   const group = 'flex flex-wrap items-center gap-0.5 border-r border-slate-200 pr-2 last:border-r-0';
@@ -1468,781 +1899,982 @@ export function Sheet({
     `${col.startsWith('base') ? 'text-slate-500' : ''} ${columns.find(c => c.key === col)?.right ? 'text-right' : ''} ${summary ? 'font-semibold text-slate-900' : ''}`;
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 p-3">
-        <div className="mr-auto">
-          <h2 className="font-semibold text-slate-900">Cronograma do mês</h2>
-          <p className="text-xs text-slate-500">
-            Horizonte de três meses: {projectDate(win.start)} a {projectDate(win.end)}
-            {plan.copiedFromPlanId
-              ? ` · copiado de ${monthLabel(data.plans.find(p => p.id === plan.copiedFromPlanId)?.month ?? plan.month)}`
-              : ''}
-          </p>
-        </div>
-        <label data-tour="medio-mes" className="text-xs font-semibold text-slate-600">
-          Mês{' '}
-          <select
-            className="field w-auto py-1.5"
-            value={plan.id}
-            disabled={dirty || !!editor || busy}
-            onChange={e => choose(e.target.value)}
-          >
-            {plans.map(p => (
-              <option key={p.id} value={p.id}>
-                {monthLabel(p.month)} · {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div data-tour="medio-salvar" className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span role="status" aria-live="polite" className={`text-xs ${dirty ? 'font-semibold text-warning' : 'text-slate-500'}`}>
-            {busy ? 'Salvando…' : dirty ? `${changed.length + removed.length} tarefas alteradas · não salvo` : 'Tudo salvo'}
-          </span>
-          <button className="button" disabled={!dirty || readOnly || busy || !!editor} onClick={() => setReview(true)}>
-            Revisar e salvar
-          </button>
-        </div>
-      </div>
-      <div
-        className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5"
-        role="toolbar"
-        aria-label="Ferramentas do cronograma"
-      >
-        <div className={group} data-tour="medio-edicao">
-          <button
-            className={tool}
-            disabled={readOnly || busy || !!plan.frozenAt}
-            aria-pressed={!locked}
-            onClick={() => {
-              if (editor && !commit()) return;
-              setLocked(!locked);
-            }}
-            title="A grade abre bloqueada, contra alteração acidental em reunião"
-          >
-            {locked ? <Lock size={14} aria-hidden /> : <LockOpen size={14} aria-hidden />}
-            {locked ? 'Liberar edição' : 'Bloquear'}
-          </button>
-          <button className={tool} disabled={!canEdit || !past.length} onClick={undo} title="Desfazer (Ctrl+Z)">
-            <Undo2 size={14} aria-hidden />
-            <span className="sr-only">Desfazer</span>
-          </button>
-          <button className={tool} disabled={!canEdit || !future.length} onClick={redo} title="Refazer (Ctrl+Y)">
-            <Redo2 size={14} aria-hidden />
-            <span className="sr-only">Refazer</span>
-          </button>
-        </div>
-        <div className={group} aria-label="Tarefa">
-          <button
-            className={tool}
-            data-tour="medio-inserir"
-            disabled={!canEdit || !!editor || filtering}
-            onClick={() => structural('insert')}
-            title="Inserir tarefa abaixo da selecionada (Insert)"
-          >
-            <ListPlus size={14} aria-hidden />
-            Inserir tarefa
-          </button>
-          <span data-tour="medio-recuo" className="inline-flex items-center gap-0.5">
-            <button
-              className={tool}
-              disabled={!canEdit || !active || !!editor || filtering}
-              onClick={() => structural('outdent')}
-              title="Diminuir o recuo das linhas selecionadas (Alt+Shift+←)"
+    // Ctrl+Z e Ctrl+Y valem na tela inteira (barra do Gantt, bloco do Planejador, botões), não só na grade.
+    <div onKeyDown={screenKey}>
+      <div ref={workspaceRef} className="flex flex-col" style={{ height: fit ?? 'calc(100dvh - 12rem)' }}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 p-3">
+          <div className="mr-auto">
+            <h2 className="font-semibold text-slate-900">Cronograma do mês</h2>
+            <p className="text-xs text-slate-500">
+              Horizonte de três meses: {projectDate(win.start)} a {projectDate(win.end)}
+              {plan.copiedFromPlanId
+                ? ` · copiado de ${monthLabel(data.plans.find(p => p.id === plan.copiedFromPlanId)?.month ?? plan.month)}`
+                : ''}
+            </p>
+          </div>
+          <label data-tour="medio-mes" className="text-xs font-semibold text-slate-600">
+            Mês{' '}
+            <select
+              className="field w-auto py-1.5"
+              value={plan.id}
+              disabled={dirty || !!editor || busy}
+              onChange={e => choose(e.target.value)}
             >
-              <IndentDecrease size={14} aria-hidden />
-              <span className="sr-only">Diminuir recuo</span>
-            </button>
-            <button
-              className={tool}
-              disabled={!canEdit || !active || !!editor || filtering}
-              onClick={() => structural('indent')}
-              title="Recuar as linhas selecionadas, tornando-as subitens da de cima (Alt+Shift+→)"
-            >
-              <IndentIncrease size={14} aria-hidden />
-              <span className="sr-only">Recuar tarefa</span>
-            </button>
-          </span>
-          <span data-tour="medio-vinculos" className="inline-flex items-center gap-0.5">
-            <button
-              className={tool}
-              disabled={!canEdit || !active || !!editor || filtering}
-              onClick={() => structural('link')}
-              title="Vincular as tarefas selecionadas em Término-Início (Ctrl+F2)"
-            >
-              <Link2 size={14} aria-hidden />
-              Vincular
-            </button>
-            <button
-              className={tool}
-              disabled={!canEdit || !active || !!editor || filtering}
-              onClick={() => structural('unlink')}
-              title="Desvincular as tarefas selecionadas (Ctrl+Shift+F2)"
-            >
-              <Unlink2 size={14} aria-hidden />
-              <span className="sr-only">Desvincular</span>
-            </button>
-          </span>
-          <button
-            data-tour="medio-excluir"
-            className={`${tool} text-danger`}
-            disabled={!canEdit || !active || !!editor || filtering}
-            onClick={() => structural('remove')}
-            title="Excluir tarefa e subitens"
-          >
-            <Trash2 size={14} aria-hidden />
-            <span className="sr-only">Excluir tarefa</span>
-          </button>
-        </div>
-        <div className={group} aria-label="Exibir">
-          <label data-tour="medio-base-exibida" className="flex items-center gap-1 text-xs text-slate-600">
-            Linha de base
-            <select className="field w-auto py-1 text-xs" value={baseId} onChange={e => setBaseId(e.target.value)}>
-              <option value="">Nenhuma</option>
-              {baselines.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                  {b.frozenAt ? ` · ${formatDate(b.frozenAt.slice(0, 10))}` : ''}
+              {plans.map(p => (
+                <option key={p.id} value={p.id}>
+                  {monthLabel(p.month)} · {p.name}
                 </option>
               ))}
             </select>
           </label>
-          <span data-tour="medio-expandir" className="inline-flex items-center gap-0.5">
-            <button className={tool} disabled={filtering} onClick={() => setFolded([])}>
-              Expandir
+          <div data-tour="medio-salvar" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span role="status" aria-live="polite" className={`text-xs ${dirty ? 'font-semibold text-warning' : 'text-slate-500'}`}>
+              {busy ? 'Salvando…' : dirty ? `${changed.length + removed.length} tarefas alteradas · não salvo` : 'Tudo salvo'}
+            </span>
+            <button className="button" disabled={!dirty || readOnly || busy || !!editor} onClick={() => setReview(true)}>
+              Revisar e salvar
             </button>
+          </div>
+        </div>
+        <div
+          className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5"
+          role="toolbar"
+          aria-label="Ferramentas do cronograma"
+        >
+          {/* "Modo de exibição" do Project: a visão principal e, logo ao lado, a Linha do Tempo por cima dela. */}
+          <div className={group}>
+            <label data-tour="medio-modo-exibicao" className="flex items-center gap-1 text-xs text-slate-600">
+              <span className="sr-only">Modo de exibição</span>
+              <select
+                className="field w-auto py-1 text-xs font-semibold"
+                value={view}
+                title="Modo de exibição"
+                onChange={e => switchView(e.target.value as View)}
+              >
+                {VIEWS.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              data-tour="medio-linha-tempo-exibir"
+              className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              title="Mostra ou esconde a Linha do Tempo acima da visão"
+            >
+              <input type="checkbox" className="accent-primary" checked={showTimeline} onChange={e => setShowTimeline(e.target.checked)} />
+              Linha do tempo
+            </label>
+          </div>
+          <div className={group} data-tour="medio-edicao">
             <button
               className={tool}
-              disabled={filtering}
-              onClick={() => setFolded(draft.tasks.filter(t => roll.get(t.id)?.summary).map(t => t.id))}
+              disabled={readOnly || busy || !!plan.frozenAt}
+              aria-pressed={!locked}
+              onClick={() => {
+                if (editor && !commit()) return;
+                setLocked(!locked);
+              }}
+              title="A grade abre bloqueada, contra alteração acidental em reunião"
             >
-              Recolher
+              {locked ? <Lock size={14} aria-hidden /> : <LockOpen size={14} aria-hidden />}
+              {locked ? 'Liberar edição' : 'Bloquear'}
             </button>
-          </span>
-          <details className="relative" data-tour="medio-colunas">
-            <summary className={`${tool} cursor-pointer list-none`}>Colunas</summary>
-            <div className="absolute left-0 z-40 mt-1 grid w-56 gap-1.5 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl">
-              {columns.map(c => (
-                <label key={c.key} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!hidden.includes(c.key) || c.key === 'name'}
-                    disabled={c.key === 'name'}
-                    onChange={e => setHidden(e.target.checked ? hidden.filter(k => k !== c.key) : [...hidden, c.key])}
-                  />{' '}
-                  {c.label}
-                </label>
-              ))}
+            <button className={tool} disabled={!canEdit || !past.length} onClick={undo} title="Desfazer (Ctrl+Z)">
+              <Undo2 size={14} aria-hidden />
+              <span className="sr-only">Desfazer</span>
+            </button>
+            <button className={tool} disabled={!canEdit || !future.length} onClick={redo} title="Refazer (Ctrl+Y)">
+              <Redo2 size={14} aria-hidden />
+              <span className="sr-only">Refazer</span>
+            </button>
+          </div>
+          {view !== 'resources' && (
+            <div className={group} aria-label="Tarefa">
+              {view === 'gantt' && (
+                <>
+                  <button
+                    className={tool}
+                    data-tour="medio-inserir"
+                    disabled={!canEdit || !!editor || filtering}
+                    onClick={() => structural('insert')}
+                    title="Inserir tarefa abaixo da selecionada (Insert)"
+                  >
+                    <ListPlus size={14} aria-hidden />
+                    Inserir tarefa
+                  </button>
+                  <span data-tour="medio-recuo" className="inline-flex items-center gap-0.5">
+                    <button
+                      className={tool}
+                      disabled={!canEdit || !active || !!editor || filtering}
+                      onClick={() => structural('outdent')}
+                      title="Diminuir o recuo das linhas selecionadas (Alt+Shift+←)"
+                    >
+                      <IndentDecrease size={14} aria-hidden />
+                      <span className="sr-only">Diminuir recuo</span>
+                    </button>
+                    <button
+                      className={tool}
+                      disabled={!canEdit || !active || !!editor || filtering}
+                      onClick={() => structural('indent')}
+                      title="Recuar as linhas selecionadas, tornando-as subitens da de cima (Alt+Shift+→)"
+                    >
+                      <IndentIncrease size={14} aria-hidden />
+                      <span className="sr-only">Recuar tarefa</span>
+                    </button>
+                  </span>
+                  <span data-tour="medio-vinculos" className="inline-flex items-center gap-0.5">
+                    <button
+                      className={tool}
+                      disabled={!canEdit || !active || !!editor || filtering}
+                      onClick={() => structural('link')}
+                      title="Vincular as tarefas selecionadas em Término-Início (Ctrl+F2)"
+                    >
+                      <Link2 size={14} aria-hidden />
+                      Vincular
+                    </button>
+                    <button
+                      className={tool}
+                      disabled={!canEdit || !active || !!editor || filtering}
+                      onClick={() => structural('unlink')}
+                      title="Desvincular as tarefas selecionadas (Ctrl+Shift+F2)"
+                    >
+                      <Unlink2 size={14} aria-hidden />
+                      <span className="sr-only">Desvincular</span>
+                    </button>
+                  </span>
+                  <button
+                    data-tour="medio-excluir"
+                    className={`${tool} text-danger`}
+                    disabled={!canEdit || !active || !!editor || filtering}
+                    onClick={() => structural('remove')}
+                    title="Excluir tarefa e subitens"
+                  >
+                    <Trash2 size={14} aria-hidden />
+                    <span className="sr-only">Excluir tarefa</span>
+                  </button>
+                </>
+              )}
               <button
-                className="button-ghost mt-1"
-                onClick={() => {
-                  setHidden(DEFAULT_HIDDEN);
-                  setOrder(DEFAULT_ORDER);
-                  setWidths({});
-                }}
+                data-tour="medio-informacoes"
+                className={tool}
+                disabled={!active || !!editor}
+                onClick={() => active && openInfo(active.id)}
+                title="Informações da tarefa: geral, predecessoras, recursos, avançado e anotações (Shift+F2 ou duplo clique na barra)"
               >
-                Restaurar padrão
+                <Info size={14} aria-hidden />
+                Informações
+              </button>
+              <button
+                data-tour="medio-linha-tempo-adicionar"
+                className={tool}
+                disabled={!canEdit || !active || !!editor}
+                onClick={() =>
+                  setTimeline(
+                    selectedTasks.map(t => t.id),
+                    !onTimeline,
+                  )
+                }
+                title={
+                  onTimeline
+                    ? 'Tira as tarefas selecionadas da Linha do Tempo'
+                    : 'Põe as tarefas selecionadas na Linha do Tempo, acima da visão'
+                }
+              >
+                <GalleryHorizontalEnd size={14} aria-hidden />
+                {onTimeline ? 'Remover da Linha do Tempo' : 'Adicionar à Linha do Tempo'}
+              </button>
+              {view === 'gantt' && presentation !== 'table' && (
+                <button
+                  data-tour="medio-rolar-tarefa"
+                  className={tool}
+                  disabled={!active}
+                  onClick={() => scrollToTask()}
+                  title="Rolar até a tarefa: leva o Gantt até a barra da linha selecionada (Ctrl+Shift+F5)"
+                >
+                  <LocateFixed size={14} aria-hidden />
+                  <span className="sr-only">Rolar até a tarefa</span>
+                </button>
+              )}
+            </div>
+          )}
+          {view === 'gantt' && (
+            <div className={group} aria-label="Exibir">
+              <label data-tour="medio-base-exibida" className="flex items-center gap-1 text-xs text-slate-600">
+                Linha de base
+                <select className="field w-auto py-1 text-xs" value={baseId} onChange={e => setBaseId(e.target.value)}>
+                  <option value="">Nenhuma</option>
+                  {baselines.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                      {b.frozenAt ? ` · ${formatDate(b.frozenAt.slice(0, 10))}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span data-tour="medio-expandir" className="inline-flex items-center gap-0.5">
+                <button className={tool} disabled={filtering} onClick={() => setFolded([])}>
+                  Expandir
+                </button>
+                <button
+                  className={tool}
+                  disabled={filtering}
+                  onClick={() => setFolded(draft.tasks.filter(t => roll.get(t.id)?.summary).map(t => t.id))}
+                >
+                  Recolher
+                </button>
+              </span>
+              <details className="relative" data-tour="medio-colunas">
+                <summary className={`${tool} cursor-pointer list-none`}>Colunas</summary>
+                <div className="absolute left-0 z-40 mt-1 grid w-56 gap-1.5 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl">
+                  {columns.map(c => (
+                    <label key={c.key} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!hidden.includes(c.key) || c.key === 'name'}
+                        disabled={c.key === 'name'}
+                        onChange={e => setHidden(e.target.checked ? hidden.filter(k => k !== c.key) : [...hidden, c.key])}
+                      />{' '}
+                      {c.label}
+                    </label>
+                  ))}
+                  <button
+                    className="button-ghost mt-1"
+                    onClick={() => {
+                      setHidden(DEFAULT_HIDDEN);
+                      setOrder(DEFAULT_ORDER);
+                      setWidths({});
+                    }}
+                  >
+                    Restaurar padrão
+                  </button>
+                </div>
+              </details>
+              <span data-tour="medio-critico" className="inline-flex items-center gap-0.5">
+                <button
+                  className={tool}
+                  aria-pressed={showCritical}
+                  onClick={() => setShowCritical(!showCritical)}
+                  title="Pinta de vermelho as tarefas sem folga no Gantt"
+                >
+                  Caminho crítico
+                </button>
+                <button
+                  className={tool}
+                  aria-pressed={showSlack}
+                  onClick={() => setShowSlack(!showSlack)}
+                  title="Linha de folga depois da barra, até o término tardio"
+                >
+                  Folga
+                </button>
+              </span>
+              <button
+                data-tour="medio-nomes-recursos"
+                className={tool}
+                aria-pressed={showResourceNames}
+                onClick={() => setShowResourceNames(!showResourceNames)}
+                title="Escreve o nome da equipe ao lado de cada barra, como o Gantt do Project"
+              >
+                Recursos nas barras
+              </button>
+              <button
+                data-tour="medio-caminho"
+                className={tool}
+                aria-pressed={showPath}
+                onClick={() => setShowPath(!showPath)}
+                title="Realça predecessoras e sucessoras da tarefa selecionada; as determinantes em tom mais forte"
+              >
+                Caminho da tarefa
+              </button>
+              <button data-tour="medio-reuniao" className={tool} aria-pressed={meeting} onClick={() => setMeeting(!meeting)}>
+                Modo reunião
               </button>
             </div>
-          </details>
-          <span data-tour="medio-critico" className="inline-flex items-center gap-0.5">
-            <button
-              className={tool}
-              aria-pressed={showCritical}
-              onClick={() => setShowCritical(!showCritical)}
-              title="Pinta de vermelho as tarefas sem folga no Gantt"
-            >
-              Caminho crítico
-            </button>
-            <button
-              className={tool}
-              aria-pressed={showSlack}
-              onClick={() => setShowSlack(!showSlack)}
-              title="Linha de folga depois da barra, até o término tardio"
-            >
-              Folga
-            </button>
-          </span>
-          <button
-            data-tour="medio-caminho"
-            className={tool}
-            aria-pressed={showPath}
-            onClick={() => setShowPath(!showPath)}
-            title="Realça predecessoras e sucessoras da tarefa selecionada; as determinantes em tom mais forte"
-          >
-            Caminho da tarefa
-          </button>
-          <button data-tour="medio-reuniao" className={tool} aria-pressed={meeting} onClick={() => setMeeting(!meeting)}>
-            Modo reunião
-          </button>
+          )}
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-1.5 text-xs">
-        <span data-tour="medio-filtros" className="flex flex-wrap items-center gap-2">
-          <label className="relative">
-            <span className="sr-only">Buscar tarefas</span>
-            <input
-              type="search"
-              className="field w-56 py-1 text-xs"
-              placeholder="Buscar tarefa, recurso ou anotação"
-              value={query}
-              disabled={!!editor}
-              onChange={e => {
-                setQuery(e.target.value);
-                setSelected({ row: 0, col: selected.col });
-              }}
-            />
-          </label>
-          <label>
-            <span className="sr-only">Filtrar por situação</span>
-            <select
-              className="field w-auto py-1 text-xs"
-              value={status}
-              disabled={!!editor}
-              onChange={e => {
-                setStatus(e.target.value);
-                setSelected({ row: 0, col: selected.col });
-              }}
-            >
-              {[
-                ['all', 'Todas as tarefas'],
-                ['zero', 'Não iniciadas'],
-                ['ongoing', 'Em andamento'],
-                ['done', 'Concluídas'],
-                ['late', 'Atrasadas'],
-                ['critical', 'Críticas'],
-                ['conflict', 'Com vínculo desrespeitado'],
-                ['deadline', 'Prazo final perdido'],
-                ['window', 'Fora do horizonte'],
-                ['changed', 'Alteradas no rascunho'],
-                ['notes', 'Com anotações'],
-              ].map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">Filtrar por recurso</span>
-            <select
-              className="field w-auto py-1 text-xs"
-              value={team}
-              disabled={!!editor}
-              onChange={e => {
-                setTeam(e.target.value);
-                setSelected({ row: 0, col: selected.col });
-              }}
-            >
-              <option value="">Todos os recursos</option>
-              {teams.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.company} · {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </span>
-        {!hidden.includes('target') && (
-          <label data-tour="medio-referencia" className="flex items-center gap-1 text-slate-600">
-            Referência do % alvo
-            <input
-              className="field w-auto py-1 text-xs"
-              type="date"
-              value={reference}
-              onChange={e => {
-                if (e.target.value) setReference(e.target.value);
-              }}
-            />
-          </label>
-        )}
-        <span data-tour="medio-atalhos" className="ml-auto flex items-center gap-0.5 text-slate-500">
-          Atalhos
-          <HelpNote title="Atalhos do teclado" label="Atalhos do teclado" compact align="end">
-            <p>
-              <kbd className={kbd}>F2</kbd> ou <kbd className={kbd}>Enter</kbd> edita a célula; digitar direto também começa a edição.{' '}
-              <kbd className={kbd}>Esc</kbd> cancela.
-            </p>
-            <p>
-              <kbd className={kbd}>Insert</kbd> insere uma tarefa abaixo da selecionada; <kbd className={kbd}>Enter</kbd> na última linha
-              grava e cria a próxima. <kbd className={kbd}>Alt+Shift+→</kbd> ou <kbd className={kbd}>Cmd+Alt+→</kbd> recua,{' '}
-              <kbd className={kbd}>Alt+Shift+←</kbd> ou <kbd className={kbd}>Cmd+Alt+←</kbd> diminui o recuo; com um intervalo selecionado,
-              os dois agem em todas as linhas dele.
-            </p>
-            <p>
-              <kbd className={kbd}>Ctrl+F2</kbd> vincula as tarefas selecionadas em Término-Início; <kbd className={kbd}>Ctrl+Shift+F2</kbd>{' '}
-              desvincula.
-            </p>
-            <p>
-              <kbd className={kbd}>Shift+setas</kbd> seleciona um intervalo; <kbd className={kbd}>Ctrl+C</kbd> e{' '}
-              <kbd className={kbd}>Ctrl+V</kbd> copiam e colam como na planilha; <kbd className={kbd}>Ctrl+D</kbd> preenche abaixo.
-            </p>
-            <p>
-              <kbd className={kbd}>Ctrl+Z</kbd> desfaz e <kbd className={kbd}>Ctrl+Y</kbd> refaz. <kbd className={kbd}>Ctrl+Home</kbd> e{' '}
-              <kbd className={kbd}>Ctrl+End</kbd> vão à primeira e à última linha.
-            </p>
-            <p>
-              Arraste o cabeçalho para mudar a ordem das colunas; com o foco no cabeçalho, <kbd className={kbd}>Alt+←</kbd> e{' '}
-              <kbd className={kbd}>Alt+→</kbd> também movem a coluna.
-            </p>
-          </HelpNote>
-        </span>
-      </div>
-      {normalized > 0 && (
-        <p className="border-b border-primary-ring bg-primary-soft px-3 py-2 text-xs text-primary-ink">
-          {normalized} {normalized === 1 ? 'tarefa foi ajustada' : 'tarefas foram ajustadas'} à regra do Project ao abrir: % concluída sem
-          início real recebe o início previsto, e o “Não iniciar antes de” antigo vira “Tipo de restrição” e passa a valer junto das
-          predecessoras. O ajuste é gravado no próximo “Revisar e salvar”.
-        </p>
-      )}
-      {error && (
-        <p id="schedule-error" role="alert" className="border-b border-danger-ring bg-danger-soft p-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      {outside > 0 && (
-        <p className="border-b border-warning-ring bg-warning-soft px-3 py-2 text-xs text-amber-900">
-          <CircleAlert size={13} className="mr-1 inline text-warning" aria-hidden />
-          {outside} {outside === 1 ? 'tarefa está' : 'tarefas estão'} fora do horizonte de três meses ({projectDate(win.start)} a{' '}
-          {projectDate(win.end)}). O filtro “Fora do horizonte” mostra quais.
-        </p>
-      )}
-
-      <div
-        className="flex h-[68vh] min-h-[320px] border-b border-slate-200"
-        onCopy={e => {
-          if (editor) return;
-          e.preventDefault();
-          const text = encodeGrid(
-            rows.slice(bounds.r0, bounds.r1 + 1).map(t => visibleCols.slice(bounds.c0, bounds.c1 + 1).map(c => raw(t, c.key))),
-          );
-          e.clipboardData.setData('text/plain', text);
-        }}
-        onPaste={e => {
-          if (editor) return;
-          e.preventDefault();
-          try {
-            const matrix = decodeGrid(e.clipboardData.getData('text/plain'));
-            const entries = matrix.flatMap((line, r) =>
-              line.map((text, c) => {
-                const t = rows[selected.row + r],
-                  col = visibleCols[selected.col + c];
-                if (!t || !col) throw new Error('Colagem ultrapassa a grade.');
-                return { id: t.id, key: col.key, text };
-              }),
-            );
-            applyCells(entries);
-          } catch (err) {
-            setError((err as Error).message);
-          }
-        }}
-      >
-        {presentation !== 'chart' && (
-          <div
-            ref={tableScroll}
-            onScroll={e => sync(e.currentTarget, chartScroll.current)}
-            className="min-w-0 overflow-auto"
-            style={{
-              width: presentation === 'split' ? Math.min(tableWidth, tableTotal + 2) : '100%',
-              flex: presentation === 'split' ? 'none' : '1',
-              overflowX: 'scroll',
-            }}
-            role="region"
-            aria-label="Tabela do cronograma"
-            data-tour="medio-tabela"
-            tabIndex={-1}
-          >
-            <table
-              ref={gridRef}
-              className="schedule-grid project-grid"
-              role="grid"
-              aria-label="Cronograma de médio prazo"
-              aria-multiselectable="true"
-              style={{ width: tableTotal }}
-            >
-              <thead>
-                <tr>
-                  {visibleCols.map((c, i) => {
-                    // Id e Indicadores ficam presas no começo (FIXED_COLS); as outras se arrastam pelo
-                    // cabeçalho e caem antes ou depois da coluna alvo conforme a metade em que forem soltas.
-                    const fixed = FIXED_COLS.includes(c.key);
-                    const side = (e: React.DragEvent<HTMLElement>) => {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      return fixed || e.clientX > r.left + r.width / 2;
-                    };
-                    const target = drop?.key === c.key ? drop : undefined;
-                    return (
-                      <th
-                        key={c.key}
-                        scope="col"
-                        data-col={c.key}
-                        tabIndex={0}
-                        draggable={!fixed}
-                        aria-label={fixed ? `Coluna ${c.label}, fixa` : `Coluna ${c.label}; arraste ou use Alt com as setas para mover`}
-                        title={fixed ? undefined : 'Arraste para mover a coluna; com o foco aqui, Alt+← e Alt+→ também movem'}
-                        style={{ width: widths[c.key] ?? c.width }}
-                        className={`${c.right ? 'text-right' : ''} ${fixed ? '' : 'cursor-grab'} ${dragCol === c.key ? 'opacity-50' : ''} ${
-                          target
-                            ? target.after
-                              ? 'shadow-[inset_-3px_0_var(--color-primary)]'
-                              : 'shadow-[inset_3px_0_var(--color-primary)]'
-                            : ''
-                        }`}
-                        onDragStart={e => {
-                          e.dataTransfer.setData('text/plain', c.key);
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDragCol(c.key);
-                        }}
-                        onDragEnd={() => {
-                          setDragCol(null);
-                          setDrop(null);
-                        }}
-                        onDragOver={e => {
-                          if (!dragCol || dragCol === c.key) return;
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
-                          const after = side(e);
-                          setDrop(d => (d && d.key === c.key && d.after === after ? d : { key: c.key, after }));
-                        }}
-                        onDragLeave={e => {
-                          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(d => (d?.key === c.key ? null : d));
-                        }}
-                        onDrop={e => {
-                          e.preventDefault();
-                          const key = dragCol ?? (e.dataTransfer.getData('text/plain') as Col);
-                          if (key && key in COLUMN && key !== c.key) reorder(moveColumn(order, key, c.key, side(e)));
-                          setDragCol(null);
-                          setDrop(null);
-                        }}
-                        onKeyDown={e => {
-                          // Só com o foco no próprio cabeçalho: no separador, as setas mudam a largura.
-                          if (e.target !== e.currentTarget || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-                          e.preventDefault();
-                          const neighbor = visibleCols[e.key === 'ArrowRight' ? i + 1 : i - 1];
-                          if (!neighbor) return;
-                          reorder(moveColumn(order, c.key, neighbor.key, e.key === 'ArrowRight'));
-                          // Mover o nó no DOM tira o foco dele; devolve depois da nova pintura.
-                          requestAnimationFrame(() => gridRef.current?.querySelector<HTMLElement>(`th[data-col="${c.key}"]`)?.focus());
-                        }}
-                      >
-                        {c.key === 'ind' ? (
-                          <span title="Indicadores" data-tour="medio-col-indicadores">
-                            <span aria-hidden>ⓘ</span>
-                            <span className="sr-only">Indicadores</span>
-                          </span>
-                        ) : (
-                          <ColumnLabel column={c} />
-                        )}
-                        <span
-                          role="separator"
-                          aria-label={`Largura de ${c.label}`}
-                          aria-orientation="vertical"
-                          aria-valuemin={36}
-                          aria-valuemax={600}
-                          aria-valuenow={widths[c.key] ?? c.width}
-                          tabIndex={0}
-                          draggable={false}
-                          className="schedule-resize"
-                          // O arrasto para redimensionar usa captura de ponteiro; cancelar o mousedown impede
-                          // que o navegador comece o arrasto de coluna a partir do separador.
-                          onMouseDown={e => e.preventDefault()}
-                          onKeyDown={e => {
-                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                              e.preventDefault();
-                              setWidths(w => ({
-                                ...w,
-                                [c.key]: Math.max(36, Math.min(600, (w[c.key] ?? c.width) + (e.key === 'ArrowRight' ? 10 : -10))),
-                              }));
-                            }
-                          }}
-                          onPointerDown={e => {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                            e.currentTarget.dataset.x = String(e.clientX);
-                            e.currentTarget.dataset.width = String(widths[c.key] ?? c.width);
-                          }}
-                          onPointerMove={e => {
-                            if (e.currentTarget.hasPointerCapture(e.pointerId))
-                              setWidths(w => ({
-                                ...w,
-                                [c.key]: Math.max(
-                                  36,
-                                  Math.min(600, Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x)),
-                                ),
-                              }));
-                          }}
-                        />
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {planRow && (
-                  <tr className="project-plan-row" data-tour="medio-linha-resumo" aria-label={`Resumo do cronograma: ${plan.name}`}>
-                    {visibleCols.map(col => (
-                      <td
-                        key={col.key}
-                        aria-readonly
-                        className={cellClass(col.key, true)}
-                        title={col.key === 'name' ? 'Resumo do cronograma inteiro, calculado das tarefas' : undefined}
-                      >
-                        {col.key === 'name' ? (
-                          <span className="flex items-center gap-1">
-                            <ChevronDown size={13} className="shrink-0 text-slate-400" aria-hidden />
-                            {planRaw(col.key)}
-                          </span>
-                        ) : (
-                          planRaw(col.key)
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                )}
-                {rows.map((t, r) => {
-                  const v = roll.get(t.id)!;
-                  const isSelected = r === selected.row;
-                  return (
-                    <tr key={t.id} className={isSelected ? 'project-row-selected' : ''}>
-                      {visibleCols.map((col, c) => {
-                        const editing = editor?.id === t.id && editor.key === col.key;
-                        const selectedCell = r >= bounds.r0 && r <= bounds.r1 && c >= bounds.c0 && c <= bounds.c1;
-                        const old = original.tasks.find(o => o.id === t.id);
-                        const field =
-                          ({ start: 'plannedStart', end: 'plannedEnd', team: 'teamId' } as Record<string, string>)[col.key] ?? col.key;
-                        const modified =
-                          col.key === 'links'
-                            ? JSON.stringify(original.links.filter(l => l.successorId === t.id)) !==
-                              JSON.stringify(draft.links.filter(l => l.successorId === t.id))
-                            : JSON.stringify(old?.[field as keyof PlanTask]) !== JSON.stringify(t[field as keyof PlanTask]);
-                        const text = raw(t, col.key);
-                        return (
-                          <td
-                            key={col.key}
-                            role="gridcell"
-                            data-pos={`${r}:${c}`}
-                            tabIndex={selected.row === r && selected.col === c ? 0 : -1}
-                            aria-selected={selectedCell}
-                            aria-readonly={!editable(t, col.key)}
-                            title={`${text}${v.summary && LEAF_ONLY.includes(col.key) ? ' · Resumo calculado das subtarefas' : ''}${modified ? ' · Alteração não salva' : ''}`}
-                            className={`${cellClass(col.key, v.summary)} ${selectedCell ? 'schedule-selected' : ''} ${modified ? 'schedule-modified' : ''}`}
-                            onClick={e => {
-                              if (editor && !editing && !commit()) return;
-                              setSelected({ row: r, col: c });
-                              if (!e.shiftKey) setAnchor({ row: r, col: c });
-                            }}
-                            onDoubleClick={() => begin(t, col.key)}
-                            onKeyDown={e => keyDown(e, t, r, c)}
-                          >
-                            {editing ? (
-                              col.key === 'team' ? (
-                                <select
-                                  ref={editRef}
-                                  aria-label={`Recurso de ${t.name}`}
-                                  value={editor.text}
-                                  onChange={e => setEditor({ ...editor, text: e.target.value })}
-                                  onBlur={commit}
-                                  onKeyDown={e => editorKey(e, r, c)}
-                                >
-                                  <option value="">Sem recurso</option>
-                                  {teams.map(team => (
-                                    <option key={team.id} value={team.id}>
-                                      {team.company} · {team.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : col.key === 'constraintType' ? (
-                                <select
-                                  ref={editRef}
-                                  aria-label={`Tipo de restrição de ${t.name}`}
-                                  value={editor.text}
-                                  onChange={e => setEditor({ ...editor, text: e.target.value })}
-                                  onBlur={commit}
-                                  onKeyDown={e => editorKey(e, r, c)}
-                                >
-                                  {CONSTRAINT_TYPES.map(type => (
-                                    <option key={type} value={type}>
-                                      {CONSTRAINT_LABELS[type]}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  ref={editRef}
-                                  aria-label={`${col.label} de ${t.name}`}
-                                  aria-invalid={!!error}
-                                  aria-describedby={error ? 'schedule-error' : undefined}
-                                  value={editor.text}
-                                  placeholder={DATE_COLS.includes(col.key) ? 'dd/mm/aa ou vazio' : undefined}
-                                  onChange={e => setEditor({ ...editor, text: e.target.value })}
-                                  onBlur={commit}
-                                  onKeyDown={e => editorKey(e, r, c)}
-                                />
-                              )
-                            ) : col.key === 'name' ? (
-                              <div className="flex items-center gap-1 truncate" style={{ paddingLeft: t.level * 16 }}>
-                                {v.summary ? (
-                                  <button
-                                    tabIndex={-1}
-                                    aria-label={`${folded.includes(t.id) ? 'Expandir' : 'Recolher'} ${t.name}`}
-                                    className="shrink-0 text-slate-500 hover:text-slate-900 disabled:opacity-40"
-                                    disabled={filtering}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setFolded(f => (f.includes(t.id) ? f.filter(id => id !== t.id) : [...f, t.id]));
-                                    }}
-                                  >
-                                    {folded.includes(t.id) ? <ChevronRight size={13} aria-hidden /> : <ChevronDown size={13} aria-hidden />}
-                                  </button>
-                                ) : (
-                                  <span className="w-[13px] shrink-0" />
-                                )}
-                                <span className="shrink-0 text-slate-400">{v.number}</span>
-                                <span className="truncate">{t.name}</span>
-                              </div>
-                            ) : col.key === 'ind' ? (
-                              <Indicators
-                                done={v.progress === 100}
-                                constraint={v.summary ? undefined : constraintOf(t)}
-                                holding={info(t.id)?.drivenBy === 'constraint'}
-                                deadline={info(t.id)?.deadlineMissed ? t.deadline : undefined}
-                                conflict={!!info(t.id)?.conflict}
-                                outside={outOfWindow(t.id)}
-                                notes={!!t.notes}
-                              />
-                            ) : (
-                              <span className={col.key === 'id' ? 'text-slate-400' : ''}>{text}</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {!rows.length && (
-              <p className="p-5 text-sm text-slate-600">
-                {filtering ? 'Nenhuma tarefa neste filtro.' : 'Cronograma vazio. Libere a edição e use “Inserir tarefa”.'}
-              </p>
+        {view === 'gantt' && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-1.5 text-xs">
+            <span data-tour="medio-filtros" className="flex flex-wrap items-center gap-2">
+              <label className="relative">
+                <span className="sr-only">Buscar tarefas</span>
+                <input
+                  type="search"
+                  className="field w-56 py-1 text-xs"
+                  placeholder="Buscar tarefa, recurso ou anotação"
+                  value={query}
+                  disabled={!!editor}
+                  onChange={e => {
+                    setQuery(e.target.value);
+                    setSelected({ row: 0, col: selected.col });
+                  }}
+                />
+              </label>
+              <label>
+                <span className="sr-only">Filtrar por situação</span>
+                <select
+                  className="field w-auto py-1 text-xs"
+                  value={status}
+                  disabled={!!editor}
+                  onChange={e => {
+                    setStatus(e.target.value);
+                    setSelected({ row: 0, col: selected.col });
+                  }}
+                >
+                  {[
+                    ['all', 'Todas as tarefas'],
+                    ['zero', 'Não iniciadas'],
+                    ['ongoing', 'Em andamento'],
+                    ['done', 'Concluídas'],
+                    ['late', 'Atrasadas'],
+                    ['critical', 'Críticas'],
+                    ['conflict', 'Com vínculo desrespeitado'],
+                    ['deadline', 'Prazo final perdido'],
+                    ['window', 'Fora do horizonte'],
+                    ['changed', 'Alteradas no rascunho'],
+                    ['notes', 'Com anotações'],
+                  ].map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="sr-only">Filtrar por recurso</span>
+                <select
+                  className="field w-auto py-1 text-xs"
+                  value={team}
+                  disabled={!!editor}
+                  onChange={e => {
+                    setTeam(e.target.value);
+                    setSelected({ row: 0, col: selected.col });
+                  }}
+                >
+                  <option value="">Todos os recursos</option>
+                  {teams.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.company} · {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </span>
+            {!hidden.includes('target') && (
+              <label data-tour="medio-referencia" className="flex items-center gap-1 text-slate-600">
+                Referência do % alvo
+                <input
+                  className="field w-auto py-1 text-xs"
+                  type="date"
+                  value={reference}
+                  onChange={e => {
+                    if (e.target.value) setReference(e.target.value);
+                  }}
+                />
+              </label>
             )}
+            <span data-tour="medio-atalhos" className="ml-auto flex items-center gap-0.5 text-slate-500">
+              Atalhos
+              <HelpNote title="Atalhos do teclado" label="Atalhos do teclado" compact align="end">
+                <p>
+                  <kbd className={kbd}>F2</kbd> ou <kbd className={kbd}>Enter</kbd> edita a célula; digitar direto também começa a edição.{' '}
+                  <kbd className={kbd}>Esc</kbd> cancela.
+                </p>
+                <p>
+                  <kbd className={kbd}>Insert</kbd> insere uma tarefa abaixo da selecionada; <kbd className={kbd}>Enter</kbd> na última
+                  linha grava e cria a próxima. <kbd className={kbd}>Alt+Shift+→</kbd> ou <kbd className={kbd}>Cmd+Alt+→</kbd> recua,{' '}
+                  <kbd className={kbd}>Alt+Shift+←</kbd> ou <kbd className={kbd}>Cmd+Alt+←</kbd> diminui o recuo; com um intervalo
+                  selecionado, os dois agem em todas as linhas dele.
+                </p>
+                <p>
+                  <kbd className={kbd}>Ctrl+F2</kbd> vincula as tarefas selecionadas em Término-Início;{' '}
+                  <kbd className={kbd}>Ctrl+Shift+F2</kbd> desvincula.
+                </p>
+                <p>
+                  <kbd className={kbd}>Shift+setas</kbd> seleciona um intervalo; <kbd className={kbd}>Ctrl+C</kbd> e{' '}
+                  <kbd className={kbd}>Ctrl+V</kbd> copiam e colam como na planilha; <kbd className={kbd}>Ctrl+D</kbd> preenche abaixo.
+                </p>
+                <p>
+                  <kbd className={kbd}>Ctrl+Z</kbd> desfaz e <kbd className={kbd}>Ctrl+Y</kbd> refaz. <kbd className={kbd}>Ctrl+Home</kbd> e{' '}
+                  <kbd className={kbd}>Ctrl+End</kbd> vão à primeira e à última linha.
+                </p>
+                <p>
+                  <kbd className={kbd}>Shift+F2</kbd> abre as Informações da tarefa; o duplo clique na barra do Gantt, ou numa célula que
+                  não se edita (Id, Indicadores, calculadas, ou com a grade bloqueada), também. <kbd className={kbd}>Ctrl+Shift+F5</kbd>{' '}
+                  rola o Gantt até a barra da tarefa selecionada.
+                </p>
+                <p>
+                  No Gantt, com a edição liberada: arrastar a barra muda o início (cria “Não iniciar antes de”), esticar a ponta direita
+                  muda a duração, puxar o avanço muda o % concluída e ligar uma barra a outra cria um vínculo Término-Início. Tudo entra no
+                  rascunho e se desfaz com <kbd className={kbd}>Ctrl+Z</kbd>.
+                </p>
+                <p>
+                  Arraste o cabeçalho para mudar a ordem das colunas; com o foco no cabeçalho, <kbd className={kbd}>Alt+←</kbd> e{' '}
+                  <kbd className={kbd}>Alt+→</kbd> também movem a coluna.
+                </p>
+              </HelpNote>
+            </span>
           </div>
         )}
-        {presentation === 'split' && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Divisão entre tabela e Gantt"
-            aria-valuenow={tableWidth}
-            aria-valuemin={240}
-            aria-valuemax={2400}
-            tabIndex={0}
-            className="w-1.5 shrink-0 cursor-col-resize bg-slate-200 hover:bg-primary-ring focus:bg-primary focus:outline-none"
-            onKeyDown={e => {
-              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        {normalized > 0 && (
+          <p className="border-b border-primary-ring bg-primary-soft px-3 py-2 text-xs text-primary-ink">
+            {normalized} {normalized === 1 ? 'tarefa foi ajustada' : 'tarefas foram ajustadas'} à regra do Project ao abrir: % concluída sem
+            início real recebe o início previsto, e o “Não iniciar antes de” antigo vira “Tipo de restrição” e passa a valer junto das
+            predecessoras. O ajuste é gravado no próximo “Revisar e salvar”.
+          </p>
+        )}
+        {error && (
+          <p id="schedule-error" role="alert" className="border-b border-danger-ring bg-danger-soft p-3 text-sm text-danger">
+            {error}
+          </p>
+        )}
+        {outside > 0 && (
+          <p className="border-b border-warning-ring bg-warning-soft px-3 py-2 text-xs text-amber-900">
+            <CircleAlert size={13} className="mr-1 inline text-warning" aria-hidden />
+            {outside} {outside === 1 ? 'tarefa está' : 'tarefas estão'} fora do horizonte de três meses ({projectDate(win.start)} a{' '}
+            {projectDate(win.end)}). O filtro “Fora do horizonte” mostra quais.
+          </p>
+        )}
+
+        {/* Linha do Tempo do Project, por cima da visão: as tarefas marcadas, o período que o Gantt mostra
+         * (arraste para rolar o Gantt) e o início e o término do projeto. */}
+        {showTimeline && (
+          <div className="flex bg-white">
+            {/* A borda de baixo é a da própria faixa; o rótulo traz a dele, para as duas alinharem. */}
+            <SideLabel className="border-b">Linha do tempo</SideLabel>
+            <TimelineSlot
+              scrollRef={chartScroll}
+              track={view === 'gantt' && presentation !== 'table' ? presentation : ''}
+              rangeStart={chartRange.start}
+              zoom={zoom}
+              items={timelineItems}
+              projectStart={analysis.projectStart}
+              projectFinish={analysis.projectFinish}
+              today={today}
+              calendar={draft.calendar}
+              selectedId={active?.id}
+              onSelect={id => selectTask(id, view === 'gantt')}
+              canEdit={canEdit}
+              onRemove={id => setTimeline([id], false)}
+              showSideLabel={false}
+              className="min-w-0 flex-1"
+            />
+          </div>
+        )}
+        <div ref={viewArea} className="flex min-h-0 flex-1 border-b border-slate-200">
+          <SideLabel>{VIEWS.find(v => v.id === view)!.label}</SideLabel>
+          {view === 'gantt' ? (
+            <div
+              className="flex min-w-0 flex-1"
+              onCopy={e => {
+                if (editor) return;
                 e.preventDefault();
-                setTableWidth(w => Math.max(240, Math.min(2400, w + (e.key === 'ArrowRight' ? 40 : -40))));
-              }
-            }}
-            onPointerDown={e => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              e.currentTarget.dataset.x = String(e.clientX);
-              e.currentTarget.dataset.width = String(Math.min(tableWidth, tableTotal + 2));
-            }}
-            onPointerMove={e => {
-              if (e.currentTarget.hasPointerCapture(e.pointerId))
-                setTableWidth(
-                  Math.max(240, Math.min(2400, Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x))),
+                const text = encodeGrid(
+                  rows.slice(bounds.r0, bounds.r1 + 1).map(t => visibleCols.slice(bounds.c0, bounds.c1 + 1).map(c => raw(t, c.key))),
                 );
-            }}
-          />
-        )}
-        {presentation !== 'table' && (
-          <GanttChart
-            rows={ganttRows}
-            links={ganttLinks}
-            window={win}
-            today={today}
-            zoom={zoom}
-            rowHeight={metrics.row}
-            headerHeight={metrics.head}
-            calendar={draft.calendar}
-            showBaseline={!!baseId}
-            showCritical={showCritical}
-            showSlack={showSlack}
-            showPath={showPath}
-            selectedId={active?.id}
-            onSelect={id => {
-              if (id === PLAN_ROW) return;
-              const r = rows.findIndex(t => t.id === id);
-              if (r >= 0) {
-                if (editor && !commit()) return;
-                setSelected({ row: r, col: selected.col });
-                setAnchor({ row: r, col: selected.col });
-              }
-            }}
-            scrollRef={chartScroll}
-            onScroll={e => sync(e.currentTarget, tableScroll.current)}
-            className="min-w-0 flex-1"
-          />
-        )}
-      </div>
-      <div
-        data-tour="medio-status"
-        className="flex flex-wrap items-center gap-3 bg-slate-100 px-3 py-1 text-xs text-slate-600"
-        aria-label="Barra de status"
-      >
-        <span>
-          Novas tarefas: <strong>Agendadas automaticamente</strong>
-        </span>
-        <span>
-          {draft.tasks.length} tarefas · {draft.links.length} vínculos · {criticalCount} críticas
-        </span>
-        {analysis.projectFinish && <span>Fim do projeto: {projectDate(analysis.projectFinish)}</span>}
-        {!draft.tasks.some(t => t.progress > 0) && <span>Sem avanço lançado ainda</span>}
-        <div className="ml-auto flex items-center gap-1" aria-label="Modo de exibição">
-          {(
-            [
-              { id: 'split', label: 'Tabela e Gantt', Icon: PanelLeft },
-              { id: 'table', label: 'Somente tabela', Icon: Table2 },
-              { id: 'chart', label: 'Somente Gantt', Icon: ChartGantt },
-            ] as const
-          ).map(m => (
-            <button
-              key={m.id}
-              type="button"
-              className={`flex h-7 w-8 items-center justify-center rounded ${presentation === m.id ? 'bg-white text-primary-ink shadow-sm' : 'hover:bg-white/70'}`}
-              aria-label={m.label}
-              title={m.label}
-              aria-pressed={presentation === m.id}
-              onClick={() => setPresentation(m.id)}
+                e.clipboardData.setData('text/plain', text);
+              }}
+              onPaste={e => {
+                if (editor) return;
+                e.preventDefault();
+                try {
+                  const matrix = decodeGrid(e.clipboardData.getData('text/plain'));
+                  const entries = matrix.flatMap((line, r) =>
+                    line.map((text, c) => {
+                      const t = rows[selected.row + r],
+                        col = visibleCols[selected.col + c];
+                      if (!t || !col) throw new Error('Colagem ultrapassa a grade.');
+                      return { id: t.id, key: col.key, text };
+                    }),
+                  );
+                  applyCells(entries);
+                } catch (err) {
+                  setError((err as Error).message);
+                }
+              }}
             >
-              <m.Icon size={15} aria-hidden />
-            </button>
-          ))}
-          {presentation !== 'table' && (
-            <span className="ml-2 flex items-center gap-0.5" aria-label="Escala do Gantt">
-              {(
-                [
-                  ['dia', 'Dias'],
-                  ['semana', 'Semanas'],
-                  ['mes', 'Meses'],
-                ] as const
-              ).map(([z, l]) => (
-                <button
-                  key={z}
-                  type="button"
-                  className={`h-7 rounded px-2 ${zoom === z ? 'bg-white font-semibold text-primary-ink shadow-sm' : 'hover:bg-white/70'}`}
-                  aria-pressed={zoom === z}
-                  onClick={() => setZoom(z)}
+              {presentation !== 'chart' && (
+                <div
+                  ref={tableScroll}
+                  onScroll={e => sync(e.currentTarget, chartScroll.current)}
+                  className="min-w-0 overflow-auto"
+                  style={{
+                    width: presentation === 'split' ? Math.min(tableWidth, tableTotal + 2) : '100%',
+                    flex: presentation === 'split' ? 'none' : '1',
+                    overflowX: 'scroll',
+                  }}
+                  role="region"
+                  aria-label="Tabela do cronograma"
+                  data-tour="medio-tabela"
+                  tabIndex={-1}
                 >
-                  {l}
+                  <table
+                    ref={gridRef}
+                    className="schedule-grid project-grid"
+                    role="grid"
+                    aria-label="Cronograma de médio prazo"
+                    aria-multiselectable="true"
+                    style={{ width: tableTotal }}
+                  >
+                    <thead>
+                      <tr>
+                        {visibleCols.map((c, i) => {
+                          // Id e Indicadores ficam presas no começo (FIXED_COLS); as outras se arrastam pelo
+                          // cabeçalho e caem antes ou depois da coluna alvo conforme a metade em que forem soltas.
+                          const fixed = FIXED_COLS.includes(c.key);
+                          const side = (e: React.DragEvent<HTMLElement>) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            return fixed || e.clientX > r.left + r.width / 2;
+                          };
+                          const target = drop?.key === c.key ? drop : undefined;
+                          return (
+                            <th
+                              key={c.key}
+                              scope="col"
+                              data-col={c.key}
+                              tabIndex={0}
+                              draggable={!fixed}
+                              aria-label={
+                                fixed ? `Coluna ${c.label}, fixa` : `Coluna ${c.label}; arraste ou use Alt com as setas para mover`
+                              }
+                              title={fixed ? undefined : 'Arraste para mover a coluna; com o foco aqui, Alt+← e Alt+→ também movem'}
+                              style={{ width: widths[c.key] ?? c.width }}
+                              className={`${c.right ? 'text-right' : ''} ${fixed ? '' : 'cursor-grab'} ${dragCol === c.key ? 'opacity-50' : ''} ${
+                                target
+                                  ? target.after
+                                    ? 'shadow-[inset_-3px_0_var(--color-primary)]'
+                                    : 'shadow-[inset_3px_0_var(--color-primary)]'
+                                  : ''
+                              }`}
+                              onDragStart={e => {
+                                e.dataTransfer.setData('text/plain', c.key);
+                                e.dataTransfer.effectAllowed = 'move';
+                                setDragCol(c.key);
+                              }}
+                              onDragEnd={() => {
+                                setDragCol(null);
+                                setDrop(null);
+                              }}
+                              onDragOver={e => {
+                                if (!dragCol || dragCol === c.key) return;
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                const after = side(e);
+                                setDrop(d => (d && d.key === c.key && d.after === after ? d : { key: c.key, after }));
+                              }}
+                              onDragLeave={e => {
+                                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(d => (d?.key === c.key ? null : d));
+                              }}
+                              onDrop={e => {
+                                e.preventDefault();
+                                const key = dragCol ?? (e.dataTransfer.getData('text/plain') as Col);
+                                if (key && key in COLUMN && key !== c.key) reorder(moveColumn(order, key, c.key, side(e)));
+                                setDragCol(null);
+                                setDrop(null);
+                              }}
+                              onKeyDown={e => {
+                                // Só com o foco no próprio cabeçalho: no separador, as setas mudam a largura.
+                                if (e.target !== e.currentTarget || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+                                e.preventDefault();
+                                const neighbor = visibleCols[e.key === 'ArrowRight' ? i + 1 : i - 1];
+                                if (!neighbor) return;
+                                reorder(moveColumn(order, c.key, neighbor.key, e.key === 'ArrowRight'));
+                                // Mover o nó no DOM tira o foco dele; devolve depois da nova pintura.
+                                requestAnimationFrame(() =>
+                                  gridRef.current?.querySelector<HTMLElement>(`th[data-col="${c.key}"]`)?.focus(),
+                                );
+                              }}
+                            >
+                              {c.key === 'ind' ? (
+                                <span title="Indicadores" data-tour="medio-col-indicadores">
+                                  <span aria-hidden>ⓘ</span>
+                                  <span className="sr-only">Indicadores</span>
+                                </span>
+                              ) : (
+                                <ColumnLabel column={c} />
+                              )}
+                              <span
+                                role="separator"
+                                aria-label={`Largura de ${c.label}`}
+                                aria-orientation="vertical"
+                                aria-valuemin={36}
+                                aria-valuemax={600}
+                                aria-valuenow={widths[c.key] ?? c.width}
+                                tabIndex={0}
+                                draggable={false}
+                                className="schedule-resize"
+                                // O arrasto para redimensionar usa captura de ponteiro; cancelar o mousedown impede
+                                // que o navegador comece o arrasto de coluna a partir do separador.
+                                onMouseDown={e => e.preventDefault()}
+                                onKeyDown={e => {
+                                  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                    e.preventDefault();
+                                    setWidths(w => ({
+                                      ...w,
+                                      [c.key]: Math.max(36, Math.min(600, (w[c.key] ?? c.width) + (e.key === 'ArrowRight' ? 10 : -10))),
+                                    }));
+                                  }
+                                }}
+                                onPointerDown={e => {
+                                  e.currentTarget.setPointerCapture(e.pointerId);
+                                  e.currentTarget.dataset.x = String(e.clientX);
+                                  e.currentTarget.dataset.width = String(widths[c.key] ?? c.width);
+                                }}
+                                onPointerMove={e => {
+                                  if (e.currentTarget.hasPointerCapture(e.pointerId))
+                                    setWidths(w => ({
+                                      ...w,
+                                      [c.key]: Math.max(
+                                        36,
+                                        Math.min(
+                                          600,
+                                          Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x),
+                                        ),
+                                      ),
+                                    }));
+                                }}
+                              />
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {planRow && (
+                        <tr className="project-plan-row" data-tour="medio-linha-resumo" aria-label={`Resumo do cronograma: ${plan.name}`}>
+                          {visibleCols.map(col => (
+                            <td
+                              key={col.key}
+                              aria-readonly
+                              className={cellClass(col.key, true)}
+                              title={col.key === 'name' ? 'Resumo do cronograma inteiro, calculado das tarefas' : undefined}
+                            >
+                              {col.key === 'name' ? (
+                                <span className="flex items-center gap-1">
+                                  <ChevronDown size={13} className="shrink-0 text-slate-400" aria-hidden />
+                                  {planRaw(col.key)}
+                                </span>
+                              ) : (
+                                planRaw(col.key)
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      )}
+                      {rows.map((t, r) => {
+                        const v = roll.get(t.id)!;
+                        const isSelected = r === selected.row;
+                        return (
+                          <tr key={t.id} className={isSelected ? 'project-row-selected' : ''}>
+                            {visibleCols.map((col, c) => {
+                              const editing = editor?.id === t.id && editor.key === col.key;
+                              const selectedCell = r >= bounds.r0 && r <= bounds.r1 && c >= bounds.c0 && c <= bounds.c1;
+                              const old = original.tasks.find(o => o.id === t.id);
+                              const field =
+                                ({ start: 'plannedStart', end: 'plannedEnd', team: 'teamId' } as Record<string, string>)[col.key] ??
+                                col.key;
+                              const modified =
+                                col.key === 'links'
+                                  ? JSON.stringify(original.links.filter(l => l.successorId === t.id)) !==
+                                    JSON.stringify(draft.links.filter(l => l.successorId === t.id))
+                                  : JSON.stringify(old?.[field as keyof PlanTask]) !== JSON.stringify(t[field as keyof PlanTask]);
+                              const text = raw(t, col.key);
+                              return (
+                                <td
+                                  key={col.key}
+                                  role="gridcell"
+                                  data-pos={`${r}:${c}`}
+                                  tabIndex={selected.row === r && selected.col === c ? 0 : -1}
+                                  aria-selected={selectedCell}
+                                  aria-readonly={!editable(t, col.key)}
+                                  title={`${text}${v.summary && LEAF_ONLY.includes(col.key) ? ' · Resumo calculado das subtarefas' : ''}${modified ? ' · Alteração não salva' : ''}`}
+                                  className={`${cellClass(col.key, v.summary)} ${selectedCell ? 'schedule-selected' : ''} ${modified ? 'schedule-modified' : ''}`}
+                                  onClick={e => {
+                                    if (editor && !editing && !commit()) return;
+                                    setSelected({ row: r, col: c });
+                                    if (!e.shiftKey) setAnchor({ row: r, col: c });
+                                  }}
+                                  // Célula que se edita abre o editor; a calculada (Id, Indicadores, folgas…) ou a
+                                  // grade bloqueada abrem as Informações da tarefa, como o duplo clique do Project.
+                                  onDoubleClick={() => (editable(t, col.key) ? begin(t, col.key) : openInfo(t.id, INFO_TAB[col.key]))}
+                                  onKeyDown={e => keyDown(e, t, r, c)}
+                                >
+                                  {editing ? (
+                                    col.key === 'team' ? (
+                                      <select
+                                        ref={editRef}
+                                        aria-label={`Recurso de ${t.name}`}
+                                        value={editor.text}
+                                        onChange={e => setEditor({ ...editor, text: e.target.value })}
+                                        onBlur={commit}
+                                        onKeyDown={e => editorKey(e, r, c)}
+                                      >
+                                        <option value="">Sem recurso</option>
+                                        {teams.map(team => (
+                                          <option key={team.id} value={team.id}>
+                                            {team.company} · {team.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : col.key === 'constraintType' ? (
+                                      <select
+                                        ref={editRef}
+                                        aria-label={`Tipo de restrição de ${t.name}`}
+                                        value={editor.text}
+                                        onChange={e => setEditor({ ...editor, text: e.target.value })}
+                                        onBlur={commit}
+                                        onKeyDown={e => editorKey(e, r, c)}
+                                      >
+                                        {CONSTRAINT_TYPES.map(type => (
+                                          <option key={type} value={type}>
+                                            {CONSTRAINT_LABELS[type]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        ref={editRef}
+                                        aria-label={`${col.label} de ${t.name}`}
+                                        aria-invalid={!!error}
+                                        aria-describedby={error ? 'schedule-error' : undefined}
+                                        value={editor.text}
+                                        placeholder={DATE_COLS.includes(col.key) ? 'dd/mm/aa ou vazio' : undefined}
+                                        onChange={e => setEditor({ ...editor, text: e.target.value })}
+                                        onBlur={commit}
+                                        onKeyDown={e => editorKey(e, r, c)}
+                                      />
+                                    )
+                                  ) : col.key === 'name' ? (
+                                    <div className="flex items-center gap-1 truncate" style={{ paddingLeft: t.level * 16 }}>
+                                      {v.summary ? (
+                                        <button
+                                          tabIndex={-1}
+                                          aria-label={`${folded.includes(t.id) ? 'Expandir' : 'Recolher'} ${t.name}`}
+                                          className="shrink-0 text-slate-500 hover:text-slate-900 disabled:opacity-40"
+                                          disabled={filtering}
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setFolded(f => (f.includes(t.id) ? f.filter(id => id !== t.id) : [...f, t.id]));
+                                          }}
+                                        >
+                                          {folded.includes(t.id) ? (
+                                            <ChevronRight size={13} aria-hidden />
+                                          ) : (
+                                            <ChevronDown size={13} aria-hidden />
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <span className="w-[13px] shrink-0" />
+                                      )}
+                                      <span className="shrink-0 text-slate-400">{v.number}</span>
+                                      <span className="truncate">{t.name}</span>
+                                    </div>
+                                  ) : col.key === 'ind' ? (
+                                    <Indicators
+                                      done={v.progress === 100}
+                                      constraint={v.summary ? undefined : constraintOf(t)}
+                                      holding={info(t.id)?.drivenBy === 'constraint'}
+                                      deadline={info(t.id)?.deadlineMissed ? t.deadline : undefined}
+                                      conflict={!!info(t.id)?.conflict}
+                                      outside={outOfWindow(t.id)}
+                                      notes={!!t.notes}
+                                    />
+                                  ) : (
+                                    <span className={col.key === 'id' ? 'text-slate-400' : ''}>{text}</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {!rows.length && (
+                    <p className="p-5 text-sm text-slate-600">
+                      {filtering ? 'Nenhuma tarefa neste filtro.' : 'Cronograma vazio. Libere a edição e use “Inserir tarefa”.'}
+                    </p>
+                  )}
+                </div>
+              )}
+              {presentation === 'split' && (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Divisão entre tabela e Gantt"
+                  aria-valuenow={tableWidth}
+                  aria-valuemin={240}
+                  aria-valuemax={2400}
+                  tabIndex={0}
+                  className="w-1.5 shrink-0 cursor-col-resize bg-slate-200 hover:bg-primary-ring focus:bg-primary focus:outline-none"
+                  onKeyDown={e => {
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                      e.preventDefault();
+                      setTableWidth(w => Math.max(240, Math.min(2400, w + (e.key === 'ArrowRight' ? 40 : -40))));
+                    }
+                  }}
+                  onPointerDown={e => {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    e.currentTarget.dataset.x = String(e.clientX);
+                    e.currentTarget.dataset.width = String(Math.min(tableWidth, tableTotal + 2));
+                  }}
+                  onPointerMove={e => {
+                    if (e.currentTarget.hasPointerCapture(e.pointerId))
+                      setTableWidth(
+                        Math.max(
+                          240,
+                          Math.min(2400, Number(e.currentTarget.dataset.width) + e.clientX - Number(e.currentTarget.dataset.x)),
+                        ),
+                      );
+                  }}
+                />
+              )}
+              {presentation !== 'table' && (
+                <GanttChart
+                  rows={ganttRows}
+                  links={ganttLinks}
+                  window={win}
+                  today={today}
+                  zoom={zoom}
+                  rowHeight={metrics.row}
+                  headerHeight={metrics.head}
+                  calendar={draft.calendar}
+                  showBaseline={!!baseId}
+                  showCritical={showCritical}
+                  showSlack={showSlack}
+                  showPath={showPath}
+                  selectedId={active?.id}
+                  onSelect={id => selectTask(id)}
+                  scrollRef={chartScroll}
+                  onScroll={e => sync(e.currentTarget, tableScroll.current)}
+                  showResourceNames={showResourceNames}
+                  canEdit={canEdit}
+                  onMoveTask={moveTask}
+                  onResizeTask={resizeTask}
+                  onProgressTask={progressTask}
+                  onLinkTasks={linkTasks}
+                  onOpenTask={id => openInfo(id)}
+                  className="min-w-0 flex-1"
+                />
+              )}
+            </div>
+          ) : view === 'team' ? (
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden" role="region" aria-label="Planejador de Equipe">
+              <TeamPlanner
+                tasks={draft.tasks}
+                info={analysis.info}
+                teams={teams}
+                calendar={draft.calendar}
+                window={win}
+                today={today}
+                zoom={zoom}
+                selectedId={active?.id}
+                onSelect={id => selectTask(id)}
+                canEdit={canEdit}
+                onAssign={assignTeam}
+                onMove={moveTask}
+                onOpenTask={id => openInfo(id)}
+                className="min-h-0 flex-1"
+              />
+            </div>
+          ) : view === 'usage' ? (
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden" role="region" aria-label="Uso dos Recursos">
+              <ResourceUsageView
+                tasks={draft.tasks}
+                info={analysis.info}
+                teams={teams}
+                calendar={draft.calendar}
+                window={win}
+                today={today}
+                zoom={zoom}
+                selectedId={active?.id}
+                onSelect={id => selectTask(id)}
+                onOpenTask={id => openInfo(id)}
+                className="min-h-0 flex-1"
+              />
+            </div>
+          ) : (
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden" role="region" aria-label="Planilha de Recursos">
+              <ResourceSheetView
+                tasks={draft.tasks}
+                info={analysis.info}
+                teams={teams}
+                calendar={draft.calendar}
+                workId={plan.workId}
+                className="min-h-0 flex-1"
+              />
+            </div>
+          )}
+        </div>
+        {/* Barra de status do Project: estado à esquerda; atalhos das visões e zoom à direita. */}
+        <div
+          data-tour="medio-status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-slate-100 px-3 py-1 text-xs text-slate-600"
+          role="group"
+          aria-label="Barra de status"
+        >
+          <span className={busy || dirty || editor ? 'font-semibold text-slate-800' : ''}>
+            {busy ? 'Salvando…' : editor ? 'Editando' : dirty ? 'Alterações não salvas' : 'Pronto'}
+          </span>
+          <span>
+            Novas tarefas: <strong>Agendadas automaticamente</strong>
+          </span>
+          <span>
+            {draft.tasks.length} tarefas · {draft.links.length} vínculos · {criticalCount} críticas
+          </span>
+          {analysis.projectFinish && <span>Fim do projeto: {projectDate(analysis.projectFinish)}</span>}
+          {!draft.tasks.some(t => t.progress > 0) && <span>Sem avanço lançado ainda</span>}
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            <span data-tour="medio-status-visoes" role="group" aria-label="Modos de exibição" className="flex items-center gap-0.5">
+              {VIEWS.map(v => (
+                <button
+                  key={v.id}
+                  type="button"
+                  className={`flex h-7 w-8 items-center justify-center rounded ${view === v.id ? 'bg-white text-primary-ink shadow-sm' : 'hover:bg-white/70'}`}
+                  aria-label={v.label}
+                  title={v.label}
+                  aria-pressed={view === v.id}
+                  onClick={() => switchView(v.id)}
+                >
+                  <v.Icon size={15} aria-hidden />
                 </button>
               ))}
             </span>
-          )}
+            {view === 'gantt' && (
+              <span
+                data-tour="medio-apresentacao"
+                role="group"
+                aria-label="Tabela e Gantt"
+                className="ml-1 flex items-center gap-0.5 border-l border-slate-300 pl-1"
+              >
+                {(
+                  [
+                    { id: 'split', label: 'Tabela e Gantt', Icon: PanelLeft },
+                    { id: 'table', label: 'Somente tabela', Icon: Table2 },
+                    { id: 'chart', label: 'Somente Gantt', Icon: ChartGantt },
+                  ] as const
+                ).map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`flex h-7 w-8 items-center justify-center rounded ${presentation === m.id ? 'bg-white text-primary-ink shadow-sm' : 'hover:bg-white/70'}`}
+                    aria-label={m.label}
+                    title={m.label}
+                    aria-pressed={presentation === m.id}
+                    onClick={() => setPresentation(m.id)}
+                  >
+                    <m.Icon size={15} aria-hidden />
+                  </button>
+                ))}
+              </span>
+            )}
+            {((view === 'gantt' && presentation !== 'table') || view === 'team' || view === 'usage') && (
+              <ZoomSlider zoom={zoom} onChange={setZoom} />
+            )}
+          </div>
         </div>
       </div>
-
-      {active && (
+      {active && view !== 'resources' && (
         <aside
           data-tour="medio-detalhes"
           className={fullDetails ? 'fixed inset-0 z-40 overflow-auto bg-white p-5' : 'border-t border-slate-200 bg-slate-50 p-4'}
@@ -2529,6 +3161,7 @@ export function Sheet({
                       'teamId',
                       'progress',
                       'notes',
+                      'timeline',
                       'level',
                     ] as const
                   )
@@ -2580,7 +3213,144 @@ export function Sheet({
           </div>
         </div>
       </dialog>
-    </>
+      {/* Fora da área da grade: copiar e colar dentro do diálogo não pode cair no Ctrl+C/Ctrl+V da tabela. */}
+      {infoTask && (
+        <TaskInfoDialog
+          key={infoTask.id}
+          title={`${draft.tasks.indexOf(infoTask) + 1} · ${infoTask.name}`}
+          subtitle={`EDT ${roll.get(infoTask.id)?.number ?? ''} · ${raw(infoTask, 'start')} a ${raw(infoTask, 'end')} · ${raw(infoTask, 'duration')}`}
+          summary={summaryOf(infoTask.id)}
+          initial={infoValues(infoTask)}
+          initialTab={infoOpen?.tab}
+          canEdit={canEdit}
+          editable={{
+            name: editable(infoTask, 'name'),
+            duration: editable(infoTask, 'duration') && !infoTask.actualEnd,
+            progress: editable(infoTask, 'progress'),
+            start: editable(infoTask, 'start') && !infoTask.actualStart,
+            end: editable(infoTask, 'end') && !infoTask.actualEnd,
+            links: editable(infoTask, 'links'),
+            team: editable(infoTask, 'team'),
+            constraintType: editable(infoTask, 'constraintType'),
+            constraintDate: editable(infoTask, 'constraintDate'),
+            deadline: editable(infoTask, 'deadline'),
+            notes: editable(infoTask, 'notes'),
+            timeline: canEdit,
+          }}
+          options={draft.tasks.flatMap((t, i) => (t.id === infoTask.id ? [] : [{ number: i + 1, name: t.name, summary: summaryOf(t.id) }]))}
+          teams={teams}
+          onApply={(changes, timeline) => applyInfo(infoTask.id, changes, timeline)}
+          onClose={closeInfo}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Nome da visão em pé na borda esquerda, como o "GRÁFICO DE GANTT" e o "LINHA DO TEMPO" do Project. */
+/* O texto fica em posição absoluta: a altura da linha é a da faixa ou da visão ao lado, nunca a do
+ * rótulo. Quando não cabe em pé numa linha só (a Linha do Tempo é baixa), quebra em duas colunas. */
+function SideLabel({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div aria-hidden className={`relative w-6 shrink-0 overflow-hidden border-r border-slate-200 bg-slate-100 ${className}`}>
+      <span className="absolute inset-0 flex rotate-180 items-center justify-center py-1.5 text-center text-[10px] font-semibold uppercase leading-[11px] tracking-[0.08em] text-slate-500 [writing-mode:vertical-rl]">
+        {children}
+      </span>
+    </div>
+  );
+}
+
+/** A Linha do Tempo ligada à rolagem do Gantt. Fica num componente à parte para a rolagem só
+ * repintar a faixa, não a tabela inteira: escuta o `scroll` do Gantt e converte pixels em dias pela
+ * escala (`GANTT_DAY_PX`), a partir do começo do período desenhado. `track` muda quando o Gantt
+ * aparece, some ou troca de lugar, para a escuta passar ao elemento novo; vazio é sem Gantt na
+ * tela, e aí a faixa não mostra o período visível nem rola nada. */
+function TimelineSlot({
+  scrollRef,
+  track,
+  rangeStart,
+  zoom,
+  ...band
+}: Omit<TimelineBandProps, 'visible' | 'onPan'> & {
+  scrollRef: RefObject<HTMLDivElement | null>;
+  track: string;
+  rangeStart: string;
+  zoom: GanttZoom;
+}) {
+  const [pos, setPos] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const node = track ? scrollRef.current : null;
+    let frame = 0;
+    const read = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = node && node.clientWidth > 0 ? { left: node.scrollLeft, width: node.clientWidth } : null;
+        setPos(p => (p && next && p.left === next.left && p.width === next.width ? p : next));
+      });
+    };
+    read();
+    if (!node) return () => cancelAnimationFrame(frame);
+    node.addEventListener('scroll', read, { passive: true });
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => {
+      cancelAnimationFrame(frame);
+      node.removeEventListener('scroll', read);
+      observer.disconnect();
+    };
+  }, [scrollRef, track]);
+  const px = GANTT_DAY_PX[zoom];
+  const first = pos ? Math.floor(pos.left / px) : 0;
+  const visible = pos
+    ? { start: addUtcDays(rangeStart, first), end: addUtcDays(rangeStart, Math.max(first, Math.ceil((pos.left + pos.width) / px) - 1)) }
+    : undefined;
+  const onPan = (start: string) => {
+    const node = scrollRef.current;
+    if (node) node.scrollLeft = Math.max(0, dateX(start, rangeStart, zoom));
+  };
+  return <TimelineBand {...band} visible={visible} onPan={track ? onPan : undefined} />;
+}
+
+/** Controle deslizante de zoom da barra de status do Project: − abre a escala (meses), + fecha
+ * (dias). Vale para o Gantt, o Planejador de Equipe e o Uso dos Recursos. */
+function ZoomSlider({ zoom, onChange }: { zoom: GanttZoom; onChange: (zoom: GanttZoom) => void }) {
+  const at = ZOOMS.indexOf(zoom);
+  const button = 'flex h-7 w-6 items-center justify-center rounded hover:bg-white/70 disabled:opacity-40';
+  return (
+    <span data-tour="medio-zoom" className="ml-1 flex items-center gap-1 border-l border-slate-300 pl-2">
+      <button
+        type="button"
+        className={button}
+        disabled={at <= 0}
+        onClick={() => onChange(ZOOMS[at - 1])}
+        aria-label="Diminuir o zoom"
+        title="Diminuir o zoom"
+      >
+        <Minus size={13} aria-hidden />
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={ZOOMS.length - 1}
+        step={1}
+        value={at}
+        className="w-20 accent-primary"
+        aria-label="Zoom da escala de tempo"
+        aria-valuetext={ZOOM_LABELS[zoom]}
+        onChange={e => onChange(ZOOMS[Number(e.target.value)])}
+      />
+      <button
+        type="button"
+        className={button}
+        disabled={at >= ZOOMS.length - 1}
+        onClick={() => onChange(ZOOMS[at + 1])}
+        aria-label="Aumentar o zoom"
+        title="Aumentar o zoom"
+      >
+        <Plus size={13} aria-hidden />
+      </button>
+      <span className="w-14 tabular-nums">{ZOOM_LABELS[zoom]}</span>
+    </span>
   );
 }
 

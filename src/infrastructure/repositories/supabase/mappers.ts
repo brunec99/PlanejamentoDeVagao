@@ -246,6 +246,7 @@ interface PlanTaskRow {
     sourceTaskId?: string;
     actualStart?: string;
     actualEnd?: string;
+    timeline?: boolean;
   };
   id: string;
   created_at: string;
@@ -816,6 +817,7 @@ export function planningDataToPayload(data: PlanningData) {
         sourceTaskId: t.sourceTaskId,
         actualStart: t.actualStart,
         actualEnd: t.actualEnd,
+        timeline: t.timeline || undefined,
       },
       id: t.id,
       created_at: t.createdAt,

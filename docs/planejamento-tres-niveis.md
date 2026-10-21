@@ -505,7 +505,7 @@ O usuário pediu a aba 3 "o mais próximo possível do MS Project" e que se busc
 - **Oito restrições** (`PlanTask.constraintType` + `constraintDate`; rótulos e siglas do Project em pt-BR em `CONSTRAINT_LABELS`/`CONSTRAINT_ABBREVIATIONS`): NIAD e NTAD só empurram para a frente; NIDD, NTDD, DIE e DTE prendem a data mesmo contra a rede e marcam o vínculo como desrespeitado; OMTP agenda nas datas tardias e refaz as sucessoras a partir delas. `anchorStart` (o "Não iniciar antes de" antigo) virou **legado**: `constraintOf(task)` o lê como NIAD, o mapper converte na leitura e o comando de revisão não o grava mais.
 - **Prazo final** (`PlanTask.deadline`): não reprograma; corta o término tardio (folga negativa quando não cabe) e acende o indicador quando o término passa dele.
 - **Passada inversa**: término tardio = o inverso exato do limite da passada direta, a partir das datas tardias das sucessoras; sem sucessora, o fim do projeto. Data real fixa as datas tardias (iniciada: início tardio = início real; concluída: término tardio = término real).
-- **Folgas e crítica**: folga total = menor entre a do término e a do início; tarefa iniciada só tem a do término; concluída nunca é crítica e tem folga livre zero; folga livre nunca negativa; crítica = folga total ≤ limite (0, configurável). Resumo é crítico quando alguma subtarefa é. A folga negativa aparece na predecessora cujo término tardio fica antes do término cedo — leitura do MPXJ, ainda a conferir no Project real.
+- **Folgas e crítica**: folga total = menor entre a do término e a do início; tarefa iniciada só tem a do término; concluída nunca é crítica e tem folga livre zero; folga livre nunca negativa; crítica = folga total ≤ limite (0, configurável). Resumo é crítico quando alguma subtarefa é. A folga negativa aparece na predecessora cujo término tardio fica antes do término cedo e, como o Project real mostra (conferido em 20/10/2026, corrigido em 21/10/2026), também na tarefa presa pela restrição. Desde 21/10/2026 o motor segue o Project também nas datas exibidas, com o dia e a ponta dele (08:00 ou 17:00), a tarefa em andamento dividida e as demais regras medidas: ver "Correções de 21/10/2026" em `docs/engenharia-reversa-project.md`.
 - **Correção**: vínculo IT (início-término) agora termina a sucessora no dia útil **anterior** ao início da predecessora (terminar às 08:00 é terminar às 17:00 da véspera), como o Project. O motor antigo terminava no mesmo dia; o teste `motor calcula IT` mudou de propósito.
 
 ### Servidor e persistência
@@ -525,7 +525,7 @@ O usuário pediu a aba 3 "o mais próximo possível do MS Project" e que se busc
 - **Indicadores**: restrição (azul = semiflexível, vermelho = inflexível, cinza = OMTP; o texto diz "segurando a data" quando é ela, e não a rede, que fixa o início), prazo final perdido e vínculo desrespeitado, sempre com ícone e texto.
 - **Gantt de acompanhamento**: barra **vermelha** para tarefa e marco críticos ("Caminho crítico", ligado por padrão, como no Gantt de acompanhamento do Project); **linha de folga** do fim da barra até o término tardio ("Folga", desligado por padrão); **seta de prazo final** verde, vermelha quando perdido; borda tracejada no vínculo desrespeitado; e o **"Caminho da tarefa"** do Project 2013 (desligado por padrão): com uma linha selecionada, predecessoras determinantes em âmbar cheio, demais predecessoras em âmbar claro, sucessoras determinadas em roxo cheio, demais sucessoras em roxo claro, vínculo determinante mais grosso e o resto apagado. As três opções ficam no grupo "Exibir" e são lembradas por pessoa e plano, como as outras preferências. Tudo o que a cor diz está também no texto da dica e do rótulo acessível.
 - Filtros novos: Críticas, Com vínculo desrespeitado, Prazo final perdido. Barra de status: quantas críticas e o fim do projeto. Painel de detalhes: datas tardias, folgas, crítica, restrição, prazo final e as predecessoras determinantes (pelo Id da linha). Diálogo de revisão e histórico mostram os três campos novos; `anchorStart` aparece no histórico antigo como "Não iniciar antes de (antigo)".
-- **Exportar para o Project (.xml)** (`src/domain/mspdi.ts`): gera o MSPDI com cabeçalho, calendário (jornada 08–12/13–17 ajustada à carga horária, feriados nos dois formatos), tarefas com EAP, durações em horas (úteis, decorridas, horas, meses → dias úteis), marcos, cedo/tardias e folgas do motor em décimos de minuto, restrições com código e data, prazo final, % e datas reais, anotações, vínculos com defasagem (úteis e decorridas) e linha de base escolhida. Sem `<Resources>`: o Project não lê nomes de recurso do XML, então a coluna sai vazia (próxima etapa: `<Resources>` + `<Assignments>`). Riscos conhecidos: tarefa em dias decorridos termina às 17:00 aqui e o Project a reagenda até as 08:00 do dia seguinte; marco sem predecessora sai às 17:00; o Project recalcula tudo ao abrir, e é justamente aí que uma divergência do motor aparece. **Ainda não foi aberto num Project real.**
+- **Exportar para o Project (.xml)** (`src/domain/mspdi.ts`): gera o MSPDI com cabeçalho, calendário (jornada 08–12/13–17 ajustada à carga horária, feriados nos dois formatos), tarefas com EAP, durações em horas (úteis, decorridas, horas, meses → dias úteis), marcos, cedo/tardias e folgas do motor em décimos de minuto, restrições com código e data, prazo final, % e datas reais, anotações, vínculos com defasagem (úteis e decorridas) e linha de base escolhida. Sem `<Resources>`: o Project não lê nomes de recurso do XML, então a coluna sai vazia (próxima etapa: `<Resources>` + `<Assignments>`). O Project recalcula tudo ao abrir, e é justamente aí que uma divergência do motor apareceria. **Conferido no Project 2019 real em 21/10/2026**, com três defeitos encontrados e corrigidos no mesmo dia: o `<HonorConstraints>` é lido invertido (o elemento saiu); o `<StartDate>` passou a ser o início das tarefas sem predecessora; e a tarefa sem predecessora que começa depois dele sai como NIAD. As horas seguem a ponta do dia calculada pelo motor (marco, IT e dias corridos às 08:00 quando é o caso), e a tarefa dividida sai com o término sem o empurrão, para o Project dividi-la de novo. Detalhes em `docs/engenharia-reversa-project.md`.
 
 ### Validação (13/10/2026)
 
@@ -590,3 +590,90 @@ Quem testa o curto prazo pode ganhar acesso ao médio prazo (ou a qualquer outro
 - o filtro de Empresa nas três semanas;
 - o "Levar" da semana anterior para a analisada;
 - o celular.
+
+## Médio prazo seguindo o Project: motor, exportação e a interface (21/10/2026)
+
+O usuário pediu: "siga como o Project, corrija tudo", e também "copie a interface e a usabilidade da ferramenta", citando a Linha do Tempo e o planejamento de recursos. A referência foi o Project 2019 do próprio usuário, na VM do UTM: a bancada rodou lá e as telas foram capturadas lá (`scripts/ms-project/`).
+
+**Identidade visual.** A decisão de 25/09/2026 foi mantida: copia-se o layout, as visões e o comportamento do Project, mas com o visual do Obra 360. A tela não tem faixa de opções, nem o azul e o tema escuro do Project.
+
+### Motor e exportação
+
+Estão descritos em `docs/engenharia-reversa-project.md`, seção "Correções de 21/10/2026". Em resumo:
+- o motor trabalha com o dia e a ponta dele (08:00 ou 17:00) e segue o Project também nas datas da tabela;
+- folga negativa na tarefa presa por restrição;
+- NIDD sem sucessora;
+- TT com piso no início do projeto;
+- tarefa em andamento dividida;
+- dias corridos em 24 h.
+
+A bancada passou a ter 69 cenários com os valores medidos no Project, em todas as tarefas e campos. O `.xml` teve três defeitos corrigidos. `TaskSchedule` ganhou `edges`, `stop` e `resume`. `PlanTask` ganhou `timeline`, gravado no jsonb `schedule_meta` (**sem migração**) e aceito pelo `save_plan_revision`. `src/domain/resource-usage.ts` calcula a carga diária de cada equipe e não conta o dia de uma ponta às 08:00.
+
+### Tela (`src/modules/medio-prazo/`)
+
+- **Modo de exibição** (`schedule-sheet.tsx`):
+  - seletor com Gráfico de Gantt, Planejador de Equipe, Uso dos Recursos e Planilha de Recursos, e os mesmos atalhos na barra de status;
+  - nome da visão em pé na borda esquerda, como no Project;
+  - a visão escolhida, a Linha do Tempo e "Recursos nas barras" ficam nas preferências do usuário por plano;
+  - os comandos que só servem ao Gantt (inserir, recuo, vínculos, excluir, Exibir e filtros) só aparecem nele.
+- **Linha do Tempo** (`timeline-band.tsx`):
+  - faixa acima de qualquer visão, ligada por padrão e com caixa para esconder;
+  - Início e Término nas pontas; barras das tarefas marcadas, com nome e período, a parte concluída mais escura e empilhadas quando se cruzam; marcos em losango com a legenda;
+  - a moldura da janela visível do Gantt: arrastar a moldura ou clicar na faixa rola o Gantt;
+  - "Adicionar/Remover da Linha do Tempo": botão na barra, aba Geral das Informações, menu de contexto da própria faixa e Delete;
+  - escala que se ajusta à largura (dia, semana, mês, trimestre ou ano) e teclado completo.
+- **Gantt** (`gantt-chart.tsx`):
+  - arrastar a barra muda o início, gravando o "Não iniciar antes de" como a célula Início;
+  - esticar a ponta muda a duração;
+  - arrastar de uma barra a outra cria um TI;
+  - arrastar o progresso muda o %;
+  - duplo clique abre as Informações;
+  - nome da equipe à direita da barra; marco com a data ao lado;
+  - barra que acaba às 08:00 termina na borda do dia;
+  - tarefa dividida desenhada em dois trechos ligados por pontilhado.
+- **Planejador de Equipe** (`team-planner.tsx`):
+  - uma linha por equipe, com as tarefas em blocos;
+  - equipe superalocada em vermelho, aberta em subfaixas, com os blocos em conflito contornados;
+  - painel "Tarefas não atribuídas: N" embaixo, com altura ajustável;
+  - arrastar o bloco para outra equipe reatribui; arrastar na horizontal muda o início (NIAD);
+  - a diagonal grava os dois num passo só do desfazer;
+  - pelo teclado: Shift+↑/↓ troca de equipe, Shift+←/→ move um dia útil e há o seletor "Atribuir a…".
+- **Uso dos Recursos** (`resource-usage-view.tsx`):
+  - equipes em negrito, com as tarefas recuadas embaixo;
+  - trabalho em horas (dias úteis × jornada);
+  - grade por dia (zoom Dias) ou por semana, com as células superalocadas em vermelho;
+  - grupo "Sem alocação".
+- **Planilha de Recursos** (`resource-sheet-view.tsx`):
+  - Nome, Tipo, Iniciais, Grupo (empresa), Unid. máximas (capacidade × 100%), Trabalho, Tarefas e Pico;
+  - ordenação por coluna;
+  - só leitura, com o link "Configurar recursos".
+- **Informações da tarefa** (`task-info-dialog.tsx`):
+  - abas Geral, Predecessoras, Recursos, Avançado e Anotações;
+  - abre por Shift+F2, pelo botão "Informações", com duplo clique na barra ou no bloco, e com duplo clique numa célula calculada ou na grade bloqueada; na célula editável, o duplo clique continua editando;
+  - o OK aplica tudo num passo só do desfazer, pelas mesmas funções de edição das células.
+- **Barra de status:**
+  - "Pronto", "Editando", "Alterações não salvas" ou "Salvando…";
+  - "Novas tarefas: Agendadas automaticamente";
+  - atalhos das visões e controle deslizante de zoom; um só controle vale para o Gantt, o Planejador e o Uso dos Recursos.
+- **Rolar até a tarefa:** botão e Ctrl+Shift+F5.
+- **Tour:** um passo para cada controle novo, em `src/modules/tour/pages/medio-prazo.ts`.
+
+**Recursos = equipes.** Os recursos do Project são as equipes cadastradas da obra. A capacidade (`weeklyCapacity`, atividades simultâneas) faz o papel das "Unidades máximas", e o recurso fica superalocado no dia em que tem mais tarefas ao mesmo tempo do que isso. A seção "Recursos" da aba, com a carga semanal contra a capacidade, continua existindo.
+
+### Validação (21/10/2026)
+
+- **Motor contra o Project montado à mão:** 1.492 checagens nos 69 cenários, 4 divergências. São as duas diferenças conhecidas: restante fracionado de tarefa em andamento e determinante com TT corrido.
+- **`.xml` exportado aberto no Project contra o motor:** 1.169 checagens, 2 divergências, no mesmo caso do restante fracionado.
+- **Typecheck, lint e testes** (ver o commit). Os componentes foram exercitados em Chromium headless, numa página isolada fora do repositório que monta a tela inteira (`Sheet`) com dados de exemplo (16 tarefas, vínculos dos quatro tipos, tarefa dividida, marcos, equipe superalocada). A primeira passada achou 9 problemas, todos corrigidos:
+  - **Alta (1):** esticar tarefa dividida contava a pausa.
+  - **Médios (3):** a pausa contava como trabalho nas visões de recursos; o Planejador movia o início de tarefa iniciada; Ctrl+Z não funcionava fora da grade.
+  - **Baixos (5):** faixa branca sob a Linha do Tempo; folga com ponto decimal; avanço desenhado por pixel e não por dia útil; barra de status abaixo da dobra; foco perdido ao fechar o diálogo.
+- **Não foi aberta no app logado:** falta conferir à mão, no navegador, o arrasto diagonal no Planejador, a moldura da Linha do Tempo e o arrasto das barras do Gantt com dados reais.
+
+### Pendências
+
+- Conferir na tela com dados reais, logado (ver acima).
+- Recursos no `.xml` (`<Resources>`/`<Assignments>`).
+- Frações de dia (restante de tarefa em andamento, durações em horas).
+- Tarefa com início real e 0% que a predecessora empurra: o motor marca a parada no próprio dia do início real, então a dica do Gantt e a duração ao esticar contam esse dia como trabalhado (no Project a parte feita tem duração zero). Corrigir pede mudar a regra de divisão no motor, no Gantt, no Planejador e na tela juntos.
+- A tabela não tem menu de contexto; o da Linha do Tempo é da própria faixa.
