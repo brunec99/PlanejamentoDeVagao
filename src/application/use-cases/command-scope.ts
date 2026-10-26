@@ -30,6 +30,9 @@ export function commandScope(command: Command, workIds: string[]): SnapshotScope
     case 'clear_fulfillment':
     case 'delete_commitment':
       return { workIds, commitments: { ids: id(command.commitmentId) } };
+    // O lote lê só as linhas que vai apontar: a barra de seleção manda dezenas de ids, não a semana.
+    case 'record_fulfillments':
+      return { workIds, commitments: { ids: Array.isArray(command.items) ? command.items.flatMap(item => id(item?.commitmentId)) : [] } };
     default:
       return full;
   }

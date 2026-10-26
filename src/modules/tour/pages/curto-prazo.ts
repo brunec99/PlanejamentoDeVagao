@@ -96,6 +96,11 @@ export const steps: TourStep[] = [
     body: 'O funil de cada coluna classifica A→Z ou Z→A uma vez e filtra por valores, que só valem no OK. Arraste a borda do cabeçalho para mudar a largura; duplo clique volta ao padrão.',
   },
   {
+    target: 'curto-marcar',
+    title: 'Marcar várias linhas',
+    body: 'A caixa de cada linha (ou esta, que marca todas as visíveis) abre a barra "linhas marcadas": escolha Status, causa e justificativa uma vez e aplique a todas numa gravação só. Com a planilha filtrada, só as linhas à vista contam.',
+  },
+  {
     target: 'curto-faixa-semana',
     title: 'Faixas das semanas',
     body: 'Com Semanas vizinhas, cada semana ganha uma faixa com período, linhas e PPC: a anterior em cima, a analisada no meio, a próxima embaixo. Na anterior só se aponta e se leva para a próxima; para editá-la, escolha-a no seletor.',
@@ -138,21 +143,21 @@ export const steps: TourStep[] = [
   {
     target: 'curto-linha-status',
     title: 'Status: Sim ou Não',
-    body: 'Ao encerrar a semana, aponte se o compromisso foi cumprido. O Sim grava na hora; o Não só é gravado depois que a causa é escolhida, e até lá a linha fica em rosa. Fica aberto mesmo com a semana encerrada.',
+    body: 'Ao encerrar a semana, aponte se o compromisso foi cumprido. A célula mostra a escolha na hora e a gravação segue por trás (filete âmbar enquanto sobe); nada trava. O Não só é gravado depois que a causa é escolhida, e até lá a linha fica em rosa. Enter desce para a linha de baixo. O quadradinho no canto da célula é a alça do Sheets: arraste para copiar o valor nas linhas vizinhas.',
   },
   {
     target: 'curto-linha-causa',
     title: 'Causa do não cumprido',
-    body: 'Só abre quando o Status é Não. A causa vem de uma lista fechada para as falhas poderem ser somadas: é dela que sai o Pareto das causas, no Fechamento.',
+    body: 'Só abre quando o Status é Não. A causa vem de uma lista fechada para as falhas poderem ser somadas: é dela que sai o Pareto das causas, no Fechamento. Também tem a alça para copiar nas linhas vizinhas com Não.',
   },
   {
     target: 'curto-linha-justificativa',
     title: 'Justificativa',
-    body: 'Texto livre ao lado da causa, liberado depois que o Sim ou o Não (com causa) foi gravado. Grava ao sair do campo e aparece em "Justificativas por causa", no Fechamento.',
+    body: 'Texto livre ao lado da causa, em qualquer ordem: escrita antes do Status, fica guardada na linha e sobe junto com o Sim ou a causa. Grava ao sair do campo; Enter e as setas levam à linha vizinha. Aparece em "Justificativas por causa", no Fechamento.',
   },
   {
     target: 'curto-levar',
-    title: 'Levar p/ próxima',
+    title: 'Levar ›: levar para a próxima semana',
     body: 'Cria a mesma linha na semana seguinte, sem apontamento; a de origem não muda e o Não segue no PPC dela. Aparece na linha com Não ou, com Semanas vizinhas, em qualquer linha. "Levar de novo" avisa que ela já está na semana seguinte.',
   },
   {
@@ -162,7 +167,7 @@ export const steps: TourStep[] = [
   },
   {
     target: 'curto-limpar-apontamento',
-    title: 'Limpar apontamento',
+    title: 'Limpar: limpar o apontamento',
     body: 'Desfaz um Sim ou Não marcado por engano: tira Status, causa e justificativa, e a linha continua, sem Status. Pede confirmação quando o apontamento já estava gravado.',
   },
   {

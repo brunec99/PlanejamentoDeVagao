@@ -173,6 +173,8 @@ export function PillSelect({
   disabled,
   placeholder,
   title,
+  dataCol,
+  onKeyDown,
 }: {
   value: string;
   options: { value: string; label: string }[];
@@ -182,6 +184,9 @@ export function PillSelect({
   disabled?: boolean;
   placeholder?: string;
   title?: string;
+  /** Coluna da planilha, para o Enter levar o foco à mesma coluna da linha vizinha (`row-navigation.ts`). */
+  dataCol?: string;
+  onKeyDown?: (event: KeyboardEvent<HTMLSelectElement>) => void;
 }) {
   const current = options.find(option => option.value === value);
   return (
@@ -189,6 +194,8 @@ export function PillSelect({
       <select
         value={value}
         onChange={event => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        data-col={dataCol}
         aria-label={ariaLabel}
         title={title ?? current?.label ?? (value || placeholder)}
         disabled={disabled}

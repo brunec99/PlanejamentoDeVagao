@@ -1,11 +1,11 @@
 import { cache } from 'react';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
-import type { User as AuthUser } from '@supabase/supabase-js';
 import type { User } from '../../domain/entities';
 import { getServiceClient } from '../repositories/supabase/client';
 import { devBypassProfileId } from './dev-bypass';
+import { trustedHeaderSecret, trustedUserFrom } from './trusted-user';
 import { hasDeveloperAccess, hasSectionAccess, RESTRICTED_MODULE_MESSAGE } from '../../application/module-access';
 
 /** SSR client bound to the request's cookies. Only for auth (getUser/signIn/signOut) — never for querying
@@ -26,13 +26,22 @@ export async function createServerSupabase() {
   });
 }
 
+/** Quem está logado: só o que as rotas e telas usam (id do Supabase Auth e e-mail). */
+export type SessionUser = { id: string; email: string | undefined };
+
 // `cache()` do React memoriza por requisição: o layout de `(app)` e uma página restrita, ou uma rota
 // que pede perfil e usuário, chamam estas funções no mesmo render e o Supabase responde uma vez só.
 // Fora de um render (rota sem despachante) o React só repassa a chamada; nada muda.
-export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
+export const getAuthUser = cache(async (): Promise<SessionUser | null> => {
+  // O proxy já validou a sessão nesta requisição e repassou a identidade nos cabeçalhos assinados
+  // (`trusted-user.ts`); usá-los poupa a segunda ida ao Supabase Auth, que era boa parte da demora de
+  // cada gravação. Sem eles (endereço fora do `matcher`, assinatura inválida, segredo ausente), a sessão
+  // é lida dos cookies como sempre foi.
+  const trusted = trustedUserFrom(await headers(), trustedHeaderSecret());
+  if (trusted) return trusted;
   const supabase = await createServerSupabase();
   const { data } = await supabase.auth.getUser();
-  return data.user;
+  return data.user ? { id: data.user.id, email: data.user.email } : null;
 });
 
 const loadProfile = cache(async (id: string): Promise<User | null> => {

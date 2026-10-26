@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { devBypassProfileId } from '@/infrastructure/auth/dev-bypass';
+import { stripTrustedHeaders, trustedHeaderSecret, trustedUserHeaders } from '@/infrastructure/auth/trusted-user';
 import {
   hasApiAccess,
   hasDeveloperAccess,
@@ -27,6 +28,19 @@ async function profileAccessOf(userId: string): Promise<{ role: string | null; m
   }
 }
 
+/** Cabeçalhos da requisição que seguem para a rota. Todo `x-obra360-*` que o navegador tenha mandado cai
+ * aqui, em qualquer caminho que encaminhe a requisição (sem usuário, acesso local sem login, sessão
+ * válida): só o proxy escreve esses cabeçalhos, e só depois de `getUser()` confirmar a sessão — é o que
+ * permite à rota reaproveitar a identidade sem ir ao Supabase Auth de novo. Os cabeçalhos vão assinados
+ * (`trustedUserHeaders`) porque alguns endereços não passam por aqui (ver o `matcher`). Clona
+ * `request.headers` na hora, para levar o cookie de sessão renovado quando `setAll` o reescreve. */
+function forwardedHeaders(request: NextRequest, user?: { id: string; email?: string }): Headers {
+  const headers = stripTrustedHeaders(new Headers(request.headers));
+  const trusted = user && trustedUserHeaders(user, trustedHeaderSecret());
+  if (trusted) for (const [name, value] of Object.entries(trusted)) headers.set(name, value);
+  return headers;
+}
+
 export async function proxy(request: NextRequest) {
   // Quando o endereço de retorno não está na lista do Supabase, ele devolve o código do login para
   // o Site URL em vez de /auth/callback. Sem este desvio o código era ignorado e a pessoa voltava
@@ -40,14 +54,16 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('redirect', request.nextUrl.pathname === '/' ? '/obras' : request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
-  if (devBypassProfileId()) return NextResponse.next({ request });
-  let response = NextResponse.next({ request });
+  // O acesso local sem login não repassa identidade: a rota resolve pelo mesmo `devBypassProfileId`.
+  if (devBypassProfileId()) return NextResponse.next({ request: { headers: forwardedHeaders(request) } });
+  let response = NextResponse.next({ request: { headers: forwardedHeaders(request) } });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: cookiesToSet => {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        // Recria a resposta para a rota receber o cookie renovado; a limpeza dos `x-obra360-*` vem junto.
+        response = NextResponse.next({ request: { headers: forwardedHeaders(request) } });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
@@ -63,6 +79,11 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
+  // Sessão confirmada: a identidade segue à rota nos cabeçalhos assinados, e `getAuthUser` dispensa a
+  // segunda ida ao Supabase Auth. Os cookies renovados em `setAll` passam para a resposta nova.
+  const forwarded = NextResponse.next({ request: { headers: forwardedHeaders(request, user) } });
+  response.cookies.getAll().forEach(cookie => forwarded.cookies.set(cookie));
+  response = forwarded;
   // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve (DEVELOPER_EMAILS),
   // com os admins e com quem tem o módulo liberado pelo admin. O acesso local sem login já
   // saiu acima e conta como desenvolvedor. As rotas repetem a conferência dos comandos. O perfil só

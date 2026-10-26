@@ -4,12 +4,24 @@ import { SupabasePlanningRepository } from '@/infrastructure/repositories/supaba
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { scopePlanning, slimForModules } from '@/application/use-cases/scope-planning';
 import { todayInSaoPaulo } from '@/infrastructure/clock';
-import { logRouteError } from '@/infrastructure/log';
+import { logRouteError, logRouteTiming, serverTimingHeader, SLOW_ROUTE_MS } from '@/infrastructure/log';
 import type { PlanningData } from '@/domain/entities';
 export const runtime = 'nodejs';
+const ROUTE = 'GET /api/planning';
 export async function GET() {
+  // Tempo por fase (`auth`, `snapshot`, `total`) em `Server-Timing`, como na rota de comandos: a carga
+  // completa é a outra requisição que a obra sente quando demora.
+  const startedAt = performance.now();
+  const durations: Record<string, number> = {};
   const { profile, developer, modules } = await getRouteAccess();
-  if (!profile) return NextResponse.json({ error: 'Perfil não provisionado. Contate o gestor.' }, { status: 403 });
+  durations.auth = performance.now() - startedAt;
+  const respond = (body: unknown, status: number) => {
+    durations.total = performance.now() - startedAt;
+    if (durations.total > SLOW_ROUTE_MS) logRouteTiming(ROUTE, durations, { actorId: profile?.id, status });
+    return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store', 'Server-Timing': serverTimingHeader(durations) } });
+  };
+  if (!profile) return respond({ error: 'Perfil não provisionado. Contate o gestor.' }, 403);
+  const snapshotStartedAt = performance.now();
   try {
     const repository = new SupabasePlanningRepository();
     const scope = { workIds: profile.workIds };
@@ -25,9 +37,11 @@ export async function GET() {
       },
       todayInSaoPaulo(),
     );
-    return NextResponse.json({ ...planning, actorId: profile.id }, { headers: { 'Cache-Control': 'no-store' } });
+    durations.snapshot = performance.now() - snapshotStartedAt;
+    return respond({ ...planning, actorId: profile.id }, 200);
   } catch (cause) {
-    logRouteError('GET /api/planning', cause, { actorId: profile.id });
-    return NextResponse.json({ error: 'Não foi possível carregar o planejamento. Tente de novo em instantes.' }, { status: 502 });
+    durations.snapshot = performance.now() - snapshotStartedAt;
+    logRouteError(ROUTE, cause, { actorId: profile.id });
+    return respond({ error: 'Não foi possível carregar o planejamento. Tente de novo em instantes.' }, 502);
   }
 }

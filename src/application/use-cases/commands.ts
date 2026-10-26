@@ -34,6 +34,10 @@ export type ActivityInput = Pick<
   Activity,
   'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
 >;
+/** O apontamento de uma linha da planilha: Sim/Não, a causa (só do Não) e a justificativa. */
+export type FulfillmentItem = { commitmentId: string; fulfilled: boolean; cause?: string; justification?: string };
+/** Linhas num apontamento em lote: a seleção da planilha inteira cabe; mais que isso é engano. */
+export const MAX_BULK_FULFILLMENTS = 500;
 export type Command =
   | {
       type: 'save_plan_revision';
@@ -127,6 +131,9 @@ export type Command =
     }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
+  /** Apontamento em lote (26/10/2026): o mesmo de `record_fulfillment` em várias linhas, numa gravação só.
+   * É o que a barra de seleção e a alça de arrastar da planilha mandam; linha a linha seriam N idas ao servidor. */
+  | { type: 'record_fulfillments'; items: FulfillmentItem[] }
   /** Desfaz o apontamento: a linha volta a "sem registro", sem Realizado, causa nem justificativa. */
   | { type: 'clear_fulfillment'; commitmentId: string }
   | { type: 'create_baseline'; workId: string; name: string }
@@ -418,6 +425,28 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
   let entityId = '';
   let wagonId: string | undefined;
   const beforeTerminal = new Set(data.wagons.filter(w => isTerminal(w.id, data)).map(w => w.id));
+  /** O apontamento de uma linha, usado pelo comando unitário e pelo lote. Sem trava de semana encerrada:
+   * o Realizado, a causa e a justificativa podem ser lançados ou corrigidos a qualquer momento (decisão do
+   * usuário, 09/10/2026); a trava vale para as linhas. Corrigir o apontamento é trocar a célula. */
+  const recordFulfillment = (item: FulfillmentItem) => {
+    const commitment = data.commitments.find(c => c.id === item.commitmentId);
+    if (!commitment) throw new Error('Compromisso não encontrado.');
+    checkWork(commitment.workId);
+    let cause: NonFulfillmentCause | undefined;
+    if (!item.fulfilled) {
+      cause = NON_FULFILLMENT_CAUSES.find(option => option === requireText(item.cause ?? '', 'Causa do não cumprimento'));
+      if (!cause) throw new Error('Causa fora da lista de causas de não cumprimento.');
+    }
+    Object.assign(commitment, {
+      fulfilled: item.fulfilled,
+      cause,
+      justification: item.justification?.trim() || undefined,
+      recordedAt: now,
+      recordedBy: actorId,
+    });
+    touch(commitment);
+    return commitment;
+  };
   switch (command.type) {
     case 'create_work': {
       if (!actsAsManager(actor.role)) throw new Error('Somente gestor ou admin pode cadastrar obras.');
@@ -930,26 +959,18 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       break;
     }
     case 'record_fulfillment': {
-      const commitment = data.commitments.find(c => c.id === command.commitmentId);
-      if (!commitment) throw new Error('Compromisso não encontrado.');
-      checkWork(commitment.workId);
-      // Sem trava de semana encerrada: o Realizado, a causa e a justificativa podem ser lançados ou
-      // corrigidos a qualquer momento (decisão do usuário, 09/10/2026). A trava vale para as linhas.
-      // A planilha é editável: corrigir o apontamento é trocar a célula, não excluir a linha.
-      let cause: NonFulfillmentCause | undefined;
-      if (!command.fulfilled) {
-        cause = NON_FULFILLMENT_CAUSES.find(option => option === requireText(command.cause ?? '', 'Causa do não cumprimento'));
-        if (!cause) throw new Error('Causa fora da lista de causas de não cumprimento.');
-      }
-      Object.assign(commitment, {
-        fulfilled: command.fulfilled,
-        cause,
-        justification: command.justification?.trim() || undefined,
-        recordedAt: now,
-        recordedBy: actorId,
-      });
-      touch(commitment);
-      entityId = commitment.id;
+      entityId = recordFulfillment(command).id;
+      break;
+    }
+    case 'record_fulfillments': {
+      if (!Array.isArray(command.items) || command.items.length === 0) throw new Error('Marque ao menos uma linha.');
+      if (command.items.length > MAX_BULK_FULFILLMENTS) throw new Error(`Aponte até ${MAX_BULK_FULFILLMENTS} linhas de cada vez.`);
+      if (new Set(command.items.map(item => item.commitmentId)).size !== command.items.length)
+        throw new Error('A mesma linha aparece mais de uma vez no lote.');
+      // Tudo ou nada: uma linha recusada (causa fora da lista, obra sem acesso) derruba o lote inteiro,
+      // porque o rascunho é descartado com o erro. É o que a tela espera para mostrar um erro só.
+      const changed = command.items.map(recordFulfillment);
+      entityId = changed[0].workId;
       break;
     }
     case 'clear_fulfillment': {

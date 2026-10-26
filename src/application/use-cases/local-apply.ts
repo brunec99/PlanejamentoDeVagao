@@ -9,6 +9,23 @@ type ClearFulfillment = { type: 'clear_fulfillment'; commitmentId: string };
 const isClearFulfillment = (command: Command): command is Command & ClearFulfillment =>
   (command as { type: string }).type === 'clear_fulfillment' && typeof (command as ClearFulfillment).commitmentId === 'string';
 
+/** Comandos que a tela projeta ANTES de o servidor responder (26/10/2026): mudam linhas que já existem,
+ * então a projeção não depende de id novo, e a célula mostra o valor escolhido na hora, como numa planilha.
+ * Se o servidor recusar, o provedor recarrega e a célula volta. Criar linha ou equipe precisa do id do
+ * servidor e continua sendo projetado depois da resposta. */
+export function projectsBeforeServer(command: Command): boolean {
+  switch ((command as { type: string }).type) {
+    case 'record_fulfillment':
+    case 'record_fulfillments':
+    case 'clear_fulfillment':
+    case 'update_commitment':
+    case 'delete_commitment':
+      return true;
+    default:
+      return false;
+  }
+}
+
 /** Projeção local de um comando já gravado no servidor, para a tela refletir a mudança sem
  * esperar a recarga de `/api/planning` (3 MB numa obra com anos de curto prazo). Cobre só o
  * curto prazo, que é onde a equipe de obra sente a lentidão; os demais devolvem `null`, e o
@@ -16,6 +33,16 @@ const isClearFulfillment = (command: Command): command is Command & ClearFulfill
  * recarga que vem em seguida é a confirmação. Nunca altera o `planning` recebido. */
 export function applyCommandLocally(planning: Planning, command: Command, id: string, actorId: string, now: string): Planning | null {
   const { data } = planning;
+  const recorded = (c: WeeklyCommitment, item: { fulfilled: boolean; cause?: string; justification?: string }): WeeklyCommitment => ({
+    ...c,
+    fulfilled: item.fulfilled,
+    // Cumprido não tem causa: a célula é limpa junto, como no servidor.
+    cause: item.fulfilled ? undefined : (item.cause as NonFulfillmentCause | undefined),
+    justification: item.justification?.trim() || undefined,
+    recordedAt: now,
+    recordedBy: actorId,
+    updatedAt: now,
+  });
   const commitments = (next: WeeklyCommitment[]): Planning => ({ ...planning, data: { ...data, commitments: next } });
   const patch = (commitmentId: string, change: (c: WeeklyCommitment) => WeeklyCommitment): Planning | null => {
     const index = data.commitments.findIndex(c => c.id === commitmentId);
@@ -74,16 +101,13 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
       }));
     }
     case 'record_fulfillment':
-      return patch(command.commitmentId, c => ({
-        ...c,
-        fulfilled: command.fulfilled,
-        // Cumprido não tem causa: a célula é limpa junto, como no servidor.
-        cause: command.fulfilled ? undefined : (command.cause as NonFulfillmentCause | undefined),
-        justification: command.justification?.trim() || undefined,
-        recordedAt: now,
-        recordedBy: actorId,
-        updatedAt: now,
-      }));
+      return patch(command.commitmentId, c => recorded(c, command));
+    case 'record_fulfillments': {
+      // Todas as linhas precisam existir: o servidor recusa o lote inteiro se uma faltar, e aqui vale o mesmo.
+      if (!command.items.length || command.items.some(item => !data.commitments.some(c => c.id === item.commitmentId))) return null;
+      const byId = new Map(command.items.map(item => [item.commitmentId, item]));
+      return commitments(data.commitments.map(c => (byId.has(c.id) ? recorded(c, byId.get(c.id)!) : c)));
+    }
     case 'delete_commitment': {
       if (!data.commitments.some(c => c.id === command.commitmentId)) return null;
       return commitments(data.commitments.filter(c => c.id !== command.commitmentId));

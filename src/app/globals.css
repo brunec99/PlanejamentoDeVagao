@@ -563,3 +563,10 @@ dialog.drawer.nav-dark {
 dialog.drawer.nav-dark {
   border-right: 0;
 }
+
+/* Linhas alvo da alça de arrastar da planilha do curto prazo (`fill-handle.tsx`): a classe é marcada
+   direto no DOM durante o arrasto e precisa vencer o fundo que a linha já tem (âmbar, rosa, cinza). */
+tr.fill-target,
+tr.fill-target > td {
+  background-color: var(--color-primary-soft) !important;
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCommandLocally } from '../src/application/use-cases/local-apply';
+import { applyCommandLocally, projectsBeforeServer } from '../src/application/use-cases/local-apply';
 import type { Planning } from '../src/application/use-cases/get-planning';
 import type { Command } from '../src/application/use-cases/commands';
 import type { WeeklyCommitment } from '../src/domain/entities';
@@ -213,4 +213,39 @@ test('comandos fora do curto prazo não têm projeção local', () => {
   const before = planning();
   assert.equal(apply(before, { type: 'create_location', workId: 'obra-1', name: 'Torre' }), null);
   assert.equal(apply(before, { type: 'update_team', teamId: 'equipe-1', company: 'A', name: 'B', weeklyCapacity: 1 }), null);
+});
+test('record_fulfillments: projeta o lote inteiro, ou nada se uma linha não existe', () => {
+  const before = planning();
+  const second: WeeklyCommitment = { ...row, id: 'c2', name: 'Reboco', fulfilled: undefined, cause: undefined, justification: undefined };
+  before.data.commitments = [row, second];
+  const frozen = snapshot(before);
+  const next = apply(before, {
+    type: 'record_fulfillments',
+    items: [
+      { commitmentId: 'c1', fulfilled: true, justification: ' feito ' },
+      { commitmentId: 'c2', fulfilled: false, cause: 'Intempéries', justification: 'Chuva' },
+    ],
+  });
+  assert.ok(next);
+  assert.equal(snapshot(before), frozen);
+  assert.deepEqual(
+    next.data.commitments.map(c => [c.fulfilled, c.cause, c.justification, c.recordedBy, c.updatedAt]),
+    [
+      [true, undefined, 'feito', ACTOR, NOW],
+      [false, 'Intempéries', 'Chuva', ACTOR, NOW],
+    ],
+  );
+  assert.equal(apply(before, { type: 'record_fulfillments', items: [{ commitmentId: 'c9', fulfilled: true }] }), null);
+  assert.equal(apply(before, { type: 'record_fulfillments', items: [] }), null);
+});
+test('projectsBeforeServer: só o que muda linha existente é projetado antes da resposta', () => {
+  assert.equal(projectsBeforeServer({ type: 'record_fulfillment', commitmentId: 'c1', fulfilled: true }), true);
+  assert.equal(projectsBeforeServer({ type: 'record_fulfillments', items: [] }), true);
+  assert.equal(projectsBeforeServer({ type: 'clear_fulfillment', commitmentId: 'c1' }), true);
+  assert.equal(projectsBeforeServer({ type: 'delete_commitment', commitmentId: 'c1' }), true);
+  assert.equal(
+    projectsBeforeServer({ type: 'create_commitment', workId: 'obra-1', name: 'x', weekStart: '2026-10-05', responsibleId: 'u' }),
+    false,
+  );
+  assert.equal(projectsBeforeServer({ type: 'create_team', workId: 'obra-1', company: 'A', name: 'B', weeklyCapacity: 1 }), false);
 });

@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Planning } from '@/application/use-cases/get-planning';
 import type { Command } from '@/application/use-cases/commands';
-import { applyCommandLocally } from '@/application/use-cases/local-apply';
+import { applyCommandLocally, projectsBeforeServer } from '@/application/use-cases/local-apply';
 import { confirmsOwnWrite, parseVersion, shouldReload } from '@/application/planning-version';
 
 type Ready = {
@@ -199,6 +199,25 @@ export function PlanningProvider({
   const execute = useCallback(
     async (command: Command) => {
       mutating.current += 1;
+      // Curto prazo: a tela mostra o comando projetado sobre os dados carregados, em vez de esperar os
+      // 3 MB da recarga (a equipe de obra sentia a planilha lenta, 10/10/2026). A recarga confirma em
+      // segundo plano; `lastText` é zerado para a resposta dela, mesmo igual à última, substituir a
+      // projeção pelo que o servidor gravou. A projeção é idempotente: se a recarga já trouxe a linha,
+      // não cria outra.
+      const project = (id: string) => {
+        if (!current.current) return false;
+        const planning = applyCommandLocally(current.current.planning, command, id, current.current.actorId, new Date().toISOString());
+        if (!planning) return false;
+        current.current = { planning, actorId: current.current.actorId };
+        lastText.current = '';
+        setLoaded(current.current);
+        return true;
+      };
+      // Quem muda linha existente é projetado ANTES da ida ao servidor (26/10/2026): o Status, a causa e a
+      // justificativa aparecem na célula no mesmo instante do clique, como numa planilha, e a gravação
+      // segue por trás. Na obra, cada apontamento esperava a resposta inteira (~4 s) com a linha travada.
+      // Se o servidor recusar ou a rede cair, a recarga devolve a linha ao que o banco tem.
+      const early = projectsBeforeServer(command) && project('');
       try {
         const res = await fetch('/api/planning/commands', {
           method: 'POST',
@@ -208,27 +227,13 @@ export function PlanningProvider({
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Falha ao aplicar o comando.');
         const id = body.id as string;
-        // Curto prazo: a tela mostra o comando na hora, projetado sobre os dados carregados, em vez
-        // de esperar os 3 MB da recarga (a equipe de obra sentia a planilha lenta, 10/10/2026). A
-        // recarga confirma em segundo plano; `lastText` é zerado para a resposta dela, mesmo igual à
-        // última, substituir a projeção pelo que o servidor gravou. A projeção é idempotente: se a
-        // recarga já trouxe a linha, não cria outra.
-        const project = () => {
-          if (!current.current) return false;
-          const planning = applyCommandLocally(current.current.planning, command, id, current.current.actorId, new Date().toISOString());
-          if (!planning) return false;
-          current.current = { planning, actorId: current.current.actorId };
-          lastText.current = '';
-          setLoaded(current.current);
-          return true;
-        };
-        const projected = project();
+        const projected = early || project(id);
         // Uma recarga que saiu antes da gravação (timer, volta à aba) ainda traz o estado antigo, e
         // `load` entregaria essa mesma promessa: espera-se ela acabar e pede-se outra, já com o comando.
         // A resposta dela substitui a projeção, por isso o comando é projetado de novo por cima.
         if (inFlight.current) {
           await inFlight.current.catch(() => {});
-          if (projected) project();
+          if (projected) project(early ? '' : id);
         }
         // Projeção confirmada pela versão: a resposta diz a versão gravada e, se ela é a conhecida + 1,
         // a única gravação desde a última carga foi esta. A projeção já é o que o banco tem; a versão
@@ -246,6 +251,10 @@ export function PlanningProvider({
         const reload = load(true).catch(() => {});
         if (!projected) await reload;
         return id;
+      } catch (cause) {
+        // A projeção adiantada já está na tela e o banco não a tem: a recarga é quem desfaz.
+        if (early) load(true).catch(() => {});
+        throw cause;
       } finally {
         mutating.current -= 1;
       }

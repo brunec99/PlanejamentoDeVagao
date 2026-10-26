@@ -9,9 +9,10 @@ import {
   type ButtonHTMLAttributes,
   type FocusEvent,
   type FormEvent,
+  type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import type { Command } from '@/application/use-cases/commands';
+import type { Command, FulfillmentItem } from '@/application/use-cases/commands';
 import { selectWorkPlanning, type Planning } from '@/application/use-cases/get-planning';
 import { NON_FULFILLMENT_CAUSES, type Activity, type User, type Wagon, type WeeklyCommitment } from '@/domain/entities';
 import { leadTimeDeadline, ppc } from '@/domain/rules';
@@ -25,6 +26,9 @@ import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
 import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet-controls';
+import { FillHandle, type FillColumn } from '@/modules/curto-prazo/fill-handle';
+import { BulkBar, bulkFulfillmentItems, type BulkChoice } from '@/modules/curto-prazo/bulk-bar';
+import { handleRowKey } from '@/modules/curto-prazo/row-navigation';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/curto-prazo/column-widths';
 import { SectionNav } from '@/modules/curto-prazo/section-nav';
@@ -59,6 +63,8 @@ const TEAM_CREATE_HINT = 'Não achou? Digite o nome para criar uma equipe nova.'
 /** Larguras iniciais (px) das colunas da planilha, na ordem em que aparecem; cada pessoa ajusta
  * arrastando a borda do cabeçalho, e o ajuste fica no navegador dela. */
 const COLUMN_DEFAULTS: Record<string, number> = {
+  // Caixa de marcar das linhas (26/10/2026), para apontar várias de uma vez; some para quem só consulta.
+  marcar: 28,
   empresa: 176,
   semana: 112,
   inicio: 128,
@@ -74,7 +80,9 @@ const COLUMN_DEFAULTS: Record<string, number> = {
   status: 96,
   causas: 224,
   justificativa: 224,
-  seguimento: 208,
+  // "Levar" e "Limpar" lado a lado, curtos: empilhados, dobravam a altura da linha e cabiam 11 linhas na
+  // tela onde o Sheets mostra 20 (vídeo da obra, 23/10/2026).
+  seguimento: 168,
   excluir: 32,
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
@@ -82,6 +90,7 @@ const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
 const NEIGHBORS_KEY = 'obra360.curto-prazo.vizinhas';
 /** O mínimo legível de cada coluna no "Ajustar à tela": abaixo disso a lista de empresa ou a data cortam. */
 const COLUMN_MIN: Record<string, number> = {
+  marcar: 28,
   empresa: 110,
   semana: 84,
   inicio: 108,
@@ -97,7 +106,7 @@ const COLUMN_MIN: Record<string, number> = {
   status: 76,
   causas: 130,
   justificativa: 130,
-  seguimento: 120,
+  seguimento: 112,
   excluir: 32,
 };
 
@@ -129,6 +138,9 @@ type RowActions = {
   openPendency: (row: WeeklyCommitment) => unknown;
   remove: (row: WeeklyCommitment) => unknown;
   clearFulfillment: (row: WeeklyCommitment) => unknown;
+  toggleSelect: (row: WeeklyCommitment) => unknown;
+  /** Alça de arrastar: copia a célula da linha de origem nas linhas alvo. */
+  fill: (column: FillColumn, sourceId: string, targetIds: string[]) => unknown;
 };
 
 /** Versão estável das ações: o objeto devolvido nunca muda, mas cada chamada cai na versão mais
@@ -188,6 +200,11 @@ function Sheet({
   const [filters, setFilters] = useState<SheetFilters>({});
   const [sort, setSort] = useState<SheetSort>();
   const [awaitingCause, setAwaitingCause] = useState<string[]>([]);
+  /** Justificativa escrita antes do Status (26/10/2026): guardada por linha e gravada junto com o Sim ou
+   * a causa. No Sheets a célula é livre, e a obra escreve a justificativa em qualquer ordem. */
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  /** Linhas marcadas para o apontamento em lote (barra de seleção). */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [printing, setPrinting] = useState<PrintKind>();
   const [neighbors, setNeighbors] = useStoredFlag(NEIGHBORS_KEY);
   const { weekOneStart } = useWorkSettings(workId);
@@ -415,11 +432,15 @@ function Sheet({
   const filterRows = around ? [...previousRows, ...weekRows, ...nextRows] : weekRows;
   const filtered = Object.values(filters).some(Boolean) || !!sort;
   const waiting = filterRows.filter(r => awaitingCause.includes(r.id)).length;
+  // A seleção vale para o que está na lista: ao filtrar, as marcadas que saem de vista deixam de contar.
+  const shownRows = [...previousShown, ...rows, ...nextShown];
+  const selectedRows = viewer ? [] : shownRows.filter(r => selected.has(r.id));
+  const allShownSelected = shownRows.length > 0 && selectedRows.length === shownRows.length;
   // A coluna "Do não cumprido" só existe quando há apontamento na semana (um Não a levar, ou um
   // Sim/Não a limpar): na semana de planejamento ela era 208 px de vazio. Nas semanas vizinhas ela
   // fica sempre, porque qualquer linha pode ser levada para a semana seguinte.
   const showFollowUp = !!around || weekRows.some(r => r.fulfilled !== undefined) || waiting > 0;
-  const visibleColumns = showFollowUp ? COLUMN_ORDER : COLUMN_ORDER.filter(column => column !== 'seguimento');
+  const visibleColumns = COLUMN_ORDER.filter(column => (column !== 'seguimento' || showFollowUp) && (column !== 'marcar' || !viewer));
   const tableWidth = visibleColumns.reduce((sum, column) => sum + columnWidths.widths[column], 0);
 
   const resizeHandle = (column: string, label: string) => (
@@ -481,14 +502,23 @@ function Sheet({
     const team = teamOf(row);
     return save(row, { supplier: company, teamId: team && textKey(team.company) !== textKey(company) ? undefined : row.teamId });
   };
-  /** A marca "aguarda causa" só sai depois que o servidor gravou: se a gravação falhar, a linha
-   * continua marcada em vez de voltar calada ao Status anterior. */
-  const settled = (row: WeeklyCommitment) => setAwaitingCause(ids => ids.filter(id => id !== row.id));
+  /** A marca "aguarda causa" e o rascunho da justificativa só saem depois que o servidor gravou: se a
+   * gravação falhar, a linha continua marcada em vez de voltar calada ao Status anterior. */
+  const settledAll = (ids: string[]) => {
+    const gone = new Set(ids);
+    setAwaitingCause(current => current.filter(id => !gone.has(id)));
+    setDrafts(current =>
+      ids.some(id => id in current) ? Object.fromEntries(Object.entries(current).filter(([id]) => !gone.has(id))) : current,
+    );
+  };
+  const settled = (row: WeeklyCommitment) => settledAll([row.id]);
+  /** A justificativa que vai junto do apontamento: a gravada ou a escrita antes do Status. */
+  const justificationOf = (row: WeeklyCommitment) => row.justification ?? drafts[row.id];
   const setStatus = async (row: WeeklyCommitment, value: string) => {
     if (value === 'Sim') {
       // Sim já gravado: desistir do Não pendente não precisa de ida ao servidor.
       if (row.fulfilled === true) return settled(row);
-      if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: row.justification }, row.id))
+      if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: justificationOf(row) }, row.id))
         settled(row);
       return;
     }
@@ -496,12 +526,98 @@ function Sheet({
   };
   const setCause = async (row: WeeklyCommitment, cause: string) => {
     if (!cause) return;
-    if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: row.justification }, row.id))
+    if (
+      await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: justificationOf(row) }, row.id)
+    )
       settled(row);
   };
   const saveJustification = (row: WeeklyCommitment, justification: string) => {
-    if (row.fulfilled === undefined || justification === (row.justification ?? '')) return;
+    // Sem Status ainda, o texto fica na linha e sobe com o Sim ou com a causa.
+    if (row.fulfilled === undefined) {
+      setDrafts(current =>
+        justification.trim()
+          ? { ...current, [row.id]: justification }
+          : Object.fromEntries(Object.entries(current).filter(([id]) => id !== row.id)),
+      );
+      return;
+    }
+    if (justification === (row.justification ?? '')) return;
     return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: row.fulfilled, cause: row.cause, justification }, row.id);
+  };
+  const toggleSelect = (row: WeeklyCommitment) =>
+    setSelected(current => {
+      const next = new Set(current);
+      if (!next.delete(row.id)) next.add(row.id);
+      return next;
+    });
+  /** Apontamento em lote (26/10/2026): barra de seleção e alça de arrastar mandam UM comando com N
+   * linhas, uma ida só ao servidor, em vez de uma gravação por linha. */
+  const recordMany = async (items: FulfillmentItem[], skipped: { count: number; why: string }) => {
+    if (!items.length) {
+      toast({
+        title: skipped.count ? `Nenhuma linha recebeu o valor: ${skipped.why}.` : 'Nada a aplicar: as linhas já estão assim.',
+        tone: 'info',
+      });
+      return false;
+    }
+    const ok = await run({ type: 'record_fulfillments', items }, 'lote');
+    if (ok) {
+      settledAll(items.map(item => item.commitmentId));
+      toast({
+        title: `${items.length} ${items.length === 1 ? 'linha apontada' : 'linhas apontadas'}.`,
+        description: skipped.count ? `${skipped.count} ${skipped.count === 1 ? 'ficou' : 'ficaram'} de fora: ${skipped.why}.` : undefined,
+        tone: 'success',
+      });
+    }
+    return ok;
+  };
+  const applyBulk = async (choice: BulkChoice) => {
+    const { items, skipped } = bulkFulfillmentItems(selectedRows, choice);
+    if (await recordMany(items, { count: skipped, why: choice.status === 'Não' ? 'Não sem causa' : 'sem Status' })) setSelected(new Set());
+  };
+  /** A alça copia a célula de origem nas linhas por onde passou, como no Sheets, respeitando as regras
+   * da planilha: Não precisa de causa (sem ela, a linha fica aguardando a causa, como no clique); a causa
+   * só entra em linha com Não; a justificativa em linha sem Status fica como rascunho. */
+  const fill = (column: FillColumn, sourceId: string, targetIds: string[]) => {
+    const byId = new Map(filterRows.map(r => [r.id, r]));
+    const source = byId.get(sourceId);
+    if (!source) return;
+    const targets = targetIds.flatMap(id => byId.get(id) ?? []);
+    const items: FulfillmentItem[] = [];
+    const pendingNo: string[] = [];
+    const draftFor: Record<string, string> = {};
+    let skipped = 0;
+    let why = '';
+    if (column === 'status') {
+      const status = statusOf(source);
+      if (!status) return void toast({ title: 'A linha de origem está sem Status.', tone: 'info' });
+      for (const t of targets) {
+        if (status === 'Sim') items.push({ commitmentId: t.id, fulfilled: true, justification: justificationOf(t) });
+        else if (t.cause ?? source.cause)
+          items.push({ commitmentId: t.id, fulfilled: false, cause: t.cause ?? source.cause, justification: justificationOf(t) });
+        else pendingNo.push(t.id);
+      }
+    } else if (column === 'causas') {
+      if (!source.cause) return void toast({ title: 'A linha de origem está sem causa.', tone: 'info' });
+      why = 'sem Não';
+      for (const t of targets) {
+        if (statusOf(t) === 'Não')
+          items.push({ commitmentId: t.id, fulfilled: false, cause: source.cause, justification: justificationOf(t) });
+        else skipped++;
+      }
+    } else {
+      const text = justificationOf(source) ?? '';
+      for (const t of targets) {
+        if (t.fulfilled === undefined) draftFor[t.id] = text;
+        else if ((t.justification ?? '') !== text)
+          items.push({ commitmentId: t.id, fulfilled: t.fulfilled, cause: t.cause, justification: text });
+      }
+    }
+    if (pendingNo.length) setAwaitingCause(ids => [...ids, ...pendingNo.filter(id => !ids.includes(id))]);
+    if (Object.keys(draftFor).length) setDrafts(current => ({ ...current, ...draftFor }));
+    // Só marcas locais (Não aguardando causa, rascunhos): nada a gravar ainda.
+    if (!items.length && (pendingNo.length || Object.keys(draftFor).length)) return;
+    void recordMany(items, { count: skipped, why });
   };
   /** Sim marcado por engano não tinha volta: o Status só trocava para Não (pedido da obra, 11/10/2026).
    * O Não ainda pendente só sai da marca local; o apontamento gravado pergunta e vai ao servidor. */
@@ -531,6 +647,8 @@ function Sheet({
     openPendency: row => setPendencyFor(row.id),
     remove: removeRow,
     clearFulfillment,
+    toggleSelect,
+    fill,
   });
   /** Resolve `true` só com a linha criada: é o sinal para a linha em branco limpar o rascunho. */
   const createRow = (draft: Draft) =>
@@ -583,6 +701,8 @@ function Sheet({
       row,
       line: scope === 'analisada' ? String(index + 1) : `${index + 1} da semana ${weekNumber(row.weekStart)}`,
       saving: busy === row.id,
+      selected: !viewer && selected.has(row.id),
+      draftJustification: drafts[row.id] ?? '',
       status: statusOf(row),
       company,
       teamName: teamOf(row)?.name ?? '',
@@ -718,6 +838,12 @@ function Sheet({
           PPC: <span className="tabular-nums text-slate-900">{stats.planned ? `${Math.round(stats.percent)}%` : '—'}</span>
           {stats.pending > 0 && <span className="ml-1 font-normal text-slate-400">({stats.pending} sem status)</span>}
         </span>
+        {/* A gravação segue por trás; a planilha não trava. O aviso só diz que ainda há algo subindo. */}
+        {busy && (
+          <span className="font-normal text-amber-700" role="status">
+            Gravando…
+          </span>
+        )}
         <label
           data-tour="curto-vizinhas"
           className="flex items-center gap-1.5"
@@ -789,6 +915,20 @@ function Sheet({
           </Callout>
         </div>
       )}
+      {selectedRows.length > 0 && (
+        <div className="mt-3">
+          <BulkBar
+            count={selectedRows.length}
+            total={shownRows.length}
+            rows={selectedRows}
+            causes={NON_FULFILLMENT_CAUSES}
+            busy={busy === 'lote'}
+            onApply={applyBulk}
+            onSelectAll={() => setSelected(new Set(shownRows.map(r => r.id)))}
+            onClear={() => setSelected(new Set())}
+          />
+        </div>
+      )}
       {filtered && (
         <div data-tour="curto-limpar-filtros" className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
           <span>
@@ -857,7 +997,7 @@ function Sheet({
               </colgroup>
               <thead className="sticky top-0 z-20 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 shadow-[0_1px_0_rgb(226_232_240)]">
                 <tr className="text-xs font-semibold normal-case tracking-normal text-slate-400">
-                  <th colSpan={6} className="px-2 pt-1.5" />
+                  <th colSpan={viewer ? 6 : 7} className="px-2 pt-1.5" />
                   {columns.map(({ day, date }) => (
                     <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">
                       {/* Com as vizinhas, cada faixa traz o próprio período: a data do dia valeria só para a do meio. */}
@@ -867,6 +1007,18 @@ function Sheet({
                   <th colSpan={showFollowUp ? 5 : 4} />
                 </tr>
                 <tr data-tour="curto-colunas" className="border-b border-slate-200">
+                  {!viewer && (
+                    <th scope="col" data-tour="curto-marcar" className="px-1 py-1.5">
+                      <input
+                        type="checkbox"
+                        className="accent-primary"
+                        checked={allShownSelected}
+                        aria-label={allShownSelected ? 'Desmarcar todas as linhas' : 'Marcar todas as linhas visíveis'}
+                        title={allShownSelected ? 'Desmarcar todas' : 'Marcar todas as linhas visíveis'}
+                        onChange={() => setSelected(allShownSelected ? new Set() : new Set(shownRows.map(r => r.id)))}
+                      />
+                    </th>
+                  )}
                   {header('empresa', 'Empresa', 'px-2 py-1.5')}
                   {header('semana', 'Semana', 'px-2 py-1.5')}
                   {header('inicio', 'Início', 'px-2 py-1.5')}
@@ -942,8 +1094,9 @@ function Sheet({
             {emptyState && !around && <div className="border-t border-slate-100 p-4">{emptyState}</div>}
           </div>
         ) : (
-          /* No celular, uma linha é um cartão: a tabela larga só serviria para rolar de lado. */
-          <div className="space-y-3" role="region" aria-label={sheetLabel}>
+          /* No celular, uma linha é um cartão: a tabela larga só serviria para rolar de lado. A barra de
+            seleção fica fixa no rodapé; o espaço embaixo evita que ela cubra o último cartão. */
+          <div className={`space-y-3 ${selectedRows.length ? 'pb-40' : ''}`} role="region" aria-label={sheetLabel}>
             {neighborSections?.previous && (
               <>
                 <WeekBandCard
@@ -1013,8 +1166,13 @@ type RowProps = {
   row: WeeklyCommitment;
   /** Número da linha nos rótulos de acessibilidade; nas semanas vizinhas leva a semana junto. */
   line: string;
-  /** A linha está gravando agora (realce âmbar); as outras seguem editáveis, a fila guarda a ordem. */
+  /** A linha está gravando agora (filete âmbar). Nada trava: a célula já mostra o valor escolhido
+   * (projeção adiantada do provedor) e a fila guarda a ordem das gravações. */
   saving: boolean;
+  /** Marcada para o apontamento em lote. */
+  selected: boolean;
+  /** Justificativa escrita antes do Status, ainda não gravada. */
+  draftJustification: string;
   /** '' | 'Sim' | 'Não', já contando o Não pendente de causa. */
   status: string;
   company: string;
@@ -1093,6 +1251,8 @@ function rowControls({
   row,
   line,
   saving,
+  selected,
+  draftJustification,
   status,
   company,
   teamName,
@@ -1111,14 +1271,27 @@ function rowControls({
 }: RowProps) {
   const missingCause = status === 'Não' && !row.cause;
   const { carry: carryable, restriction, clear: clearable } = followUpOf(row, status, canCarry, carryAny, developer, viewer);
+  // Enter desce e Shift+Enter sobe na mesma coluna, como no Sheets; as setas só nos campos de texto.
+  const keys = (arrows: boolean) => (event: KeyboardEvent<HTMLElement>) => void handleRowKey(event, { arrows });
   return {
     saving,
     missingCause,
+    select: viewer ? null : (
+      <input
+        type="checkbox"
+        className="accent-primary"
+        checked={selected}
+        aria-label={`Marcar a linha ${line}`}
+        onChange={() => actions.toggleSelect(row)}
+      />
+    ),
+    /** A alça de arrastar do Sheets, nas células de apontamento; a célula precisa ser `relative group`. */
+    fillHandle: (column: FillColumn) => (viewer ? null : <FillHandle rowId={row.id} column={column} onFill={actions.fill} />),
     company: (
       <PillCombo
         value={company}
         options={companies}
-        disabled={readOnly || saving}
+        disabled={readOnly}
         ariaLabel={`Empresa da linha ${line}`}
         placeholder="Empresa"
         onCommit={value => actions.assignCompany(row, value)}
@@ -1127,10 +1300,12 @@ function rowControls({
     week: (
       <PillSelect
         value={row.weekStart}
-        disabled={readOnly || saving}
+        disabled={readOnly}
         ariaLabel={`Semana da linha ${line}`}
         title={`${dayMonth(row.weekStart)} a ${dayMonth(addDays(row.weekStart, 5))}`}
         options={weekOptions}
+        dataCol="semana"
+        onKeyDown={keys(false)}
         onChange={value => actions.moveWeek(row, value)}
       />
     ),
@@ -1146,7 +1321,9 @@ function rowControls({
         disabled={readOnly}
         min={row.weekStart}
         max={row.weekEnd}
+        data-col="inicio"
         aria-label={`Início da linha ${line}`}
+        onKeyDown={keys(false)}
         onBlur={e => {
           if (e.target.value && e.target.value !== row.startDate) actions.saveStart(row, e.target.value);
         }}
@@ -1161,7 +1338,9 @@ function rowControls({
         disabled={readOnly}
         min={row.startDate}
         max={row.weekEnd}
+        data-col="termino"
         aria-label={`Término da linha ${line}`}
+        onKeyDown={keys(false)}
         onBlur={e => {
           if (e.target.value && e.target.value !== row.endDate) actions.saveEnd(row, e.target.value);
         }}
@@ -1173,6 +1352,7 @@ function rowControls({
         className={className}
         defaultValue={row.name}
         disabled={readOnly}
+        data-col="atividade"
         aria-label={`Atividade da linha ${line}`}
         onBlur={e => {
           const name = e.target.value.trim();
@@ -1180,16 +1360,14 @@ function rowControls({
           if (!name) e.target.value = row.name;
           else if (name !== row.name) actions.saveName(row, name);
         }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
+        onKeyDown={keys(true)}
       />
     ),
     team: (
       <PillCombo
         value={teamName}
         options={teamOptions}
-        disabled={readOnly || saving}
+        disabled={readOnly}
         allowCreate={!!company}
         emptyHint={company ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
         createHint={TEAM_CREATE_HINT}
@@ -1204,12 +1382,14 @@ function rowControls({
         value={status}
         tone={status === 'Sim' ? 'success' : status === 'Não' ? 'danger' : 'neutral'}
         // Realizado, causa e justificativa ficam abertos mesmo na semana encerrada (09/10/2026).
-        disabled={viewer || saving}
+        disabled={viewer}
         ariaLabel={`Status da linha ${line}`}
         options={[
           { value: 'Sim', label: 'Sim' },
           { value: 'Não', label: 'Não' },
         ]}
+        dataCol="status"
+        onKeyDown={keys(false)}
         onChange={value => actions.setStatus(row, value)}
       />
     ),
@@ -1217,21 +1397,27 @@ function rowControls({
       <PillSelect
         value={row.cause ?? ''}
         tone={missingCause ? 'required' : 'neutral'}
-        disabled={viewer || saving || status !== 'Não'}
+        disabled={viewer || status !== 'Não'}
         ariaLabel={`Causa da linha ${line}`}
         placeholder={missingCause ? 'Escolha a causa' : ''}
         title={status !== 'Não' ? 'A causa só é pedida quando o Status é Não.' : undefined}
         options={NON_FULFILLMENT_CAUSES.map(cause => ({ value: cause, label: cause }))}
+        dataCol="causas"
+        onKeyDown={keys(false)}
         onChange={value => actions.setCause(row, value)}
       />
     ),
+    // Aberta mesmo sem Status: o texto fica na linha (rascunho) e sobe junto com o Sim ou a causa.
     justification: (className = 'cell') => (
       <input
-        key={row.justification ?? ''}
+        key={row.justification ?? draftJustification}
         className={className}
-        defaultValue={row.justification ?? ''}
-        disabled={viewer || row.fulfilled === undefined}
+        defaultValue={row.justification ?? draftJustification}
+        disabled={viewer}
+        data-col="justificativa"
         aria-label={`Justificativa da linha ${line}`}
+        title={row.fulfilled === undefined && draftJustification ? 'Será gravada junto com o Status.' : undefined}
+        onKeyDown={keys(true)}
         onBlur={e => actions.saveJustification(row, e.target.value)}
       />
     ),
@@ -1243,16 +1429,15 @@ function rowControls({
               tour={tour.carry}
               tourId="curto-levar"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
-              disabled={saving}
               aria-label={`Levar ${row.name} para a próxima semana`}
               title={
                 carried
-                  ? `Já existe uma linha com esta atividade e este fornecedor na semana ${nextWeek}`
-                  : `Cria a mesma linha na semana ${nextWeek}, sem apontamento`
+                  ? `Já existe uma linha com esta atividade e este fornecedor na semana ${nextWeek}. Levar de novo cria outra.`
+                  : `Levar para a próxima: cria a mesma linha na semana ${nextWeek}, sem apontamento`
               }
               onClick={() => actions.carry(row)}
             >
-              {carried ? 'Levar de novo' : 'Levar p/ próxima'}
+              {carried ? 'Levar de novo' : 'Levar ›'}
             </RowButton>
           )}
           {restriction && (
@@ -1262,9 +1447,10 @@ function rowControls({
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
               aria-haspopup="dialog"
               aria-label={`Gerar restrição a partir de ${row.name}`}
+              title="Gerar restrição no longo prazo a partir desta falha"
               onClick={() => actions.openPendency(row)}
             >
-              Gerar restrição
+              Restrição
             </RowButton>
           )}
           {clearable && (
@@ -1272,16 +1458,15 @@ function rowControls({
               tour={tour.clear}
               tourId="curto-limpar-apontamento"
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs text-slate-500"
-              disabled={saving}
               aria-label={`Limpar o apontamento de ${row.name}`}
               title={
                 row.fulfilled === undefined
-                  ? 'Desfaz o Não que ainda aguarda a causa'
-                  : 'Tira o Sim/Não, a causa e a justificativa; a linha continua'
+                  ? 'Limpar apontamento: desfaz o Não que ainda aguarda a causa'
+                  : 'Limpar apontamento: tira o Sim/Não, a causa e a justificativa; a linha continua'
               }
               onClick={() => actions.clearFulfillment(row)}
             >
-              Limpar apontamento
+              Limpar
             </RowButton>
           )}
         </>
@@ -1308,8 +1493,11 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
   const c = rowControls(props);
   return (
     <tr
-      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/60' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}`}
+      data-row-id={row.id}
+      aria-busy={c.saving || undefined}
+      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/40 shadow-[inset_3px_0_0_#f59e0b]' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}`}
     >
+      {c.select && <td className="px-1 py-1 text-center">{c.select}</td>}
       <Cell tour={tour.cells} tourId="curto-linha-empresa">
         {c.company}
       </Cell>
@@ -1338,16 +1526,19 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
           {marked(row, day) ? 'x' : ''}
         </Cell>
       ))}
-      <Cell tour={tour.cells} tourId="curto-linha-status">
+      <Cell tour={tour.cells} tourId="curto-linha-status" className="group relative px-1 py-1">
         {c.statusPill}
+        {c.fillHandle('status')}
       </Cell>
-      <Cell tour={tour.cells} tourId="curto-linha-causa">
+      <Cell tour={tour.cells} tourId="curto-linha-causa" className="group relative px-1 py-1">
         {c.causePill}
+        {c.fillHandle('causas')}
       </Cell>
-      <Cell tour={tour.cells} tourId="curto-linha-justificativa">
+      <Cell tour={tour.cells} tourId="curto-linha-justificativa" className="group relative px-1 py-1">
         {c.justification()}
+        {c.fillHandle('justificativa')}
       </Cell>
-      {showFollowUp && <td className="px-1 py-1">{c.followUp && <div className="flex flex-wrap gap-1">{c.followUp}</div>}</td>}
+      {showFollowUp && <td className="px-1 py-1">{c.followUp && <div className="flex flex-nowrap gap-1">{c.followUp}</div>}</td>}
       <td className="px-1 py-1">{c.deleteButton}</td>
     </tr>
   );
@@ -1363,6 +1554,7 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
       className={`rounded-xl border p-3 shadow-sm ${c.saving ? 'border-amber-200 bg-amber-50/60' : c.missingCause ? 'border-rose-200 bg-rose-50/40' : muted ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}
     >
       <div className="flex items-start gap-2">
+        {c.select && <span className="flex h-9 items-center">{c.select}</span>}
         <Mark tour={tour.cells} tourId="curto-linha-atividade" className="min-w-0 flex-1">
           {c.name('field py-1.5 font-semibold')}
         </Mark>
@@ -1779,6 +1971,8 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
   };
   return (
     <tr data-tour="curto-linha-nova" className="border-t border-slate-100 bg-primary-soft/40" onBlur={leave}>
+      {/* A coluna da caixa de marcar: a linha em branco só existe para quem edita, que sempre a tem. */}
+      <td className="px-1 py-1" />
       <td className="px-1 py-1">
         <PillCombo
           value={draft.supplier}
