@@ -29,6 +29,8 @@ import { ColumnFilter, PillCombo, PillSelect } from '@/modules/curto-prazo/sheet
 import { FillHandle, type FillColumn } from '@/modules/curto-prazo/fill-handle';
 import { BulkBar, bulkFulfillmentItems, type BulkChoice } from '@/modules/curto-prazo/bulk-bar';
 import { handleRowKey } from '@/modules/curto-prazo/row-navigation';
+import { fulfillmentLabel, quote, recreateCommand, undoFulfillmentCommand, undoUpdateCommand } from '@/modules/curto-prazo/undo';
+import { Undo2 } from 'lucide-react';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/curto-prazo/column-widths';
 import { SectionNav } from '@/modules/curto-prazo/section-nav';
@@ -257,15 +259,14 @@ function Sheet({
     setError(message);
     toast({ title, description: message === title ? undefined : message, tone: 'danger' });
   };
-  /** Põe uma gravação na fila. `busy` é a chave da linha gravando naquele momento (realce âmbar);
-   * resolve `true` só quando a tarefa inteira terminou sem erro. */
-  const enqueue = (key: string, task: () => Promise<unknown>) => {
-    const turn = queue.current.then(async () => {
+  /** Põe uma gravação na fila. `busy` é a chave da linha gravando naquele momento (filete âmbar);
+   * resolve com o resultado da tarefa (o id gravado, nos comandos) ou `false` quando ela falhou. */
+  const enqueue = <T,>(key: string, task: () => Promise<T>): Promise<T | false> => {
+    const turn: Promise<T | false> = queue.current.then(async () => {
       setBusy(key);
       setError('');
       try {
-        await task();
-        return true;
+        return await task();
       } catch (cause) {
         fail(cause);
         return false;
@@ -277,6 +278,41 @@ function Sheet({
     return turn;
   };
   const run = (command: Command, key: string) => enqueue(key, () => execute(command));
+  /** "Desfazer" (26/10/2026): cada gravação guarda o comando que devolve a planilha ao estado anterior.
+   * Vale só nesta sessão, como no Sheets; as últimas 20. O botão e o Ctrl+Z desfazem a mais recente; o
+   * "Desfazer" de um aviso desfaz aquela ação em particular. */
+  type UndoEntry = { label: string; revert: () => Promise<unknown> };
+  const [undos, setUndos] = useState<UndoEntry[]>([]);
+  const pushUndo = (label: string, revert: () => Promise<unknown>) => {
+    const entry: UndoEntry = { label, revert };
+    setUndos(current => [...current.slice(-19), entry]);
+    return entry;
+  };
+  const revertEntry = async (entry: UndoEntry) => {
+    setUndos(current => current.filter(e => e !== entry));
+    if (await entry.revert()) toast({ title: `Desfeito: ${entry.label}.`, tone: 'info' });
+  };
+  const undoLast = () => {
+    const entry = undos[undos.length - 1];
+    if (entry && !busy) void revertEntry(entry);
+  };
+  const undoAction = (entry: UndoEntry) => ({ label: 'Desfazer', onClick: () => void revertEntry(entry) });
+  const undoLastRef = useRef(undoLast);
+  useLayoutEffect(() => {
+    undoLastRef.current = undoLast;
+  });
+  useEffect(() => {
+    if (viewer) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') return;
+      // Dentro de um campo de texto, Ctrl+Z é o desfazer do próprio campo; fora dele, o da planilha.
+      if ((event.target as HTMLElement | null)?.closest('input, textarea, [contenteditable="true"]')) return;
+      event.preventDefault();
+      undoLastRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewer]);
   const save = (
     row: WeeklyCommitment,
     patch: Partial<Pick<WeeklyCommitment, 'name' | 'supplier' | 'teamId' | 'weekStart' | 'startDate' | 'endDate'>>,
@@ -303,7 +339,10 @@ function Sheet({
         endDate: next.endDate,
       },
       row.id,
-    );
+    ).then(ok => {
+      if (ok) pushUndo(`edição de ${quote(row.name)}`, () => run(undoUpdateCommand(row), row.id));
+      return ok;
+    });
   };
   /** Trocar a Semana move a linha inteira: o período anda o mesmo número de semanas e conserva o
    * dia da semana. Sem isso o comando recusaria o período por estar fora da semana nova. */
@@ -326,7 +365,7 @@ function Sheet({
    * compromisso novo daquela semana, sem marca de continuação, e a de origem não muda. */
   const carry = async (row: WeeklyCommitment) => {
     const target = weekNumber(addDays(row.weekStart, 7));
-    const done = await run(
+    const created = await run(
       {
         type: 'create_commitment',
         workId,
@@ -340,12 +379,17 @@ function Sheet({
       },
       row.id,
     );
-    if (done)
+    if (created) {
+      const entry = pushUndo(`linha ${quote(row.name)} levada para a semana ${target}`, () =>
+        run({ type: 'delete_commitment', commitmentId: created }, created),
+      );
       toast({
         title: `Linha levada para a semana ${target}.`,
         description: `“${row.name}” entrou na semana ${target} sem apontamento. ${row.fulfilled === false ? 'A semana de origem continua com o Não.' : 'A linha de origem não muda.'}`,
         tone: 'success',
+        action: undoAction(entry),
       });
+    }
   };
   const alreadyCarried = (row: WeeklyCommitment) =>
     commitments.some(c => c.weekStart === addDays(row.weekStart, 7) && c.name === row.name && c.supplier === row.supplier);
@@ -357,8 +401,24 @@ function Sheet({
       confirmLabel: 'Excluir',
       tone: 'danger',
     });
-    if (ok && (await run({ type: 'delete_commitment', commitmentId: row.id }, row.id)))
-      toast({ title: 'Linha excluída.', tone: 'success' });
+    if (ok && (await run({ type: 'delete_commitment', commitmentId: row.id }, row.id))) {
+      // Desfazer recria a linha (id novo) e, se ela tinha Sim/Não, regrava o apontamento no id novo.
+      const entry = pushUndo(`exclusão de ${quote(row.name)}`, async () => {
+        const id = await run(recreateCommand(row, actor.id), 'desfazer');
+        if (id && row.fulfilled !== undefined)
+          return run(
+            { type: 'record_fulfillment', commitmentId: id, fulfilled: row.fulfilled, cause: row.cause, justification: row.justification },
+            id,
+          );
+        return id;
+      });
+      toast({
+        title: 'Linha excluída.',
+        description: `“${row.name}” saiu da semana ${weekNumber(row.weekStart)}.`,
+        tone: 'success',
+        action: undoAction(entry),
+      });
+    }
   };
 
   const weekEnd = addDays(week, 6);
@@ -494,7 +554,10 @@ function Sheet({
         startDate: row.startDate,
         endDate: row.endDate,
       });
+      // Desfazer tira a equipe da linha; a equipe criada fica no cadastro.
+      pushUndo(`equipe de ${quote(row.name)}`, () => run(undoUpdateCommand(row), row.id));
       teamCreated(name.trim(), company);
+      return teamId;
     });
   };
   /** Trocar a empresa desfaz a equipe de outra empresa: a equipe pertence a uma empresa só. */
@@ -518,8 +581,10 @@ function Sheet({
     if (value === 'Sim') {
       // Sim já gravado: desistir do Não pendente não precisa de ida ao servidor.
       if (row.fulfilled === true) return settled(row);
-      if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: justificationOf(row) }, row.id))
+      if (await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: true, justification: justificationOf(row) }, row.id)) {
         settled(row);
+        pushUndo(fulfillmentLabel([row]), () => run(undoFulfillmentCommand([row]), row.id));
+      }
       return;
     }
     if (value === 'Não' && row.fulfilled !== false) setAwaitingCause(ids => (ids.includes(row.id) ? ids : [...ids, row.id]));
@@ -528,8 +593,10 @@ function Sheet({
     if (!cause) return;
     if (
       await run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: false, cause, justification: justificationOf(row) }, row.id)
-    )
+    ) {
       settled(row);
+      pushUndo(fulfillmentLabel([row]), () => run(undoFulfillmentCommand([row]), row.id));
+    }
   };
   const saveJustification = (row: WeeklyCommitment, justification: string) => {
     // Sem Status ainda, o texto fica na linha e sobe com o Sim ou com a causa.
@@ -542,7 +609,13 @@ function Sheet({
       return;
     }
     if (justification === (row.justification ?? '')) return;
-    return run({ type: 'record_fulfillment', commitmentId: row.id, fulfilled: row.fulfilled, cause: row.cause, justification }, row.id);
+    return run(
+      { type: 'record_fulfillment', commitmentId: row.id, fulfilled: row.fulfilled, cause: row.cause, justification },
+      row.id,
+    ).then(ok => {
+      if (ok) pushUndo(`justificativa de ${quote(row.name)}`, () => run(undoFulfillmentCommand([row]), row.id));
+      return ok;
+    });
   };
   const toggleSelect = (row: WeeklyCommitment) =>
     setSelected(current => {
@@ -560,13 +633,18 @@ function Sheet({
       });
       return false;
     }
+    // O estado anterior das linhas, para o Desfazer: `filterRows` ainda é o de antes da gravação.
+    const ids = new Set(items.map(item => item.commitmentId));
+    const before = filterRows.filter(r => ids.has(r.id));
     const ok = await run({ type: 'record_fulfillments', items }, 'lote');
     if (ok) {
       settledAll(items.map(item => item.commitmentId));
+      const entry = pushUndo(fulfillmentLabel(before), () => run(undoFulfillmentCommand(before), 'desfazer'));
       toast({
         title: `${items.length} ${items.length === 1 ? 'linha apontada' : 'linhas apontadas'}.`,
         description: skipped.count ? `${skipped.count} ${skipped.count === 1 ? 'ficou' : 'ficaram'} de fora: ${skipped.why}.` : undefined,
         tone: 'success',
+        action: undoAction(entry),
       });
     }
     return ok;
@@ -630,7 +708,13 @@ function Sheet({
     });
     if (ok && (await run({ type: 'clear_fulfillment', commitmentId: row.id }, row.id))) {
       settled(row);
-      toast({ title: 'Apontamento limpo.', description: `“${row.name}” voltou a ficar sem Status.`, tone: 'success' });
+      const entry = pushUndo(`limpeza do apontamento de ${quote(row.name)}`, () => run(undoFulfillmentCommand([row]), row.id));
+      toast({
+        title: 'Apontamento limpo.',
+        description: `“${row.name}” voltou a ficar sem Status.`,
+        tone: 'success',
+        action: undoAction(entry),
+      });
     }
   };
   const actions = useLiveActions<RowActions>({
@@ -669,7 +753,7 @@ function Sheet({
           created = draft.teamName.trim();
         }
       }
-      await execute({
+      const id = await execute({
         type: 'create_commitment',
         workId,
         name: draft.name.trim(),
@@ -680,7 +764,9 @@ function Sheet({
         startDate: draft.startDate || undefined,
         endDate: draft.endDate || undefined,
       });
+      pushUndo(`nova linha ${quote(draft.name.trim())}`, () => run({ type: 'delete_commitment', commitmentId: id }, id));
       if (created) teamCreated(created, company);
+      return id;
     });
 
   // Levar para a próxima só mexe na semana seguinte, e é ela que o servidor confere: a linha de
@@ -843,6 +929,20 @@ function Sheet({
           <span className="font-normal text-amber-700" role="status">
             Gravando…
           </span>
+        )}
+        {!viewer && (
+          <button
+            type="button"
+            data-tour="curto-desfazer"
+            className="button-ghost px-2 py-1 text-xs"
+            disabled={!undos.length || !!busy}
+            aria-keyshortcuts="Control+Z Meta+Z"
+            title={undos.length ? `Desfazer: ${undos[undos.length - 1].label} (Ctrl+Z)` : 'Nada para desfazer nesta sessão'}
+            onClick={undoLast}
+          >
+            <Undo2 size={14} aria-hidden />
+            Desfazer{undos.length > 1 ? ` (${undos.length})` : ''}
+          </button>
         )}
         <label
           data-tour="curto-vizinhas"
@@ -1923,13 +2023,13 @@ type BlankProps = {
   weekNumber: number;
   companies: string[];
   teamNames: (company: string) => string[];
-  /** Resolve `true` só com a linha criada; `false` é erro já avisado, e o rascunho fica. */
-  onCreate: (draft: Draft) => Promise<boolean>;
+  /** Resolve com o id da linha criada; `false` é erro já avisado, e o rascunho fica. */
+  onCreate: (draft: Draft) => Promise<string | false>;
 };
 
 /** O rascunho da linha nova, o mesmo na tabela e no cartão. Trocar a empresa derruba a equipe que
  * não é dela, porque a equipe pertence a uma empresa só. */
-function useDraft(onCreate: (draft: Draft) => Promise<boolean>, teamNames: (company: string) => string[]) {
+function useDraft(onCreate: (draft: Draft) => Promise<string | false>, teamNames: (company: string) => string[]) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [creating, setCreating] = useState(false);
   // Ref, e não só estado: dois Enter seguidos chegam antes de a tela mostrar "Criando…".

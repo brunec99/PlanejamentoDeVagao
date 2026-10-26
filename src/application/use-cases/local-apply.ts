@@ -43,6 +43,15 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
     recordedBy: actorId,
     updatedAt: now,
   });
+  const cleared = (c: WeeklyCommitment): WeeklyCommitment => ({
+    ...c,
+    fulfilled: undefined,
+    cause: undefined,
+    justification: undefined,
+    recordedAt: undefined,
+    recordedBy: undefined,
+    updatedAt: now,
+  });
   const commitments = (next: WeeklyCommitment[]): Planning => ({ ...planning, data: { ...data, commitments: next } });
   const patch = (commitmentId: string, change: (c: WeeklyCommitment) => WeeklyCommitment): Planning | null => {
     const index = data.commitments.findIndex(c => c.id === commitmentId);
@@ -51,16 +60,7 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
     next[index] = change(data.commitments[index]);
     return commitments(next);
   };
-  if (isClearFulfillment(command))
-    return patch(command.commitmentId, c => ({
-      ...c,
-      fulfilled: undefined,
-      cause: undefined,
-      justification: undefined,
-      recordedAt: undefined,
-      recordedBy: undefined,
-      updatedAt: now,
-    }));
+  if (isClearFulfillment(command)) return patch(command.commitmentId, cleared);
   switch (command.type) {
     case 'create_commitment': {
       // Uma recarga que correu junto com a gravação pode já ter trazido a linha: não se duplica.
@@ -106,7 +106,13 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
       // Todas as linhas precisam existir: o servidor recusa o lote inteiro se uma faltar, e aqui vale o mesmo.
       if (!command.items.length || command.items.some(item => !data.commitments.some(c => c.id === item.commitmentId))) return null;
       const byId = new Map(command.items.map(item => [item.commitmentId, item]));
-      return commitments(data.commitments.map(c => (byId.has(c.id) ? recorded(c, byId.get(c.id)!) : c)));
+      return commitments(
+        data.commitments.map(c => {
+          const item = byId.get(c.id);
+          if (!item) return c;
+          return 'clear' in item ? cleared(c) : recorded(c, item);
+        }),
+      );
     }
     case 'delete_commitment': {
       if (!data.commitments.some(c => c.id === command.commitmentId)) return null;

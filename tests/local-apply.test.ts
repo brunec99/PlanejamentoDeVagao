@@ -249,3 +249,13 @@ test('projectsBeforeServer: só o que muda linha existente é projetado antes da
   );
   assert.equal(projectsBeforeServer({ type: 'create_team', workId: 'obra-1', company: 'A', name: 'B', weeklyCapacity: 1 }), false);
 });
+test('record_fulfillments: item com `clear` projeta a linha limpa', () => {
+  const before = planning();
+  const next = apply(before, { type: 'record_fulfillments', items: [{ commitmentId: 'c1', clear: true }] });
+  assert.ok(next);
+  const c = next.data.commitments[0];
+  assert.deepEqual(
+    [c.fulfilled, c.cause, c.justification, c.recordedAt, c.recordedBy, c.updatedAt],
+    [undefined, undefined, undefined, undefined, undefined, NOW],
+  );
+});

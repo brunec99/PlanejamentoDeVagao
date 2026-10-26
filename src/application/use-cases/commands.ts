@@ -35,7 +35,11 @@ export type ActivityInput = Pick<
   'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
 >;
 /** O apontamento de uma linha da planilha: Sim/Não, a causa (só do Não) e a justificativa. */
-export type FulfillmentItem = { commitmentId: string; fulfilled: boolean; cause?: string; justification?: string };
+export type FulfillmentRecord = { commitmentId: string; fulfilled: boolean; cause?: string; justification?: string };
+/** Item do lote: aponta a linha ou, com `clear`, limpa o apontamento dela. O `clear` existe para o
+ * "Desfazer" da planilha devolver várias linhas ao estado anterior numa gravação só, inclusive as que
+ * não tinham Status. */
+export type FulfillmentItem = FulfillmentRecord | { commitmentId: string; clear: true };
 /** Linhas num apontamento em lote: a seleção da planilha inteira cabe; mais que isso é engano. */
 export const MAX_BULK_FULFILLMENTS = 500;
 export type Command =
@@ -428,7 +432,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
   /** O apontamento de uma linha, usado pelo comando unitário e pelo lote. Sem trava de semana encerrada:
    * o Realizado, a causa e a justificativa podem ser lançados ou corrigidos a qualquer momento (decisão do
    * usuário, 09/10/2026); a trava vale para as linhas. Corrigir o apontamento é trocar a célula. */
-  const recordFulfillment = (item: FulfillmentItem) => {
+  const recordFulfillment = (item: FulfillmentRecord) => {
     const commitment = data.commitments.find(c => c.id === item.commitmentId);
     if (!commitment) throw new Error('Compromisso não encontrado.');
     checkWork(commitment.workId);
@@ -443,6 +447,22 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       justification: item.justification?.trim() || undefined,
       recordedAt: now,
       recordedBy: actorId,
+    });
+    touch(commitment);
+    return commitment;
+  };
+  /** Limpar o apontamento: mesma regra, sem trava de semana encerrada, porque limpar é corrigir a célula.
+   * Os cinco campos vão juntos: o adaptador grava null no que ficou undefined. */
+  const clearFulfillment = (commitmentId: string) => {
+    const commitment = data.commitments.find(c => c.id === commitmentId);
+    if (!commitment) throw new Error('Compromisso não encontrado.');
+    checkWork(commitment.workId);
+    Object.assign(commitment, {
+      fulfilled: undefined,
+      cause: undefined,
+      justification: undefined,
+      recordedAt: undefined,
+      recordedBy: undefined,
     });
     touch(commitment);
     return commitment;
@@ -969,25 +989,12 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         throw new Error('A mesma linha aparece mais de uma vez no lote.');
       // Tudo ou nada: uma linha recusada (causa fora da lista, obra sem acesso) derruba o lote inteiro,
       // porque o rascunho é descartado com o erro. É o que a tela espera para mostrar um erro só.
-      const changed = command.items.map(recordFulfillment);
+      const changed = command.items.map(item => ('clear' in item ? clearFulfillment(item.commitmentId) : recordFulfillment(item)));
       entityId = changed[0].workId;
       break;
     }
     case 'clear_fulfillment': {
-      const commitment = data.commitments.find(c => c.id === command.commitmentId);
-      if (!commitment) throw new Error('Compromisso não encontrado.');
-      checkWork(commitment.workId);
-      // Mesma regra do apontamento: sem trava de semana encerrada, porque limpar é corrigir a célula.
-      // Os cinco campos vão juntos: o adaptador grava null no que ficou undefined.
-      Object.assign(commitment, {
-        fulfilled: undefined,
-        cause: undefined,
-        justification: undefined,
-        recordedAt: undefined,
-        recordedBy: undefined,
-      });
-      touch(commitment);
-      entityId = commitment.id;
+      entityId = clearFulfillment(command.commitmentId).id;
       break;
     }
     case 'delete_commitment': {

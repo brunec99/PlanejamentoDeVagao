@@ -41,6 +41,11 @@ export const steps: TourStep[] = [
     body: 'Linhas cumpridas (Sim) sobre o total de linhas da semana analisada. Linha sem Status conta como não cumprida até ser apontada; o número entre parênteses diz quantas faltam. Não é a média dos percentuais executados.',
   },
   {
+    target: 'curto-desfazer',
+    title: 'Desfazer',
+    body: 'Desfaz a última gravação desta sessão: apontamento (de uma linha, do lote ou da alça), justificativa, edição de célula, "Levar", exclusão ou linha nova. Ctrl+Z (Cmd+Z no Mac) fora de um campo de texto faz o mesmo, e os avisos de ação trazem o próprio "Desfazer". Como no Sheets, recarregar a página zera a lista.',
+  },
+  {
     target: 'curto-vizinhas',
     title: 'Semanas vizinhas',
     body: 'Mostra a semana anterior acima e a próxima abaixo, na mesma planilha e com os mesmos filtros de coluna, para levar o que faltou de uma semana para a outra. Nessa visão qualquer linha pode ser levada. A escolha fica lembrada neste navegador.',

@@ -90,3 +90,24 @@ test('consulta não aponta em lote; o recorte da leitura é só as linhas do lot
   };
   assert.deepEqual(commandScope(command, ['obra-1']), { workIds: ['obra-1'], commitments: { ids } });
 });
+
+test('item com `clear` limpa o apontamento daquela linha no mesmo lote (é o que o Desfazer manda)', () => {
+  const { data, ids } = withRows(2);
+  run(data, {
+    type: 'record_fulfillments',
+    items: [
+      { commitmentId: ids[0], fulfilled: true },
+      { commitmentId: ids[1], fulfilled: true },
+    ],
+  });
+  run(data, {
+    type: 'record_fulfillments',
+    items: [
+      { commitmentId: ids[0], clear: true },
+      { commitmentId: ids[1], fulfilled: false, cause: 'Intempéries' },
+    ],
+  });
+  const [a, b] = ids.map(rowId => data.commitments.find(c => c.id === rowId)!);
+  assert.deepEqual([a.fulfilled, a.cause, a.recordedBy], [undefined, undefined, undefined]);
+  assert.deepEqual([b.fulfilled, b.cause], [false, 'Intempéries']);
+});

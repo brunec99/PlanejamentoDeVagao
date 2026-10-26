@@ -8,6 +8,9 @@ export interface ToastInput {
   description?: string;
   tone?: ToastTone;
   duration?: number;
+  /** Ação de uma vez dentro do aviso ("Desfazer"): clicar executa e fecha o aviso. Com ação, o aviso
+   * fica mais tempo na tela, para dar chance de ser lida e usada. */
+  action?: { label: string; onClick: () => void };
 }
 interface Toast extends ToastInput {
   id: number;
@@ -45,7 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = ++sequence.current;
       const tone = input.tone ?? 'success';
       setToasts(current => [...current.slice(-3), { ...input, id, tone }]);
-      const duration = input.duration ?? (tone === 'danger' ? 0 : 5000);
+      const duration = input.duration ?? (tone === 'danger' ? 0 : input.action ? 8000 : 5000);
       if (duration > 0)
         timers.current.set(
           id,
@@ -82,6 +85,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{t.title}</p>
                 {t.description && <p className="mt-0.5 text-xs leading-5 opacity-90">{t.description}</p>}
+                {t.action && (
+                  <button
+                    type="button"
+                    className="mt-1.5 rounded-md border border-current/30 px-2 py-0.5 text-xs font-semibold hover:bg-white/60"
+                    onClick={() => {
+                      dismiss(t.id);
+                      t.action!.onClick();
+                    }}
+                  >
+                    {t.action.label}
+                  </button>
+                )}
               </div>
               <button
                 type="button"
