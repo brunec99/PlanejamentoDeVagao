@@ -105,7 +105,7 @@ Todos os comandos passam por `POST /api/terminalidade/commands`. Antes de execut
 - **0028 aplicada no `takt-hub` em 08/10/2026.** As 6 tabelas respondem, e o bucket `terminalidade` é privado, com limite de 2 MB e só JPEG. Falta testar a aba logado, no celular.
 - **Fotos órfãs:** se o navegador fechar entre o envio e o `add_photo`, o arquivo fica sem pendência. Ainda não há limpeza automática.
 - **Edição simultânea:** não há trava de versão. Se duas pessoas editarem a mesma pendência ao mesmo tempo, vale a última gravação.
-- **Importação:** a lista atual do Sheets ainda não foi importada. O primeiro passo é cadastrar os locais.
+- **Importação:** a Mozine foi importada da planilha em 21/10/2026 (seção "Importação da planilha" no fim). As demais obras que ainda usam o Sheets podem passar pelo mesmo script.
 
 ## Correções de 09/10/2026
 
@@ -245,3 +245,61 @@ A pedido do usuário, a janela do PDF ganhou o agrupamento por **tipo**, e em to
 ## Tour guiado (20/10/2026)
 
 A aba 5 (27 passos) e o modo de campo (39 passos) ganharam tour "Como usar". No modo de campo, que fica fora do layout do sistema, `FieldTerminality` passou a envolver o app com `TourProvider` e `TourOverlay`, com o "?" no cabeçalho e outro em cada folha (Nova pendência, Resolver, Foto). O "?" da folha explica só os campos dela (`data-tour-scope`). Tudo é componente estático, então o tour abre sem sinal. Detalhes em [tour-guiado.md](tour-guiado.md).
+
+## Importação da planilha (21/10/2026)
+
+O usuário pediu para atualizar à mão a terminalidade da **Mozine** a partir da planilha PCP-MZN (aba "Terminalidades", "Lista de pendências Mozine"), com os dados e as fotos. A Mozine ainda não existia no Obra 360, e o usuário escolheu cadastrá-la como **"Mozine", código MZN**.
+
+### Como funciona
+
+1. **Exportar** a planilha em .xlsx. Com o link aberto a quem tem o link, basta `https://docs.google.com/spreadsheets/d/<id>/export?format=xlsx`; senão, Arquivo → Fazer download → Microsoft Excel.
+2. **Extrair** com `python3 -I scripts/terminalidade/extrair-planilha.py <planilha.xlsx> <pasta>`, que usa só a biblioteca padrão e gera `pendencias.json` e `fotos/<sha1>.<ext>`.
+   - As colunas são achadas pelo nome do cabeçalho ("Descrição da pendência", "Data observação" etc.), não pela posição.
+   - O Sheets exporta a imagem colocada na célula como desenho ancorado nela. A âncora na coluna "Foto" vira foto do problema; na "Foto da correção", foto da correção. Imagem fora dessas colunas (o logotipo, uma imagem solta abaixo da lista) é relatada e ignorada.
+   - O cadastro vem das listas suspensas da aba "Apoio", no bloco "LISTAS SUSPENSAS TERMINALIDADES": Local, Apto, Responsável 3°, Responsável ATR e Tipo.
+3. **Simular e gravar** com `node --import tsx scripts/import-terminalidade.ts <pasta> --work-code MZN --actor-email <e-mail> [--work-name Mozine --create-work] [--ajustes ajustes.json] [--env-file …] [--apply]`. Sem `--apply`, só simula e imprime o relatório. O ator precisa ser admin.
+
+### Regras (`src/application/use-cases/import-terminality.ts`)
+
+- **Cada linha passa pelos comandos da aba 5** (`planTerminalityCommand`): `create_floors`, `create_units`, `create_type`, `create_person`, `create_item`, `add_photo` e `resolve_item`. O que a tela recusaria, a importação também recusa.
+- **Obra nova** sai pelo `create_work` da tela, numa transação do planejamento, e o ator ganha acesso a ela.
+- **Cadastro:**
+  - pavimentos em ordem vertical: subsolos, térreo, pavimentos-tipo, topo (Ático, Barrilete) e o resto (Geral, Fachada) no fim;
+  - apto da lista vai para o pavimento do número ("801 ATC" no 8°), e apto usado numa linha vai para o pavimento daquela linha (o "801 ATC" também no Ático);
+  - "N.A" é pendência sem unidade;
+  - tipos e responsáveis ATR da lista mais os que só as linhas usam.
+- **Responsável terceiro:** grafia da lista quando só muda a pontuação ("ATR - Obra" vira "ATR Obra"). O resto vai como está.
+- **Observação:** a planilha tem a coluna e a aba não; o texto vai para o fim da descrição ("… — Obs.: …").
+- **Datas:**
+  - célula de data ou texto DD/MM/AAAA;
+  - texto sem a segunda barra ("08/102026") é lido com aviso;
+  - data ilegível é erro da linha;
+  - ano muito anterior às demais (mais de 180 dias antes da mediana) é aviso;
+  - o arquivo `--ajustes` corrige uma linha sem mexer na planilha: `{ "250": { "observado": "2026-10-08" } }`, ou `{ "ignorar": true }`.
+- **Resolução:** "SIM" com data e foto da correção grava resolvida. Sem a foto, fica **aberta**, com aviso, porque a foto da correção é obrigatória desde 08/10. A pendência nova já nasce resolvida, sem gravação extra.
+- **Fotos:** comprimidas no script com o sharp (vem com o Next), na mesma escada do navegador (`IMAGE_LADDER`/`THUMB_LADDER` de `compress-image.ts`): até 1600 px e miniatura de 320 px, em JPEG. Depois vão ao bucket nos caminhos de `terminalityPhotoPaths`, e só então a gravação registra as linhas.
+- **Idempotência:** o id da pendência sai da linha (local, apto, descrição, data e a primeira foto, mais a ocorrência, para linhas idênticas como "Buraco no drywall" repetido), e o da foto sai da pendência e do arquivo. Rodar de novo só acrescenta pendência nova, foto nova e resolução nova. **Campo de pendência já gravada nunca é sobrescrito**, porque a equipe pode ter corrigido na tela. Pendência aberta na planilha e resolvida no sistema continua resolvida, com aviso. Linha editada na planilha depois da importação (descrição, data, local ou primeira foto) vira pendência nova.
+
+### Resultado na Mozine (21/10/2026)
+
+- **Obra criada:** Mozine (MZN), id `c9832b53-a279-4fe6-a259-d365bff92fb5`.
+- **Cadastro:** 15 pavimentos (SS2, SS1, Térreo, 2° a 8° pavto, Ático, Barrilete, GERAL, FACHADA, Escada - 7°/6°), 31 unidades, 54 tipos (os 53 da lista e BITBOX, que só as linhas usam) e 2 responsáveis ATR (Ana, Yulli).
+- **Pendências:** 280, das quais 41 resolvidas, com 320 fotos (279 do problema e 41 da correção).
+- **Avisos da importação:**
+  - linha 250: observação digitada em 2025 e corrigida para 08/10/2026 pelo arquivo de ajustes. A coluna Observação dessa linha foi para a descrição;
+  - linha 252: "08/102026" lida como 08/10/2026;
+  - linha 104 ("Reparo de massa corrida e selador", 305): "SIM" com correção em 16/10, mas sem foto da correção, então ficou aberta;
+  - linha 227: "ATR - Obra" gravado como "ATR Obra";
+  - linha 255: sem foto do problema na planilha.
+- **Conferência:**
+  - rodar de novo deu 0 novidades;
+  - as 320 fotos têm URL assinada, e amostras abriram como JPEG (imagem e miniatura);
+  - a pendência "Massa corrida no nicho" (201) bate com a planilha em local, tipo, datas, responsáveis, situação e fotos.
+- **Testes:** `tests/terminality-import.test.ts` cobre a ordem dos pavimentos, as datas, o cadastro, a resolução dobrada na inserção, a resolução sem foto, a idempotência, as linhas idênticas e os ajustes.
+
+### Pendências
+
+- **Acesso:** só o ator (admin) recebeu acesso à Mozine. Quem usa a obra (Ana, Yulli e o resto da equipe) precisa ser liberado em Configurações.
+- **Telas de planejamento:** a Mozine não tem curto prazo, vagões nem médio prazo no Obra 360. A aba "Curto prazo" da PCP-MZN não foi importada (`scripts/import-curto-prazo.ts` serve para isso, se pedido).
+- **Planilha e sistema:** enquanto a equipe lançar nas duas, rodar a importação de novo traz só o que é novo na planilha. O que for editado na tela não volta para a planilha.
+- **Não conferido:** a aba 5 da Mozine aberta no navegador, logado.
