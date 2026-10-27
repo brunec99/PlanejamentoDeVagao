@@ -215,6 +215,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'Resolver uma pendência com o texto "Como foi corrigido" não grava; sem o texto, resolve normalmente.',
     critical: false,
   },
+  {
+    migration: '0035_agent',
+    label: 'Agente de IA: leituras guardadas, uso por pessoa e limites',
+    probe: { kind: 'table', table: 'agent_usage' },
+    effect: 'O agente de IA não guarda leituras, não contabiliza o custo nem aplica limites; o radar determinístico continua.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

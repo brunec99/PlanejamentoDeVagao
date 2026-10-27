@@ -1,3 +1,5 @@
+import { AGENT } from '../agente/agent-identity';
+import { steps as agenteAdmin } from './pages/agente-admin';
 import { steps as campo } from './pages/campo';
 import { steps as configuracoes } from './pages/configuracoes';
 import { steps as curtoPrazo } from './pages/curto-prazo';
@@ -38,6 +40,7 @@ export type TourKey =
   | 'dividas'
   | 'obraConfiguracoes'
   | 'configuracoes'
+  | 'agenteAdmin'
   | 'campo';
 
 /** Fecho comum a todos os tours: aponta para o próprio botão, para a pessoa saber onde voltar. */
@@ -46,7 +49,13 @@ const CLOSING: TourStep = {
   title: 'Sempre que precisar',
   body: 'Este botão refaz o tour da tela em que você estiver. Ele só explica: nada é alterado enquanto o tour está aberto.',
 };
-const withClosing = (steps: TourStep[]) => [...steps, CLOSING];
+/** O agente de IA está em toda tela da obra (27/10/2026); fora da obra o alvo não existe e o passo é pulado. */
+const AGENT_STEP: TourStep = {
+  target: 'agente',
+  title: `${AGENT.name}, ${AGENT.tagline}`,
+  body: 'Abre a assistente de planejamento: ela lê o longo, o médio e o curto prazo desta obra, aponta o que não bate entre os níveis e responde perguntas. Também propõe edições na planilha da semana (levar linhas, criar linhas do plano do mês, apontar), que só são gravadas quando você clica em Aplicar.',
+};
+const withClosing = (steps: TourStep[]) => [...steps, AGENT_STEP, CLOSING];
 
 const pages: Record<TourKey, TourStep[]> = {
   obras,
@@ -62,6 +71,7 @@ const pages: Record<TourKey, TourStep[]> = {
   dividas,
   obraConfiguracoes,
   configuracoes,
+  agenteAdmin,
   campo,
 };
 export const tours = Object.fromEntries(Object.entries(pages).map(([key, steps]) => [key, withClosing(steps)])) as Record<
@@ -83,6 +93,7 @@ export function resolveTourKey(pathname: string): TourKey | null {
   if (/^\/obras\/[^/]+\/dividas$/.test(pathname)) return 'dividas';
   if (/^\/obras\/[^/]+\/configuracoes$/.test(pathname)) return 'obraConfiguracoes';
   if (pathname === '/configuracoes') return 'configuracoes';
+  if (pathname === '/configuracoes/agente') return 'agenteAdmin';
   if (/^\/campo\/terminalidade\/?$/.test(pathname)) return 'campo';
   return null;
 }

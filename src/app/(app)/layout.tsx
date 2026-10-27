@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Building2, Settings, LogOut } from 'lucide-react';
+import { Building2, Settings, LogOut, Sparkles } from 'lucide-react';
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
@@ -14,6 +14,7 @@ import { ConnectionBanner } from '@/modules/layout/connection-banner';
 import { TourProvider } from '@/modules/tour/tour-provider';
 import { TourOverlay } from '@/modules/tour/tour-overlay';
 import { HelpButton } from '@/modules/tour/help-button';
+import { AgentButton } from '@/modules/agente/agent-panel';
 import { signOut } from '../login/actions';
 import { roleLabels } from '@/shared/format';
 
@@ -72,6 +73,14 @@ export default async function AppLayout({ children }: Readonly<{ children: React
                 <Settings size={16} className="shrink-0 text-brand-300/70" />
                 Configurações
               </Link>
+              {/* 27/10/2026: consumo de IA por pessoa e por obra, limite mensal por pessoa e corte de acesso. */}
+              <Link
+                href="/configuracoes/agente"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-100/80 transition-colors hover:bg-white/6 hover:text-white"
+              >
+                <Sparkles size={16} className="shrink-0 text-brand-300/70" />
+                Agente de IA
+              </Link>
             </div>
           </>
         )}
@@ -122,6 +131,8 @@ export default async function AppLayout({ children }: Readonly<{ children: React
                   }
                   end={
                     <>
+                      {/* O agente de IA fica ao lado da ajuda, em toda tela da obra (27/10/2026). */}
+                      <AgentButton />
                       <ZoomToggle variant="icon" />
                       <HelpButton variant="icon" />
                     </>

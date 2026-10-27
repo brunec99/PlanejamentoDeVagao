@@ -8,6 +8,7 @@ import { todayInSaoPaulo } from '@/infrastructure/clock';
 import { logRouteError } from '@/infrastructure/log';
 import { startOfWeek } from '@/domain/validation';
 import { applyClosingFilter, failureRows, type FailureRow } from '@/modules/curto-prazo/justifications';
+import { agentConfigFromEnv } from '@/domain/agent-cost';
 
 export const runtime = 'nodejs';
 // A chamada ao modelo leva dezenas de segundos com muitas linhas; o padrão da Vercel cortaria antes.
@@ -78,7 +79,9 @@ export async function POST(request: NextRequest) {
   const { profile } = await getRouteAccess();
   // Leitura apenas: quem consulta a obra também pode pedir a análise.
   if (!profile?.workIds.includes(workId)) return fail('Você não tem acesso a esta obra.', 403);
-  if (!process.env.ANTHROPIC_API_KEY) return fail('Análise com IA não configurada: defina ANTHROPIC_API_KEY.', 503);
+  // A mesma chave do agente de IA (27/10/2026): `ANTHROPIC_API_KEY` ou o apelido `API_ANTHROPIC` que o usuário gravou.
+  const { apiKey } = agentConfigFromEnv(process.env);
+  if (!apiKey) return fail('Análise com IA não configurada: defina ANTHROPIC_API_KEY.', 503);
 
   let rows: FailureRow[];
   try {
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
   if (!rows.length) return fail('Nenhuma falha com causa no recorte escolhido: não há o que analisar.', 422);
 
   try {
-    const client = new Anthropic();
+    const client = new Anthropic({ apiKey });
     const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
