@@ -2,11 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerSupabase } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { BOOTSTRAP_ADMIN_EMAIL } from '@/application/module-access';
-import { NOT_REGISTERED_REASON } from '@/application/access-request';
+import { ACCESS_DOMAINS_LABEL, NOT_REGISTERED_REASON, isAllowedEmail } from '@/application/access-request';
 import { ACCESS_REQUEST_COOKIE, signIdentity } from '@/infrastructure/auth/access-request-token';
 
 export const runtime = 'nodejs';
-const ALLOWED_DOMAIN = 'atrincorporadora.com.br';
 const NOT_REGISTERED = 'Seu e-mail ainda não foi cadastrado no Obra 360. Peça o cadastro a um administrador.';
 
 function loginError(request: NextRequest, message: string, reason?: string) {
@@ -51,9 +50,9 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   // Recusas encerram a sessão só neste navegador: a global derrubaria a mesma pessoa no Takt Hub.
-  if (!user?.email || !user.email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
+  if (!user?.email || !isAllowedEmail(user.email)) {
     await supabase.auth.signOut({ scope: 'local' });
-    return loginError(request, `Apenas contas @${ALLOWED_DOMAIN} podem acessar este sistema.`);
+    return loginError(request, `Apenas contas ${ACCESS_DOMAINS_LABEL} podem acessar este sistema.`);
   }
 
   // Só entra quem tem perfil, criado pelo cadastro em Configurações. O Auth é dividido com o Takt Hub:

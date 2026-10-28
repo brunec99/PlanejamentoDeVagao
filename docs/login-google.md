@@ -4,7 +4,7 @@ O Planejamento Vagão não tem senha própria. Quem decide se você entra é o G
 
 ## O que você precisa
 
-Uma conta **@atrincorporadora.com.br**. Conta Gmail pessoal não serve, mesmo que seja a sua e mesmo que você use o mesmo computador: o sistema recusa qualquer endereço fora desse domínio.
+Uma conta **@atrincorporadora.com.br** ou, desde 28/10/2026, **@taktengenharia.com.br** (equipe da Takt Engenharia). Conta Gmail pessoal não serve, mesmo que seja a sua e mesmo que você use o mesmo computador: o sistema recusa qualquer endereço fora desses dois domínios.
 
 Desde 08/10/2026 você também precisa **ter sido cadastrado** por um administrador. O sistema passou a dividir o banco e o login com o Takt Hub, e o cadastro aberto fica desligado. Ter conta da ATR não basta mais: se o seu e-mail não estiver cadastrado, o login é recusado com uma mensagem dizendo isso.
 
@@ -12,7 +12,7 @@ Desde 08/10/2026 você também precisa **ter sido cadastrado** por um administra
 
 1. Abra o endereço do sistema. Se você não estiver logado, ele leva direto para a tela **Acesso ao sistema**.
 2. Clique em **Entrar com Google**.
-3. O Google pergunta **com qual conta** você quer entrar — ele pergunta toda vez, de propósito, porque muita gente tem a conta da ATR e a pessoal abertas no mesmo navegador. Escolha a da ATR.
+3. O Google pergunta **com qual conta** você quer entrar — ele pergunta toda vez, de propósito, porque muita gente tem a conta da empresa e a pessoal abertas no mesmo navegador. A lista mostra só contas de empresa (Google Workspace). Escolha a da ATR ou a da Takt.
 4. Pronto. O sistema devolve você para a página que você tentou abrir. Se você entrou pela porta da frente, cai na lista de obras.
 
 Não é preciso repetir isso todo dia: a sessão fica guardada no navegador. Ela expira depois de um tempo parado, e aí o sistema pede o login de novo e **volta para a mesma página** em que você estava.
@@ -21,7 +21,7 @@ Não é preciso repetir isso todo dia: a sessão fica guardada no navegador. Ela
 
 Entrar e ver acesso são coisas diferentes. O cadastro dá o papel, e as obras são liberadas à parte. Se o administrador ainda não liberou nenhuma, a tela de obras aparece vazia.
 
-Isso não é erro nem falha de configuração: é a regra. Ser da ATR garante que você entra; **quem libera obra é um administrador**. Fale com quem administra o sistema e diga quais obras você precisa ver. É um clique do lado dele.
+Isso não é erro nem falha de configuração: é a regra. O cadastro garante que você entra; **quem libera obra é um administrador**. Fale com quem administra o sistema e diga quais obras você precisa ver. É um clique do lado dele.
 
 ## Quando aparecer uma mensagem de erro
 
@@ -29,7 +29,7 @@ A tela de login mostra o motivo em vermelho. O que cada um quer dizer:
 
 | Mensagem | O que aconteceu | O que fazer |
 | --- | --- | --- |
-| **Apenas contas @atrincorporadora.com.br podem acessar este sistema** | Você entrou com uma conta pessoal ou de outro domínio | Clique em Entrar com Google de novo e escolha a conta da ATR. Se o Google não perguntar, saia da conta pessoal ou use uma janela anônima |
+| **Apenas contas @atrincorporadora.com.br ou @taktengenharia.com.br podem acessar este sistema** | Você entrou com uma conta pessoal ou de outro domínio | Clique em Entrar com Google de novo e escolha a conta da ATR ou da Takt. Se o Google não perguntar, saia da conta pessoal ou use uma janela anônima |
 | **Falha ao entrar com Google. Tente novamente** | A volta do Google não completou — normalmente rede instável ou a janela ficou aberta tempo demais | Tente de novo. Se insistir, feche a aba e abra o endereço outra vez |
 | **Login incompleto. Tente novamente** | O endereço de retorno foi aberto direto, sem passar pelo Google | Comece pela tela de login, clicando no botão |
 | **Seu e-mail ainda não foi cadastrado no Obra 360** | O e-mail não tem cadastro, ou o seu perfil foi excluído | Peça o cadastro a um administrador e entre de novo com o Google |
@@ -69,7 +69,7 @@ Numa instalação nova não existe ninguém para liberar o primeiro acesso. Por 
 
 ## O que o sistema não faz
 
-Não cria senha, não envia "esqueci minha senha" e não aceita conta de fora do domínio — nem para visita, nem para cliente, nem temporariamente. Quem precisa ver a obra precisa de uma conta da ATR. Se a conta Google de alguém for desativada pela empresa, o acesso ao sistema cai junto, sem nenhum passo adicional aqui.
+Não cria senha, não envia "esqueci minha senha" e não aceita conta de fora dos dois domínios (ATR e Takt) — nem para visita, nem para cliente, nem temporariamente. Quem precisa ver a obra precisa de uma conta da ATR ou da Takt. Para liberar outro domínio, é uma linha em `ACCESS_DOMAINS` (`src/application/access-request.ts`), seguida de deploy. Se a conta Google de alguém for desativada pela empresa, o acesso ao sistema cai junto, sem nenhum passo adicional aqui.
 
 ## "Faço login e volto para a tela de login" (23/09/2026)
 

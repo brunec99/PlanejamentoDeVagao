@@ -109,7 +109,7 @@ export default async function LoginPage({
                 <h1 id="login-title" className="text-2xl font-semibold tracking-tight text-brand-950">
                   Entrar no Obra 360
                 </h1>
-                <p className="mt-1 text-sm text-slate-600">Use sua conta Google da ATR para acessar o planejamento das obras.</p>
+                <p className="mt-1 text-sm text-slate-600">Use sua conta Google da ATR ou da Takt para acessar o planejamento das obras.</p>
               </div>
             </div>
 

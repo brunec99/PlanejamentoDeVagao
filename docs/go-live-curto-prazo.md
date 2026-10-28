@@ -235,7 +235,7 @@ No mesmo dia, o usuário pediu que a tela de usuários mostrasse **todas as func
 Quem entra com o Google e não tem cadastro vê, abaixo do aviso, o botão **"Solicitar acesso"**. Ele abre um formulário curto com e-mail, nome e "obra e função" (opcional), e o pedido vai para a tabela `access_requests` (migração **0032, criada e não aplicada**; fora do snapshot, não reescreve `commit_planning`, lida e gravada só pelo servidor).
 
 - **E-mail confirmado ou digitado.** Quando a pessoa já tem conta no Auth compartilhado (do Takt, por exemplo), o retorno do login sabe quem ela é: o e-mail vai num cookie assinado com a chave de serviço, válido por 30 minutos e só no caminho `/login`, e aparece travado como "confirmado pelo Google". Quando o Supabase recusa antes (sem conta no Auth, porque o cadastro aberto está desligado), o e-mail não chega ao sistema e a pessoa o digita; o pedido fica marcado "não confirmado" para o admin.
-- **Regras** (`src/application/access-request.ts`): só `@atrincorporadora.com.br`, nome até 120 caracteres, mensagem até 500. Um pedido por e-mail: repetir atualiza o mesmo; cliques seguidos em menos de um minuto não regravam; pedido digitado não sobrescreve um confirmado.
+- **Regras** (`src/application/access-request.ts`): só `@atrincorporadora.com.br` (e `@taktengenharia.com.br` desde 28/10/2026, ver abaixo), nome até 120 caracteres, mensagem até 500. Um pedido por e-mail: repetir atualiza o mesmo; cliques seguidos em menos de um minuto não regravam; pedido digitado não sobrescreve um confirmado.
 - **Admin, em Configurações → Usuários:** a lista "Pedidos de acesso" (só aparece com pedido pendente) mostra nome, e-mail, se foi confirmado e a mensagem. "Cadastrar" cria o usuário como consulta, sem obras, e o pedido sai da lista; as obras e os módulos se liberam logo abaixo. "Dispensar" só tira da lista. Cadastrar pelo formulário com o mesmo e-mail também aprova o pedido.
 - Nenhum e-mail é enviado: a pessoa é avisada pelo admin e entra de novo com o Google.
 - Sem a 0032 aplicada, o botão aparece mas o envio responde que não foi possível registrar, e a lista de pedidos não aparece; a tela de migrações avisa (sonda `access_requests`).
@@ -243,3 +243,38 @@ Quem entra com o Google e não tem cadastro vê, abaixo do aviso, o botão **"So
 **Correção, 14/10/2026:** a 0032 foi aplicada, mas o pedido respondia "Não foi possível registrar o pedido agora". A causa era `permission denied for table access_requests`: no takt-hub as tabelas novas não ganham permissão automática para a chave de serviço (a 0028 já dava o `grant` explícito, e a 0032 esqueceu). A migração **0033_access_requests_grant** dá o `grant select, insert, update, delete` a `service_role`. Toda migração que criar tabela neste projeto precisa desse `grant`.
 
 **Correção, 14/10/2026 — dados dos módulos liberados:** o Pedro tinha IFC liberado, criou 8 modelos e nenhum aparecia, então nunca pôde subir arquivo. A causa: `/api/planning` decidia o recorte só por "é desenvolvedor", e quem não é recebia o recorte do curto prazo, sem modelos IFC, planos do mês nem vagões, mesmo com o módulo liberado. A tela do médio prazo de quem só tinha o módulo liberado também abria vazia. Agora o recorte é `slimForModules(data, modules)` (`src/application/use-cases/scope-planning.ts`): IFC e modelo federado levam modelos, versões e regras de vínculo; longo prazo, vagões, dívidas e integrações levam vagões, atividades, restrições e afins; médio prazo leva os planos do mês e também os vagões, que a janela de três meses, a cobertura e o quadro de restrições leem. Sem módulo liberado, o recorte é o mesmo do go-live. Os modelos já criados passam a aparecer sem nenhuma ação no banco.
+
+## Tela de usuários em grade (28/10/2026)
+
+**Pedido do usuário:** "São muitos usuários e está difícil de ajustar. Possibilite classificar por nome e monte uma visualização melhor." Com 18 pessoas, 7 obras e 10 módulos, a tela empilhava um cartão por pessoa, com um chip por obra e outro por módulo: mais de 300 chips numa coluna, na ordem do banco e sem busca. Além disso, cada clique esperava o servidor e depois a recarga do planejamento inteiro, que para o admin traz todas as obras (passou de 23 mil compromissos com a importação do mesmo dia).
+
+**O que mudou (Configurações → Usuários e acessos):**
+- **Grade:** uma linha por pessoa e uma coluna por obra, com uma célula de marcar em cada cruzamento. A troca **Obras / Módulos** põe nas colunas os 7 módulos em desenvolvimento. Os abertos a todos (curto prazo, terminalidade e configurações da obra) não aparecem, e o rodapé diz isso. Na linha de um admin, os módulos ficam marcados em cinza, sem clique.
+- **Ordem:** por nome, de A a Z (padrão, sem diferença de acento nem de caixa), ou por papel, clicando no cabeçalho. Clicar de novo inverte a ordem, e o papel desempata pelo nome.
+- **Pesquisa e filtros:** a pesquisa é por nome ou e-mail, e cada palavra digitada precisa aparecer. O filtro de papel e o de obra incluem "Sem obra liberada", que mostra quem foi cadastrado e ainda não vê nada (a linha também avisa). O contador mostra "N de M usuários".
+- **Leitura da grade:** o cabeçalho de cada coluna mostra quantos dos usuários listados têm aquele acesso. A coluna do nome e o cabeçalho ficam presos ao rolar, e no celular a grade rola por dentro, sem rolar a página.
+- **Clique imediato:** `grant_access`, `revoke_access`, `set_role` e `set_module_access` entraram na projeção local (`src/application/use-cases/local-apply.ts`). A célula muda no clique, e o servidor confirma por trás, sem baixar o planejamento quando a versão confirma a própria gravação. Se o servidor recusar, um aviso explica e a recarga devolve a célula. A mudança no **próprio** acesso não é projetada, porque muda o que `/api/planning` devolve, e continua esperando a recarga.
+- **Erros:** o erro de papel ou de exclusão vai para um aviso (toast), porque não cabe embaixo de cada célula.
+
+**Código:** `src/modules/configuracoes/users-table.tsx` (grade), `src/modules/configuracoes/user-list.ts` (pesquisa, filtros e ordem, puro) e `settings-manager.tsx`, que perdeu os chips. O tour ganhou os passos "Pesquisar e filtrar" e "Obras ou módulos", e a ajuda "Como funciona" foi reescrita.
+
+**Validação:**
+- Testes novos: `tests/user-list.test.ts` (ordem, pesquisa, filtros, cabeçalho) e dois casos em `tests/local-apply.test.ts` (projeção dos quatro comandos, entrada intacta, próprio acesso sem projeção).
+- Tela aberta numa prévia temporária fora do proxy, com 18 usuários fictícios e as APIs respondidas pelo Playwright, a 1280 px e a 390 px. Foram conferidos: a ordem A–Z com acento, Z–A, ordem por papel, a pesquisa, os filtros "Sem obra liberada" e "Com acesso a Mozine", a célula marcada 100 ms após o clique (com o servidor simulado levando 600 ms), o módulo do admin travado e nenhuma rolagem horizontal da página no celular.
+- **Não validado:** a tela logada em produção. A prévia foi apagada antes do commit.
+
+## Contas da Takt Engenharia (28/10/2026)
+
+**Pedido do usuário:** a equipe da Takt Engenharia tem e-mail `@taktengenharia.com.br` e precisa ser cadastrada. O login, o cadastro pelo admin e o pedido de acesso só aceitavam `@atrincorporadora.com.br`: a tela de login respondia "Só contas @atrincorporadora.com.br podem pedir acesso", e o "Cadastrar usuário" em Configurações recusava o e-mail.
+
+**O que mudou:**
+- **Lista única de domínios:** `ACCESS_DOMAINS = ['atrincorporadora.com.br', 'taktengenharia.com.br']` e `isAllowedEmail` em `src/application/access-request.ts`. O domínio estava repetido em três lugares (retorno do login, `/api/admin/invite` e pedido de acesso), e os três passaram a usar a lista. A conferência é por `@domínio` no fim do e-mail, então subdomínio ou domínio parecido (`ana@obra.taktengenharia.com.br`, `ana@faketaktengenharia.com.br`) continuam recusados.
+- **Escolha de conta no Google:** o parâmetro `hd` passou de `atrincorporadora.com.br` para `*` (`src/app/login/actions.ts`). Com o domínio fixo, o Google escondia as contas da Takt. Com `*`, ele mostra qualquer conta de empresa (Google Workspace) e esconde as contas pessoais. Quem decide é o servidor, no retorno.
+- **Textos:** a tela de login diz "conta Google da ATR ou da Takt", e o campo de e-mail do pedido de acesso também. As mensagens de recusa citam os dois domínios.
+- **O que não mudou:** estar no domínio não basta. Só entra quem tem perfil no Obra 360, criado por um admin (Configurações → Cadastrar usuário ou "Cadastrar" no pedido de acesso). Muitas pessoas da Takt já têm conta no Auth compartilhado por causa do Takt Hub. O cadastro reaproveita essa conta e cria só o perfil do Obra 360, sem mexer no acesso delas ao Takt.
+
+**Para cadastrar alguém da Takt:** em Configurações, informe o e-mail `@taktengenharia.com.br`, o papel e as obras. Avise a pessoa para entrar com o Google usando a conta da Takt. A pessoa também pode clicar em "Solicitar acesso" na tela de login, e o pedido aparece para o admin.
+
+**Validação:**
+- `tests/access-request.test.ts` ganhou um caso: aceita ATR e Takt com qualquer caixa, recusa Gmail, subdomínio, domínio parecido e e-mail vazio, e a mensagem de recusa cita os dois domínios. Typecheck e lint dos arquivos alterados sem erros.
+- **Não validado:** o login real de uma conta `@taktengenharia.com.br` em produção, que depende do deploy. A tela de consentimento do Google é **Externa** (ver "Projeto compartilhado com o Takt Hub"), então não deve barrar contas de fora da ATR. Se barrar, a correção é no Google Cloud, e não no código.

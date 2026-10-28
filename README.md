@@ -30,7 +30,7 @@ npm ci
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Login é obrigatório e feito só por Google Workspace (domínio `atrincorporadora.com.br`) — configure o Supabase e o provedor Google antes de testar, veja as seções [Supabase](#supabase) e [Login com Google](#login-com-google) abaixo. Depois acesse http://127.0.0.1:3000/login. Para testar sem o Google só no `next dev`, use `DEV_AUTH_BYPASS_PROFILE_ID` (ver `.env.example`). A data de "hoje" é a real, no fuso de São Paulo (`src/infrastructure/clock.ts`), em todas as rotas; a data fixa de demonstração só existe nos testes em memória. Os dados persistem no Postgres do Supabase.
+Login é obrigatório e feito só por Google Workspace (domínios `atrincorporadora.com.br` e `taktengenharia.com.br`) — configure o Supabase e o provedor Google antes de testar, veja as seções [Supabase](#supabase) e [Login com Google](#login-com-google) abaixo. Depois acesse http://127.0.0.1:3000/login. Para testar sem o Google só no `next dev`, use `DEV_AUTH_BYPASS_PROFILE_ID` (ver `.env.example`). A data de "hoje" é a real, no fuso de São Paulo (`src/infrastructure/clock.ts`), em todas as rotas; a data fixa de demonstração só existe nos testes em memória. Os dados persistem no Postgres do Supabase.
 
 ```sh
 npm run typecheck          # tipos
@@ -189,7 +189,7 @@ Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, 
 
 ## Login com Google
 
-Autenticação exclusivamente via Google OAuth, restrita ao domínio `atrincorporadora.com.br` (checado no servidor em `src/app/auth/callback/route.ts`, não só pelo parâmetro `hd` do Google). Não existe mais login por e-mail/senha.
+Autenticação exclusivamente via Google OAuth, restrita aos domínios `atrincorporadora.com.br` e `taktengenharia.com.br` (lista única `ACCESS_DOMAINS` em `src/application/access-request.ts`, conferida no servidor em `src/app/auth/callback/route.ts`, no cadastro pelo admin e no pedido de acesso; o `hd=*` do Google só esconde contas pessoais na escolha de conta). A Takt entrou em 28/10/2026, e ter e-mail de um dos domínios não basta: continua valendo o cadastro feito por um admin. Não existe mais login por e-mail/senha.
 
 **Desde 08/10/2026 o projeto Supabase é dividido com o Takt Hub** (`takt-hub`; o Takt fica nos schemas `takt`/`takt_private`, o Obra 360 no `public`). Por isso, três coisas mudaram:
 - **Cadastro obrigatório:** só entra quem tem perfil. O admin cadastra o e-mail em Configurações, sem envio de e-mail, e a exceção é o primeiro acesso do admin inicial.
@@ -200,9 +200,9 @@ Autenticação exclusivamente via Google OAuth, restrita ao domínio `atrincorpo
 2. Em **Authorized redirect URIs**, adicione exatamente: `https://<seu-projeto>.supabase.co/auth/v1/callback` (URL do próprio Supabase, não do app — pegue o `<seu-projeto>` da URL do seu `NEXT_PUBLIC_SUPABASE_URL`).
 3. Copie o **Client ID** e o **Client Secret** gerados.
 4. No Supabase Dashboard → **Authentication → Providers → Google**, ative o provedor e cole as duas credenciais.
-5. Acesse `/login` e entre com uma conta `@atrincorporadora.com.br`. O primeiro login de `bruno.engenharia@atrincorporadora.com.br` cria automaticamente o perfil administrador (com acesso a todas as obras já cadastradas); qualquer outra conta do domínio é criada como "Consulta" sem acesso a nenhuma obra até um admin liberar em `/configuracoes`.
+5. Acesse `/login` e entre com uma conta `@atrincorporadora.com.br` ou `@taktengenharia.com.br`. O primeiro login de `bruno.engenharia@atrincorporadora.com.br` cria automaticamente o perfil administrador (com acesso a todas as obras já cadastradas); qualquer outra conta do domínio é criada como "Consulta" sem acesso a nenhuma obra até um admin liberar em `/configuracoes`.
 
-Contas fora do domínio configurado são barradas e deslogadas no próprio callback, mesmo que completem o login no Google.
+Contas fora dos domínios configurados são barradas e deslogadas no próprio callback, mesmo que completem o login no Google.
 
 ## Arquitetura e evolução
 
@@ -257,6 +257,8 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
   Faltam a troca das variáveis na Vercel e a importação do Sheets. Veja o [roteiro do go-live](docs/go-live-curto-prazo.md).
 
   **28/10/2026:** histórico do curto prazo importado para Atmos e Tauá (obras criadas nesta data), Brizz, Essenza e Mozine (16.042 compromissos). A causa "Falha de Gestão da Construtora" entrou na lista oficial. Amariles, Lummi e My Sunset ficaram de fora, e a Blentt não foi tocada. Veja a [importação de 28/10](docs/go-live-curto-prazo.md#importação-do-histórico-das-demais-obras-28102026).
+
+  **28/10/2026, tela de usuários:** os cartões com chips viraram uma grade pessoa × obra (ou × módulo), em ordem alfabética, com pesquisa por nome ou e-mail, filtros de papel e de obra e clique que marca a célula na hora. Veja a [tela de usuários em grade](docs/go-live-curto-prazo.md#tela-de-usuários-em-grade-28102026).
 
 - **08/10/2026 — revisão visual com base no Takt Hub (não publicada):**
   - a marca passou ao azul-petróleo da Takt e os neutros ganharam um tom desse azul;

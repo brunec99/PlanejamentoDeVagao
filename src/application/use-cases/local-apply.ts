@@ -1,5 +1,6 @@
 import type { NonFulfillmentCause, PlanningData, Team, WeeklyCommitment } from '../../domain/entities';
 import { addDays, startOfWeek } from '../../domain/validation';
+import { normalizeModules } from '../module-access';
 import type { Command } from './commands';
 import type { Planning } from './get-planning';
 
@@ -20,6 +21,12 @@ export function projectsBeforeServer(command: Command): boolean {
     case 'clear_fulfillment':
     case 'update_commitment':
     case 'delete_commitment':
+    // Tela de usuários (28/10/2026): cada clique na grade de acessos esperava a recarga do planejamento
+    // inteiro, que para o admin traz todas as obras.
+    case 'grant_access':
+    case 'revoke_access':
+    case 'set_role':
+    case 'set_module_access':
       return true;
     default:
       return false;
@@ -27,9 +34,9 @@ export function projectsBeforeServer(command: Command): boolean {
 }
 
 /** Projeção local de um comando já gravado no servidor, para a tela refletir a mudança sem
- * esperar a recarga de `/api/planning` (3 MB numa obra com anos de curto prazo). Cobre só o
- * curto prazo, que é onde a equipe de obra sente a lentidão; os demais devolvem `null`, e o
- * provedor segue recarregando como antes. Não valida: o servidor já aceitou o comando, e a
+ * esperar a recarga de `/api/planning` (3 MB numa obra com anos de curto prazo). Cobre o
+ * curto prazo, que é onde a equipe de obra sente a lentidão, e os acessos da tela de usuários; os
+ * demais devolvem `null`, e o provedor segue recarregando como antes. Não valida: o servidor já aceitou o comando, e a
  * recarga que vem em seguida é a confirmação. Nunca altera o `planning` recebido. */
 export function applyCommandLocally(planning: Planning, command: Command, id: string, actorId: string, now: string): Planning | null {
   const { data } = planning;
@@ -131,6 +138,30 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
       };
       const next: PlanningData = { ...data, teams: [...data.teams, team] };
       return { ...planning, data: next };
+    }
+    case 'grant_access':
+    case 'revoke_access':
+    case 'set_role':
+    case 'set_module_access': {
+      // O próprio acesso muda o que `/api/planning` devolve (obras, módulos): esse espera a recarga.
+      const index = data.users.findIndex(u => u.id === command.userId);
+      if (index < 0 || command.userId === actorId) return null;
+      const user = data.users[index];
+      const changed =
+        command.type === 'grant_access'
+          ? { workIds: user.workIds.includes(command.workId) ? user.workIds : [...user.workIds, command.workId] }
+          : command.type === 'revoke_access'
+            ? { workIds: user.workIds.filter(id => id !== command.workId) }
+            : command.type === 'set_role'
+              ? { role: command.role }
+              : {
+                  modules: normalizeModules(
+                    command.enabled ? [...(user.modules ?? []), command.section] : (user.modules ?? []).filter(s => s !== command.section),
+                  ),
+                };
+      const users = data.users.slice();
+      users[index] = { ...user, ...changed, updatedAt: now };
+      return { ...planning, data: { ...data, users } };
     }
     default:
       return null;

@@ -18,7 +18,8 @@ export async function signInWithGoogle(formData: FormData) {
     provider: 'google',
     options: {
       redirectTo: `${await origin()}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
-      queryParams: { hd: 'atrincorporadora.com.br', prompt: 'select_account' },
+      // "*" mostra só contas de empresa (Google Workspace): ATR e Takt. O domínio é conferido no retorno.
+      queryParams: { hd: '*', prompt: 'select_account' },
     },
   });
   if (error || !data.url) redirect(`/login?error=${encodeURIComponent('Não foi possível iniciar o login com Google.')}`);

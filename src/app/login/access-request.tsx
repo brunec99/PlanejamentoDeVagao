@@ -50,7 +50,7 @@ export function AccessRequest({ verified }: { verified: { email: string; name: s
             <span className="text-xs text-success">confirmado pelo Google</span>
           </span>
         ) : (
-          <input className={field} type="email" name="email" required autoComplete="email" placeholder="nome@atrincorporadora.com.br" />
+          <input className={field} type="email" name="email" required autoComplete="email" placeholder="seu e-mail da ATR ou da Takt" />
         )}
       </label>
       <label className="mt-3 block text-xs font-semibold text-slate-700">

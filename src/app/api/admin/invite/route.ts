@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
+import { ACCESS_DOMAINS_LABEL, isAllowedEmail } from '@/application/access-request';
 
 export const runtime = 'nodejs';
-const ALLOWED_DOMAIN = 'atrincorporadora.com.br';
 const ROLES = ['viewer', 'planner', 'manager', 'admin'] as const;
 
 /** Pré-cadastro, sem e-mail. O projeto Supabase é dividido com o Takt Hub, que tem o cadastro aberto
@@ -24,8 +24,8 @@ export async function POST(request: NextRequest) {
   const email = (body.email ?? '').trim().toLowerCase();
   const role = ROLES.includes(body.role as (typeof ROLES)[number]) ? (body.role as (typeof ROLES)[number]) : 'viewer';
   const workIds = Array.isArray(body.workIds) ? body.workIds.filter(id => typeof id === 'string') : [];
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`))
-    return NextResponse.json({ error: `Só contas @${ALLOWED_DOMAIN} podem ser cadastradas.` }, { status: 400 });
+  if (!isAllowedEmail(email))
+    return NextResponse.json({ error: `Só contas ${ACCESS_DOMAINS_LABEL} podem ser cadastradas.` }, { status: 400 });
 
   const service = getServiceClient();
   const created = await service.auth.admin.createUser({ email, email_confirm: true });

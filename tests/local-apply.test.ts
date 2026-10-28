@@ -259,3 +259,32 @@ test('record_fulfillments: item com `clear` projeta a linha limpa', () => {
     [undefined, undefined, undefined, undefined, undefined, NOW],
   );
 });
+test('acessos da tela de usuários: obra, papel e módulo projetados antes da resposta, sem mexer na entrada', () => {
+  const before = planning();
+  const copy = snapshot(before);
+  const user = (p: Planning | null) => p?.data.users.find(u => u.id === 'user-2');
+  for (const type of ['grant_access', 'revoke_access', 'set_role', 'set_module_access'] as const)
+    assert.equal(projectsBeforeServer({ type } as Command), true, type);
+
+  const granted = apply(before, { type: 'grant_access', userId: 'user-2', workId: 'obra-2' });
+  assert.deepEqual(user(granted)?.workIds, ['obra-1', 'obra-2']);
+  assert.equal(user(granted)?.updatedAt, NOW);
+  assert.deepEqual(user(apply(granted!, { type: 'grant_access', userId: 'user-2', workId: 'obra-2' }))?.workIds, ['obra-1', 'obra-2']);
+  assert.deepEqual(user(apply(before, { type: 'revoke_access', userId: 'user-2', workId: 'obra-1' }))?.workIds, []);
+  assert.equal(user(apply(before, { type: 'set_role', userId: 'user-2', role: 'manager' }))?.role, 'manager');
+
+  // Na ordem do catálogo, como `normalizeModules` grava no servidor.
+  const medio = apply(before, { type: 'set_module_access', userId: 'user-2', section: 'medio-prazo', enabled: true });
+  const both = apply(medio!, { type: 'set_module_access', userId: 'user-2', section: 'longo-prazo', enabled: true });
+  assert.deepEqual(user(both)?.modules, ['longo-prazo', 'medio-prazo']);
+  assert.deepEqual(user(apply(both!, { type: 'set_module_access', userId: 'user-2', section: 'medio-prazo', enabled: false }))?.modules, [
+    'longo-prazo',
+  ]);
+  assert.equal(snapshot(before), copy);
+});
+test('acessos: o próprio acesso e o usuário desconhecido esperam a recarga', () => {
+  const before = planning();
+  assert.equal(apply(before, { type: 'revoke_access', userId: ACTOR, workId: 'obra-1' }), null);
+  assert.equal(apply(before, { type: 'set_module_access', userId: ACTOR, section: 'vagoes', enabled: true }), null);
+  assert.equal(apply(before, { type: 'grant_access', userId: 'ninguem', workId: 'obra-1' }), null);
+});

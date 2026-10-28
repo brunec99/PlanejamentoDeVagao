@@ -38,7 +38,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-request-actions',
     title: 'Cadastrar ou dispensar',
-    body: 'Cadastrar cria o usuário com papel de consulta e sem obras: libere obras e módulos na lista abaixo e avise a pessoa para entrar de novo com o Google. Dispensar só tira o pedido da lista.',
+    body: 'Cadastrar cria o usuário com papel de consulta e sem obras: libere obras e módulos na grade abaixo e avise a pessoa para entrar de novo com o Google. Dispensar só tira o pedido da lista.',
   },
   {
     target: 'config-invite',
@@ -48,12 +48,22 @@ export const steps: TourStep[] = [
   {
     target: 'config-invite-role',
     title: 'Papel',
-    body: 'Consulta só vê; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela. Dá para trocar depois, na lista.',
+    body: 'Consulta só vê; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela. Dá para trocar depois, na grade.',
   },
   {
     target: 'config-users',
     title: 'Usuários e acessos',
-    body: 'Uma linha por pessoa cadastrada, com o nome e o e-mail. O que se muda aqui vale na hora, sem botão de salvar.',
+    body: 'Uma grade com uma linha por pessoa, em ordem alfabética, e uma coluna por obra (ou por módulo). O que se muda aqui vale na hora, sem botão de salvar.',
+  },
+  {
+    target: 'config-users-filters',
+    title: 'Pesquisar e filtrar',
+    body: 'Pesquise pelo nome ou pelo e-mail (sem diferença de acento) e filtre por papel ou por obra; "Sem obra liberada" mostra quem foi cadastrado e ainda não vê nada. Clique em Usuário ou em Papel, no cabeçalho, para ordenar; clicar de novo inverte a ordem.',
+  },
+  {
+    target: 'config-users-view',
+    title: 'Obras ou módulos',
+    body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo em desenvolvimento. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
   },
   {
     target: 'config-user-role',
@@ -61,19 +71,19 @@ export const steps: TourStep[] = [
     body: 'Troca o papel da pessoa assim que você escolhe outro. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
   },
   {
-    target: 'config-user-delete',
-    title: 'Excluir usuário',
-    body: 'Depois de confirmar, a pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo; a conta de login continua valendo nos outros sistemas da ATR. Não aparece na sua própria linha.',
-  },
-  {
     target: 'config-user-works',
     title: 'Obras liberadas',
-    body: 'Um chip por obra: preenchido, com o visto, é obra liberada para a pessoa. Clique para liberar ou revogar; quem não tem a obra liberada não a vê na lista de obras.',
+    body: 'Cada célula cruza uma pessoa com uma obra: preenchida, com o visto, é obra liberada. Clique para liberar ou revogar; quem não tem a obra liberada não a vê na lista de obras.',
   },
   {
     target: 'config-user-modules',
     title: 'Módulos liberados',
-    body: 'Os módulos abertos a todos (curto prazo, terminalidade e configurações da obra) vêm marcados e travados. Os em desenvolvimento, com cadeado e borda tracejada, são liberados ou bloqueados com um clique. Admin vê todos.',
+    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo em desenvolvimento para a pessoa. Curto prazo, terminalidade e configurações da obra são abertos a todos e não aparecem. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
+  },
+  {
+    target: 'config-user-delete',
+    title: 'Excluir usuário',
+    body: 'A lixeira no fim da linha. Depois de confirmar, a pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo; a conta de login continua valendo nos outros sistemas da ATR. Não aparece na sua própria linha.',
   },
   {
     target: 'config-db',

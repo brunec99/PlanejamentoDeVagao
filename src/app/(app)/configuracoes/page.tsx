@@ -15,8 +15,9 @@ export default function ConfiguracoesPage() {
               liberado, a data em que ele começa.
             </p>
             <p>
-              <strong>Usuários e acessos</strong>: o convite cria o perfil com o papel escolhido; o acesso a cada obra é liberado nos chips
-              abaixo do nome. Quem é Admin herda o que o Gestor pode.
+              <strong>Usuários e acessos</strong>: o convite cria o perfil com o papel escolhido. Na grade, cada linha é uma pessoa e cada
+              coluna uma obra (ou um módulo, na visão Módulos): clique na célula para liberar ou revogar. A grade pesquisa por nome ou
+              e-mail, filtra por papel e por obra e ordena pelo cabeçalho. Quem é Admin herda o que o Gestor pode.
             </p>
             <p>
               <strong>Banco de dados</strong> lista as migrações conhecidas e pergunta ao banco quais já estão aplicadas. As críticas fazem

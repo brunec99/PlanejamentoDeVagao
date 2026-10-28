@@ -1,15 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Database, Inbox, Lock, Mail, RefreshCw, Timer, Trash2, UserPlus, Users } from 'lucide-react';
+import { Database, Inbox, Mail, RefreshCw, Timer, UserPlus, Users } from 'lucide-react';
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
-import { useConfirm } from '@/modules/layout/confirm';
 import { formatTimestamp, roleLabels } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
-import type { User } from '@/domain/entities';
 import type { AccessRequest } from '@/application/access-request';
-import { MODULES, type ModuleInfo } from '@/application/module-access';
+import { UsersTable } from './users-table';
 
 function useCommand() {
   const c = usePlanning();
@@ -28,120 +26,6 @@ function useCommand() {
     }
   };
   return { busy, error, run };
-}
-
-function AccessChip({ userId, workId, name, granted }: { userId: string; workId: string; name: string; granted: boolean }) {
-  const { busy, run } = useCommand();
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      aria-pressed={granted}
-      onClick={() => run({ type: granted ? 'revoke_access' : 'grant_access', userId, workId })}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${granted ? 'border-primary bg-primary text-white hover:bg-primary-strong' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
-    >
-      {granted && <Check size={12} aria-hidden />}
-      {name}
-    </button>
-  );
-}
-
-function RoleSelect({ userId, role, self }: { userId: string; role: string; self: boolean }) {
-  const { busy, error, run } = useCommand();
-  return (
-    <div data-tour="config-user-role">
-      <select
-        className="field w-auto py-1.5 text-xs"
-        value={role}
-        disabled={busy || self}
-        aria-label="Papel do usuário"
-        onChange={e => run({ type: 'set_role', userId, role: e.target.value as 'viewer' | 'planner' | 'manager' | 'admin' })}
-      >
-        {(['viewer', 'planner', 'manager', 'admin'] as const).map(r => (
-          <option key={r} value={r}>
-            {roleLabels[r]}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <p className="mt-1 text-xs text-danger" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Um módulo na lista de acessos da pessoa: os abertos a todos ficam marcados e travados; os em
- * desenvolvimento o admin libera ou bloqueia com um clique. Admin vê todos, por isso fica tudo marcado
- * e travado na linha dele. O estado vai em texto (`aria-pressed` e o título), nunca só na cor. */
-function ModuleChip({ userId, module, granted, locked }: { userId: string; module: ModuleInfo; granted: boolean; locked?: string }) {
-  const { busy, error, run } = useCommand();
-  const fixed = !!locked;
-  return (
-    <span className="inline-flex flex-col">
-      <button
-        type="button"
-        disabled={busy || fixed}
-        aria-pressed={granted}
-        title={locked ?? `${module.hint}. ${granted ? 'Liberado: clique para bloquear.' : 'Bloqueado: clique para liberar.'}`}
-        onClick={() => run({ type: 'set_module_access', userId, section: module.section, enabled: !granted })}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-          granted
-            ? fixed
-              ? 'border-slate-300 bg-slate-100 text-slate-600'
-              : 'border-primary bg-primary text-white hover:bg-primary-strong'
-            : 'border-dashed border-slate-300 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50'
-        } disabled:cursor-default ${busy ? 'opacity-50' : ''}`}
-      >
-        {granted ? <Check size={12} aria-hidden /> : <Lock size={11} aria-hidden />}
-        {module.label}
-      </button>
-      {error && (
-        <span className="mt-1 text-xs text-danger" role="alert">
-          {error}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ModuleAccessList({ user }: { user: User }) {
-  const admin = user.role === 'admin';
-  const granted = new Set(user.modules ?? []);
-  const released = MODULES.filter(m => !m.open && (admin || granted.has(m.section))).length;
-  const restricted = MODULES.filter(m => !m.open).length;
-  return (
-    <div data-tour="config-user-modules" className="mt-3">
-      <p className="mb-1.5 text-xs font-semibold text-slate-500">
-        Módulos{' '}
-        <span className="font-normal text-slate-400">
-          · {admin ? 'admin vê todos' : `${released} de ${restricted} em desenvolvimento liberados`}
-        </span>
-      </p>
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        {(['Planejamento', 'Apoio'] as const).map(group => (
-          <div key={group} className="flex flex-wrap items-start gap-2" role="group" aria-label={`Módulos de ${group.toLowerCase()}`}>
-            {MODULES.filter(m => m.group === group).map(module => (
-              <ModuleChip
-                key={module.section}
-                userId={user.id}
-                module={module}
-                granted={module.open || admin || granted.has(module.section)}
-                locked={
-                  module.open
-                    ? `${module.label}: aberto a todos.`
-                    : admin
-                      ? `${module.label}: administradores veem todos os módulos.`
-                      : undefined
-                }
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function TaktField({ sequenceId, taktDays }: { sequenceId: string; taktDays: number }) {
@@ -395,54 +279,6 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function DeleteUserButton({ userId, name, onDone }: { userId: string; name: string; onDone: () => void }) {
-  const confirm = useConfirm();
-  const { toast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  return (
-    <div data-tour="config-user-delete">
-      <button
-        type="button"
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-danger-ring bg-white px-2.5 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-danger-soft disabled:opacity-50"
-        onClick={async () => {
-          // O diálogo do sistema no lugar do `window.confirm`: mesmo visual, foco preso, Esc cancela.
-          const ok = await confirm({
-            title: `Excluir ${name}?`,
-            description:
-              'A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo. A conta de login continua valendo nos outros sistemas da ATR.',
-            confirmLabel: 'Excluir usuário',
-            tone: 'danger',
-          });
-          if (!ok) return;
-          setBusy(true);
-          setError('');
-          try {
-            const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error ?? 'Não foi possível excluir.');
-            toast({ title: `${name} foi excluído.`, tone: 'success' });
-            onDone();
-          } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'Não foi possível excluir.');
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Trash2 size={13} aria-hidden />
-        {busy ? 'Excluindo…' : 'Excluir'}
-      </button>
-      {error && (
-        <p className="mt-1 text-xs text-danger" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /** O que `GET /api/health` devolve: cada migração conhecida e se o banco já a tem. */
 type Health = {
   checkedAt: string;
@@ -683,44 +519,18 @@ export function SettingsManager() {
             }}
           />
         </div>
-        {/* As marcas do tour de cada linha (papel, excluir, obras, módulos) se repetem em todas; o tour destaca a
+        {/* As marcas do tour de cada linha (papel, excluir, células) se repetem em todas; o tour destaca a
             primeira que aparece — a de excluir, portanto, nunca na sua própria linha. */}
-        <div data-tour="config-users" className="panel divide-y divide-slate-100">
-          {data.users.map(user => (
-            <div key={user.id} className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{user.name}</p>
-                  <p className="text-xs text-slate-400">{emails[user.id] ?? '—'}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RoleSelect userId={user.id} role={user.role} self={user.id === c.actorId} />
-                  {user.id !== c.actorId && (
-                    <DeleteUserButton
-                      userId={user.id}
-                      name={user.name}
-                      onDone={() => {
-                        c.refresh();
-                        loadEmails();
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-              <p className="mb-1.5 mt-3 text-xs font-semibold text-slate-500">Obras</p>
-              <div data-tour="config-user-works" className="flex flex-wrap gap-2">
-                {data.works.length === 0 ? (
-                  <span className="text-xs text-slate-400">Nenhuma obra para liberar</span>
-                ) : (
-                  data.works.map(work => (
-                    <AccessChip key={work.id} userId={user.id} workId={work.id} name={work.name} granted={user.workIds.includes(work.id)} />
-                  ))
-                )}
-              </div>
-              <ModuleAccessList user={user} />
-            </div>
-          ))}
-        </div>
+        <UsersTable
+          users={data.users}
+          works={data.works}
+          emails={emails}
+          actorId={c.actorId}
+          onDeleted={() => {
+            c.refresh();
+            loadEmails();
+          }}
+        />
       </section>
 
       <DatabaseHealth />

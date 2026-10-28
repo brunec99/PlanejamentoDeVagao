@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAccessRequest } from '../src/application/access-request';
+import { isAllowedEmail, validateAccessRequest } from '../src/application/access-request';
 import { readIdentity, signIdentity } from '../src/infrastructure/auth/access-request-token';
 
 /* Pedido de acesso (14/10/2026): só contas da ATR, nome obrigatório, mensagem curta; e o cookie que
@@ -23,6 +23,24 @@ test('pedido aceita só e-mail da ATR, com nome, e limpa espaços e caixa', () =
   assert.match(validateAccessRequest({ email: 'sem-arroba', name: 'Ana' }).error!, /e-mail válido/);
   assert.match(validateAccessRequest({ email: 'ana@atrincorporadora.com.br', name: ' ' }).error!, /nome/);
   assert.match(validateAccessRequest({ email: 'ana@atrincorporadora.com.br', name: 'Ana', message: 'x'.repeat(501) }).error!, /500/);
+});
+
+test('contas da Takt também entram, pedem e são cadastradas; domínio parecido ou subdomínio não (28/10/2026)', () => {
+  assert.equal(isAllowedEmail('ana@atrincorporadora.com.br'), true);
+  assert.equal(isAllowedEmail(' Joao.Silva@TaktEngenharia.com.br '), true);
+  assert.equal(isAllowedEmail('ana@gmail.com'), false);
+  assert.equal(isAllowedEmail('ana@taktengenharia.com.br.evil.com'), false);
+  assert.equal(isAllowedEmail('ana@obra.taktengenharia.com.br'), false);
+  assert.equal(isAllowedEmail('ana@faketaktengenharia.com.br'), false);
+  assert.equal(isAllowedEmail(null), false);
+  assert.deepEqual(validateAccessRequest({ email: 'joao@taktengenharia.com.br', name: 'João' }).value, {
+    email: 'joao@taktengenharia.com.br',
+    name: 'João',
+  });
+  assert.match(
+    validateAccessRequest({ email: 'ana@gmail.com', name: 'Ana' }).error!,
+    /@atrincorporadora\.com\.br ou @taktengenharia\.com\.br/,
+  );
 });
 
 test('identidade assinada volta igual, e assinatura trocada, chave errada ou prazo vencido são recusados', () => {
