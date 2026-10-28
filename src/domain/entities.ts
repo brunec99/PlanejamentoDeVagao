@@ -226,6 +226,8 @@ export const NON_FULFILLMENT_CAUSES = [
   // inventar uma; não deve ser a escolha de quem preenche a semana agora.
   'Mudança de Planejamento',
   'Mudança do método executivo',
+  // 28/10/2026, na importação do histórico da Atmos: a falha é da construtora, não do empreiteiro.
+  'Falha de Gestão da Construtora',
   'Causa não informada',
 ] as const;
 export type NonFulfillmentCause = (typeof NON_FULFILLMENT_CAUSES)[number];

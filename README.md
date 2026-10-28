@@ -256,6 +256,8 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
 
   Faltam a troca das variáveis na Vercel e a importação do Sheets. Veja o [roteiro do go-live](docs/go-live-curto-prazo.md).
 
+  **28/10/2026:** histórico do curto prazo importado para Atmos e Tauá (obras criadas nesta data), Brizz, Essenza e Mozine (16.042 compromissos). A causa "Falha de Gestão da Construtora" entrou na lista oficial. Amariles, Lummi e My Sunset ficaram de fora, e a Blentt não foi tocada. Veja a [importação de 28/10](docs/go-live-curto-prazo.md#importação-do-histórico-das-demais-obras-28102026).
+
 - **08/10/2026 — revisão visual com base no Takt Hub (não publicada):**
   - a marca passou ao azul-petróleo da Takt e os neutros ganharam um tom desse azul;
   - lateral azul profunda, com cabeçalho fixo e trilha;

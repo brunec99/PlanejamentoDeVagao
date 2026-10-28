@@ -174,6 +174,42 @@ Isso funciona porque o proxy roda em Node.js no Next 16.
 
 **Reexecução:** a mesma importação acusa "2 atualizadas". São pares de linhas idênticas na mesma semana, com resultados diferentes, que o pareamento pela chave natural pode trocar. As contagens totais batem, então **não reaplicar**.
 
+## Importação do histórico das demais obras (28/10/2026)
+
+**Origem:** `~/Downloads/Dados compilados.xlsx`, um arquivo com uma aba de curto prazo por obra (BRZ, AMA, ESZ, LMM, MYS, BLT, MZN, ATM, TAU), mais a aba "Dados combinados", que é só um resumo e foi ignorada. A conversão seguiu o caminho da Blentt: o .xlsx foi lido sem dependências, convertido para o CSV normalizado e gravado com `scripts/import-curto-prazo.ts`, em lotes de 20 semanas, com `--work-id` explícito e o `.env.local` do App-Takt.
+
+**O que entrou, por decisão do usuário:**
+
+| Obra | Situação antes | Compromissos | Sim / Não / sem apuração | Semanas | Equipes criadas | Semana 1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Atmos (ATM) | **criada** nesta data | 2.802 | 1.964 / 521 / 317 | 18/08/2025 a 26/10/2026 (61) | 85 | 18/08/2025 (gravada) |
+| Tauá (TAU) | **criada** nesta data | 310 | 218 / 80 / 12 | 15/06/2026 a 26/10/2026 (20) | 0 | 15/06/2026 (gravada) |
+| Brizz (BRZ) | existia, vazia | 306 | 205 / 72 / 29 | 22/06/2026 a 26/10/2026 (19) | 0 | 22/06/2026 (gravada) |
+| Essenza (ESZ) | existia, com 26 equipes e nenhum compromisso | 4.752 | 3.441 / 1.242 / 69 | 26/08/2024 a 26/10/2026 (110) | 0 | 09/09/2024 (já estava) |
+| Mozine (MZN) | existia (terminalidade), sem compromissos | 7.872 | 6.100 / 1.459 / 313 | 29/07/2024 a 02/11/2026 (114) | 206 | 29/07/2024 (gravada) |
+
+As obras novas foram criadas pelo `create_work` da tela, com o código da planilha. Só o admin que importou (Bruno) tem acesso a elas, e o acesso das equipes ainda precisa ser liberado em Configurações → Usuários. Nas planilhas de Brizz, Essenza e Tauá a coluna de equipe está vazia, por isso nenhuma equipe foi criada nelas.
+
+**Ficaram de fora:**
+- **MYS** (My Sunset), obra entregue;
+- **AMA** (Amariles) e **LMM** (Lummi), por decisão do usuário. A planilha da Lummi parou em 02/06/2025, e a da Amariles em 27/07/2026;
+- **Blentt**: o histórico já estava no sistema (ver acima), e a equipe preenche a planilha e o sistema ao mesmo tempo (semana de 26/10: 103 linhas na planilha, 96 no sistema). Reimportar duplicaria linhas, então a obra não foi tocada (6.187 compromissos antes e depois).
+
+**Regras da conversão:**
+- **Semana:** vem do número da semana na planilha, contado a partir da semana 1 da obra, e não da data, como na Blentt. A semana 1 gravada em `work_settings` faz o número do sistema bater com o da planilha.
+- **Essenza, semanas 1 a 17:** a planilha numerou essas semanas a partir de 26/08/2024 e depois passou a contar de 09/09/2024, que já era a semana 1 da obra no sistema. Essas 171 linhas entram pela data e aparecem como semanas −1 a 15.
+- **Data fora da semana indicada:** é deslocada em semanas inteiras para dentro dela, mantendo o dia da semana. Isso afetou 27 linhas nas cinco obras.
+- **Término:** término antes do início vira o início (49 linhas), e término depois do domingo vira o domingo.
+- **Linhas sem início:** entram na segunda-feira da semana (20 linhas).
+- **"Não" sem causa:** vira "Causa não informada" (276 linhas: 152 na Mozine, 110 na Atmos, 7 na Essenza, 4 na Brizz e 3 na Tauá).
+- **Causa nova:** "Falha de Gestão da Construtora" **entrou na lista oficial** (`NON_FULFILLMENT_CAUSES`), por decisão do usuário. Ela aparece em 3 linhas da Atmos e distingue a falha da construtora da do empreiteiro.
+- **"Sobreposição de tarefas":** a única linha com essa causa (Tauá) entrou como "Falha de Planejamento".
+- **Linha sem atividade:** uma linha da Essenza tinha só espaços na atividade e ficou de fora.
+
+**Conferência no banco:** as contagens por obra batem com as da planilha, linha a linha, nos totais de Sim, Não e sem apuração. A simulação repetida com cada arquivo inteiro acusa 0 novas, 0 atualizadas e todas as linhas como já existentes.
+
+**Atenção:** a semana de 26/10/2026 (e a de 02/11 na Mozine) entrou sem apontamento. Se as equipes continuarem na planilha depois da carga, as obras repetem o caso da Blentt, com dados divergentes nos dois lugares.
+
 ## Varredura de segurança e robustez (09/10/2026)
 
 - **Cadastrar usuário já cadastrado** sobrescrevia nome, papel e obras (um gestor voltaria a consulta sem obra). Agora responde 409 "Usuário já cadastrado. Altere o papel e as obras na lista abaixo." A conta que só existe no Takt, sem perfil, continua sendo cadastrada.
