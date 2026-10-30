@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { WeeklyCommitment } from '@/domain/entities';
+import type { ClosingRankingResponse } from '@/domain/closing-ranking';
 import { addDays, startOfWeek } from '@/domain/validation';
 import type { WeatherResponse } from '@/domain/weather';
 import { weekNumberFrom } from '@/domain/week-numbering';
@@ -8,6 +9,7 @@ import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { compareText } from '@/modules/curto-prazo/sheet-view';
 import { WeatherStrip } from '@/modules/curto-prazo/weather-strip';
+import { PrintDashboard } from '@/modules/curto-prazo/print-dashboard';
 import { formatDate } from '@/shared/format';
 
 /** Os dois PDFs da semana no formato da planilha "Planejamento de curto prazo" da obra (exemplos do
@@ -32,6 +34,13 @@ const WEATHER_TIMEOUT_MS = 4000;
 const WEATHER_UNAVAILABLE: WeatherResponse = { available: false, reason: 'indisponivel', message: 'Tempo indisponível no momento.' };
 const isWeatherResponse = (value: unknown): value is WeatherResponse =>
   typeof value === 'object' && value !== null && typeof (value as { available?: unknown }).available === 'boolean';
+/** O ranking lê as linhas de todas as obras; passou disso, o painel sai com o ranking indisponível. */
+const RANKING_TIMEOUT_MS = 8000;
+const RANKING_UNAVAILABLE: ClosingRankingResponse = { available: false, message: 'Ranking das obras indisponível no momento.' };
+const isRankingResponse = (value: unknown): value is ClosingRankingResponse =>
+  typeof value === 'object' &&
+  value !== null &&
+  ((value as { available?: unknown }).available === false || Array.isArray((value as { entries?: unknown }).entries));
 
 export function PrintSheet({
   workId,
@@ -39,6 +48,7 @@ export function PrintSheet({
   kind,
   order = 'empreiteiro',
   excluded = [],
+  dashboard = false,
 }: {
   workId: string;
   week?: string;
@@ -46,6 +56,8 @@ export function PrintSheet({
   order?: PrintOrder;
   /** Empreiteiros desmarcados na janela do PDF ('' = linhas sem empreiteiro). */
   excluded?: string[];
+  /** Fechamento com o painel na primeira página (`print-dashboard.tsx`). */
+  dashboard?: boolean;
 }) {
   const context = usePlanning();
   const { state: settings, weekOneStart } = useWorkSettings(workId);
@@ -86,6 +98,7 @@ export function PrintSheet({
         : byCompany(a, b) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt),
     );
   const closing = kind === 'fechamento';
+  const withPanel = closing && dashboard;
   const title = work
     ? `PCP-${work.code || work.name} - ${closing ? 'Resultados ' : ''}Semana ${number(week)}`
     : 'Planejamento de curto prazo';
@@ -114,14 +127,37 @@ export function PrintSheet({
     };
   }, [ready, hasWork, workId, week]);
 
+  // Ranking das obras para o painel (30/10/2026): mesma espera do tempo, com limite próprio; qualquer
+  // falha vira "indisponível" e o PDF sai assim mesmo.
+  const [ranking, setRanking] = useState<ClosingRankingResponse | 'pending'>('pending');
   useEffect(() => {
-    if (!ready || !work || weather === 'pending' || printed.current) return;
+    if (!withPanel || !ready || !hasWork || !week) return;
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), RANKING_TIMEOUT_MS);
+    let active = true;
+    fetch(`/api/curto-prazo/ranking?semana=${week}&obra=${encodeURIComponent(workId)}`, { signal: controller.signal })
+      .then((r): Promise<unknown> => (r.ok ? r.json() : Promise.resolve(RANKING_UNAVAILABLE)))
+      .then(r => (isRankingResponse(r) ? r : RANKING_UNAVAILABLE))
+      .catch(() => RANKING_UNAVAILABLE)
+      .then(r => {
+        clearTimeout(deadline);
+        if (active) setRanking(r);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      clearTimeout(deadline);
+    };
+  }, [withPanel, ready, hasWork, workId, week]);
+
+  useEffect(() => {
+    if (!ready || !work || weather === 'pending' || (withPanel && ranking === 'pending') || printed.current) return;
     printed.current = true;
     document.title = title;
     // Um respiro para as fontes e o layout assentarem antes do diálogo de impressão.
     const timer = setTimeout(() => window.print(), 400);
     return () => clearTimeout(timer);
-  }, [ready, work, title, weather]);
+  }, [ready, work, title, weather, withPanel, ranking]);
 
   if (context.state === 'error') return <p className="p-6 text-sm text-danger">{context.message}</p>;
   if (!ready) return <p className="p-6 text-sm text-slate-500">Preparando o PDF…</p>;
@@ -170,9 +206,21 @@ export function PrintSheet({
         <span className="text-slate-500">
           No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {rows.length} linha{rows.length === 1 ? '' : 's'},{' '}
           {order === 'inicio' ? 'por data de início' : 'por empreiteiro'}
-          {left.size ? ` · fora do PDF: ${[...left].map(c => c || '(sem empreiteiro)').join(', ')}` : ''}.
+          {left.size ? ` · fora do PDF: ${[...left].map(c => c || '(sem empreiteiro)').join(', ')}` : ''}
+          {withPanel ? ' · com o painel na primeira página' : ''}.
         </span>
       </div>
+      {withPanel && (
+        <PrintDashboard
+          work={work}
+          week={week}
+          currentWeek={currentWeek}
+          label={start => weekNumberFrom(firstWeek, start)}
+          commitments={commitments}
+          ranking={ranking === 'pending' ? undefined : ranking}
+          excluded={[...left]}
+        />
+      )}
       <table>
         <colgroup>
           <col style={{ width: '8%' }} />

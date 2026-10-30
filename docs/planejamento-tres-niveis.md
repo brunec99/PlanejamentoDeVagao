@@ -727,3 +727,97 @@ Pedido do usuário logo depois de publicar: "adicione um botão de desfazer". Co
 - **Como:** cada gravação guarda o estado anterior das linhas e o comando inverso; as últimas 20, só nesta sessão, como no Sheets. O inverso do apontamento é um `record_fulfillments` só, em que a linha que não tinha Status vai com **`clear: true`**, item novo do lote (`FulfillmentItem` virou união em `commands.ts`; o `clear_fulfillment` passou a usar o mesmo `clearFulfillment`). Desfazer é uma gravação comum: entra no histórico e passa pelas mesmas regras (semana encerrada, papel).
 - **Validação:** `tests/undo.test.ts` (comandos inversos), casos de `clear` em `tests/bulk-fulfillment.test.ts` e `tests/local-apply.test.ts`; 680 testes. No navegador (prévia temporária, servidor simulado de 400 ms): botão desabilitado sem ação; desfazer um apontamento mandou `record_fulfillments` com `clear` e a célula voltou a vazia; o "Desfazer" do aviso do lote limpou as 3 linhas num comando; Ctrl+Z desfez uma atividade renomeada e, com o cursor num campo de texto, não mandou nada; exclusão desfeita recriou a linha com o Sim. Sem erros no console.
 - **Pendências:** sem Refazer; a pilha zera ao recarregar; desfazer uma ação antiga pelo aviso não desfaz as que vieram depois nas mesmas linhas (vale a última gravação).
+
+## Curto prazo: inserir linha no meio e arrastar linhas (30/10/2026)
+
+Pedido da obra, trazido pelo usuário: "colocar uma função pra inserir linha no meio do planejamento"; logo depois, "seria bom se fosse possível arrastar as atividades pra cima e para baixo". Até aqui a linha nova só entrava embaixo e a ordem salva era a de inclusão (`createdAt`), sem lugar para guardar outra.
+
+### Decisões
+
+- **A posição fica no banco**, coluna nova `weekly_commitments.order_index` (`WeeklyCommitment.order`), e vale para todos que abrem a planilha. A ordem da sessão (`pinned`) sozinha não bastava: recarregar desfaria o que a obra arrumou.
+- **Quem insere ou arrasta grava a semana inteira** (1, 2, 3…), na ordem que a tela mostra. Gravar só a linha mexida deixaria a ordem salva diferente da tela quando ela estava classificada pelo funil ou organizada por empresa. A linha sem posição (todas as de antes, e a criada depois pela linha em branco do fim) segue a regra antiga, depois das posicionadas: a nova entra embaixo e fica embaixo.
+- **"Inserir linha acima"**, como o "Inserir" do Excel: com ele chega-se a qualquer lugar (o topo e o meio; o fim é a linha em branco de sempre). Abre uma linha em branco logo acima, já no campo da atividade. Enter cria e a linha em branco continua aberta para a próxima, que entra logo abaixo da criada; sair da linha depois de criar, Esc ou "Cancelar" fecham. No celular, o cartão "Nova linha acima de …" tem "Inserir" e "Cancelar".
+- **Arrastar pela alça ⠿** do começo da linha (HTML5 drag and drop, com o filete azul indicando se cai em cima ou embaixo). Com a alça em foco, as setas ↑ e ↓ movem uma posição e o foco acompanha a linha. No celular não há arrasto: o cartão ganhou setas de subir e descer.
+- **Só na semana analisada e para quem edita a semana**, como a linha em branco: nas vizinhas não há alça nem inserir. Semana encerrada: só admin (`guardWeek`, a mesma trava das outras edições de linha).
+- **"Organizar por empresa" e o funil continuam só da tela**; a faixa da ordem passa a dizer isso e oferece "Salvar esta ordem" (grava) e "Voltar à ordem salva" (antes "Voltar à ordem de inclusão").
+- **Linha que muda de semana perde a posição** e entra embaixo da semana nova.
+
+### O que mudou
+
+- `src/domain/commitment-order.ts` (novo): a ordem saiu da tela para o domínio, porque o servidor precisa numerar exatamente como a tela mostra. `sheetOrder` (posição, depois inclusão, depois empresa e início para o lote importado), `byCompany`, `orderPositions` (linha da semana fora da lista vai para o fim; id de outra semana é ignorado), `insertionOrder` e `placeBefore`. `compareText` mora aqui e `sheet-view.ts` o reexporta.
+- `commands.ts`: `create_commitment` aceita `beforeId` e `order` (a ordem da tela, sem a linha nova; sem ela, vale a salva). Referência que sumiu nesse meio-tempo não é erro: a linha entra embaixo. Comando novo **`reorder_commitments`** (`workId`, `weekStart`, `ids`), com até 2.000 ids, liberado para quem não é desenvolvedor (`module-access.ts`), lendo só a semana (`command-scope.ts`). Só as linhas cuja posição mudou são tocadas e viajam na gravação. No histórico, o arrasto guarda a contagem de linhas e não a lista de ids.
+- `local-apply.ts`: o arrasto é projetado antes da resposta do servidor, como o apontamento; a inserção numera a semana quando o servidor devolve o id, pela mesma regra (`insertionOrder`).
+- `commitments-overview.tsx`: alça na coluna da caixa de marcar (44 px), "Inserir linha acima" ao lado do ✕ (coluna de 56 px), linha em branco no meio (a mesma `BlankRow`/`BlankCard`, com `insert`), faixa da ordem. A ordem da tela (`pinned`) ganhou `session` (ordem só desta tela) e `sig` (as posições salvas): quando outra pessoa reordena, a recarga traz as posições novas e a tela que segue a ordem salva passa a mostrá-las. `mergePinned` (`sheet-view.ts`) põe a linha que a tela ainda não conhece acima da que vem depois dela na ordem salva: a inserida aparece no lugar, mesmo com a ordem classificada.
+- Desfazer: arrasto (volta a ordem anterior), linha inserida (apaga) e **exclusão**, que agora devolve a linha ao mesmo lugar (`recreateCommand` manda `beforeId` com a linha que vinha logo abaixo).
+- Migração **`0036_commitment_order.sql`**: coluna `order_index integer` e `commit_planning` reescrita (cópia da 0031 com a coluna no upsert). Sondagem em `migrations.ts`; bootstrap regenerado (36 migrações).
+- Tour "Como usar" (passos "Arrastar a linha" e "Inserir linha acima"; textos de ordem, filtros e exclusão) e a ajuda "Como funciona" da tela.
+
+### Validação (30/10/2026)
+
+- `tests/commitment-order.test.ts` (13 testes): ordem salva, inserir na ordem da tela e na salva, referência que sumiu, arrasto que só toca o que mudou, trava da semana e papel, troca de semana, recorte de leitura, projeção local igual à do servidor, `mergePinned` e ida e volta de `order_index` (inclusive banco sem a coluna). 759 testes, `typecheck`, `lint` (sem aviso novo) e `format:check` passando.
+- `npm run validate:migrations` (PGlite): `commit_planning` grava `order_index` e `planning_snapshot` o devolve. `node scripts/validate-bootstrap-sql.mjs`: OK. Ele falhava antes desta mudança por contar 39 tabelas: a 0035 criou 3 e o número não tinha sido atualizado. Passou para 42.
+- No navegador (prévia temporária em `/campo/`, já apagada, com as APIs respondidas pelo `applyCommand` real): inserir duas linhas seguidas acima da 3ª, Esc fechando, recarga mantendo a ordem, arrastar a última para o topo e a primeira para baixo da terceira, seta ↓ na alça (o foco seguiu a linha), Desfazer do movimento, exclusão desfeita voltando ao mesmo lugar, "Organizar por empresa" + "Salvar esta ordem", e no celular as setas do cartão e o "Inserir". A ordem gravada no servidor bateu com a tela em todos os passos. Nenhum erro no console.
+
+### Pendências
+
+- **0036 aplicada pelo usuário no `takt-hub` em 30/10/2026**, antes da publicação (conferir em Configurações → Banco de dados; daqui a leitura de produção foi bloqueada pelo modo automático). Com o código antigo no ar ela não quebra nada: nada manda posição, e as linhas seguem sem ela.
+- **Não publicado.** Decisão do usuário (30/10): esperar e publicar junto com a exclusão de obra (0037, outra sessão em andamento) e o manual da Claudia. Até lá o código está só no disco, sem commit.
+- Os PDFs seguem as ordens próprias deles ("por empreiteiro" ou "por início"), não a da planilha. Se a obra quiser o PDF na ordem arrastada, é uma terceira opção no diálogo de impressão.
+- A Claudia lista a semana pela ordem de inclusão (`agent-tools.ts`, `listWeek`), não pela salva. Não foi mexido porque o arquivo está com o trabalho do manual em andamento; a troca é uma linha (`sheetOrder`).
+- Duas pessoas arrastando a mesma semana ao mesmo tempo: vale a última gravação, que leva a ordem inteira da tela de quem gravou.
+
+## Curto prazo: painel na primeira página do PDF do fechamento (30/10/2026)
+
+Pedido do usuário: "no relatório de fechamento colocar na primeira página um dashboard com o PPC da semana comparado com as semanas anteriores, o PPC geral da obra comparado com as outras obras e as principais causas", mais um ranking dos PPCs das obras. Antes de implementar, ele pediu o modelo da tela. O modelo foi entregue como página publicada (dados de exemplo) e aprovado sem mudanças ("adorei, pode seguir com ele"). O usuário falou em fechamento "mensal", mas o PDF que existe é o semanal ("Resultados Semana N"), e foi nele que o painel entrou.
+
+### Decisões (todas do modelo aprovado)
+
+- **Só no PDF do fechamento, na página 1**, com a planilha de resultados a partir da página 2. O PDF do planejamento não muda. Na janela do PDF entrou a caixa "Painel na primeira página", só no fechamento e já marcada; desmarcada, o PDF sai como antes. Na URL da impressão, a caixa vira `painel=1`.
+- **O painel considera sempre a obra inteira.** Os empreiteiros desmarcados na janela saem só da planilha; se o painel seguisse o recorte, a comparação com as outras obras deixaria de valer. Com recorte, o rodapé diz quem ficou fora da planilha.
+- **Nada depois da semana analisada:** série, médias, Pareto e ranking contam só até ela, para o PDF de uma semana antiga sair igual depois.
+- **Série:** as 12 semanas com linha até a analisada, como a da tela Fechamento: barra hachurada para semana em aberto, fora da média, e faixa âmbar na analisada. "Média das últimas 12 semanas" é a média simples dos PPCs semanais apurados, como o cartão da tela Fechamento (âmbar abaixo de 70%).
+- **PPC geral = cumpridos ÷ assumidos de todas as semanas apuradas desde o início da obra**, somando as linhas e não fazendo a média dos percentuais. É o que ordena o ranking.
+- **Ranking:**
+  - mostra todas as obras ativas pelo nome, para qualquer pessoa com obra liberada. De outra obra só saem números agregados (PPC geral, semanas apuradas e PPC da semana), nunca linhas, empreiteiros ou justificativas;
+  - a obra do PDF entra mesmo inativa, e obra sem nenhuma linha até a semana fica fora;
+  - obra com menos de 4 semanas apuradas aparece no fim, "em início", sem posição;
+  - empate exato divide a posição;
+  - a coluna da semana usa o mesmo período do calendário, porque cada obra tem a sua semana 1;
+  - a folha mostra até 7 obras; se a obra do PDF ficar de fora, ela entra na 7ª linha, e a legenda diz quantas ficaram fora, todas contadas na média.
+- **Causas em dois recortes:** as da semana, com a posição de cada uma no Pareto da obra, e o Pareto da obra até a semana, com as causas que somam 80% em vermelho e as demais agrupadas em "Outras N causas".
+
+### O que mudou
+
+- `src/domain/closing-ranking.ts` (novo, puro): `workPpc` (PPC geral e da semana de uma obra até a semana), `rankWorks`, `buildRanking`, `withLocalWork` e `rankingMean`. O PDF troca a linha da própria obra pelo cálculo com os dados que já carregou (`withLocalWork`), para o painel e o ranking nunca mostrarem números diferentes da mesma obra.
+- `GET /api/curto-prazo/ranking?semana=&obra=` (`src/app/api/curto-prazo/ranking/route.ts`):
+  - lê `works` e só `work_id, week_start, fulfilled` de `weekly_commitments` até a semana, de todas as obras, pelo service role. A primeira página traz a contagem, e as demais páginas de 1000 linhas vêm 6 por vez;
+  - exige perfil com obra liberada;
+  - qualquer falha depois da autorização responde 200 com `available: false`, como a rota do tempo.
+- `src/modules/curto-prazo/closing-dashboard.ts` (novo, puro): monta o painel (série, semana anterior apurada, média, causas, posição) e escreve a frase de resumo em trechos, comparando os valores já arredondados para a frase nunca contradizer os cartões.
+- `src/modules/curto-prazo/print-dashboard.tsx` (novo):
+  - a folha em si: cabeçalho igual ao da planilha, resumo, quatro cartões, série, ranking, causas da semana, Pareto e rodapé;
+  - altura fixa de 732 px dentro da área útil de A4 paisagem com 7 mm de margem (1069 × 741 px), e quebra de página depois;
+  - cores fixas, porque é papel.
+- `print-sheet.tsx`: com `painel=1` no fechamento, busca o ranking e espera a resposta antes de chamar a impressão, como já fazia com o tempo, com limite de 8 s; passou disso, o painel sai com "Ranking das obras indisponível no momento". A página `imprimir/curto-prazo/[obraId]` lê o `painel`, e `print-dialog.tsx` ganhou a caixa.
+- Manual da Claudia (`curto-prazo-pdf-impressao`): a caixa da janela e a seção "O painel na primeira página do fechamento".
+- **Nenhuma migração.**
+
+### Validação (30/10/2026)
+
+- `tests/closing-dashboard.test.ts`, com 10 testes:
+  - PPC geral ponderado e só com semanas apuradas;
+  - ranking com empate e obras em início;
+  - obra sem linha e semanas posteriores fora;
+  - troca da linha da própria obra;
+  - o cenário do modelo aprovado, com a frase exata;
+  - semana em aberto, sem ranking, empate de causas, semana sem falhas, falha sem causa e falha única;
+  - chamada do Pareto, corte "Outras" e ranking que cabe na folha.
+- A bateria do CI passou: `typecheck`, `lint` (nenhum aviso nos arquivos novos ou alterados), `format:check`, 774 testes, `validate:migrations` e `build` e o teste de fumaça no navegador (8 de 8).
+- Renderização no Chromium com um harness fora do repositório: o componente com dados de exemplo, impresso em A4 paisagem com margem de 7 mm, em três cenários (o do modelo; semana em aberto com 13 obras e nome longo; ranking indisponível). Nos três, o painel ocupou uma folha só e nenhum quadro cortou conteúdo. O harness achou dois defeitos, já corrigidos: as barras do ranking não apareciam e o Pareto e o ranking com muitas obras passavam da altura do quadro.
+- **Não validado:** a rota contra o banco real e o PDF gerado pelo botão no sistema. Desta máquina a sessão não alcançou o Supabase (`fetch failed`), então o tempo da rota com o volume real (todas as obras, ~6 mil linhas só na Blentt) não foi medido.
+
+### Pendências
+
+- **Sem commit e não publicado.** O código está só no disco, junto com o trabalho de outras sessões (ordem das linhas, exclusão de obra, manual da Claudia).
+- Conferir no sistema: gerar o PDF do fechamento de uma semana encerrada da Blentt e comparar os números com a tela Fechamento (série, média e Pareto devem bater; a tela conta também as semanas posteriores, o PDF não).
+- Se a rota ficar lenta com o volume real, o próximo passo é uma função SQL que agregue por obra e semana (exigiria migração). Um cache curto também ajudaria, mas faria a linha das outras obras ficar até alguns minutos atrás.

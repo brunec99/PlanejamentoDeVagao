@@ -53,7 +53,7 @@ const CLOSING: TourStep = {
 const AGENT_STEP: TourStep = {
   target: 'agente',
   title: `${AGENT.name}, ${AGENT.tagline}`,
-  body: 'Abre a assistente de planejamento: ela lê o longo, o médio e o curto prazo desta obra, aponta o que não bate entre os níveis e responde perguntas. Também propõe edições na planilha da semana (levar linhas, criar linhas do plano do mês, apontar), que só são gravadas quando você clica em Aplicar.',
+  body: 'Abre a assistente de planejamento: ela lê o longo, o médio e o curto prazo desta obra, aponta o que não bate entre os níveis e responde perguntas. Também propõe edições na planilha da semana (levar linhas, criar linhas do plano do mês, apontar), que só são gravadas quando você clica em Aplicar. E tira dúvidas sobre o sistema: pergunte "como faço para…" ou "onde fica…" e ela responde pelo manual, com os nomes dos botões da tela.',
 };
 const withClosing = (steps: TourStep[]) => [...steps, AGENT_STEP, CLOSING];
 

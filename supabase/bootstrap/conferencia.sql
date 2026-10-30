@@ -69,7 +69,8 @@ funcoes(ordem, assinatura, servidor_apenas) as (
     (402, 'planning_snapshot(text[])', true),
     (403, 'ifc_version_summary(text)', true),
     (404, 'guard_planning_history()', false),
-    (405, 'guard_plan_baseline()', false)
+    (405, 'guard_plan_baseline()', false),
+    (409, 'delete_work(text,text,text)', true)
 ),
 gatilhos(ordem, tabela, nome) as (
   values

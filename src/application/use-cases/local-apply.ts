@@ -1,5 +1,7 @@
 import type { NonFulfillmentCause, PlanningData, Team, WeeklyCommitment } from '../../domain/entities';
 import { addDays, startOfWeek } from '../../domain/validation';
+import { commitmentCompanyOf } from '../../domain/agent-briefing';
+import { insertionOrder, orderPositions } from '../../domain/commitment-order';
 import { normalizeModules } from '../module-access';
 import type { Command } from './commands';
 import type { Planning } from './get-planning';
@@ -21,6 +23,8 @@ export function projectsBeforeServer(command: Command): boolean {
     case 'clear_fulfillment':
     case 'update_commitment':
     case 'delete_commitment':
+    // Arrastar uma linha: a planilha já mostra a ordem nova; o provedor só guarda as posições.
+    case 'reorder_commitments':
     // Tela de usuários (28/10/2026): cada clique na grade de acessos esperava a recarga do planejamento
     // inteiro, que para o admin traz todas as obras.
     case 'grant_access':
@@ -60,6 +64,12 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
     updatedAt: now,
   });
   const commitments = (next: WeeklyCommitment[]): Planning => ({ ...planning, data: { ...data, commitments: next } });
+  /** As posições da semana na ordem `ids`, pela mesma regra do servidor (`orderPositions`). */
+  const reordered = (list: WeeklyCommitment[], workId: string, weekStart: string, ids: string[]): WeeklyCommitment[] => {
+    const inWeek = (c: WeeklyCommitment) => c.workId === workId && c.weekStart === weekStart;
+    const positions = orderPositions(list.filter(inWeek), ids, row => commitmentCompanyOf(row, data.teams));
+    return list.map(c => (inWeek(c) && positions.get(c.id) !== c.order ? { ...c, order: positions.get(c.id), updatedAt: now } : c));
+  };
   const patch = (commitmentId: string, change: (c: WeeklyCommitment) => WeeklyCommitment): Planning | null => {
     const index = data.commitments.findIndex(c => c.id === commitmentId);
     if (index < 0) return null;
@@ -74,7 +84,7 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
       if (data.commitments.some(c => c.id === id)) return null;
       const weekStart = startOfWeek(command.weekStart);
       const startDate = command.startDate ?? weekStart;
-      return commitments([
+      const next: WeeklyCommitment[] = [
         ...data.commitments,
         {
           id,
@@ -91,8 +101,15 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
           startDate,
           endDate: command.endDate ?? startDate,
         },
-      ]);
+      ];
+      if (command.order === undefined && !command.beforeId) return commitments(next);
+      // A mesma regra do servidor (`insertionOrder`).
+      const week = next.filter(c => c.workId === command.workId && c.weekStart === weekStart);
+      const order = insertionOrder(week, id, command.beforeId, command.order, row => commitmentCompanyOf(row, data.teams));
+      return commitments(reordered(next, command.workId, weekStart, order));
     }
+    case 'reorder_commitments':
+      return commitments(reordered(data.commitments, command.workId, startOfWeek(command.weekStart), command.ids));
     case 'update_commitment': {
       const weekStart = startOfWeek(command.weekStart);
       return patch(command.commitmentId, c => ({
@@ -104,6 +121,7 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
         weekEnd: addDays(weekStart, 6),
         startDate: command.startDate,
         endDate: command.endDate,
+        order: weekStart === c.weekStart ? c.order : undefined,
         updatedAt: now,
       }));
     }

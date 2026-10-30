@@ -50,6 +50,10 @@ export function WorkSettingsHeader({ workId }: { workId: string }) {
                 use o mesmo da planilha que a equipe já preenche.
               </p>
               <p>Quem tem perfil de consulta vê as duas seções, mas não edita.</p>
+              <p>
+                No fim da página, só administradores veem <strong>Excluir obra</strong>: apaga a obra com tudo o que é dela, sem volta,
+                depois de digitar o código da obra.
+              </p>
             </HelpNote>
           </div>
         </div>

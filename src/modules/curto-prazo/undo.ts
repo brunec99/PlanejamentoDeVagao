@@ -36,8 +36,9 @@ export function undoUpdateCommand(before: WeeklyCommitment): Command {
 }
 
 /** Recria uma linha excluída com as mesmas células. Nasce com id novo e sem apontamento: quem desfaz a
- * exclusão regrava o Sim/Não em seguida, com `record_fulfillment` no id novo. */
-export function recreateCommand(before: WeeklyCommitment, responsibleId: string): Command {
+ * exclusão regrava o Sim/Não em seguida, com `record_fulfillment` no id novo. Com `beforeId` (a linha que
+ * vinha logo abaixo na ordem salva), volta para o mesmo lugar em vez de entrar embaixo. */
+export function recreateCommand(before: WeeklyCommitment, responsibleId: string, beforeId?: string): Command {
   return {
     type: 'create_commitment',
     workId: before.workId,
@@ -49,6 +50,7 @@ export function recreateCommand(before: WeeklyCommitment, responsibleId: string)
     activityId: before.activityId ?? null,
     startDate: before.startDate,
     endDate: before.endDate,
+    ...(beforeId && { beforeId }),
   };
 }
 

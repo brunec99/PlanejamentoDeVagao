@@ -3,6 +3,7 @@ import type { AgentBriefing } from '../../domain/agent-briefing';
 import { costOf, type TokenUsage } from '../../domain/agent-cost';
 import { AGENT_TOOL_SPECS, runAgentTool, type AgentProposal, type ToolContext } from '../../application/use-cases/agent-tools';
 import { AGENT } from '../../modules/agente/agent-identity';
+import { manualIndex, SCREEN_LABEL } from '../../modules/agente/manual';
 
 /** Chamada ao modelo da Anthropic para o agente de IA (27/10/2026). Duas entradas: a leitura da obra
  * (uma chamada, sem ferramentas, com estrutura fixa em markdown) e a pergunta (laço manual de
@@ -29,6 +30,8 @@ export interface ChatResult {
   /** Iterações com o modelo (a pergunta com ferramentas faz várias). */
   calls: number;
   proposals: AgentProposal[];
+  /** Nomes das ferramentas chamadas, na ordem (vazio na leitura). Serve ao teste de fumaça. */
+  toolCalls: string[];
 }
 
 /** Erro do modelo já traduzido para a pessoa, com o status HTTP que a rota deve responder. */
@@ -67,8 +70,12 @@ Regras: baseie-se só no dossiê; o pareamento entre níveis é feito pelo nome 
 const QUESTION_SYSTEM = `Você é ${AGENT.name}, ${AGENT.persona}
 Você conversa com a equipe de planejamento de uma obra. O dossiê da obra (abaixo) resume os três níveis: longo prazo (plano macro e vagões), médio prazo (plano do mês) e curto prazo (planilha semanal com PPC e causas).
 Responda curto e direto, em português do Brasil, em markdown simples (listas com -, negrito com **; títulos só se a resposta for longa). Cite nomes e números do dossiê e das listas que as ferramentas devolvem; não invente nada. Se faltar informação para responder ou para propor, pergunte.
-Ferramentas: listar_semana (linhas da planilha de uma semana, com apelidos "c:…"), listar_tarefas_mes (tarefas do plano do mês, com apelidos "t:…"), listar_servicos_macro (serviços do longo prazo), propor_levar, propor_criar_linhas e propor_apontar.
-Quando a pessoa pedir para editar o planejamento (levar linhas para outra semana, criar linhas a partir do plano do mês, apontar linhas como cumpridas ou não), primeiro use listar_semana ou listar_tarefas_mes para achar os apelidos certos e só então chame propor_*. Nunca diga que algo foi gravado: as propostas aparecem na tela com o botão Aplicar, e só a pessoa grava. Depois de propor, resuma em uma ou duas linhas o que a proposta faz e o que ficou de fora.`;
+Ferramentas: listar_semana (linhas da planilha de uma semana, com apelidos "c:…"), listar_tarefas_mes (tarefas do plano do mês, com apelidos "t:…"), listar_servicos_macro (serviços do longo prazo), propor_levar, propor_criar_linhas, propor_apontar e consultar_manual (o manual do sistema).
+Quando a pessoa pedir para editar o planejamento (levar linhas para outra semana, criar linhas a partir do plano do mês, apontar linhas como cumpridas ou não), primeiro use listar_semana ou listar_tarefas_mes para achar os apelidos certos e só então chame propor_*. Nunca diga que algo foi gravado: as propostas aparecem na tela com o botão Aplicar, e só a pessoa grava. Depois de propor, resuma em uma ou duas linhas o que a proposta faz e o que ficou de fora.
+Você também é a ajuda do Obra 360, o sistema em que esta conversa acontece. Quando a pergunta for sobre o sistema — como fazer algo, onde fica um botão ou campo, o que uma coluna ou aviso significa, por que não consegue editar, quem pode fazer o quê, ou o que você mesma sabe fazer — chame consultar_manual com o id da seção (índice abaixo) ou com o tema em palavras, e responda com o que o manual devolver: passo a passo curto, com os nomes dos botões, campos e abas como aparecem na tela, entre aspas. Pode chamar consultar_manual mais de uma vez se a dúvida cruzar duas telas. Se o manual não cobrir a dúvida, diga que não encontrou isso no manual e indique o botão "?" (Como usar) da tela; nunca descreva uma funcionalidade que o manual não confirme. Quando a pessoa misturar dúvida de uso com pergunta sobre os dados, resolva as duas. Você não clica nem grava nada: explica, e a pessoa faz na tela.
+
+## Índice do manual do sistema (id: o que a seção responde)
+${manualIndex()}`;
 
 const briefingBlock = (briefing: AgentBriefing): Anthropic.Beta.BetaTextBlockParam => ({
   type: 'text',
@@ -145,7 +152,18 @@ export async function generateReading(input: { briefing: AgentBriefing; config: 
   if (response.stop_reason === 'refusal') throw new AgentModelError('O modelo não pôde analisar estes dados.', 502);
   const text = textOf(response);
   if (!text) throw new AgentModelError('A leitura voltou vazia. Tente de novo.', 502);
-  return { text, usage: tally.usage, costUsd: tally.costUsd, model: tally.model, calls: tally.calls, proposals: [] };
+  return { text, usage: tally.usage, costUsd: tally.costUsd, model: tally.model, calls: tally.calls, proposals: [], toolCalls: [] };
+}
+
+/** Bloco, fora do cache, que diz ao modelo em que tela a pessoa está (29/10/2026): "como faço isso
+ * aqui?" passa a ter resposta. Tela desconhecida não gera bloco. */
+export function screenBlock(screen: string | undefined): Anthropic.Beta.BetaTextBlockParam | undefined {
+  const label = screen ? SCREEN_LABEL[screen] : undefined;
+  if (!label) return undefined;
+  return {
+    type: 'text',
+    text: `Tela em que a pessoa está agora: ${label}. Quando ela disser "esta tela", "aqui" ou "este botão", é dessa tela que fala.`,
+  };
 }
 
 /** Histórico que vai ao modelo: as últimas mensagens, cada uma cortada, sem vazias e começando por
@@ -176,15 +194,24 @@ export async function answerQuestion(input: {
   question: string;
   history: ChatTurn[];
   toolContext: ToolContext;
+  /** Seção da obra em que a pessoa está (`curto-prazo`, `vagoes`…), para as dúvidas de uso sobre "esta tela". */
+  screen?: string;
 }): Promise<ChatResult> {
   const client = new Anthropic({ apiKey: input.config.apiKey });
   const tally = new Tally();
   const proposals: AgentProposal[] = [];
+  const toolCalls: string[] = [];
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     ...trimHistory(input.history).map(turn => ({ role: turn.role, content: turn.content })),
     { role: 'user', content: input.question },
   ];
-  const system: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text: QUESTION_SYSTEM }, briefingBlock(input.briefing)];
+  // O bloco da tela vem depois do dossiê (que leva o `cache_control`): muda a cada pergunta e não entra no cache.
+  const screen = screenBlock(input.screen);
+  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+    { type: 'text', text: QUESTION_SYSTEM },
+    briefingBlock(input.briefing),
+    ...(screen ? [screen] : []),
+  ];
   let text = '';
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     let response: Anthropic.Beta.BetaMessage;
@@ -209,6 +236,7 @@ export async function answerQuestion(input: {
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue;
+      toolCalls.push(block.name);
       const outcome = runAgentTool(block.name, block.input, input.toolContext);
       if (outcome.proposal) proposals.push(outcome.proposal);
       results.push({ type: 'tool_result', tool_use_id: block.id, content: outcome.result, ...(outcome.error ? { is_error: true } : {}) });
@@ -227,5 +255,5 @@ export async function answerQuestion(input: {
     text = proposals.length
       ? 'Proposta montada: confira abaixo e clique em Aplicar.'
       : 'A resposta voltou vazia. Tente perguntar de outro jeito.';
-  return { text, usage: tally.usage, costUsd: tally.costUsd, model: tally.model, calls: tally.calls, proposals };
+  return { text, usage: tally.usage, costUsd: tally.costUsd, model: tally.model, calls: tally.calls, proposals, toolCalls };
 }

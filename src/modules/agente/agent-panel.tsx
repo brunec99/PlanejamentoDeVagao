@@ -88,6 +88,7 @@ const SUGGESTIONS = [
   'O que do plano do mês não está na semana atual?',
   'Leve para a semana atual os Não da semana passada',
   'Resuma os riscos da obra em 5 pontos',
+  'Como funciona o sistema? O que você sabe fazer?',
 ];
 const SEVERITY: Record<FindingSeverity, { label: string; className: string }> = {
   alerta: { label: 'Alerta', className: 'border-danger-ring bg-danger-soft text-danger' },
@@ -112,6 +113,11 @@ function workIdOf(pathname: string | null): string | null {
   } catch {
     return match[1];
   }
+}
+/** A seção da obra aberta ("curto-prazo", "vagoes"…), enviada com a pergunta para as dúvidas de uso
+ * sobre "esta tela" (29/10/2026). A tela de um vagão conta como "vagoes". */
+export function screenOf(pathname: string | null): string | undefined {
+  return /^\/obras\/[^/]+\/([^/?#]+)/.exec(pathname ?? '')?.[1];
 }
 
 /** Lê o JSON e transforma status de erro em `Error` com o `error` do corpo, mostrado como veio
@@ -269,7 +275,7 @@ export function AgentButton() {
       const response = await fetch('/api/agente', {
         method: 'POST',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ workId, kind: 'pergunta', question, history }),
+        body: JSON.stringify({ workId, kind: 'pergunta', question, history, screen: screenOf(pathname) }),
       });
       const body = await readJson<{ answer?: string; proposals?: AgentProposal[]; usage?: AgentUsage }>(response);
       const proposals = (body.proposals ?? []).map(proposal => ({ proposal, state: { status: 'pendente' } as const }));
@@ -590,7 +596,7 @@ function PanelBody({
             value={session.question}
             onChange={event => onQuestion(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={`Pergunte para ${AGENT.name} ou peça uma edição…`}
+            placeholder={`Pergunte sobre a obra, peça uma edição ou tire uma dúvida do sistema…`}
             className="field max-h-40 min-w-0 flex-1 resize-none overflow-y-auto leading-6"
           />
           <button type="submit" className="button shrink-0" disabled={!canSend}>

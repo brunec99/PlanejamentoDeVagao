@@ -72,7 +72,15 @@ test('resolveWeek: atual, anterior, próxima, número, "S42", data dentro da sem
 test('as especificações das ferramentas têm nome, descrição e esquema de entrada', () => {
   assert.deepEqual(
     AGENT_TOOL_SPECS.map(s => s.name),
-    ['listar_semana', 'listar_tarefas_mes', 'listar_servicos_macro', 'propor_levar', 'propor_criar_linhas', 'propor_apontar'],
+    [
+      'listar_semana',
+      'listar_tarefas_mes',
+      'listar_servicos_macro',
+      'propor_levar',
+      'propor_criar_linhas',
+      'propor_apontar',
+      'consultar_manual',
+    ],
   );
   for (const spec of AGENT_TOOL_SPECS) {
     assert.ok(spec.description.length > 20, spec.name);

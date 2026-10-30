@@ -83,12 +83,12 @@ export const steps: TourStep[] = [
   {
     target: 'curto-limpar-filtros',
     title: 'Filtros ativos',
-    body: 'Diz quantas linhas passam nos filtros de coluna. "Limpar filtros e classificação" volta a mostrar todas as linhas, na ordem de inclusão.',
+    body: 'Diz quantas linhas passam nos filtros de coluna. "Limpar filtros e classificação" volta a mostrar todas as linhas, na ordem salva.',
   },
   {
     target: 'curto-ordem',
     title: 'Ordem das linhas',
-    body: 'Como numa planilha, a linha nova entra embaixo e a editada não muda de lugar. "Organizar por empresa" junta as linhas de cada empresa, pela data de início; "Voltar à ordem de inclusão" desfaz.',
+    body: 'Como numa planilha, a linha nova entra embaixo e a editada não muda de lugar. A ordem que você arrasta ou em que insere linhas fica salva para todos. "Organizar por empresa" e o funil reorganizam só a sua tela: "Salvar esta ordem" grava, "Voltar à ordem salva" desfaz.',
   },
   {
     target: 'curto-commitments',
@@ -99,6 +99,11 @@ export const steps: TourStep[] = [
     target: 'curto-colunas',
     title: 'Filtrar, classificar, redimensionar',
     body: 'O funil de cada coluna classifica A→Z ou Z→A uma vez e filtra por valores, que só valem no OK. Arraste a borda do cabeçalho para mudar a largura; duplo clique volta ao padrão.',
+  },
+  {
+    target: 'curto-linha-mover',
+    title: 'Arrastar a linha',
+    body: 'Segure a alça ⠿ e arraste a linha para cima ou para baixo; o filete azul mostra onde ela vai cair. Com a alça selecionada, as setas ↑ e ↓ movem uma posição. A ordem fica salva e o Desfazer volta atrás. No celular, use as setas do cartão.',
   },
   {
     target: 'curto-marcar',
@@ -176,9 +181,14 @@ export const steps: TourStep[] = [
     body: 'Desfaz um Sim ou Não marcado por engano: tira Status, causa e justificativa, e a linha continua, sem Status. Pede confirmação quando o apontamento já estava gravado.',
   },
   {
+    target: 'curto-linha-inserir',
+    title: 'Inserir linha acima',
+    body: 'Abre uma linha em branco logo acima desta, para pôr uma atividade no meio da semana. Escreva e tecle Enter: a linha entra ali, e a linha em branco continua aberta para a próxima. Esc ou Cancelar fecha sem criar.',
+  },
+  {
     target: 'curto-linha-excluir',
     title: 'Excluir linha',
-    body: 'O ✕ apaga a linha, com o Status e a causa, depois de confirmar. A série do PPC e o Pareto deixam de contá-la.',
+    body: 'O ✕ apaga a linha, com o Status e a causa, depois de confirmar. A série do PPC e o Pareto deixam de contá-la. O Desfazer devolve a linha ao mesmo lugar.',
   },
   {
     target: 'curto-linha-nova',

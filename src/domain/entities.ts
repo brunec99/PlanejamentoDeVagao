@@ -258,6 +258,9 @@ export interface WeeklyCommitment extends RecordBase {
   justification?: string;
   recordedAt?: string;
   recordedBy?: Id;
+  /** Posição na planilha da semana, gravada quando alguém insere uma linha no meio ou arrasta uma linha
+   * (30/10/2026). Sem ela, a linha segue a ordem de inclusão (`sheetOrder`). */
+  order?: number;
 }
 /** Cópia imutável das datas planejadas de uma obra num momento. Reprogramar o
  * planejamento atual nunca altera uma linha de base já salva. */

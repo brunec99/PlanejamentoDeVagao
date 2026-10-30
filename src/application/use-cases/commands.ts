@@ -23,6 +23,7 @@ import type {
   RecordBase,
   Restriction,
   Wagon,
+  WeeklyCommitment,
 } from '../../domain/entities';
 import { LINK_TYPES, NON_FULFILLMENT_CAUSES } from '../../domain/entities';
 import { actsAsManager, isTerminal, leadTimeDeadline, validateActivity, validateSequence } from '../../domain/rules';
@@ -30,6 +31,8 @@ import { planSequenceRegeneration } from './regenerate-sequence';
 import { LONG_TERM_PREFIX, planLongTermSync, type LongTermSlot } from './sync-long-term-plan';
 import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePeriod } from '../../domain/validation';
 import { canEditWeek, weekLockLastDay } from '../../domain/week-lock';
+import { commitmentCompanyOf } from '../../domain/agent-briefing';
+import { insertionOrder, orderPositions } from '../../domain/commitment-order';
 export type ActivityInput = Pick<
   Activity,
   'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
@@ -42,6 +45,8 @@ export type FulfillmentRecord = { commitmentId: string; fulfilled: boolean; caus
 export type FulfillmentItem = FulfillmentRecord | { commitmentId: string; clear: true };
 /** Linhas num apontamento em lote: a seleção da planilha inteira cabe; mais que isso é engano. */
 export const MAX_BULK_FULFILLMENTS = 500;
+/** Linhas na ordem de uma semana (`order` do comando): a semana mais cheia da obra tem perto de 150. */
+export const MAX_WEEK_ROWS = 2000;
 export type Command =
   | {
       type: 'save_plan_revision';
@@ -122,7 +127,14 @@ export type Command =
       activityId?: string | null;
       startDate?: string;
       endDate?: string;
+      /** Inserir no meio (30/10/2026): a linha nova entra logo acima de `beforeId`, e a semana passa a
+       * ter a ordem `order` (os ids da semana como a tela mostra, sem a linha nova); sem `order`, vale a
+       * ordem salva. Sem os dois, a linha entra embaixo, como sempre. */
+      beforeId?: string;
+      order?: string[];
     }
+  /** Arrastar linhas (30/10/2026): grava a ordem da semana, `ids` como a tela mostra depois de soltar. */
+  | { type: 'reorder_commitments'; workId: string; weekStart: string; ids: string[] }
   | {
       type: 'update_commitment';
       commitmentId: string;
@@ -425,6 +437,24 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     const team = data.teams.find(t => t.id === teamId && t.workId === workId);
     if (!team) throw new Error('Equipe deve pertencer à obra.');
     return team.id;
+  };
+  const weekIds = (ids: unknown) => {
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Ordem das linhas inválida.');
+    if (ids.length > MAX_WEEK_ROWS) throw new Error(`Ordene até ${MAX_WEEK_ROWS} linhas de cada vez.`);
+    return ids as string[];
+  };
+  /** Grava a posição de cada linha da semana na ordem `ids` (`orderPositions`); só a linha cuja posição
+   * mudou é tocada, e só ela viaja na gravação. */
+  const companyOf = (row: WeeklyCommitment) => commitmentCompanyOf(row, data.teams);
+  const saveOrder = (workId: string, weekStart: string, ids: string[]) => {
+    const week = data.commitments.filter(c => c.workId === workId && c.weekStart === weekStart);
+    const positions = orderPositions(week, ids, companyOf);
+    for (const row of week) {
+      const order = positions.get(row.id);
+      if (order === row.order) continue;
+      row.order = order;
+      touch(row);
+    }
   };
   let entityId = '';
   let wagonId: string | undefined;
@@ -951,7 +981,23 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         ...period(startDate, endDate, weekStart, weekEnd),
       };
       data.commitments.push(commitment);
+      // Inserir no meio: a ordem de base é a da tela (`order`) ou, sem ela, a salva (`insertionOrder`).
+      if (command.order !== undefined || command.beforeId) {
+        const order = command.order === undefined ? undefined : weekIds(command.order);
+        const week = data.commitments.filter(c => c.workId === workId && c.weekStart === weekStart);
+        saveOrder(workId, weekStart, insertionOrder(week, commitment.id, command.beforeId, order, companyOf));
+      }
       entityId = commitment.id;
+      break;
+    }
+    case 'reorder_commitments': {
+      checkWork(command.workId);
+      validateDate(command.weekStart);
+      const weekStart = startOfWeek(command.weekStart);
+      // Ordem é edição da planilha: na semana encerrada, só admin.
+      guardWeek(weekStart);
+      saveOrder(command.workId, weekStart, weekIds(command.ids));
+      entityId = command.workId;
       break;
     }
     case 'update_commitment': {
@@ -973,6 +1019,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         weekStart,
         weekEnd,
         ...period(command.startDate, command.endDate, weekStart, weekEnd),
+        // A posição é da semana de origem: na semana nova a linha entra embaixo, como a linha nova.
+        order: weekStart === commitment.weekStart ? commitment.order : undefined,
       });
       touch(commitment);
       entityId = commitment.id;
@@ -1897,9 +1945,14 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     occurredAt: now,
     changes: {
       targetId: entityId,
+      // A ordem da semana viaja inteira no comando (centenas de ids a cada arrasto); no histórico, só a contagem.
       ...(command.type === 'sync_long_term_plan'
         ? { type: command.type, sequenceId: command.sequenceId, slots: command.slots.length }
-        : command),
+        : command.type === 'reorder_commitments'
+          ? { type: command.type, workId: command.workId, weekStart: command.weekStart, rows: command.ids.length }
+          : command.type === 'create_commitment' && command.order
+            ? { ...command, order: command.order.length }
+            : command),
     },
   });
   for (const id of beforeTerminal)

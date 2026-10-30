@@ -23,6 +23,9 @@ export function commandScope(command: Command, workIds: string[]): SnapshotScope
       return { workIds, commitments: { ids: [] } };
     case 'create_commitment':
       return command.activityId ? full : { workIds, commitments: { weekStarts: week(command.weekStart) } };
+    // Arrastar regrava a ordem da semana inteira: lê a semana.
+    case 'reorder_commitments':
+      return { workIds, commitments: { weekStarts: week(command.weekStart) } };
     // Mover de semana: a linha pela chave e a semana de destino, para o rascunho conter as duas pontas.
     case 'update_commitment':
       return { workIds, commitments: { ids: id(command.commitmentId), weekStarts: week(command.weekStart) } };

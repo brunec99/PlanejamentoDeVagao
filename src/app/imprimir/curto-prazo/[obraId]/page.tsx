@@ -10,9 +10,9 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ obraId: string }>;
-  searchParams: Promise<{ semana?: string; tipo?: string; ordem?: string; excluir?: string | string[] }>;
+  searchParams: Promise<{ semana?: string; tipo?: string; ordem?: string; excluir?: string | string[]; painel?: string }>;
 }) {
-  const [{ obraId }, { semana, tipo, ordem, excluir }] = await Promise.all([params, searchParams]);
+  const [{ obraId }, { semana, tipo, ordem, excluir, painel }] = await Promise.all([params, searchParams]);
   const week = semana && /^\d{4}-\d{2}-\d{2}$/.test(semana) ? semana : undefined;
   return (
     <PlanningProvider>
@@ -22,6 +22,7 @@ export default async function Page({
         kind={tipo === 'fechamento' ? 'fechamento' : 'planejamento'}
         order={ordem === 'inicio' ? 'inicio' : 'empreiteiro'}
         excluded={excluir === undefined ? [] : Array.isArray(excluir) ? excluir : [excluir]}
+        dashboard={painel === '1'}
       />
     </PlanningProvider>
   );

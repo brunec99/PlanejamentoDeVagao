@@ -1,3 +1,4 @@
+import { compareText } from '@/domain/commitment-order';
 import { addDays } from '@/domain/validation';
 
 /** Filtro e classificação da planilha da semana, no modelo do Google Sheets que ela substitui: cada
@@ -6,8 +7,8 @@ export type Accessor<T> = (row: T) => string;
 export type SheetSort = { column: string; dir: 'asc' | 'desc' };
 export type SheetFilters = Record<string, Set<string> | undefined>;
 
-const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
-export const compareText = (a: string, b: string) => collator.compare(a, b);
+// A comparação de texto é a da ordem da planilha (domínio), para o funil e o servidor concordarem.
+export { compareText };
 
 /** Sem acento, sem caixa e sem espaço repetido: "Hidrotec " e "HIDROTEC" são a mesma empresa. */
 export const textKey = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -49,6 +50,23 @@ export function applySheetView<T>(
     }
     return fallback(a, b);
   });
+}
+
+/** A ordem presa da tela com as linhas que ela ainda não conhece. Cada uma entra logo acima da linha que
+ * vem depois dela na ordem salva (`saved`), ou no fim: a linha nova entra embaixo, e a inserida no meio
+ * (por esta tela ou, na recarga, por outra pessoa) aparece no lugar dela, mesmo com a planilha
+ * classificada pelo funil. Linha que saiu da semana sai da lista. */
+export function mergePinned(pinned: readonly string[], saved: readonly string[]): string[] {
+  const known = new Set(saved);
+  const merged = pinned.filter(id => known.has(id));
+  const present = new Set(merged);
+  saved.forEach((id, index) => {
+    if (present.has(id)) return;
+    const next = saved.slice(index + 1).find(other => present.has(other));
+    merged.splice(next === undefined ? merged.length : merged.indexOf(next), 0, id);
+    present.add(id);
+  });
+  return merged;
 }
 
 /** As semanas oferecidas na lista: da primeira semana da obra até `ahead` semanas depois da atual. */

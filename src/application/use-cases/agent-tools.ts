@@ -6,6 +6,7 @@ import { ppc, rollUpPlan, targetPercent } from '../../domain/rules';
 import { addDays, startOfWeek } from '../../domain/validation';
 import { canEditWeek } from '../../domain/week-lock';
 import { weekNumberFrom } from '../../domain/week-numbering';
+import { findManualSections, manualIndex, renderManual } from '../../modules/agente/manual';
 import type { Command, FulfillmentItem } from './commands';
 
 /** Ferramentas do agente de IA (27/10/2026). O modelo nunca grava: as ferramentas de leitura devolvem
@@ -145,6 +146,23 @@ export const AGENT_TOOL_SPECS: AgentToolSpec[] = [
         },
       },
       required: ['itens'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'consultar_manual',
+    description:
+      'Consulta o manual do Obra 360, o sistema em que esta conversa acontece: para que serve cada tela, o que cada botão, campo e coluna faz, quem pode fazer o quê, avisos e perguntas frequentes. Use quando a dúvida for sobre o sistema (como fazer, onde fica, o que significa, por que não consigo), não sobre os dados da obra. Informe o id de uma seção do índice do prompt ou o tema em palavras.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tema: {
+          type: 'string',
+          description:
+            'Id da seção (ex.: "geral-glossario") ou o assunto em palavras (ex.: "apontar não com causa na planilha da semana").',
+        },
+      },
+      required: ['tema'],
       additionalProperties: false,
     },
   },
@@ -526,6 +544,20 @@ function proposeFulfillment(input: Record<string, unknown>, ctx: ToolContext): T
   return { result: proposalText(proposal), proposal };
 }
 
+// ─── Manual do sistema ──────────────────────────────────────────────────────────
+
+/** As seções do manual que respondem ao tema (29/10/2026). Sem nada que case, devolve o índice como
+ * erro, para o modelo escolher um id. Não depende da obra nem do papel: o manual é o mesmo para todos,
+ * e as seções dizem quem pode o quê. */
+function consultManual(input: Record<string, unknown>): ToolOutcome {
+  const topic = text(input.tema);
+  if (!topic) return { result: `Informe o tema ou o id da seção. Seções do manual:\n${manualIndex()}`, error: true };
+  const sections = findManualSections(topic);
+  if (!sections.length)
+    return { result: `Nenhuma seção do manual casa com "${topic}". Escolha um id entre estas:\n${manualIndex()}`, error: true };
+  return { result: renderManual(sections) };
+}
+
 const proposalText = (p: AgentProposal) =>
   `Proposta ${p.id} criada: ${p.title}. Ela aparece na tela com o botão Aplicar; nada foi gravado ainda.\n${p.lines.map(l => `- ${l}`).join('\n')}${p.skipped.length ? `\nFicaram de fora: ${p.skipped.join('; ')}.` : ''}`;
 
@@ -545,6 +577,8 @@ export function runAgentTool(name: string, input: unknown, ctx: ToolContext): To
       return proposeCreate(args, ctx);
     case 'propor_apontar':
       return proposeFulfillment(args, ctx);
+    case 'consultar_manual':
+      return consultManual(args);
     default:
       return { result: `Ferramenta "${name}" não existe.`, error: true };
   }

@@ -21,6 +21,7 @@ import {
 } from '@/domain/agent-cost';
 import type { ToolContext } from '@/application/use-cases/agent-tools';
 import { AGENT } from '@/modules/agente/agent-identity';
+import { isManualScreen } from '@/modules/agente/manual';
 import {
   countActiveWorks,
   monthUsage,
@@ -220,12 +221,14 @@ const parseHistory = (value: unknown): ChatTurn[] | null => {
 };
 
 export async function POST(request: NextRequest) {
-  let body: { workId?: unknown; kind?: unknown; question?: unknown; history?: unknown };
+  let body: { workId?: unknown; kind?: unknown; question?: unknown; history?: unknown; screen?: unknown };
   try {
     body = await request.json();
   } catch {
     return fail('Corpo da requisição inválido.', 400);
   }
+  // A tela em que a pessoa está (29/10/2026), só para as dúvidas de uso; valor desconhecido é ignorado.
+  const screen = isManualScreen(body.screen) ? body.screen : undefined;
   const workId = typeof body.workId === 'string' ? body.workId : '';
   if (!workId) return fail('Obra não informada.', 400);
   const kind = body.kind === 'leitura' ? 'leitura' : body.kind === 'pergunta' ? 'pergunta' : null;
@@ -329,7 +332,7 @@ export async function POST(request: NextRequest) {
     newId: () => crypto.randomUUID(),
   };
   try {
-    const result = await answerQuestion({ briefing, config: chatConfig, question, history, toolContext });
+    const result = await answerQuestion({ briefing, config: chatConfig, question, history, toolContext, screen });
     const recorded = await recordUsage({
       workId,
       actorId: profile.id,

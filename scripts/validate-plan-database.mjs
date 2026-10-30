@@ -134,6 +134,8 @@ try {
       fulfilled: true,
       recorded_at: '2026-10-09T18:00:00Z',
       recorded_by: 'tester',
+      // Posição na planilha da semana (0036): gravada pela função e devolvida pelo snapshot.
+      order_index: 2,
     },
   ];
   partial.history_events = [
@@ -157,7 +159,8 @@ try {
     'as linhas fora do payload ficam como estavam',
   );
   const c2 = after.weekly_commitments.find(c => c.id === 'c2');
-  assert.deepEqual([c2.fulfilled, c2.recorded_by], [true, 'tester']);
+  assert.deepEqual([c2.fulfilled, c2.recorded_by, c2.order_index], [true, 'tester', 2]);
+  assert.equal(before.weekly_commitments.find(c => c.id === 'c1').order_index, null);
   assert.equal(await historyCount(), eventsBefore + 1);
   // Listas vazias ou chaves ausentes: só a versão sobe.
   await commit(6, Object.fromEntries(Object.keys(payload).map(key => [key, []])));
@@ -167,7 +170,7 @@ try {
   sameExcept(after, idle);
   assert.equal(await historyCount(), eventsBefore + 1);
   console.log(
-    'PostgreSQL isolado: migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027), gravação parcial (só o que mudou) e RPCs sem acesso público: OK',
+    'PostgreSQL isolado: migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027), gravação parcial (só o que mudou), ordem da planilha (0036) e RPCs sem acesso público: OK',
   );
 } finally {
   await db.close();

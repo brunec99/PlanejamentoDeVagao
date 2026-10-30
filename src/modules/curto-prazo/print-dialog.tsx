@@ -29,6 +29,8 @@ export function PrintDialog({
   const [checked, setChecked] = useState<Set<string>>(() => new Set(initialSelected ?? companies.map(c => c.value)));
   const [query, setQuery] = useState('');
   const [order, setOrder] = useState<PrintOrder>('empreiteiro');
+  // Painel na primeira página do fechamento (30/10/2026): marcado por padrão; desmarcado, sai só a planilha.
+  const [panel, setPanel] = useState(true);
   useEffect(() => {
     const element = dialog.current;
     if (element && !element.open) element.showModal();
@@ -51,6 +53,7 @@ export function PrintDialog({
   const generate = () => {
     if (!chosen.length) return;
     const params = new URLSearchParams({ semana: week, tipo: kind, ordem: order });
+    if (kind === 'fechamento' && panel) params.set('painel', '1');
     companies.filter(c => !checked.has(c.value)).forEach(c => params.append('excluir', c.value));
     window.open(`/imprimir/curto-prazo/${encodeURIComponent(workId)}?${params}`, '_blank', 'noopener');
     onClose();
@@ -73,6 +76,20 @@ export function PrintDialog({
           {title}
         </h2>
         <p className="mt-1 text-sm text-slate-600">Escolha os empreiteiros e a ordem das linhas.</p>
+
+        {kind === 'fechamento' && (
+          <label
+            className={`mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm ${panel ? 'border-primary bg-primary-soft text-primary-ink' : 'border-slate-200 hover:bg-slate-50'}`}
+          >
+            <input type="checkbox" className="mt-0.5 accent-primary" checked={panel} onChange={event => setPanel(event.target.checked)} />
+            <span>
+              <span className="block font-semibold">Painel na primeira página</span>
+              <span className="block text-xs text-slate-600">
+                PPC da semana e das anteriores, ranking das obras e principais causas. O painel considera todos os empreiteiros.
+              </span>
+            </span>
+          </label>
+        )}
 
         <fieldset className="mt-4">
           <legend className="eyebrow mb-2">Ordem das linhas</legend>

@@ -1,12 +1,15 @@
 'use client';
 import Link from 'next/link';
 import {
+  Fragment,
   memo,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type DragEvent,
+  type HTMLAttributes,
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -30,7 +33,8 @@ import { FillHandle, type FillColumn } from '@/modules/curto-prazo/fill-handle';
 import { BulkBar, bulkFulfillmentItems, type BulkChoice } from '@/modules/curto-prazo/bulk-bar';
 import { handleRowKey } from '@/modules/curto-prazo/row-navigation';
 import { fulfillmentLabel, quote, recreateCommand, undoFulfillmentCommand, undoUpdateCommand } from '@/modules/curto-prazo/undo';
-import { Undo2 } from 'lucide-react';
+import { BetweenHorizontalStart, ChevronDown, ChevronUp, GripVertical, Undo2 } from 'lucide-react';
+import { byCompany as companyOrder, placeBefore, sheetOrder } from '@/domain/commitment-order';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/curto-prazo/column-widths';
 import { SectionNav } from '@/modules/curto-prazo/section-nav';
@@ -41,8 +45,8 @@ import { canEditWeek, isWeekLocked, weekLockLastDay } from '@/domain/week-lock';
 import {
   applySheetView,
   companyOptions,
-  compareText,
   distinctValues,
+  mergePinned,
   neighborWeeks,
   textKey,
   weekOptions,
@@ -66,7 +70,8 @@ const TEAM_CREATE_HINT = 'Não achou? Digite o nome para criar uma equipe nova.'
  * arrastando a borda do cabeçalho, e o ajuste fica no navegador dela. */
 const COLUMN_DEFAULTS: Record<string, number> = {
   // Caixa de marcar das linhas (26/10/2026), para apontar várias de uma vez; some para quem só consulta.
-  marcar: 28,
+  // Ao lado dela, a alça de arrastar a linha (30/10/2026).
+  marcar: 44,
   empresa: 176,
   semana: 112,
   inicio: 128,
@@ -85,14 +90,15 @@ const COLUMN_DEFAULTS: Record<string, number> = {
   // "Levar" e "Limpar" lado a lado, curtos: empilhados, dobravam a altura da linha e cabiam 11 linhas na
   // tela onde o Sheets mostra 20 (vídeo da obra, 23/10/2026).
   seguimento: 168,
-  excluir: 32,
+  // "Inserir linha acima" e o ✕ de excluir (30/10/2026).
+  excluir: 56,
 };
 const COLUMN_ORDER = Object.keys(COLUMN_DEFAULTS);
 /** A visão "Semanas vizinhas" é preferência de quem planeja, guardada no navegador como as larguras. */
 const NEIGHBORS_KEY = 'obra360.curto-prazo.vizinhas';
 /** O mínimo legível de cada coluna no "Ajustar à tela": abaixo disso a lista de empresa ou a data cortam. */
 const COLUMN_MIN: Record<string, number> = {
-  marcar: 28,
+  marcar: 44,
   empresa: 110,
   semana: 84,
   inicio: 108,
@@ -109,8 +115,10 @@ const COLUMN_MIN: Record<string, number> = {
   causas: 130,
   justificativa: 130,
   seguimento: 112,
-  excluir: 32,
+  excluir: 56,
 };
+/** Tipo do arrasto de linha: só o que sai da alça da planilha vira mover; texto arrastado não. */
+const ROW_DRAG = 'application/x-obra360-linha';
 
 export function CommitmentsOverview({ workId }: { workId: string }) {
   const context = usePlanning();
@@ -143,6 +151,15 @@ type RowActions = {
   toggleSelect: (row: WeeklyCommitment) => unknown;
   /** Alça de arrastar: copia a célula da linha de origem nas linhas alvo. */
   fill: (column: FillColumn, sourceId: string, targetIds: string[]) => unknown;
+  /** Abre a linha em branco logo acima desta (inserir no meio, 30/10/2026). */
+  insertAbove: (row: WeeklyCommitment) => unknown;
+  /** Mover a linha uma posição, pelo teclado na alça ou pelas setas do cartão. */
+  moveBy: (row: WeeklyCommitment, delta: -1 | 1) => unknown;
+  /** Arrastar a linha pela alça: começar, passar sobre outra linha, soltar e terminar. */
+  dragStart: (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => unknown;
+  dragOver: (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => unknown;
+  drop: (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => unknown;
+  dragEnd: () => unknown;
 };
 
 /** Versão estável das ações: o objeto devolvido nunca muda, mas cada chamada cai na versão mais
@@ -177,6 +194,8 @@ const same = (a: unknown, b: unknown): boolean => {
   return false;
 };
 const sameProps = <P extends object>(prev: P, next: P) => (Object.keys(prev) as (keyof P)[]).every(key => same(prev[key], next[key]));
+const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+type Pinned = { week: string; ids: string[]; session: boolean; sig: string };
 
 function Sheet({
   workId,
@@ -219,8 +238,17 @@ function Sheet({
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   /** Ordem das linhas da semana como estão na tela. Linha nova entra no fim e linha editada não muda de
    * lugar, como no Sheets (pedido da obra, 09/10/2026): reordenar a cada gravação atrapalhava escrever o
-   * planejamento. Volta à ordem por empresa ao trocar de semana, recarregar ou pedir "Organizar". */
-  const [pinned, setPinned] = useState<{ week: string; ids: string[] }>({ week: '', ids: [] });
+   * planejamento. `session`: ordem só desta tela (classificada pelo funil ou "Organizar por empresa"),
+   * que trocar de semana, recarregar ou "Voltar à ordem salva" desfazem. `sig` são as posições salvas da
+   * semana: quando mudam (alguém inseriu ou arrastou), a tela que segue a ordem salva passa a mostrá-las. */
+  const [pinned, setPinned] = useState<Pinned>({ week: '', ids: [], session: false, sig: '' });
+  /** Linha em branco aberta no meio da semana, logo acima de `beforeId` ("Inserir linha acima", 30/10/2026). */
+  const [inserting, setInserting] = useState<{ week: string; beforeId: string }>();
+  /** Arrasto em curso pela alça: a linha levada e onde ela cairia ("id:before" ou "id:after"). */
+  const dragging = useRef('');
+  const [dropAt, setDropAt] = useState('');
+  /** Depois de mover pelo teclado, o foco volta à alça da linha movida. */
+  const refocus = useRef('');
   const { data } = planning;
   const viewer = actor.role === 'viewer';
 
@@ -401,10 +429,16 @@ function Sheet({
       confirmLabel: 'Excluir',
       tone: 'danger',
     });
+    // A linha que vinha logo abaixo na ordem salva: o Desfazer devolve a excluída para o mesmo lugar.
+    const saved = commitments
+      .filter(c => c.weekStart === row.weekStart)
+      .sort(sheetOrder(companyOf))
+      .map(c => c.id);
+    const below = saved[saved.indexOf(row.id) + 1];
     if (ok && (await run({ type: 'delete_commitment', commitmentId: row.id }, row.id))) {
       // Desfazer recria a linha (id novo) e, se ela tinha Sim/Não, regrava o apontamento no id novo.
       const entry = pushUndo(`exclusão de ${quote(row.name)}`, async () => {
-        const id = await run(recreateCommand(row, actor.id), 'desfazer');
+        const id = await run(recreateCommand(row, actor.id, below), 'desfazer');
         if (id && row.fulfilled !== undefined)
           return run(
             { type: 'record_fulfillment', commitmentId: id, fulfilled: row.fulfilled, cause: row.cause, justification: row.justification },
@@ -452,26 +486,28 @@ function Sheet({
     justificativa: r => r.justification ?? '',
   };
   const sortKeys: Record<string, Accessor<WeeklyCommitment>> = { inicio: r => r.startDate, termino: r => r.endDate };
-  // Ordem da planilha de origem: as linhas de cada empresa juntas, e dentro dela pela data de início.
-  const byCompany = (a: WeeklyCommitment, b: WeeklyCommitment) => {
-    const [x, y] = [companyOf(a), companyOf(b)];
-    if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
-    return compareText(x, y) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt);
-  };
-  // Ordem padrão = ordem de inclusão (09/10/2026, pedido da obra): linha nova entra embaixo e fica
-  // embaixo, inclusive depois de recarregar, como numa planilha. O histórico importado tem o mesmo
-  // horário de inclusão por lote, e aí o desempate é o da planilha de origem (empresa, início).
-  const defaultOrder = (a: WeeklyCommitment, b: WeeklyCommitment) => a.createdAt.localeCompare(b.createdAt) || byCompany(a, b);
+  // Ordem salva (domínio, a mesma do servidor): a posição gravada por quem inseriu ou arrastou linhas;
+  // sem ela, a de inclusão (09/10/2026, pedido da obra), com o histórico importado desempatado pela
+  // planilha de origem (empresa, início).
+  const byCompany = companyOrder(companyOf);
+  const defaultOrder = sheetOrder(companyOf);
   const defaultIds = [...weekRows].sort(defaultOrder).map(r => r.id);
   const companyIds = [...weekRows].sort(byCompany).map(r => r.id);
-  const known = new Set(defaultIds);
-  const orderIds =
-    pinned.week === week ? [...pinned.ids.filter(id => known.has(id)), ...defaultIds.filter(id => !pinned.ids.includes(id))] : defaultIds;
-  if (pinned.week !== week || orderIds.length !== pinned.ids.length || orderIds.some((id, i) => id !== pinned.ids[i]))
-    setPinned({ week, ids: orderIds });
+  const orderSig = weekRows
+    .filter(r => r.order !== undefined)
+    .sort(defaultOrder)
+    .map(r => `${r.id}:${r.order}`)
+    .join();
+  const keep = pinned.week === week && (pinned.session || pinned.sig === orderSig);
+  const orderIds = keep ? mergePinned(pinned.ids, defaultIds) : defaultIds;
+  const session = keep && pinned.session;
+  if (pinned.week !== week || pinned.sig !== orderSig || pinned.session !== session || !sameIds(orderIds, pinned.ids))
+    setPinned({ week, ids: orderIds, session, sig: orderSig });
   const position = new Map(orderIds.map((id, i) => [id, i]));
   const byPin = (a: WeeklyCommitment, b: WeeklyCommitment) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0);
-  const byCompanyNow = orderIds.every((id, i) => id === companyIds[i]);
+  const byCompanyNow = sameIds(orderIds, companyIds);
+  // A tela mostra uma ordem que não está salva: a do funil ou a de "Organizar por empresa".
+  const unsaved = session && !sameIds(orderIds, defaultIds);
   // Classificar pelo funil é uma ação de uma vez, como no Sheets: reescreve a ordem presa e pronto.
   // Classificação contínua reordenava a linha a cada apontamento (Status A→Z levava a linha recém
   // marcada para junto das outras "Sim"), e foi isso que a obra viu como "a tarefa sobe" (09/10/2026).
@@ -480,8 +516,13 @@ function Sheet({
     setSort(dir ? { column, dir } : undefined);
     setPinned(
       dir
-        ? { week, ids: applySheetView([...weekRows], accessors, {}, { column, dir }, byPin, sortKeys).map(r => r.id) }
-        : { week: '', ids: [] },
+        ? {
+            week,
+            ids: applySheetView([...weekRows], accessors, {}, { column, dir }, byPin, sortKeys).map(r => r.id),
+            session: true,
+            sig: orderSig,
+          }
+        : { week: '', ids: [], session: false, sig: '' },
     );
   };
   const rows = applySheetView([...weekRows], accessors, filters, undefined, byPin, sortKeys);
@@ -717,6 +758,70 @@ function Sheet({
       });
     }
   };
+  /** Grava a ordem da semana como a tela vai mostrar (`ids`): arrastar, mover pelo teclado ou "Salvar esta
+   * ordem" (30/10/2026). A tela muda na hora, sem esperar o servidor; o Desfazer devolve a ordem de antes. */
+  const saveOrder = async (ids: string[], label: string, key: string) => {
+    const before = orderIds;
+    if (sameIds(ids, before) && !session) return;
+    const target = week;
+    setSort(undefined);
+    setPinned({ week, ids, session: false, sig: orderSig });
+    const ok = await run({ type: 'reorder_commitments', workId, weekStart: target, ids }, key);
+    if (ok) pushUndo(label, () => run({ type: 'reorder_commitments', workId, weekStart: target, ids: before }, key));
+    return ok;
+  };
+  /** Leva a linha para logo acima (`before`) ou logo abaixo (`after`) de outra, na ordem da tela. */
+  const moveRow = (rowId: string, targetId: string, edge: 'before' | 'after') => {
+    const row = weekRows.find(r => r.id === rowId);
+    if (!row || rowId === targetId) return;
+    const rest = orderIds.filter(id => id !== rowId);
+    const beforeId = edge === 'before' ? targetId : rest[rest.indexOf(targetId) + 1];
+    return saveOrder(placeBefore(orderIds, rowId, beforeId), `movimento de ${quote(row.name)}`, rowId);
+  };
+  /** Uma posição para cima ou para baixo entre as linhas visíveis (com filtro, pula as escondidas). */
+  const moveBy = (row: WeeklyCommitment, delta: -1 | 1) => {
+    const index = rows.findIndex(r => r.id === row.id);
+    const target = index < 0 ? undefined : rows[index + delta];
+    if (!target) return;
+    refocus.current = row.id;
+    return moveRow(row.id, target.id, delta < 0 ? 'before' : 'after');
+  };
+  const dropEdge = (event: DragEvent<HTMLElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+  };
+  const isRowDrag = (event: DragEvent<HTMLElement>) => !!dragging.current && event.dataTransfer.types.includes(ROW_DRAG);
+  const dragEnd = () => {
+    dragging.current = '';
+    setDropAt('');
+  };
+  const dragStart = (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => {
+    dragging.current = row.id;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(ROW_DRAG, row.id);
+    // A imagem do arrasto é a linha inteira, não só a alça.
+    const line = event.currentTarget.closest('tr');
+    if (line) event.dataTransfer.setDragImage(line, 16, line.offsetHeight / 2);
+  };
+  const dragOver = (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => {
+    if (!isRowDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropAt(row.id === dragging.current ? '' : `${row.id}:${dropEdge(event)}`);
+  };
+  const drop = (row: WeeklyCommitment, event: DragEvent<HTMLElement>) => {
+    if (!isRowDrag(event)) return;
+    event.preventDefault();
+    const moving = dragging.current;
+    dragEnd();
+    void moveRow(moving, row.id, dropEdge(event));
+  };
+  useEffect(() => {
+    if (!refocus.current) return;
+    const id = refocus.current;
+    refocus.current = '';
+    document.querySelector<HTMLElement>(`[data-row-id="${id}"] [data-row-grip]`)?.focus();
+  });
   const actions = useLiveActions<RowActions>({
     assignCompany,
     moveWeek,
@@ -733,10 +838,17 @@ function Sheet({
     clearFulfillment,
     toggleSelect,
     fill,
+    insertAbove: row => setInserting({ week, beforeId: row.id }),
+    moveBy,
+    dragStart,
+    dragOver,
+    drop,
+    dragEnd,
   });
-  /** Resolve `true` só com a linha criada: é o sinal para a linha em branco limpar o rascunho. */
-  const createRow = (draft: Draft) =>
-    enqueue('nova', async () => {
+  /** Resolve `true` só com a linha criada: é o sinal para a linha em branco limpar o rascunho. Com
+   * `beforeId`, a linha entra logo acima dela, e a ordem da tela fica salva (inserir no meio, 30/10/2026). */
+  const createRow = (draft: Draft, beforeId?: string) =>
+    enqueue(beforeId ? 'inserir' : 'nova', async () => {
       const company = draft.supplier.trim();
       let teamId: string | undefined;
       let created = '';
@@ -753,6 +865,11 @@ function Sheet({
           created = draft.teamName.trim();
         }
       }
+      if (beforeId) {
+        // A ordem que vai junto é a da tela; a partir daqui ela é a salva, e o funil deixa de valer.
+        setSort(undefined);
+        setPinned(current => (current.session ? { ...current, session: false } : current));
+      }
       const id = await execute({
         type: 'create_commitment',
         workId,
@@ -763,8 +880,11 @@ function Sheet({
         teamId: teamId ?? null,
         startDate: draft.startDate || undefined,
         endDate: draft.endDate || undefined,
+        ...(beforeId && { beforeId, order: orderIds }),
       });
-      pushUndo(`nova linha ${quote(draft.name.trim())}`, () => run({ type: 'delete_commitment', commitmentId: id }, id));
+      pushUndo(`${beforeId ? 'linha inserida' : 'nova linha'} ${quote(draft.name.trim())}`, () =>
+        run({ type: 'delete_commitment', commitmentId: id }, id),
+      );
       if (created) teamCreated(created, company);
       return id;
     });
@@ -804,6 +924,11 @@ function Sheet({
       viewer,
       // A anterior só aceita apontamento e "Levar", mesmo aberta: mexer nas linhas dela é escolhê-la no seletor.
       readOnly: scope === 'anterior' ? true : scope === 'proxima' ? nextReadOnly : readOnly,
+      // Inserir e mover só na semana analisada, como a linha em branco: nas vizinhas, escolha a semana no seletor.
+      arrange: scope === 'analisada' && !readOnly,
+      first: index === 0,
+      last: index === rows.length - 1,
+      dropEdge: scope === 'analisada' && dropAt.startsWith(`${row.id}:`) ? (dropAt.endsWith(':before') ? 'before' : 'after') : '',
       tour: {
         cells: scope === 'analisada' && index === 0,
         carry: tourRows.carry === row.id,
@@ -836,6 +961,13 @@ function Sheet({
           : undefined,
   });
   const sheetLabel = `Planilha da semana ${weekNumber(week)}`;
+  /** A linha acima da qual a linha em branco está aberta ('' quando nenhuma). Fecha só a dela: sair de
+   * uma inserida para abrir outra não pode fechar a nova. */
+  const insertingAbove = !readOnly && inserting?.week === week ? inserting.beforeId : '';
+  const insertFor = (row: WeeklyCommitment) => ({
+    above: row.name,
+    onClose: () => setInserting(current => (current?.beforeId === row.id ? undefined : current)),
+  });
   const emptyState =
     weekRows.length === 0 ? (
       <Empty>Semana em branco. Escreva a primeira atividade na linha de nova atividade.</Empty>
@@ -855,6 +987,10 @@ function Sheet({
             <p>
               A planilha é a mesma que a equipe já preenche: empresa, semana, início, término, atividade e equipe, todos editáveis na
               célula. Escreva a atividade na última linha e a linha existe; a equipe é opcional.
+            </p>
+            <p>
+              Para pôr uma linha no meio, use &quot;Inserir linha acima&quot; no fim da linha de baixo. Para mudar a ordem, arraste a linha
+              pela alça ⠿ do começo (no celular, pelas setas do cartão). A ordem fica salva para todos que abrem a planilha.
             </p>
             <p>
               O calendário de SEG a SÁB é a única coisa que se marca sozinha, a partir de Início e Término. Trocar a semana de uma linha
@@ -1050,20 +1186,33 @@ function Sheet({
       {weekRows.length > 1 && (
         <div data-tour="curto-ordem" className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
           <span>
-            {sort
-              ? 'Linhas classificadas uma vez pelo funil; marcar Status ou editar não as move, e as novas entram embaixo.'
-              : byCompanyNow
-                ? 'Linhas organizadas por empresa; as novas entram embaixo.'
-                : 'Linhas na ordem em que foram incluídas; a nova entra embaixo.'}
+            {unsaved
+              ? `${sort ? 'Linhas classificadas pelo funil' : 'Linhas organizadas por empresa'} só nesta tela; marcar Status ou editar não as move. ${readOnly ? 'Recarregar volta à ordem salva.' : 'Arrastar ou inserir uma linha salva a ordem que está na tela.'}`
+              : readOnly
+                ? 'Linhas na ordem salva da semana.'
+                : 'Linhas na ordem salva: arraste pela alça ⠿ para mudar. A nova entra embaixo, ou acima da linha escolhida em "Inserir linha acima".'}
           </span>
-          {sort || byCompanyNow ? (
-            <button type="button" className="text-link" onClick={() => sortOnce('', undefined)}>
-              Voltar à ordem de inclusão
-            </button>
+          {unsaved ? (
+            <>
+              {!readOnly && (
+                <button type="button" className="text-link" onClick={() => void saveOrder(orderIds, 'ordem da semana', 'ordem')}>
+                  Salvar esta ordem
+                </button>
+              )}
+              <button type="button" className="text-link" onClick={() => sortOnce('', undefined)}>
+                Voltar à ordem salva
+              </button>
+            </>
           ) : (
-            <button type="button" className="text-link" onClick={() => setPinned({ week, ids: companyIds })}>
-              Organizar por empresa
-            </button>
+            !byCompanyNow && (
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => setPinned({ week, ids: companyIds, session: true, sig: orderSig })}
+              >
+                Organizar por empresa
+              </button>
+            )
           )}
         </div>
       )}
@@ -1136,7 +1285,7 @@ function Sheet({
                     </th>
                   )}
                   <th scope="col">
-                    <span className="sr-only">Excluir</span>
+                    <span className="sr-only">Inserir ou excluir linha</span>
                   </th>
                 </tr>
               </thead>
@@ -1165,7 +1314,22 @@ function Sheet({
                   />
                 )}
                 {rows.map((row, index) => (
-                  <SheetRow key={row.id} {...rowProps(row, index)} showFollowUp={showFollowUp} />
+                  <Fragment key={row.id}>
+                    {row.id === insertingAbove && (
+                      <BlankRow
+                        key="inserir"
+                        week={week}
+                        weekEnd={weekEnd}
+                        weekNumber={weekNumber(week)}
+                        companies={companies}
+                        teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                        onCreate={draft => createRow(draft, row.id)}
+                        insert={insertFor(row)}
+                        trailingSpan={showFollowUp ? 11 : 10}
+                      />
+                    )}
+                    <SheetRow key="linha" {...rowProps(row, index)} showFollowUp={showFollowUp} />
+                  </Fragment>
                 ))}
                 {!readOnly && (
                   <BlankRow
@@ -1175,6 +1339,7 @@ function Sheet({
                     companies={companies}
                     teamNames={company => teamsOfCompany(company).map(t => t.name)}
                     onCreate={createRow}
+                    tourId="curto-linha-nova"
                     trailingSpan={showFollowUp ? 11 : 10}
                   />
                 )}
@@ -1214,7 +1379,21 @@ function Sheet({
             )}
             {around && <WeekBandCard band={band('analisada', week, rows.length, weekRows.length)} tourId="curto-faixa-semana" />}
             {rows.map((row, index) => (
-              <SheetCard key={row.id} {...rowProps(row, index)} />
+              <Fragment key={row.id}>
+                {row.id === insertingAbove && (
+                  <BlankCard
+                    key="inserir"
+                    week={week}
+                    weekEnd={weekEnd}
+                    weekNumber={weekNumber(week)}
+                    companies={companies}
+                    teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                    onCreate={draft => createRow(draft, row.id)}
+                    insert={insertFor(row)}
+                  />
+                )}
+                <SheetCard key="linha" {...rowProps(row, index)} />
+              </Fragment>
             ))}
             {!readOnly && (
               <BlankCard
@@ -1224,6 +1403,7 @@ function Sheet({
                 companies={companies}
                 teamNames={company => teamsOfCompany(company).map(t => t.name)}
                 onCreate={createRow}
+                tourId="curto-linha-nova"
               />
             )}
             {neighborSections && (
@@ -1288,6 +1468,13 @@ type RowProps = {
   carryAny: boolean;
   /** Linha da semana anterior nas vizinhas, desenhada esmaecida. */
   muted: boolean;
+  /** Pode inserir uma linha acima desta e mover esta linha (semana analisada, quem edita). */
+  arrange: boolean;
+  /** Primeira e última das linhas visíveis: as setas do cartão não vão além delas. */
+  first: boolean;
+  last: boolean;
+  /** Onde a linha arrastada cairia em relação a esta: o filete azul em cima ou embaixo. */
+  dropEdge: '' | 'before' | 'after';
   developer: boolean;
   viewer: boolean;
   readOnly: boolean;
@@ -1343,6 +1530,10 @@ function Mark({ tour, tourId, className, children }: { tour: boolean; tourId: st
 function RowButton({ tour, tourId, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tour: boolean; tourId: string }) {
   return <button type="button" {...props} data-tour={tour ? tourId : undefined} />;
 }
+/** A alça de arrastar a linha. É um `span` e não um `button` porque o Firefox não começa arrasto em botão. */
+function RowGrip({ tour, tourId, ...props }: HTMLAttributes<HTMLSpanElement> & { tour: boolean; tourId: string }) {
+  return <span role="button" tabIndex={0} draggable {...props} data-tour={tour ? tourId : undefined} />;
+}
 
 /** Os controles de uma linha são os mesmos na tabela (telas largas) e no cartão (celular): só a
  * disposição muda, a gravação é uma. Os campos de texto recebem a classe de quem os monta,
@@ -1366,6 +1557,9 @@ function rowControls({
   developer,
   viewer,
   readOnly,
+  arrange,
+  first,
+  last,
   tour,
   actions,
 }: RowProps) {
@@ -1571,6 +1765,64 @@ function rowControls({
           )}
         </>
       ) : null,
+    /** Arrastar muda a linha de lugar; com a alça em foco, as setas para cima e para baixo também. */
+    grip: arrange ? (
+      <RowGrip
+        tour={tour.cells}
+        tourId="curto-linha-mover"
+        data-row-grip=""
+        aria-label={`Mover a linha ${line}: arraste, ou use as setas para cima e para baixo`}
+        aria-keyshortcuts="ArrowUp ArrowDown"
+        title="Arraste para mudar a linha de lugar (ou, com a alça selecionada, as setas ↑ e ↓)"
+        className="flex h-6 w-4 cursor-grab items-center justify-center rounded text-slate-300 hover:bg-slate-100 hover:text-slate-600 focus-visible:text-primary focus-visible:outline-2 focus-visible:outline-primary active:cursor-grabbing"
+        onDragStart={event => actions.dragStart(row, event)}
+        onDragEnd={() => actions.dragEnd()}
+        onKeyDown={event => {
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+          event.preventDefault();
+          actions.moveBy(row, event.key === 'ArrowUp' ? -1 : 1);
+        }}
+      >
+        <GripVertical size={14} aria-hidden />
+      </RowGrip>
+    ) : null,
+    /** No celular não há arrasto: o cartão sobe e desce uma posição por toque. */
+    moveButtons: arrange ? (
+      <>
+        <button
+          type="button"
+          disabled={first}
+          aria-label={`Subir a linha ${line}`}
+          title="Subir uma posição"
+          className="rounded px-1 py-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+          onClick={() => actions.moveBy(row, -1)}
+        >
+          <ChevronUp size={16} aria-hidden />
+        </button>
+        <button
+          type="button"
+          disabled={last}
+          aria-label={`Descer a linha ${line}`}
+          title="Descer uma posição"
+          className="rounded px-1 py-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+          onClick={() => actions.moveBy(row, 1)}
+        >
+          <ChevronDown size={16} aria-hidden />
+        </button>
+      </>
+    ) : null,
+    insertButton: arrange ? (
+      <RowButton
+        tour={tour.cells}
+        tourId="curto-linha-inserir"
+        onClick={() => actions.insertAbove(row)}
+        aria-label={`Inserir uma linha acima da linha ${line}`}
+        title="Inserir linha acima"
+        className="rounded px-1 py-0.5 text-slate-300 transition-colors hover:bg-primary-soft hover:text-primary"
+      >
+        <BetweenHorizontalStart size={14} aria-hidden />
+      </RowButton>
+    ) : null,
     deleteButton: readOnly ? null : (
       <RowButton
         tour={tour.cells}
@@ -1589,15 +1841,31 @@ function rowControls({
 /** Uma linha da tabela. Memorizada por valor (`sameProps`): o Status de uma linha não redesenha as
  * outras 119 com seus combos, e a recarga que troca os objetos também não. */
 const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolean }) {
-  const { row, showFollowUp, muted, tour } = props;
+  const { row, showFollowUp, muted, tour, arrange, dropEdge, actions } = props;
   const c = rowControls(props);
+  // O filete azul diz onde a linha arrastada vai cair: em cima ou embaixo desta.
+  const drop =
+    dropEdge === 'before'
+      ? ' shadow-[inset_0_2px_0_0_var(--color-primary)]'
+      : dropEdge === 'after'
+        ? ' shadow-[inset_0_-2px_0_0_var(--color-primary)]'
+        : '';
   return (
     <tr
       data-row-id={row.id}
       aria-busy={c.saving || undefined}
-      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/40 shadow-[inset_3px_0_0_#f59e0b]' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}`}
+      onDragOver={arrange ? event => actions.dragOver(row, event) : undefined}
+      onDrop={arrange ? event => actions.drop(row, event) : undefined}
+      className={`border-t border-slate-100 ${c.saving ? 'bg-amber-50/40 shadow-[inset_3px_0_0_#f59e0b]' : c.missingCause ? 'bg-rose-50/40' : muted ? 'bg-slate-50 hover:bg-slate-100/60' : 'hover:bg-slate-50/60'}${drop}`}
     >
-      {c.select && <td className="px-1 py-1 text-center">{c.select}</td>}
+      {c.select && (
+        <td className="px-0.5 py-1">
+          <div className="flex items-center justify-center gap-0.5">
+            {c.grip}
+            {c.select}
+          </div>
+        </td>
+      )}
       <Cell tour={tour.cells} tourId="curto-linha-empresa">
         {c.company}
       </Cell>
@@ -1639,7 +1907,12 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
         {c.fillHandle('justificativa')}
       </Cell>
       {showFollowUp && <td className="px-1 py-1">{c.followUp && <div className="flex flex-nowrap gap-1">{c.followUp}</div>}</td>}
-      <td className="px-1 py-1">{c.deleteButton}</td>
+      <td className="px-1 py-1">
+        <div className="flex items-center gap-0.5">
+          {c.insertButton}
+          {c.deleteButton}
+        </div>
+      </td>
     </tr>
   );
 }, sameProps);
@@ -1658,7 +1931,11 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
         <Mark tour={tour.cells} tourId="curto-linha-atividade" className="min-w-0 flex-1">
           {c.name('field py-1.5 font-semibold')}
         </Mark>
-        {c.deleteButton}
+        <span className="flex h-9 shrink-0 items-center">
+          {c.moveButtons}
+          {c.insertButton}
+          {c.deleteButton}
+        </span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <CardField label="Empresa" tour={tour.cells} tourId="curto-linha-empresa">
@@ -2025,11 +2302,21 @@ type BlankProps = {
   teamNames: (company: string) => string[];
   /** Resolve com o id da linha criada; `false` é erro já avisado, e o rascunho fica. */
   onCreate: (draft: Draft) => Promise<string | false>;
+  /** Linha em branco aberta no meio da semana ("Inserir linha acima"): a atividade de baixo e o fechar.
+   * Sem isto, é a linha em branco do fim. */
+  insert?: { above: string; onClose: () => void };
+  /** Marca do tour: só a linha em branco do fim a leva. */
+  tourId?: string;
 };
 
 /** O rascunho da linha nova, o mesmo na tabela e no cartão. Trocar a empresa derruba a equipe que
  * não é dela, porque a equipe pertence a uma empresa só. */
-function useDraft(onCreate: (draft: Draft) => Promise<string | false>, teamNames: (company: string) => string[]) {
+function useDraft(
+  onCreate: (draft: Draft) => Promise<string | false>,
+  teamNames: (company: string) => string[],
+  /** Depois de criar: `refocus` diz se a pessoa segue escrevendo (Enter) ou saiu da linha. */
+  onCreated?: (refocus: boolean) => void,
+) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [creating, setCreating] = useState(false);
   // Ref, e não só estado: dois Enter seguidos chegam antes de a tela mostrar "Criando…".
@@ -2050,6 +2337,7 @@ function useDraft(onCreate: (draft: Draft) => Promise<string | false>, teamNames
       if (await onCreate(next)) {
         setDraft(EMPTY_DRAFT);
         if (refocus) nameInput.current?.focus();
+        onCreated?.(refocus);
       }
     } finally {
       pending.current = false;
@@ -2061,16 +2349,42 @@ function useDraft(onCreate: (draft: Draft) => Promise<string | false>, teamNames
 
 /** Linha em branco no fim: escreveu a atividade, a linha existe. Empresa, equipe e datas podem
  * ficar em branco — sem período, a linha nasce no primeiro dia da semana e se ajusta na planilha. */
-function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, trailingSpan }: BlankProps & { trailingSpan: number }) {
-  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames);
+function BlankRow({
+  week,
+  weekEnd,
+  weekNumber,
+  companies,
+  teamNames,
+  onCreate,
+  insert,
+  tourId,
+  trailingSpan,
+}: BlankProps & { trailingSpan: number }) {
+  // A inserida segue aberta enquanto se escreve com Enter (a próxima entra logo abaixo da criada, ainda
+  // acima da mesma linha); sair dela depois de criar a fecha.
+  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames, refocus => {
+    if (!refocus) insert?.onClose();
+  });
+  const of = insert ? 'da linha inserida' : 'da nova linha';
   /** Só cria quando o foco deixa a linha em branco: andar de célula em célula — inclusive abrir a
-   * lista suspensa de empresa ou equipe — é continuar preenchendo a mesma linha. */
+   * lista suspensa de empresa ou equipe — é continuar preenchendo a mesma linha. A inserida que fica
+   * sem nada escrito se fecha. */
   const leave = (event: FocusEvent<HTMLElement>) => {
     const next = event.relatedTarget as HTMLElement | null;
-    if (!event.currentTarget.closest('tr')?.contains(next) && !next?.closest('[data-sheet-popover]')) create(draft);
+    if (event.currentTarget.closest('tr')?.contains(next) || next?.closest('[data-sheet-popover]')) return;
+    if (draft.name.trim()) create(draft);
+    else if (insert && !draft.supplier && !draft.teamName && !draft.startDate && !draft.endDate) insert.onClose();
   };
   return (
-    <tr data-tour="curto-linha-nova" className="border-t border-slate-100 bg-primary-soft/40" onBlur={leave}>
+    <tr
+      data-tour={tourId}
+      className={`border-t border-slate-100 bg-primary-soft/40 ${insert ? 'shadow-[inset_3px_0_0_var(--color-primary)]' : ''}`}
+      onBlur={leave}
+      onKeyDown={event => {
+        // Esc fecha a inserida; o das listas suspensas só fecha a lista (elas marcam o evento).
+        if (insert && event.key === 'Escape' && !event.defaultPrevented) insert.onClose();
+      }}
+    >
       {/* A coluna da caixa de marcar: a linha em branco só existe para quem edita, que sempre a tem. */}
       <td className="px-1 py-1" />
       <td className="px-1 py-1">
@@ -2078,7 +2392,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
           value={draft.supplier}
           options={companies}
           disabled={creating}
-          ariaLabel="Empresa da nova linha"
+          ariaLabel={`Empresa ${of}`}
           placeholder="Empresa"
           onCommit={setCompany}
         />
@@ -2092,7 +2406,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
           disabled={creating}
           min={week}
           max={weekEnd}
-          aria-label="Início da nova linha"
+          aria-label={`Início ${of}`}
           onChange={e => change({ startDate: e.target.value })}
         />
       </td>
@@ -2104,7 +2418,7 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
           disabled={creating}
           min={draft.startDate || week}
           max={weekEnd}
-          aria-label="Término da nova linha"
+          aria-label={`Término ${of}`}
           onChange={e => change({ endDate: e.target.value })}
         />
       </td>
@@ -2116,7 +2430,9 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
           className="cell"
           value={draft.name}
           readOnly={creating}
-          aria-label="Atividade da nova linha"
+          // A inserida abre já no campo da atividade: quem clicou em "Inserir linha acima" quer escrever.
+          autoFocus={!!insert}
+          aria-label={`Atividade ${of}`}
           placeholder={creating ? 'Criando…' : 'Escreva a atividade e tecle Enter'}
           onChange={e => change({ name: e.target.value })}
           onKeyDown={e => {
@@ -2136,14 +2452,25 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
           emptyHint={draft.supplier.trim() ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
           createHint={TEAM_CREATE_HINT}
           createLabel={text => `Criar equipe “${text}” em ${draft.supplier}`}
-          ariaLabel="Equipe da nova linha"
+          ariaLabel={`Equipe ${of}`}
           placeholder="Equipe"
           onCommit={value => change({ teamName: value })}
         />
       </td>
       {/* `trailingSpan` acompanha a coluna "Do não cumprido", que só aparece com apontamento na semana. */}
       <td colSpan={trailingSpan} className="px-2 py-1 text-slate-400">
-        os dias se marcam a partir do período depois de criar a linha
+        {insert ? (
+          <>
+            entra acima de {quote(insert.above)} ·{' '}
+            {/* Sem tirar o foco da linha: no Safari o clique não foca o botão, e a saída criaria a linha. */}
+            <button type="button" className="text-link" onMouseDown={event => event.preventDefault()} onClick={insert.onClose}>
+              Cancelar
+            </button>{' '}
+            (Esc)
+          </>
+        ) : (
+          'os dias se marcam a partir do período depois de criar a linha'
+        )}
       </td>
     </tr>
   );
@@ -2151,25 +2478,30 @@ function BlankRow({ week, weekEnd, weekNumber, companies, teamNames, onCreate, t
 
 /** A linha em branco no celular: sem a tabela, é um cartão com botão explícito — no toque, sair
  * do campo não é gesto claro o bastante para criar a linha. */
-function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }: BlankProps) {
-  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames);
+function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate, insert, tourId }: BlankProps) {
+  // No celular a inserida fecha depois de criar: para outra, toca-se de novo em "Inserir linha acima".
+  const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames, () => insert?.onClose());
+  const of = insert ? 'da linha inserida' : 'da nova linha';
   return (
     <form
-      data-tour="curto-linha-nova"
+      data-tour={tourId}
       className="rounded-xl border border-dashed border-primary-ring bg-primary-soft/40 p-3"
-      aria-label="Nova linha"
+      aria-label={insert ? `Nova linha acima de ${insert.above}` : 'Nova linha'}
       onSubmit={event => {
         event.preventDefault();
         create(draft, true);
       }}
     >
-      <p className="text-xs font-semibold text-slate-600">Nova linha · semana {weekNumber}</p>
+      <p className="text-xs font-semibold text-slate-600">
+        {insert ? `Nova linha acima de ${quote(insert.above)}` : `Nova linha · semana ${weekNumber}`}
+      </p>
       <input
         ref={nameInput}
         className="field mt-2 py-1.5"
         value={draft.name}
         readOnly={creating}
-        aria-label="Atividade da nova linha"
+        autoFocus={!!insert}
+        aria-label={`Atividade ${of}`}
         placeholder={creating ? 'Criando…' : 'Atividade'}
         onChange={e => change({ name: e.target.value })}
       />
@@ -2179,7 +2511,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }
             value={draft.supplier}
             options={companies}
             disabled={creating}
-            ariaLabel="Empresa da nova linha"
+            ariaLabel={`Empresa ${of}`}
             placeholder="Empresa"
             onCommit={setCompany}
           />
@@ -2193,7 +2525,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }
             emptyHint={draft.supplier.trim() ? 'Nenhuma equipe cadastrada. Digite para criar.' : 'Escolha a empresa primeiro.'}
             createHint={TEAM_CREATE_HINT}
             createLabel={text => `Criar equipe “${text}” em ${draft.supplier}`}
-            ariaLabel="Equipe da nova linha"
+            ariaLabel={`Equipe ${of}`}
             placeholder="Equipe"
             onCommit={value => change({ teamName: value })}
           />
@@ -2208,7 +2540,7 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }
             disabled={creating}
             min={week}
             max={weekEnd}
-            aria-label="Início da nova linha"
+            aria-label={`Início ${of}`}
             onChange={e => change({ startDate: e.target.value })}
           />
         </CardField>
@@ -2220,14 +2552,21 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate }
             disabled={creating}
             min={draft.startDate || week}
             max={weekEnd}
-            aria-label="Término da nova linha"
+            aria-label={`Término ${of}`}
             onChange={e => change({ endDate: e.target.value })}
           />
         </CardField>
       </div>
-      <button type="submit" className="button mt-3 w-full" disabled={creating || !draft.name.trim()}>
-        {creating ? 'Criando…' : 'Adicionar'}
-      </button>
+      <div className="mt-3 flex gap-2">
+        {insert && (
+          <button type="button" className="button-secondary flex-1" onClick={insert.onClose}>
+            Cancelar
+          </button>
+        )}
+        <button type="submit" className="button flex-1" disabled={creating || !draft.name.trim()}>
+          {creating ? 'Criando…' : insert ? 'Inserir' : 'Adicionar'}
+        </button>
+      </div>
     </form>
   );
 }

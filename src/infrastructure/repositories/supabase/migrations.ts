@@ -222,6 +222,21 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'O agente de IA não guarda leituras, não contabiliza o custo nem aplica limites; o radar determinístico continua.',
     critical: false,
   },
+  {
+    migration: '0036_commitment_order',
+    label: 'Ordem das linhas da planilha do curto prazo',
+    probe: { kind: 'column', table: 'weekly_commitments', column: 'order_index' },
+    effect: 'Inserir linha no meio e arrastar linhas na planilha só valem até recarregar: a ordem não fica gravada.',
+    critical: false,
+  },
+  {
+    migration: '0037_delete_work',
+    label: 'Exclusão de obra pelo administrador',
+    // O ator fictício não é admin: a função recusa antes de tocar em qualquer linha.
+    probe: { kind: 'function', name: 'delete_work', args: { p_work_id: '__probe__', p_code: '__probe__', p_actor_id: '__probe__' } },
+    effect: 'O botão "Excluir obra" das Configurações da obra responde pedindo a migração; nada é apagado.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };
