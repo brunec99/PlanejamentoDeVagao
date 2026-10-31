@@ -772,7 +772,7 @@ Pedido do usuário: "no relatório de fechamento colocar na primeira página um 
 
 ### Decisões (todas do modelo aprovado)
 
-- **Só no PDF do fechamento, na página 1**, com a planilha de resultados a partir da página 2. O PDF do planejamento não muda. Na janela do PDF entrou a caixa "Painel na primeira página", só no fechamento e já marcada; desmarcada, o PDF sai como antes. Na URL da impressão, a caixa vira `painel=1`.
+- **Só no PDF do fechamento, na página 1**, com a planilha de resultados a partir da página 2. O PDF do planejamento não muda. Na janela do PDF entrou a caixa "Painel na primeira página", só no fechamento e já marcada; desmarcada, o PDF sai como antes. Na URL da impressão, só a caixa desmarcada aparece, como `painel=0`: sem o parâmetro, o fechamento sai com o painel (correção de 31/10/2026, abaixo).
 - **O painel considera sempre a obra inteira.** Os empreiteiros desmarcados na janela saem só da planilha; se o painel seguisse o recorte, a comparação com as outras obras deixaria de valer. Com recorte, o rodapé diz quem ficou fora da planilha.
 - **Nada depois da semana analisada:** série, médias, Pareto e ranking contam só até ela, para o PDF de uma semana antiga sair igual depois.
 - **Série:** as 12 semanas com linha até a analisada, como a da tela Fechamento: barra hachurada para semana em aberto, fora da média, e faixa âmbar na analisada. "Média das últimas 12 semanas" é a média simples dos PPCs semanais apurados, como o cartão da tela Fechamento (âmbar abaixo de 70%).
@@ -798,7 +798,7 @@ Pedido do usuário: "no relatório de fechamento colocar na primeira página um 
   - a folha em si: cabeçalho igual ao da planilha, resumo, quatro cartões, série, ranking, causas da semana, Pareto e rodapé;
   - altura fixa de 732 px dentro da área útil de A4 paisagem com 7 mm de margem (1069 × 741 px), e quebra de página depois;
   - cores fixas, porque é papel.
-- `print-sheet.tsx`: com `painel=1` no fechamento, busca o ranking e espera a resposta antes de chamar a impressão, como já fazia com o tempo, com limite de 8 s; passou disso, o painel sai com "Ranking das obras indisponível no momento". A página `imprimir/curto-prazo/[obraId]` lê o `painel`, e `print-dialog.tsx` ganhou a caixa.
+- `print-sheet.tsx`: com o painel ligado no fechamento, busca o ranking e espera a resposta antes de chamar a impressão, como já fazia com o tempo, com limite de 8 s; passou disso, o painel sai com "Ranking das obras indisponível no momento". A página `imprimir/curto-prazo/[obraId]` lê o `painel`, e `print-dialog.tsx` ganhou a caixa.
 - Manual da Claudia (`curto-prazo-pdf-impressao`): a caixa da janela e a seção "O painel na primeira página do fechamento".
 - **Nenhuma migração.**
 
@@ -821,3 +821,13 @@ Pedido do usuário: "no relatório de fechamento colocar na primeira página um 
 - **Sem commit e não publicado.** O código está só no disco, junto com o trabalho de outras sessões (ordem das linhas, exclusão de obra, manual da Claudia).
 - Conferir no sistema: gerar o PDF do fechamento de uma semana encerrada da Blentt e comparar os números com a tela Fechamento (série, média e Pareto devem bater; a tela conta também as semanas posteriores, o PDF não).
 - Se a rota ficar lenta com o volume real, o próximo passo é uma função SQL que agregue por obra e semana (exigiria migração). Um cache curto também ajudaria, mas faria a linha das outras obras ficar até alguns minutos atrás.
+
+### Correção de 31/10/2026: fechamento sem o painel
+
+Um engenheiro mandou um PDF do fechamento sem o painel na manhã seguinte à publicação (`65cd066`, 30/10/2026). O deploy estava no ar: os arquivos estáticos da página de login mudaram depois do push. A causa era outra:
+
+- o sistema recarrega os dados da aba aberta, mas não o código;
+- quem estava com a planilha aberta desde antes do deploy usava a janela antiga do PDF, que não manda o parâmetro do painel;
+- a página de impressão, que abre numa aba nova e já com o código novo, exigia `painel=1` e por isso saía sem o painel.
+
+A regra foi invertida: no fechamento, o painel sai sempre, e só a caixa desmarcada (`painel=0`) o tira. Funciona também a partir de uma aba antiga.

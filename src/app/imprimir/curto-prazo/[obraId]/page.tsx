@@ -22,7 +22,9 @@ export default async function Page({
         kind={tipo === 'fechamento' ? 'fechamento' : 'planejamento'}
         order={ordem === 'inicio' ? 'inicio' : 'empreiteiro'}
         excluded={excluir === undefined ? [] : Array.isArray(excluir) ? excluir : [excluir]}
-        dashboard={painel === '1'}
+        // O painel sai por padrão: só `painel=0` (caixa desmarcada) tira. Exigir `painel=1` deixava sem painel
+        // quem gerava o PDF de uma aba aberta antes do deploy de 30/10/2026, cuja janela não manda o parâmetro.
+        dashboard={painel !== '0'}
       />
     </PlanningProvider>
   );

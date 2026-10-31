@@ -53,7 +53,7 @@ export function PrintDialog({
   const generate = () => {
     if (!chosen.length) return;
     const params = new URLSearchParams({ semana: week, tipo: kind, ordem: order });
-    if (kind === 'fechamento' && panel) params.set('painel', '1');
+    if (kind === 'fechamento' && !panel) params.set('painel', '0');
     companies.filter(c => !checked.has(c.value)).forEach(c => params.append('excluir', c.value));
     window.open(`/imprimir/curto-prazo/${encodeURIComponent(workId)}?${params}`, '_blank', 'noopener');
     onClose();
