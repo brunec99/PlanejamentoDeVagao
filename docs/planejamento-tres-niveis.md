@@ -831,3 +831,58 @@ Um engenheiro mandou um PDF do fechamento sem o painel na manhã seguinte à pub
 - a página de impressão, que abre numa aba nova e já com o código novo, exigia `painel=1` e por isso saía sem o painel.
 
 A regra foi invertida: no fechamento, o painel sai sempre, e só a caixa desmarcada (`painel=0`) o tira. Funciona também a partir de uma aba antiga.
+
+## Etapa — Linha de Balanço no estilo Prevision e medições fotográficas (04/11/2026)
+
+Pedido do usuário em 04/11/2026: no longo prazo, "dois planejamentos": a Linha de Balanço parecida com o Prevision, com uma ferramenta para criar **fluxo de serviços** e facilitar o lançamento na Linha de Balanço, e a **interface de medição** do Prevision, para medições fotográficas dos serviços.
+
+Seguindo o combinado de 30/10/2026, o modelo de UX foi publicado antes do código (<https://claude.ai/artifact/PQq34sq1UaWSw3WUTPnMi6>: cinco telas com dados de exemplo e 28 regras numeradas). O usuário aprovou sem mudanças ("adorei, pode seguir"), e a implementação seguiu as 28 regras. **Migração 0038 aplicada no `takt-hub` em 04/11/2026; código commitado e publicado no mesmo dia, junto com o dashboard da aba 0.**
+
+### O que a aba 1 mostra agora
+
+Cinco visões, trocadas no cabeçalho (`?visao=`), em `src/app/(app)/obras/[obraId]/longo-prazo/page.tsx`:
+
+- **Linha de Balanço** (padrão, `src/modules/longo-prazo/lob/lob-view.tsx`): blocos por serviço × local, locais de baixo para cima, tempo com meses e segundas-feiras, parte medida cheia e parte a fazer clara, contorno vermelho nos atrasados, linhas de hoje e das medições (M1, M2…), sobreposição da linha de base escolhida. Arrastar empurra as sucessoras e nunca entra antes das predecessoras; setas do teclado movem um dia útil; desfazer (botão e Ctrl+Z) reverte as mudanças de datas da sessão. Filtros de serviço, local e período, zoom Semana/Mês/Trimestre, tecla H, tabela ordenável, lista de atrasos, indicadores (serviços, locais, término × linha de base, avanço físico × previsto), painel do bloco selecionado (início, duração, equipe, unidade, observação, predecessoras com espera e "equipe segue", sucessoras que acompanham, atraso com motivo, datas reais, fotos), gaveta de locais, gaveta de linhas de base (criar, comparar, restaurar, excluir), "Importar do Planejador" e exportar CSV. Gráfico em `lob-chart.tsx` e `lob-model.ts`, tabela em `lob-table.tsx`, painéis em `lob-activity-panel.tsx`, `lob-locals-panel.tsx`, `lob-baselines-panel.tsx`.
+- **Fluxos de serviços** (`flows-view.tsx`, `flow-editor.tsx`, `flow-network.tsx`): lista dos fluxos da empresa com as obras em que cada um foi lançado; editor com nome, sentido padrão, rede desenhada a partir das predecessoras e tabela (nome, cor, duração por local em dias úteis, equipe com sugestões das equipes da obra, unidade, "Depois de" com espera), salvamento automático 1 s depois com trava de revisão, duplicar, excluir e "Lançar na Linha de Balanço".
+- **Lançar fluxo** (`lob-launch-dialog.tsx`): fluxo, locais marcados, início, sentido e ritmo (contínuo, takt fixo, todos juntos), com prévia calculada no navegador pela mesma função do servidor (`planLaunch`), aviso dos blocos mantidos e da linha de base automática.
+- **Medições** (`measurements-view.tsx`, `measurement-sheet.tsx`, `measurement-photos.tsx`): rodadas, avanço físico, folha com abas Atuais/Futuras/Concluídas, agrupada por local, previsto até a data, anterior, realizado acumulado com atalhos, desvio, datas reais e ações (fotos, observação, motivo do atraso, histórico). No celular (abaixo de 768 px) a folha vira um local por vez, com cartões, − e + de 5 em 5, "Tirar foto" (câmera traseira) e "Galeria". As fotos são comprimidas no navegador pelo mesmo `compressImage` da Terminalidade e sobem direto ao Storage por URL assinada.
+- **Vagões e restrições** e **Planejador**: como antes. O Planejador continua responsável por "Gerar vagões" (regra 1).
+
+### Onde o dado fica
+
+- `src/domain/lob.ts`: tipos e regras puras (dias úteis, cascata, lançamento, previsto, atraso, avanço físico, medições, importação do Planejador).
+- `src/application/use-cases/lob-commands.ts`: 26 comandos, que recebem os dados de uma obra e devolvem o que gravar, como a Terminalidade.
+- `src/infrastructure/repositories/supabase/lob-repository.ts` e as rotas `GET /api/lob`, `POST /api/lob/commands`, `GET/POST/PUT/DELETE /api/lob/flows` e `POST/DELETE /api/lob/upload-url`. Todas exigem o módulo "Longo prazo" (`/api/lob` entrou em `RESTRICTED_API_PREFIXES`); consulta só lê.
+- **Migração 0038** (`0038_lob.sql`, criada e **aplicada no `takt-hub` em 04/11/2026**, por conexão direta ao banco numa transação; conferidos as 10 tabelas, o `grant` para `service_role`, o bucket e a leitura pela API REST): `service_flows` (da empresa, sem obra), `lob_locals`, `lob_services`, `lob_launches`, `lob_activities`, `lob_dependencies`, `lob_baselines`, `lob_measurements`, `lob_measurement_items`, `lob_photos` e o bucket privado `medicoes` (JPEG até 2 MB). Fora do snapshot, não reescreve `commit_planning`, reexecutável. Sem ela, só as três visões novas respondem "indisponível". As tabelas da obra têm `on delete cascade` a partir de `works`, então o `delete_work` da 0037 leva tudo junto sem ser reescrito, e a rota de exclusão apaga também a pasta da obra no bucket `medicoes` (`work-files.ts`). Uma medição aberta por obra é garantida por índice único parcial. Sondagem nova na tela de saúde do banco; bootstrap regenerado (38 migrações) e `conferencia.sql` com as 10 tabelas e o bucket.
+
+### Decisões de implementação (onde o modelo não dizia)
+
+- Tudo em dias úteis, segunda a sexta, sem feriados (regra 5). O fim do bloco é exclusivo; o término mostrado é o último dia trabalhado.
+- Atraso: previsto até hoje menos medido ≥ 10 pontos, e nunca em bloco a 100%. O limiar evita marcar em vermelho tudo o que andou na semana desde a última medição.
+- Importar do Planejador: cada pavimento vira local, cada serviço × pavimento um bloco com a data atual; a espera do Planejador (dias corridos) vira dias úteis e nunca passa da folga real entre os blocos, para a importação não empurrar nada; nomes repetidos ganham sufixo "(2)". Só funciona com a Linha de Balanço vazia.
+- Linha de base automática "Antes do lançamento dd/mm/aaaa", com sufixo se houver duas no mesmo dia. O lançamento devolve quantos blocos entraram e quantos foram mantidos.
+- Medições: cada valor é gravado ao sair do campo (não há botão "Salvar rascunho"); campo vazio é recusado em vez de virar 0%; esvaziar um lançamento existente o remove, com confirmação; motivo ou observação num bloco não lançado cria o lançamento com o valor anterior. Corrigir a última medição já salva preenche as datas reais como o fechamento; excluir uma medição desfaz as datas reais iguais à data dela que nenhuma outra medição sustenta; numa medição já salva, a única foto de um avanço não pode ser excluída.
+- Indicadores e contagem de atrasos são da obra inteira, não dos filtros.
+- Fluxo: novo serviço já entra ligado ao último (para manter um só serviço inicial); "Lançar" fica desabilitado enquanto há alteração não salva; falha de rede no salvamento não tenta de novo sozinha.
+
+### Correções feitas pela bateria de testes
+
+O agente de testes achou quatro defeitos, todos corrigidos com teste: `isLocalDate` (`long-term-plan.ts`, também usado pelo Planejador) estourava `RangeError` com mês 13 ou dia 32 em vez de devolver falso; a importação do Planejador usava a espera em dias corridos como dias úteis e empurrava blocos no primeiro arrasto; a importação criava locais ou serviços homônimos que a 0038 recusaria; campo vazio virava 0%. Também: fluxo com serviço dependente de si mesmo passava pela trava de lançamento, e "12 meses" eram 360 dias.
+
+### Validação (04/11/2026)
+
+- Sequência do CI inteira: `typecheck`, `lint` (nenhum aviso nos arquivos novos), `format:check`, `npm test` com 908 testes (75 novos em `tests/lob.test.ts` e `tests/lob-commands.test.ts`, mais a semente da exclusão de obra com as tabelas da 0038), `validate:migrations`, bootstrap (77 de 77 itens), `build` e o teste de fumaça (8 de 8).
+- **Navegador**: `next dev` local apontado para um Supabase falso (só o perfil) e as rotas `/api/*` respondidas no Playwright pelas regras reais do domínio, com uma obra de exemplo de 14 locais, 8 serviços, 112 blocos e 3 medições salvas com fotos. Conferidos em 1440 px e 400 px: Linha de Balanço, lista de atrasos, seleção e painel, arrasto (término de 18/03/2027 para 22/04/2027 com as sucessoras empurradas), tabela, lançamento de um segundo fluxo pelo endereço `?lancar=` (linha de base automática gravada), fluxos, medição (dois valores gravados, "Salvar" travado por avanço sem foto, foto enviada pelo diálogo) e a folha no celular. Nenhum erro de console. A conferência achou e corrigiu dois defeitos de layout: a tabela do fluxo empurrava a página 115 px (textos só para leitor de tela escapando do contêiner rolável) e, no celular, as três grades não encolhiam até a tela.
+- **Não validado**: gravação real pelas telas (a 0038 foi aplicada e as tabelas respondem pela API, mas nenhum fluxo foi lançado em obra real), envio real de foto ao Storage, dois usuários editando o mesmo fluxo (409), e celular de verdade com câmera.
+
+### Fontes consultadas sobre o Prevision
+
+Artigos do suporte (suporteprevision.freshdesk.com): "Criando um Macrofluxo", "Como lançar o macrofluxo no Cronograma?", "Análise e ajustes do planejamento em linha de balanço" e "Como fazer medição física da obra". Deles saíram: macrofluxo criado pelo administrador e lançado por usuário normal; lançamento por lote com backup automático; sentido topo → base ou base → topo definido no pacote; macrofluxo e cronograma independentes depois do lançamento; medição com data retroativa, atividades atuais e futuras (12 meses), acumulado que não pode cair, atalhos "igualar ao previsto" e "100%", coluna de ações com imagens, observações e motivos de atraso, início e término reais digitados, data travada depois de salvar; na Linha de Balanço, barra azul-escura nas medições, azul-clara em hoje, arrastar replaneja as sucessoras, atalhos de seta, +, −, H e Ctrl+Z.
+
+### Pendências
+
+- Conferir no ar: abrir a aba 1 de uma obra logado e ver as três visões novas sem o aviso de "indisponível".
+- Primeiro uso real: cadastrar os locais, criar o fluxo da empresa e lançar numa obra, ou importar o plano do Planejador de uma obra que já o tem.
+- Etapa 3, a combinar (regra 27): "Gerar vagões" a partir da Linha de Balanço (e então tirar o Planejador), datas marco, edição em lote, medição sem sinal (fila no aparelho, como a Terminalidade), importar o cronograma do Prevision direto para a Linha de Balanço, "Importar .xml do Project" na tela de fluxos e o PDF da medição.
+- O dashboard da aba 0 (outra sessão, também só no disco) lê o longo prazo do Planejador (`/api/long-term-plan`), não da Linha de Balanço: quando a Linha de Balanço virar a fonte, o quadro de longo prazo do dashboard deve passar a ler `/api/lob` (blocos, medições e avanço físico).
+- Lacunas conhecidas: corrigir para cima um valor da última medição já salva não exige foto no servidor (a tela marca em âmbar); o motivo do atraso é pedido pela tela, mas o servidor não o exige; não há limpeza periódica de fotos órfãs no bucket (mesma pendência da Terminalidade); o takt padrão do diálogo de lançamento é 10 dias úteis, sem ler a sequência de vagões.

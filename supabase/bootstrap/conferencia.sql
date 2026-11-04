@@ -4,9 +4,9 @@
 -- Devolve uma tabela única, uma linha por item, com situação OK / FALTA / ATENÇÃO, e uma última
 -- linha de resumo. Num banco recém-montado, todas as linhas devem sair OK.
 --
--- Itens: as 22 tabelas do snapshot do planejamento, as 10 tabelas fora dele, as 6 da terminalidade, as colunas que a tela
+-- Itens: as 22 tabelas do snapshot do planejamento, as 10 tabelas fora dele, as 6 da terminalidade, as 10 da Linha de Balanço (0038), as colunas que a tela
 -- de saúde do banco (/api/health) sonda, RLS ligada em cada tabela, as funções e seus privilégios,
--- os gatilhos de imutabilidade, os buckets ifc e terminalidade do Storage e a versão em planning_meta.
+-- os gatilhos de imutabilidade, os buckets ifc, terminalidade e medicoes do Storage e a versão em planning_meta.
 with
 tabelas(ordem, nome, grupo) as (
   values
@@ -47,7 +47,17 @@ tabelas(ordem, nome, grupo) as (
     (213, 'terminality_types', 'Terminalidade (0028)'),
     (214, 'terminality_people', 'Terminalidade (0028)'),
     (215, 'terminality_items', 'Terminalidade (0028)'),
-    (216, 'terminality_photos', 'Terminalidade (0028)')
+    (216, 'terminality_photos', 'Terminalidade (0028)'),
+    (217, 'service_flows', 'Linha de Balanço (0038)'),
+    (218, 'lob_locals', 'Linha de Balanço (0038)'),
+    (219, 'lob_services', 'Linha de Balanço (0038)'),
+    (220, 'lob_launches', 'Linha de Balanço (0038)'),
+    (221, 'lob_activities', 'Linha de Balanço (0038)'),
+    (222, 'lob_dependencies', 'Linha de Balanço (0038)'),
+    (223, 'lob_baselines', 'Linha de Balanço (0038)'),
+    (224, 'lob_measurements', 'Linha de Balanço (0038)'),
+    (225, 'lob_measurement_items', 'Linha de Balanço (0038)'),
+    (226, 'lob_photos', 'Linha de Balanço (0038)')
 ),
 colunas(ordem, tabela, coluna, migracao) as (
   values
@@ -146,6 +156,14 @@ itens(ordem, grupo, item, ok, detalhe) as (
       else 'PÚBLICO — deveria ser privado'
     end
   from storage.buckets b where b.id = 'terminalidade'
+  union all
+  select 603, 'Storage', 'bucket medicoes (privado, fotos da 0038)', count(*) = 1,
+    case
+      when count(*) = 0 then 'bucket ausente'
+      when bool_and(not b.public) then 'privado'
+      else 'PÚBLICO — deveria ser privado'
+    end
+  from storage.buckets b where b.id = 'medicoes'
   union all
   -- query_to_xml lê a tabela por SQL dinâmico, para a conferência não quebrar se ela não existir.
   select 701, 'Dados', 'planning_meta (linha única de versão)', m.versao is not null,

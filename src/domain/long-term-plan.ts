@@ -103,8 +103,10 @@ export const toMs = (date: LocalDate) => Date.parse(`${date}T00:00:00Z`);
 export const fromMs = (ms: number): LocalDate => new Date(ms).toISOString().slice(0, 10);
 export const addDays = (date: LocalDate, days: number): LocalDate => fromMs(toMs(date) + days * DAY);
 export const daysBetween = (from: LocalDate, to: LocalDate) => Math.round((toMs(to) - toMs(from)) / DAY);
+/** Data AAAA-MM-DD que existe no calendário. "2026-13-01" faz `Date.parse` devolver NaN, e o
+ * `toISOString` de NaN lança: por isso o NaN é conferido antes de voltar a texto. */
 export const isLocalDate = (value: unknown): value is LocalDate =>
-  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && fromMs(toMs(value)) === value;
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(toMs(value)) && fromMs(toMs(value)) === value;
 const maxDate = (a: LocalDate, b: LocalDate) => (a > b ? a : b);
 const minDate = (a: LocalDate, b: LocalDate) => (a < b ? a : b);
 

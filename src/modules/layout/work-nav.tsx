@@ -7,18 +7,28 @@ import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/pl
 import { hasSectionAccess } from '@/application/module-access';
 import { workPath } from '@/shared/format';
 
-/** As abas do sistema: os quatro níveis, na ordem em que o planejamento desce do macro para a semana,
- * e a terminalidade (aba 5, 08/10/2026), que fecha a obra apartamento por apartamento. O número faz
- * parte do nome: é assim que a equipe se refere a elas. Em 02/10/2026 o usuário cancelou o BIM 4D; o
- * modelo federado e os arquivos IFC seguem como apoio. */
+/** As abas do sistema: o dashboard (aba 0, 04/11/2026), os quatro níveis, na ordem em que o planejamento
+ * desce do macro para a semana, e a terminalidade (aba 5, 08/10/2026), que fecha a obra apartamento por
+ * apartamento. O número faz parte do nome: é assim que a equipe se refere a elas, e por isso ele é
+ * explícito aqui (o dashboard é o zero). Em 02/10/2026 o usuário cancelou o BIM 4D; o modelo federado e
+ * os arquivos IFC seguem como apoio. */
 export const WORK_TABS = [
-  { section: 'longo-prazo', short: 'Longo prazo', label: 'Cronograma de longo prazo', hint: 'Fluxograma · Linha de balanço · Restrições' },
-  { section: 'vagoes', short: 'Vagões', label: 'Planejamento por vagões', hint: 'Períodos de takt · Terminalidade' },
-  { section: 'medio-prazo', short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
-  { section: 'curto-prazo', short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },
+  // 04/11/2026: os cinco níveis numa página, até a semana analisada, com filtros e PDF. Aberta a todos
+  // (não está em RESTRICTED_SECTIONS); cada quadro só aparece para quem pode abrir o módulo dele.
+  { section: 'dashboard', number: 0, short: 'Dashboard', label: 'Dashboard da obra', hint: 'Visão geral · Filtros · PDF' },
+  {
+    section: 'longo-prazo',
+    number: 1,
+    short: 'Longo prazo',
+    label: 'Cronograma de longo prazo',
+    hint: 'Linha de balanço · Fluxos · Medições',
+  },
+  { section: 'vagoes', number: 2, short: 'Vagões', label: 'Planejamento por vagões', hint: 'Períodos de takt · Terminalidade' },
+  { section: 'medio-prazo', number: 3, short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
+  { section: 'curto-prazo', number: 4, short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },
   // 08/10/2026: a "Lista de pendências" de terminalidade por pavimento, apartamento e empreiteiro,
   // com fotos. Aberta a todos desde o primeiro dia, como o curto prazo (não está em RESTRICTED_SECTIONS).
-  { section: 'terminalidade', short: 'Terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento · Fotos' },
+  { section: 'terminalidade', number: 5, short: 'Terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento · Fotos' },
 ] as const;
 
 /** Telas de apoio: alimentam as abas, mas não são um nível de planejamento. */
@@ -36,10 +46,8 @@ function useWork() {
   const developer = useDeveloper();
   const modules = useModules();
   // Fora do desenvolvimento, só as seções abertas no go-live e os módulos liberados para a pessoa;
-  // o número segue o da aba.
-  const tabs = WORK_TABS.map((tab, index) => ({ ...tab, number: index + 1 })).filter(t =>
-    hasSectionAccess(t.section, { developer, modules }),
-  );
+  // o número é o da aba, mesmo quando uma aba do meio está escondida.
+  const tabs = WORK_TABS.filter(t => hasSectionAccess(t.section, { developer, modules }));
   const support = SUPPORT.filter(s => hasSectionAccess(s.section, { developer, modules }));
   const workId = pathname.match(/^\/obras\/([^/]+)/)?.[1];
   const work = workId && context.state === 'ready' ? context.planning.data.works.find(w => w.id === decodeURIComponent(workId)) : undefined;

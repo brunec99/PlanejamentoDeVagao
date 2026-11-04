@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TERMINALITY_BUCKET } from './terminality-repository';
+import { LOB_BUCKET } from './lob-repository';
 
 /** Os buckets em que cada obra tem uma pasta com o próprio id: os IFC e a geometria convertida em
- * `ifc/<obra>/<modelo>/…`, as fotos da terminalidade em `terminalidade/<obra>/<item>/…`. */
-export const WORK_BUCKETS = ['ifc', TERMINALITY_BUCKET] as const;
+ * `ifc/<obra>/<modelo>/…`, as fotos da terminalidade em `terminalidade/<obra>/<item>/…` e as fotos
+ * das medições da Linha de Balanço em `medicoes/<obra>/<lançamento>/…` (0038). */
+export const WORK_BUCKETS = ['ifc', TERMINALITY_BUCKET, LOB_BUCKET] as const;
 const PAGE = 1000;
 const REMOVE_BATCH = 100;
 

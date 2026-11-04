@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowRight, Building2, CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { WorkActions } from '@/modules/planejamento/planning-actions';
-import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
+import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, workPath } from '@/shared/format';
@@ -58,8 +58,8 @@ function Indicator({ label, value, state, tone }: { label: string; value: ReactN
 
 export function WorksOverview() {
   const context = usePlanning();
-  // Fora do desenvolvimento a obra abre no curto prazo, o único módulo em produção.
-  const landing = useDeveloper() ? 'longo-prazo' : 'curto-prazo';
+  // Abrir uma obra cai no dashboard (aba 0, 04/11/2026), que mostra só os módulos que a pessoa pode abrir.
+  const landing = 'dashboard';
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
   const { data, today } = planning;

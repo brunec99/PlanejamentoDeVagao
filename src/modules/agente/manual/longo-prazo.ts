@@ -31,9 +31,14 @@ export const sections: ManualSection[] = [
     body: `## Para que serve
 A aba 1, "Cronograma de longo prazo", é o macro da obra: a sequência de serviços por pavimento e o que deriva dela (datas, prazo, equipes, avanço).
 
-Ela tem duas visões, alternadas pelo seletor no cabeçalho:
-- **"Planejador"** (padrão): onde o cronograma é montado — um fluxograma de serviços que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. É o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (aba 2).
+Ela tem cinco visões, alternadas pelo seletor no cabeçalho (desde 04/11/2026):
+- **"Linha de Balanço"** (padrão): o cronograma de longo prazo no estilo do Prevision, uma atividade por serviço × local, com o que já foi medido. Os blocos nascem do lançamento de um fluxo de serviços; arrastar um bloco empurra as sucessoras. Veja a seção "Linha de Balanço".
+- **"Fluxos de serviços"**: o molde da empresa (o "macrofluxo" do Prevision) com a sequência de serviços, a duração por local e as dependências, pronto para lançar em qualquer obra. Veja "Fluxos de serviços" e "Lançar um fluxo".
+- **"Medições"**: rodadas com data em que se lança o acumulado realizado de cada bloco, com foto de cada avanço. Veja "Medições".
 - **"Vagões e restrições"**: as atividades dos vagões em Linha de Balanço, só para leitura, mais o módulo de restrições, a curva de avanço acumulado e as linhas de base da obra. Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
+- **"Planejador"**: a ferramenta anterior, um fluxograma de serviços por pavimento que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. Ainda é o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (aba 2). O plano dele pode ser levado para a Linha de Balanço nova por "Importar do Planejador".
+
+As seções abaixo sobre salvamento, exportar e importar valem para o Planejador; a Linha de Balanço, os fluxos e as medições gravam cada alteração na hora, sem botão de salvar (as medições têm "Salvar medição", que fecha a rodada).
 
 O "?" ao lado da descrição ("Como funciona") explica como as visões se encaixam.
 
@@ -338,5 +343,231 @@ No fim da visão. Uma linha de base é uma fotografia imutável do cronograma do
 - **"Definir linha de base"** (planejador, gestor e admin): dê o "Nome da linha de base" e confirme. Cada acionamento cria um registro novo e preserva os anteriores. Exige ao menos um vagão: "Cadastre ao menos um vagão antes de definir a linha de base".
 - **"Linhas de base salvas"**: "Linha de base", "Salva em", "Por", "Vagões" (e a partir de qual vagão), "Atividades" e "Período coberto". Reprogramar o planejamento atual nunca altera uma linha de base salva; não há edição nem exclusão por aqui.
 - Elas são diferentes das linhas de base do Planejador (fotos dos serviços do plano, na gaveta "Linhas de base" da outra visão). Um fluxo comum: aprovar o plano, gerar os vagões e, em seguida, definir aqui a linha de base dos vagões, para a curva comparar o executado com o aprovado.`,
+  },
+  {
+    id: 'longo-prazo-linha-de-balanco',
+    title: 'Linha de Balanço: blocos por serviço e local, arrastar, atrasos, filtros, linhas de base e locais',
+    summary:
+      'A visão padrão da aba 1 (estilo Prevision): blocos, arrastar e desfazer, filtros e zoom, atrasos, painel do bloco, locais, linhas de base e importar do Planejador.',
+    keywords: [
+      'linha de balanço',
+      'linha de balanco',
+      'bloco',
+      'atividade',
+      'serviço por local',
+      'arrastar',
+      'desfazer',
+      'atrasado',
+      'atrasos',
+      'previsto até hoje',
+      'medido',
+      'zoom',
+      'semana mês trimestre',
+      'tabela',
+      'hoje',
+      'filtros',
+      'locais da obra',
+      'linha de base',
+      'importar do planejador',
+      'exportar csv',
+      'término previsto',
+      'avanço físico',
+      'equipe segue',
+      'predecessora',
+      'dependência',
+    ],
+    screen: 'longo-prazo',
+    body: `## O que a tela mostra
+A visão "Linha de Balanço" é o cronograma de longo prazo da obra no estilo do Prevision. No eixo vertical estão os locais da obra, de baixo para cima (Térreo embaixo); no horizontal, o tempo em semanas, com os meses no alto. Cada bloco é um serviço num local, na cor do serviço: a parte cheia é o que já foi medido e a parte clara é o que falta. Um bloco fica com contorno vermelho quando o previsto até hoje passa do medido em 10 pontos ou mais ("atrasado"). A linha tracejada âmbar é hoje; as linhas azuis com "M1", "M2"… são as datas das medições salvas.
+
+Passe o mouse sobre um bloco para ver serviço, local, início e término, duração em dias úteis, equipe, previsto até hoje e medido. Clique para selecionar: o painel à direita abre com os detalhes.
+
+## Indicadores
+No alto: Serviços (com quantos lançamentos e blocos), Locais, Término previsto (e a diferença em dias para a linha de base escolhida no filtro) e Avanço físico (média dos blocos ponderada pela duração de cada um, com o previsto até hoje e quantos blocos estão atrasados).
+
+## Arrastar, desfazer e teclado
+- Arraste um bloco para a direita ou para a esquerda para mudar a data de início. As sucessoras (os blocos que dependem dele, inclusive o mesmo serviço no local seguinte) acompanham. Um bloco nunca entra antes do fim das predecessoras mais a espera: puxar para trás só vai até essa folga.
+- "Desfazer" (ou Ctrl+Z fora de um campo) volta a última mudança de datas.
+- Com um bloco selecionado, as setas esquerda e direita do teclado movem um dia útil. A tecla H (ou o botão "Hoje") leva o gráfico para hoje.
+- Perfil de consulta vê o gráfico e não arrasta.
+
+## Filtros, zoom e tabela
+- "Serviços", "Locais" e "Período" filtram o que aparece; a legenda embaixo do gráfico também esconde ou mostra um serviço com um clique.
+- "Linha de base" sobrepõe em cinza as datas de uma linha de base salva (as automáticas, gravadas antes de cada lançamento, aparecem marcadas).
+- Zoom "Semana", "Mês" e "Trimestre" muda a escala do tempo; "Tabela" troca o gráfico por uma lista com local, serviço, início, término, duração, previsto, medido, situação e datas reais, ordenável pelos cabeçalhos.
+- "Atrasos" abre a lista dos blocos atrasados (previsto, medido e atraso em dias úteis); clicar num deles seleciona o bloco no gráfico.
+
+## Painel do bloco selecionado
+Início e duração (em dias úteis) editáveis, término calculado, equipe e unidade do serviço, observação, as predecessoras ("Depois de", com a espera em dias e a ligação "equipe segue" para o mesmo serviço no local anterior), quantos blocos acompanham ao arrastar, o aviso de atraso com o motivo informado na medição, as datas reais (início real e término real, que a medição preenche e aqui podem ser corrigidas), as fotos da última medição e "Excluir bloco". Um bloco já medido não pode ser excluído.
+
+## Locais, linhas de base e outras ações
+- "Lançar fluxo" abre o lançamento de um fluxo de serviços (veja "Lançar um fluxo"). Sem locais cadastrados, a tela pede para cadastrá-los primeiro.
+- No menu "⋯": "Locais da obra" (cadastrar em lote, um nome por linha, renomear, reordenar com as setas e excluir; "Usar os locais da obra" traz os locais já importados do Prevision em ordem de altura; um local com blocos não pode ser excluído), "Importar do Planejador" (converte o plano do Planejador em blocos: cada pavimento vira um local e cada serviço × pavimento um bloco; só funciona com a Linha de Balanço ainda sem blocos) e "Exportar CSV".
+- "Salvar linha de base" abre a gaveta de linhas de base: criar com nome, "Comparar" (sobrepõe no gráfico), "Restaurar" (volta as datas dos blocos para as da foto) e "Excluir". Antes de cada lançamento de fluxo o sistema grava sozinho a linha de base "Antes do lançamento <data>".
+- "Nova medição" leva à visão "Medições".
+- A tela avisa quando o banco ainda não tem a migração da Linha de Balanço ("indisponível"): avise o administrador.`,
+  },
+  {
+    id: 'longo-prazo-fluxos-de-servicos',
+    title: 'Fluxos de serviços: criar o molde da empresa com serviços, duração por local, equipe, unidade e predecessoras',
+    summary:
+      'A visão "Fluxos de serviços" (o macrofluxo): lista, editor com rede automática e tabela, dias úteis, predecessoras com espera, salvamento, duplicar, excluir e travas.',
+    keywords: [
+      'fluxo de serviços',
+      'fluxos',
+      'macrofluxo',
+      'novo fluxo',
+      'molde',
+      'sequência de serviços',
+      'duração por local',
+      'dias úteis',
+      'depois de',
+      'predecessora',
+      'espera',
+      'antecipação',
+      'rede',
+      'cor do serviço',
+      'equipe',
+      'unidade',
+      'duplicar fluxo',
+      'excluir fluxo',
+      'usado em',
+      'serviço inicial',
+      'ciclo',
+    ],
+    screen: 'longo-prazo',
+    body: `## O que é um fluxo
+Um fluxo de serviços é o molde da empresa: a sequência padrão de serviços de um tipo de obra (por exemplo, "Residencial padrão"), com a duração de cada serviço em cada local, a equipe, a unidade de medição e as dependências. Ele não pertence a uma obra: é criado uma vez e lançado em qualquer obra pela visão "Linha de Balanço". Depois de lançado, o fluxo e a obra ficam independentes: mudar o fluxo não mexe nos blocos já lançados.
+
+## A lista
+À esquerda ficam os fluxos da empresa, com o número de serviços e em quais obras cada um já foi lançado ("usado em …" ou "nunca lançado"). Clique num fluxo para abrir o editor; "Novo fluxo" cria um com dois serviços de exemplo encadeados para você ajustar.
+
+## O editor
+- O nome do fluxo é editado direto no título. A pill ao lado alterna o sentido padrão do lançamento ("Base → topo" ou "Topo → base").
+- A rede acima da tabela é desenhada sozinha a partir da coluna "Depois de": cada cartão é um serviço (cor, duração por local e equipe), as setas são as dependências com a espera escrita no meio, e o serviço inicial tem contorno azul. Não há o que arrastar nela.
+- Na tabela, cada linha é um serviço: setas para reordenar, nome, cor (clique no quadrado para escolher uma das oito cores), duração por local em dias úteis (segunda a sexta), equipe (com sugestões das equipes cadastradas na obra), unidade e "Depois de": as predecessoras, cada uma com a espera em dias úteis ("+5 d"; pode ser negativa, para antecipar). O "+" na coluna adiciona uma predecessora; só aparecem os serviços que não fechariam um ciclo. Toda dependência é término → início no mesmo local.
+- "Adicionar serviço" cria uma linha nova; as ações da linha duplicam ou excluem o serviço.
+- "Duplicar" copia o fluxo inteiro ("(cópia)" no nome); "Excluir" apaga o fluxo (as obras onde ele foi lançado não mudam).
+
+## Salvamento
+Cada alteração é salva sozinha cerca de um segundo depois; o texto no canto diz "Salvando…", "Salvo às hh:mm", "Não salvo" ou "Somente leitura". Um erro de validação (nome vazio, duração inválida, ciclo) aparece em vermelho e segura o salvamento até ser corrigido, sem perder o que você digitou. "Somente leitura" com aviso de que outra pessoa salvou o fluxo: clique em "Recarregar" para ver a versão atual.
+
+## Quem edita
+Planejador, gestor e admin criam, editam e lançam fluxos; o perfil de consulta só vê.
+
+## Quando um fluxo não lança
+"Lançar na Linha de Balanço" fica desabilitado, com o motivo, quando o fluxo tem um serviço só, tem mais de um serviço inicial (separe em dois fluxos ou ligue-os) ou tem um ciclo de predecessoras.`,
+  },
+  {
+    id: 'longo-prazo-lancar-fluxo',
+    title: 'Lançar um fluxo na Linha de Balanço: locais, data de início, sentido, ritmo e a prévia',
+    summary:
+      'O diálogo "Lançar fluxo": fluxo e locais, início, sentido (base → topo ou topo → base), ritmo (contínuo, takt, todos juntos), prévia, blocos mantidos e base automática.',
+    keywords: [
+      'lançar fluxo',
+      'lançar na linha de balanço',
+      'lançamento',
+      'locais marcados',
+      'data de início',
+      'sentido',
+      'base para topo',
+      'topo para base',
+      'ritmo',
+      'contínuo',
+      'takt fixo',
+      'todos os locais juntos',
+      'prévia',
+      'blocos mantidos',
+      'não duplica',
+      'linha de base automática',
+      'antes do lançamento',
+      'independente',
+    ],
+    screen: 'longo-prazo',
+    body: `## Como lançar
+Na visão "Linha de Balanço", clique em "Lançar fluxo" (ou, na visão "Fluxos de serviços", em "Lançar na Linha de Balanço"). O diálogo pede:
+- **Fluxo**: um dos fluxos da empresa ("Editar fluxos" leva à outra visão).
+- **Locais**: marque, na ordem do cadastro de locais da obra, onde o fluxo entra ("Marcar todos" e "Desmarcar" ajudam). Sem locais cadastrados, cadastre-os antes em "⋯ → Locais da obra".
+- **Início**: a data do primeiro serviço no primeiro local (um sábado ou domingo vira a segunda-feira seguinte).
+- **Sentido**: "Base → topo" começa pelo local mais baixo; "Topo → base", pelo mais alto.
+- **Ritmo**: "Contínuo" (a equipe passa ao próximo local quando termina o anterior, e o serviço vira uma linha reta no gráfico), "Takt fixo de N dias úteis" (cada local começa N dias úteis depois do anterior, como o vagão) ou "Todos os locais juntos".
+
+## A prévia
+Antes de confirmar, o diálogo calcula no navegador quantos blocos entram, o primeiro e o último bloco com as datas e a duração em semanas. Dois avisos podem aparecer:
+- amarelo: quantos blocos já existiam (o mesmo serviço no mesmo local) e serão mantidos, não duplicados; as sucessoras encaixam neles;
+- azul: a obra já tem blocos, então uma linha de base automática "Antes do lançamento <data>" será gravada antes. Desfazer um lançamento é restaurá-la na gaveta de linhas de base.
+
+## Como as datas saem
+Para cada serviço, em ordem de precedência, e cada local, no sentido escolhido, o bloco começa na data mais tardia entre: o início pedido, o fim das predecessoras no mesmo local mais a espera, e o ritmo (o fim do mesmo serviço no local anterior, no contínuo). Cada dependência fica gravada no bloco ("Depois de", no painel), inclusive a ligação "equipe segue" do ritmo.
+
+## Depois
+"Lançar N blocos" grava tudo e o gráfico mostra os blocos novos. A partir daí o fluxo e a obra ficam independentes: ajuste as datas arrastando os blocos ou pelo painel; mudar o fluxo não altera a obra. Serviço com o mesmo nome já existente na obra é reaproveitado (mesma cor); os demais entram como serviços novos.`,
+  },
+  {
+    id: 'longo-prazo-medicoes-fotograficas',
+    title: 'Medições: rodadas com data, realizado acumulado por bloco, foto obrigatória no avanço, motivo do atraso e datas reais',
+    summary:
+      'A visão "Medições" da aba 1: nova medição, atuais e futuras, previsto e anterior, realizado acumulado, fotos obrigatórias, motivo, salvar, última editável e celular.',
+    keywords: [
+      'medição',
+      'medições',
+      'medir',
+      'nova medição',
+      'realizado acumulado',
+      'previsto até a data',
+      'medição anterior',
+      'igualar ao previsto',
+      '100%',
+      'foto',
+      'fotos',
+      'foto obrigatória',
+      'avanço sem foto',
+      'tirar foto',
+      'galeria',
+      'motivo do atraso',
+      'observação',
+      'início real',
+      'término real',
+      'salvar medição',
+      'salvar rascunho',
+      'em aberto',
+      'só leitura',
+      'excluir medição',
+      'atuais',
+      'futuras',
+      'concluídas',
+      'celular',
+      'avanço físico',
+    ],
+    screen: 'longo-prazo',
+    body: `## O que é uma medição
+Uma medição é uma rodada com data em que se lança, para cada bloco da Linha de Balanço, o realizado acumulado em porcentagem. A rodada fica "em aberto" enquanto é preenchida e vira uma medição salva com "Salvar medição". Só pode haver uma rodada em aberto por obra.
+
+## Nova medição
+Clique em "Nova medição" e escolha a data: pode ser uma data passada, nunca futura, e não pode ser anterior à última medição salva. A data trava ao salvar; se estiver errada, exclua a medição e lance de novo. Sem blocos na obra, lance um fluxo antes.
+
+## A folha de medição
+- Abas: "Atuais" (blocos que começaram até a data e ainda não chegaram a 100%), "Futuras" (começam depois, até 12 meses) e "Concluídas". A busca filtra por serviço ou local.
+- Os blocos vêm agrupados por local, do mais alto para o mais baixo; clique no local para abrir ou recolher.
+- Em cada linha: o previsto até a data (pela proporção dos dias úteis do bloco), a medição anterior e o campo "Realizado acumulado" com os atalhos "= previsto" e "100%". O acumulado nunca pode ficar abaixo da anterior. O desvio em pontos aparece ao lado (vermelho atrás, verde à frente). O valor é gravado ao sair do campo.
+- Início real e término real: o sistema preenche com a data da medição no primeiro avanço acima de zero e ao chegar a 100%; os dois podem ser corrigidos à mão.
+- Ações: fotos (com a contagem), observação, motivo do atraso e histórico das medições anteriores daquele bloco.
+
+## Fotos
+Todo avanço precisa de foto: se o realizado subiu em relação à anterior, o bloco exige ao menos uma foto nesta rodada, e "Salvar medição" fica desabilitado listando os blocos sem foto. Até 6 fotos por bloco em cada medição. "Tirar foto" abre a câmera traseira no celular; "Galeria" aceita várias de uma vez. A foto é comprimida no aparelho antes de subir e fica guardada com a medição; dá para ampliar e excluir enquanto a rodada pode ser editada.
+
+## Motivo do atraso e observação
+Um bloco atrasado (previsto acima do medido) pede o motivo do atraso, escolhido na mesma lista de causas do curto prazo; a observação é texto livre. Os dois ficam na linha de detalhe do bloco.
+
+## Salvar, corrigir e excluir
+- "Salvar rascunho" guarda os valores lançados sem fechar; "Salvar medição #N" fecha a rodada e ela passa para a lista com data, blocos, fotos e autor.
+- Só a última medição pode ser alterada ou excluída (valores, fotos, motivos); as anteriores ficam só para consulta. Excluir uma medição apaga os lançamentos e as fotos dela.
+- O cartão "Avanço físico da obra" mostra o acumulado da obra pelas medições salvas, o previsto até hoje e o desvio.
+
+## No celular
+A mesma rodada aberta no computador aparece no celular: um local por vez, escolhido na faixa de cima; cada bloco é um cartão com previsto, anterior, o valor grande com "−" e "+" (de 5 em 5), os atalhos, "Tirar foto" e "Galeria". Avanço sem foto fica destacado e não deixa salvar. Sem sinal ainda não funciona: é preciso conexão para lançar e enviar fotos.
+
+## Quem mede
+Planejador, gestor e admin medem; o perfil de consulta vê as medições e as fotos, mas não lança.`,
   },
 ];

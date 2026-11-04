@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
-import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
+import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { SUPPORT, WORK_TABS } from '@/modules/layout/work-nav';
 import { workPath } from '@/shared/format';
 
@@ -13,8 +13,8 @@ type Crumb = { label: string; href?: string };
 function useCrumbs(): Crumb[] {
   const pathname = usePathname();
   const context = usePlanning();
-  // A obra abre na mesma aba que o cartão da lista de obras: o curto prazo fora do desenvolvimento.
-  const landing = useDeveloper() ? 'longo-prazo' : 'curto-prazo';
+  // A obra abre na mesma aba que o cartão da lista de obras: o dashboard (aba 0, 04/11/2026).
+  const landing = 'dashboard';
   const data = context.state === 'ready' ? context.planning.data : undefined;
   if (pathname.startsWith('/configuracoes')) return [{ label: 'Configurações' }];
   const match = pathname.match(/^\/obras\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/);

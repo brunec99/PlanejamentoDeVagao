@@ -88,8 +88,9 @@ try {
   const tables = (
     await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where nspname='public' and relkind='r'")
   ).rows.map(r => r.relname);
-  // 32 do planejamento + 6 da terminalidade (0028) + pedidos de acesso (0032) + 3 do agente de IA (0035).
-  assert.equal(tables.length, 42, `esperava 42 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
+  // 32 do planejamento + 6 da terminalidade (0028) + pedidos de acesso (0032) + 3 do agente de IA (0035)
+  // + 10 da Linha de Balanço, fluxos e medições (0038).
+  assert.equal(tables.length, 52, `esperava 52 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
   const overloads = (await db.query("select count(*)::int n from pg_proc where proname='commit_planning'")).rows[0].n;
   assert.equal(overloads, 1, 'commit_planning deveria ter só a assinatura de três parâmetros');
 

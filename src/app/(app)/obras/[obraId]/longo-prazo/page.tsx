@@ -7,15 +7,34 @@ import { LineOfBalance } from '@/modules/longo-prazo/line-of-balance';
 import { SCurve } from '@/modules/longo-prazo/s-curve';
 import { RestrictionsBoard } from '@/modules/longo-prazo/restrictions-board';
 import { LongTermPlanner } from '@/modules/longo-prazo/planner/long-term-planner';
+import { LobView } from '@/modules/longo-prazo/lob/lob-view';
+import { FlowsView } from '@/modules/longo-prazo/lob/flows-view';
+import { MeasurementsView } from '@/modules/longo-prazo/lob/measurements-view';
 import { TabHeader } from '@/modules/layout/tab-header';
 import { Callout } from '@/modules/planejamento/ui';
 import { workPath } from '@/shared/format';
 export const metadata = { title: 'Cronograma de longo prazo' };
 
+/** Visões da aba 1 (04/11/2026, modelo aprovado, regra 1): a Linha de Balanço no estilo Prevision é
+ * a padrão; Fluxos de serviços e Medições são as outras duas visões novas. "Vagões e restrições"
+ * continua, e o Planejador (fluxograma) fica por último até a Linha de Balanço assumir "Gerar
+ * vagões". O endereço guarda a visão em `?visao=`. */
 const VIEWS = [
-  { id: 'planejador', label: 'Planejador' },
+  { id: 'lob', label: 'Linha de Balanço' },
+  { id: 'fluxos', label: 'Fluxos de serviços' },
+  { id: 'medicoes', label: 'Medições' },
   { id: 'prevision', label: 'Vagões e restrições' },
+  { id: 'planejador', label: 'Planejador' },
 ] as const;
+type View = (typeof VIEWS)[number]['id'];
+const DESCRIPTIONS: Record<View, string> = {
+  lob: 'Linha de Balanço da obra: cada bloco é um serviço num local, com o que já foi medido. Arraste para reprogramar; as sucessoras acompanham.',
+  fluxos: 'Fluxos de serviços: a sequência padrão da empresa, com duração por local e dependências, pronta para lançar em qualquer obra.',
+  medicoes: 'Medições: o acumulado realizado de cada serviço em cada local, com foto do que avançou.',
+  prevision: 'As atividades dos vagões em Linha de Balanço, como base para identificar e tratar as restrições de cada frente.',
+  planejador:
+    'Fluxograma de serviços que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes (ferramenta anterior).',
+};
 
 export default async function Page({
   params,
@@ -29,25 +48,26 @@ export default async function Page({
   const access = await getRouteAccess();
   if (!hasSectionAccess('longo-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
   const { visao } = await searchParams;
-  const view = visao === 'prevision' ? 'prevision' : 'planejador';
+  const view: View = VIEWS.some(v => v.id === visao) ? (visao as View) : 'lob';
   const base = workPath(obraId, 'longo-prazo');
-  // A explicação longa das duas visões vive na ajuda do cabeçalho: a tela fica com uma linha, e
-  // quem quer entender como Planejador, vagões e restrições se encaixam abre "Como funciona".
+  const href = (id: View) => (id === 'lob' ? base : `${base}?visao=${id}`);
   const help = (
     <>
       <p>
-        <strong>Planejador</strong> é o cronograma macro: o fluxograma de serviços por pavimento que se expande em Linha de Balanço, com
-        linhas de base, medições e alocação de equipes. É ele o dono das atividades dos vagões — "Gerar vagões" transforma cada serviço ×
-        pavimento em atividades de vagão.
+        <strong>Linha de Balanço</strong> é o cronograma de longo prazo: uma atividade por serviço × local, no estilo do Prevision. Os
+        blocos nascem do lançamento de um <strong>fluxo de serviços</strong> (a sequência padrão da empresa, com duração por local e
+        dependências) nos locais da obra, com a data de início, o sentido e o ritmo escolhidos. Arrastar um bloco empurra as sucessoras;
+        cada bloco mostra a parte já medida e fica vermelho quando o previsto até hoje passa do medido.
       </p>
       <p>
-        <strong>Vagões e restrições</strong> mostra essas atividades só para leitura e é onde as restrições se ligam: cada uma aponta para
-        uma atividade e um lead time, e o limite de resolução sai do início previsto menos esse lead time. Enquanto uma restrição aberta
-        bloquear a execução, o vagão não aceita lançamento de progresso.
+        <strong>Medições</strong> são rodadas com data: o acumulado realizado de cada bloco, com foto obrigatória de cada avanço. Elas
+        preenchem os blocos, apontam os atrasos e alimentam o avanço físico.
       </p>
       <p>
-        Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que ainda não geraram vagões pelo plano
-        mostram o que veio do Prevision (
+        <strong>Vagões e restrições</strong> mostra as atividades dos vagões só para leitura, para criar e acompanhar restrições. O{' '}
+        <strong>Planejador</strong> é a ferramenta anterior (fluxograma por pavimento); o plano dele pode ser importado para a Linha de
+        Balanço pelo botão "Importar do Planejador", e ele continua gerando os vagões até a Linha de Balanço assumir essa função. Obras que
+        ainda não geraram vagões pelo plano mostram o que veio do Prevision (
         <Link className="text-link" href={workPath(obraId, 'importar')}>
           Integrações
         </Link>
@@ -57,41 +77,33 @@ export default async function Page({
   );
   return (
     <>
-      <TabHeader
-        workId={obraId}
-        section="longo-prazo"
-        help={help}
-        description={
-          view === 'planejador'
-            ? 'Preenchimento do cronograma macro: fluxograma de serviços que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes.'
-            : 'As atividades dos vagões em Linha de Balanço, como base para identificar e tratar as restrições de cada frente.'
-        }
-      >
+      <TabHeader workId={obraId} section="longo-prazo" help={help} description={DESCRIPTIONS[view]}>
         <nav
           data-tour="longo-visoes"
           aria-label="Visões do longo prazo"
-          className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-1"
+          className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-slate-100/70 p-1"
         >
           {VIEWS.map(v => (
             <Link
               key={v.id}
-              href={v.id === 'planejador' ? base : `${base}?visao=${v.id}`}
+              href={href(v.id)}
               aria-current={view === v.id ? 'page' : undefined}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === v.id ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === v.id ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : v.id === 'planejador' ? 'text-slate-400 hover:text-slate-700' : 'text-slate-600 hover:text-slate-900'}`}
             >
               {v.label}
             </Link>
           ))}
         </nav>
       </TabHeader>
-      {view === 'planejador' ? (
-        <LongTermPlanner workId={obraId} />
-      ) : (
+      {view === 'lob' && <LobView workId={obraId} />}
+      {view === 'fluxos' && <FlowsView workId={obraId} />}
+      {view === 'medicoes' && <MeasurementsView workId={obraId} />}
+      {view === 'planejador' && <LongTermPlanner workId={obraId} />}
+      {view === 'prevision' && (
         <>
-          {/* As atividades dos vagões são só leitura aqui: servem de base às restrições, que dependem do vagão de cada atividade. */}
           <Callout tone="info">
             Atividades dos vagões, só leitura: para mudar datas, serviços ou pavimentos, edite o{' '}
-            <Link className="text-link" href={base}>
+            <Link className="text-link" href={href('planejador')}>
               Planejador
             </Link>{' '}
             e use "Gerar vagões".

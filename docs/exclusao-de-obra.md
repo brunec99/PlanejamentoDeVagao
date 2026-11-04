@@ -2,7 +2,7 @@
 
 O usuário pediu que administradores possam excluir obras. Até aqui não havia como: o manual da Claudia respondia "Não há botão para isso na tela".
 
-**Estado:** código e migração **criados** em 30/10/2026, sem commit. A migração `0037_delete_work.sql` **não foi aplicada** no `takt-hub`. A tela nunca foi aberta logada.
+**Estado:** código e migração **criados** em 30/10/2026 e publicados no commit `65cd066`. **Atualização de 04/11/2026:** a função `delete_work` existe no `takt-hub`, ou seja, a `0037_delete_work.sql` foi aplicada (conferido por consulta ao catálogo do banco). A tela ainda não foi aberta logada. A migração 0038 (Linha de Balanço) pôs `on delete cascade` nas tabelas novas, então a exclusão de obra também leva os blocos, as medições e as fotos dela, e a rota apaga a pasta da obra no bucket `medicoes`.
 
 ## O que a pessoa vê
 
@@ -71,7 +71,7 @@ Depois do commit, a rota apaga a pasta da obra nos buckets `ifc` e `terminalidad
 
 ## Pendências
 
-1. **Aplicar `supabase/migrations/0037_delete_work.sql` no `takt-hub`**, pelo SQL Editor. A migração é reexecutável. Aplicar antes de publicar não quebra nada; publicar antes só deixa o botão respondendo que falta a migração.
+1. ~~**Aplicar `supabase/migrations/0037_delete_work.sql` no `takt-hub`**~~ (feito; conferido em 04/11/2026), pelo SQL Editor. A migração é reexecutável. Aplicar antes de publicar não quebra nada; publicar antes só deixa o botão respondendo que falta a migração.
 2. Conferir em Configurações → Banco de dados que a `0037_delete_work` aparece como aplicada.
 3. Primeiro uso real: excluir uma obra de teste, nunca uma com histórico. Conferir que ela some da lista, que outra pessoa com a tela aberta vê a obra sumir na recarga seguinte e que a pasta da obra sai dos buckets no painel do Storage.
 4. O tour da página não tem passo para o bloco: ele tem `data-tour="obra-config-delete"`, mas os tours estavam sendo editados por outra sessão.

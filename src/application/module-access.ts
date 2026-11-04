@@ -14,7 +14,7 @@ export const RESTRICTED_MODULE_MESSAGE = 'Módulo disponível apenas para desenv
 export const RESTRICTED_SECTIONS = ['longo-prazo', 'vagoes', 'medio-prazo', 'federacao', 'ifc', 'dividas', 'importar'] as const;
 
 /** APIs que só servem às seções restritas. `/api/history` é lido pelo vagão e pelo médio prazo. */
-export const RESTRICTED_API_PREFIXES = ['/api/long-term-plan', '/api/prevision', '/api/ifc', '/api/history'] as const;
+export const RESTRICTED_API_PREFIXES = ['/api/long-term-plan', '/api/lob', '/api/prevision', '/api/ifc', '/api/history'] as const;
 
 /** Comandos do curto prazo, das equipes (configurações da obra) e da administração; o resto é dos
  * módulos em desenvolvimento. Os papéis continuam conferidos em `applyCommand`. */
@@ -48,7 +48,9 @@ export interface ModuleInfo {
   open?: boolean;
 }
 export const MODULES: readonly ModuleInfo[] = [
-  { section: 'longo-prazo', label: 'Longo prazo', hint: 'Fluxograma, linha de balanço e restrições', group: 'Planejamento' },
+  // 04/11/2026: a aba 0 é aberta a todos; dentro dela, cada quadro segue o acesso ao módulo de origem.
+  { section: 'dashboard', label: 'Dashboard', hint: 'Os cinco níveis numa página, com filtros e PDF', group: 'Planejamento', open: true },
+  { section: 'longo-prazo', label: 'Longo prazo', hint: 'Linha de balanço, fluxos, medições e restrições', group: 'Planejamento' },
   { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações', group: 'Planejamento' },
   { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
   { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento', open: true },
@@ -65,7 +67,7 @@ export const grantableSection = (section: string) => isRestrictedSection(section
 
 /** APIs de cada módulo: quem tem o módulo liberado usa a API dele. */
 const SECTION_APIS: Record<string, readonly string[]> = {
-  'longo-prazo': ['/api/long-term-plan', '/api/prevision'],
+  'longo-prazo': ['/api/long-term-plan', '/api/lob', '/api/prevision'],
   vagoes: ['/api/history'],
   'medio-prazo': ['/api/history'],
   federacao: ['/api/ifc'],

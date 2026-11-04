@@ -3,6 +3,7 @@ import { steps as agenteAdmin } from './pages/agente-admin';
 import { steps as campo } from './pages/campo';
 import { steps as configuracoes } from './pages/configuracoes';
 import { steps as curtoPrazo } from './pages/curto-prazo';
+import { steps as dashboard } from './pages/dashboard';
 import { steps as dividas } from './pages/dividas';
 import { steps as federacao } from './pages/federacao';
 import { steps as ifc } from './pages/ifc';
@@ -28,6 +29,7 @@ export interface TourStep {
 
 export type TourKey =
   | 'obras'
+  | 'dashboard'
   | 'longoPrazo'
   | 'medioPrazo'
   | 'curtoPrazo'
@@ -59,6 +61,7 @@ const withClosing = (steps: TourStep[]) => [...steps, AGENT_STEP, CLOSING];
 
 const pages: Record<TourKey, TourStep[]> = {
   obras,
+  dashboard,
   longoPrazo,
   medioPrazo,
   curtoPrazo,
@@ -81,6 +84,7 @@ export const tours = Object.fromEntries(Object.entries(pages).map(([key, steps])
 
 export function resolveTourKey(pathname: string): TourKey | null {
   if (pathname === '/obras') return 'obras';
+  if (/^\/obras\/[^/]+\/dashboard$/.test(pathname)) return 'dashboard';
   if (/^\/obras\/[^/]+\/longo-prazo$/.test(pathname)) return 'longoPrazo';
   if (/^\/obras\/[^/]+\/medio-prazo$/.test(pathname)) return 'medioPrazo';
   if (/^\/obras\/[^/]+\/curto-prazo$/.test(pathname)) return 'curtoPrazo';

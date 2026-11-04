@@ -25,8 +25,9 @@ export function TabHeader({
   children?: ReactNode;
 }) {
   const context = usePlanning();
-  const index = WORK_TABS.findIndex(tab => tab.section === section);
-  const tab = WORK_TABS[index];
+  const tab = WORK_TABS.find(t => t.section === section)!;
+  // O número é o da aba (o dashboard é o zero), não a posição na lista.
+  const number = tab.number;
   const work = context.state === 'ready' ? context.planning.data.works.find(w => w.id === workId) : undefined;
   return (
     <header data-tour="tab-header" className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -36,11 +37,11 @@ export function TabHeader({
           aria-hidden
           className="mt-1 hidden h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-xl font-bold text-white shadow-md shadow-brand-900/20 ring-1 ring-brand-900/10 sm:grid"
         >
-          {index + 1}
+          {number}
         </span>
         <div className="min-w-0">
           <p className="eyebrow">
-            Aba {index + 1}
+            Aba {number}
             {work ? ` · ${work.code} · ${work.name}` : ''}
           </p>
           <h1 className="page-title">{tab.label}</h1>

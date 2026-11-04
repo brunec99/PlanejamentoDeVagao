@@ -137,6 +137,35 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
     storage_path: `${w}/${p}-item/photo.jpg`,
     thumb_path: `${w}/${p}-item/photo-thumb.jpg`,
   });
+  // Linha de Balanço, fluxos e medições (0038): saem pela cascata a partir de works. O fluxo é da
+  // empresa e fica (por isso o id não leva o prefixo da obra).
+  await insert('service_flows', { id: `fluxo-${p}` });
+  await insert('lob_locals', { id: `${p}-lloc`, work_id: w });
+  await insert('lob_services', { id: `${p}-lsvc`, work_id: w });
+  await insert('lob_launches', { id: `${p}-launch`, work_id: w, flow_id: `fluxo-${p}` });
+  const block = { work_id: w, service_id: `${p}-lsvc`, local_id: `${p}-lloc` };
+  await insert('lob_activities', { id: `${p}-lact1`, ...block, launch_id: `${p}-launch` });
+  await insert('lob_locals', { id: `${p}-lloc2`, work_id: w, name: 'y' });
+  await insert('lob_activities', { id: `${p}-lact2`, ...block, local_id: `${p}-lloc2` });
+  await insert('lob_dependencies', { id: `${p}-ldep`, work_id: w, predecessor_id: `${p}-lact1`, successor_id: `${p}-lact2` });
+  await insert('lob_baselines', { id: `${p}-lbase`, work_id: w });
+  await insert('lob_measurements', { id: `${p}-meas`, work_id: w, status: 'closed', closed_at: STAMP });
+  await insert('lob_measurement_items', {
+    id: `${p}-mitem`,
+    measurement_id: `${p}-meas`,
+    work_id: w,
+    activity_id: `${p}-lact1`,
+    value: 50,
+  });
+  await insert('lob_photos', {
+    id: `${p}-mphoto`,
+    item_id: `${p}-mitem`,
+    measurement_id: `${p}-meas`,
+    work_id: w,
+    activity_id: `${p}-lact1`,
+    storage_path: `${w}/${p}-mitem/foto.jpg`,
+    thumb_path: `${w}/${p}-mitem/foto-thumb.jpg`,
+  });
   await insert('agent_insights', { work_id: w });
   await insert('agent_usage', { work_id: w, actor_id: ADMIN, month: '2026-10', kind: 'leitura', cost_usd: 0.05 });
   await insert('history_events', { id: `${p}-h`, entity_id: `${p}-v1`, entity_type: 'wagon', action: 'release', author_id: ADMIN });
@@ -304,15 +333,17 @@ function fakeStorage(buckets: Record<string, string[]>, failing?: string) {
   return { client: client as unknown as SupabaseClient, removed };
 }
 
-test('removeWorkFiles apaga a pasta da obra nos dois buckets, descendo nas pastas, e só ela', async () => {
+test('removeWorkFiles apaga a pasta da obra nos buckets, descendo nas pastas, e só ela', async () => {
   // 1205 fotos numa pasta só: o `list` devolve 1000 por vez, e a segunda página tem que vir.
   const photos = [...Array.from({ length: 1205 }, (_, i) => `obra-x/item-1/foto-${i}.jpg`), 'obra-x/item-2/foto.jpg'];
   const { client, removed } = fakeStorage({
     ifc: ['obra-x/modelo-1/a.ifc', 'obra-x/modelo-1/a.frag', 'obra-y/modelo-2/b.ifc'],
     terminalidade: [...photos, 'obra-y/item/foto.jpg'],
+    medicoes: ['obra-x/lancamento-1/foto.jpg', 'obra-x/lancamento-1/foto-thumb.jpg', 'obra-y/lancamento-2/foto.jpg'],
   });
   const result = await removeWorkFiles(client, 'obra-x');
-  assert.deepEqual(result, { removed: 2 + photos.length, failed: [] });
+  assert.deepEqual(result, { removed: 4 + photos.length, failed: [] });
+  assert.ok(removed.includes('medicoes:obra-x/lancamento-1/foto.jpg'), 'as fotos das medições saem também');
   assert.ok(
     removed.every(path => path.includes(':obra-x/')),
     'a outra obra fica',

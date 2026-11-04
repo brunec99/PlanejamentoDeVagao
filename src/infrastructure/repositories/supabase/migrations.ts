@@ -237,6 +237,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'O botão "Excluir obra" das Configurações da obra responde pedindo a migração; nada é apagado.',
     critical: false,
   },
+  {
+    migration: '0038_lob',
+    label: 'Linha de Balanço, fluxos de serviços e medições com fotos',
+    probe: { kind: 'table', table: 'lob_activities' },
+    effect: 'As visões Linha de Balanço, Fluxos de serviços e Medições da aba 1 respondem "indisponível"; o Planejador e os vagões seguem.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

@@ -1,12 +1,13 @@
 import type { TourStep } from '../tours';
 
-/** Tour da aba 1. A tela tem duas visões (`?visao=`): os passos da visão fechada são pulados sozinhos,
- * porque os alvos dela não estão na tela. Os passos seguem a ordem visual: primeiro o comum às duas
- * visões, depois o Planejador e, por fim, "Vagões e restrições". */
+/** Tour da aba 1. A tela tem cinco visões (`?visao=`): os passos das visões fechadas são pulados
+ * sozinhos, porque os alvos delas não estão na tela. Os passos seguem a ordem visual: primeiro o comum
+ * a todas, depois Linha de Balanço, Fluxos de serviços e Medições (04/11/2026), o Planejador e, por
+ * fim, "Vagões e restrições". */
 export const steps: TourStep[] = [
   {
     title: 'Aba 1 · Cronograma de longo prazo',
-    body: 'O macro da obra em duas visões: o Planejador, onde se monta o cronograma de serviços por pavimento, e "Vagões e restrições", com as atividades dos vagões na Linha de Balanço, as restrições, a curva de avanço e as linhas de base.',
+    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, "Vagões e restrições" e o Planejador anterior.',
   },
   {
     target: 'work-nav',
@@ -21,12 +22,128 @@ export const steps: TourStep[] = [
   {
     target: 'tab-ajuda',
     title: 'Como funciona a aba',
-    body: 'O ? ao lado da descrição explica como o Planejador, os vagões e as restrições se encaixam, e por que datas, serviços e pavimentos só mudam pelo Planejador.',
+    body: 'O ? ao lado da descrição explica como a Linha de Balanço, os fluxos, as medições, os vagões e o Planejador se encaixam.',
   },
   {
     target: 'longo-visoes',
-    title: 'Planejador ou vagões',
-    body: 'O Planejador é o cronograma de longo prazo e é ele que gera as atividades dos vagões. "Vagões e restrições" mostra essas atividades só para leitura, junto das restrições, da curva de avanço e das linhas de base. O tour explica a visão que estiver aberta.',
+    title: 'As visões da aba',
+    body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos. "Vagões e restrições" mostra as atividades dos vagões, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
+  },
+
+  // ─── Linha de Balanço ─────────────────────────────────────────────────────────
+  {
+    target: 'longo-lob-indicadores',
+    title: 'Indicadores da obra',
+    body: 'Serviços e blocos lançados, locais, término previsto (com a diferença para a linha de base escolhida) e avanço físico pelas medições salvas, com o previsto até hoje e quantos blocos estão atrasados.',
+  },
+  {
+    target: 'longo-lob-filtros',
+    title: 'Filtros',
+    body: 'Escolha os serviços, os locais e o período que aparecem, e uma linha de base para sobrepor em cinza. Os indicadores e a contagem de atrasos continuam sendo da obra inteira.',
+  },
+  {
+    target: 'longo-lob-zoom',
+    title: 'Zoom do tempo',
+    body: 'Semana, Mês ou Trimestre. "Hoje" (ou a tecla H) leva o gráfico até hoje.',
+  },
+  {
+    target: 'longo-lob-grafico',
+    title: 'Linha de Balanço',
+    body: 'Locais de baixo para cima e o tempo na horizontal. Cada bloco é um serviço num local: a parte cheia é o que já foi medido, a clara o que falta, e o contorno vermelho marca atraso. Arraste um bloco para mudar a data: as sucessoras acompanham, e ele nunca entra antes das predecessoras. Com um bloco selecionado, as setas movem um dia útil.',
+  },
+  {
+    target: 'longo-lob-legenda',
+    title: 'Legenda',
+    body: 'Cada serviço com a cor e a duração por local. Clique para esconder ou mostrar o serviço no gráfico.',
+  },
+  {
+    target: 'longo-lob-painel',
+    title: 'Bloco selecionado',
+    body: 'Início, duração, equipe, predecessoras com a espera, quantos blocos acompanham ao arrastar, o atraso com o motivo da medição, as datas reais e as fotos da última medição.',
+  },
+  {
+    target: 'longo-lob-desfazer',
+    title: 'Desfazer',
+    body: 'Volta a última mudança de datas (arraste, duração, dependência ou restauração). Ctrl+Z também funciona fora de um campo.',
+  },
+  {
+    target: 'longo-lob-tabela',
+    title: 'Tabela',
+    body: 'Troca o gráfico por uma lista ordenável com local, serviço, datas, duração, previsto, medido, situação e datas reais.',
+  },
+  {
+    target: 'longo-lob-atrasos',
+    title: 'Atrasos',
+    body: 'Os blocos em que o previsto até hoje passa do medido, com o atraso em dias úteis. Clique num deles para selecioná-lo no gráfico.',
+  },
+  {
+    target: 'longo-lob-linha-base',
+    title: 'Linhas de base',
+    body: 'Guarde uma foto das datas, compare com o atual ou restaure. Antes de cada lançamento de fluxo o sistema grava uma automaticamente.',
+  },
+  {
+    target: 'longo-lob-lancar',
+    title: 'Lançar fluxo',
+    body: 'Escolha um fluxo de serviços, os locais, a data de início, o sentido e o ritmo. A prévia mostra quantos blocos entram e quais já existiam e são mantidos.',
+  },
+  {
+    target: 'longo-lob-mais',
+    title: 'Mais ações',
+    body: 'Locais da obra (cadastrar, renomear e reordenar), Importar do Planejador (converte o plano antigo em blocos, com a Linha de Balanço vazia) e Exportar CSV.',
+  },
+
+  // ─── Fluxos de serviços ───────────────────────────────────────────────────────
+  {
+    target: 'longo-fluxos-lista',
+    title: 'Fluxos da empresa',
+    body: 'Cada fluxo é um molde, com as obras em que já foi lançado. Depois de lançado, mudar o fluxo não mexe na obra.',
+  },
+  {
+    target: 'longo-fluxos-novo',
+    title: 'Novo fluxo',
+    body: 'Cria um fluxo com dois serviços de exemplo encadeados, para ajustar.',
+  },
+  {
+    target: 'longo-fluxos-rede',
+    title: 'Rede do fluxo',
+    body: 'Desenhada sozinha a partir da coluna "Depois de": cada cartão é um serviço e as setas são as dependências, com a espera em dias úteis. O serviço inicial tem contorno azul.',
+  },
+  {
+    target: 'longo-fluxos-tabela',
+    title: 'Serviços do fluxo',
+    body: 'Nome, cor, duração por local em dias úteis, equipe, unidade e as predecessoras com espera (negativa antecipa). Tudo é salvo sozinho um segundo depois.',
+  },
+  {
+    target: 'longo-fluxos-lancar',
+    title: 'Lançar na Linha de Balanço',
+    body: 'Abre o lançamento já com este fluxo. Fica desabilitado, com o motivo, se o fluxo tem um serviço só, mais de um serviço inicial ou um ciclo.',
+  },
+
+  // ─── Medições ─────────────────────────────────────────────────────────────────
+  {
+    target: 'longo-medicoes-nova',
+    title: 'Nova medição',
+    body: 'Abre uma rodada com data (passada ou hoje, nunca futura). Só pode haver uma em aberto.',
+  },
+  {
+    target: 'longo-medicoes-rodadas',
+    title: 'Rodadas',
+    body: 'A medição em aberto e as salvas, com blocos, fotos e autor. Só a última pode ser corrigida ou excluída. Embaixo, o avanço físico da obra.',
+  },
+  {
+    target: 'longo-medicoes-abas',
+    title: 'Atuais, futuras e concluídas',
+    body: 'Atuais são os blocos que já começaram e não chegaram a 100%; futuras começam nos próximos 12 meses.',
+  },
+  {
+    target: 'longo-medicoes-tabela',
+    title: 'Lançar o realizado',
+    body: 'Digite o acumulado de cada bloco (nunca abaixo da medição anterior) ou use "= previsto" e "100%". Todo avanço precisa de foto; o ícone da câmera fica âmbar enquanto falta. Atrasado pede o motivo, da mesma lista de causas do curto prazo.',
+  },
+  {
+    target: 'longo-medicoes-salvar',
+    title: 'Salvar medição',
+    body: 'Fecha a rodada e preenche as datas reais. Fica desabilitado enquanto houver avanço sem foto.',
   },
 
   // ─── Planejador ───────────────────────────────────────────────────────────────
