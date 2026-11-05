@@ -5,6 +5,7 @@ import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
 import { HelpNote } from '@/modules/layout/help-note';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
+import { isMonthlyPlan } from '@/domain/legalization';
 import { baselineVariance, type TaskVariance, type VarianceStatus } from '@/domain/schedule-analysis';
 import { DEFAULT_CALENDAR } from '@/domain/plan-schedule';
 import { addDays } from '@/domain/validation';
@@ -37,8 +38,9 @@ export function BaselineDelays({ workId }: { workId: string }) {
   if (!selected || !actor?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
   const { data } = planning;
 
+  // Gantt de legalização (04/11/2026, regra 17): fica só na aba 1, fora da variação do plano do mês.
   const livePlans = data.plans
-    .filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt)
+    .filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt && isMonthlyPlan(p))
     .sort((a, b) => b.month.localeCompare(a.month));
   const plan = livePlans.find(p => p.id === planId) ?? livePlans[0];
   const baselines = plan

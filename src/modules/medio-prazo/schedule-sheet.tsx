@@ -71,6 +71,7 @@ import {
   type WorkCalendar,
 } from '@/domain/plan-schedule';
 import { buildMspdi } from '@/domain/mspdi';
+import { isMonthlyPlan } from '@/domain/legalization';
 import { parseLinks, formatLink, rollUpPlan } from '@/domain/rules';
 import { validateDate } from '@/domain/validation';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
@@ -109,6 +110,47 @@ import { TaskInfoDialog, type TaskInfoChange, type TaskInfoTab, type TaskInfoVal
  * validações, mesmo rascunho, mesmo desfazer. */
 
 type Draft = { tasks: PlanTask[]; links: PlanDependency[]; calendar: WorkCalendar };
+
+/** O rascunho como a peça de fora o vê: já agendado e analisado pelo motor, a cada edição. */
+export interface SheetState {
+  tasks: PlanTask[];
+  links: PlanDependency[];
+  calendar: WorkCalendar;
+  analysis: ScheduleAnalysis;
+  dirty: boolean;
+}
+/** O que uma peça de fora pode fazer no cronograma (o "Trazer da Linha de Balanço", o resumo do topo). */
+export interface SheetApi extends SheetState {
+  /** Pode trocar as tarefas agora: não é só leitura, não está salvando nem editando uma célula. */
+  canEdit: boolean;
+  /** Troca as tarefas do rascunho num passo só do desfazer: reagenda, libera a edição e marca o rascunho. */
+  replaceTasks: (tasks: PlanTask[]) => void;
+  /** Seleciona a tarefa e rola até ela (abre o resumo recolhido que a esconde). */
+  selectTask: (id: string) => void;
+}
+/** Gantt de legalização da aba 1 (04/11/2026): o mesmo cronograma, com outro cabeçalho, outra janela e
+ * peças da aba 1 por cima. Sem `variant`, é o cronograma do mês do médio prazo, como sempre. */
+export interface SheetVariant {
+  /** No lugar de "Cronograma do mês". */
+  title: string;
+  /** A linha de baixo do título, no lugar de "Horizonte de três meses…". */
+  subtitle: ReactNode;
+  /** A janela sombreada no Gantt e usada no aviso e no filtro de fora da janela. */
+  window: { start: string; end: string };
+  /** Como a janela é chamada no aviso, no filtro e no indicador: "janela de 12 meses". */
+  windowLabel: string;
+  /** No lugar do seletor de mês; como função, enxerga o rascunho (para travar o que grava direto no banco). */
+  headerExtra?: ReactNode | ((api: SheetApi) => ReactNode);
+  /** No lugar de "Novo cronograma do mês", no rodapé. */
+  footerExtra?: ReactNode;
+  /** Zoom e colunas que aparecem antes de a pessoa guardar as preferências dela. */
+  defaultZoom?: GanttZoom;
+  defaultShown?: string[];
+  /** Por cima da área de trabalho (o resumo do topo), recalculado a cada edição do rascunho. */
+  summary?: (api: SheetApi) => ReactNode;
+  /** Na barra de ferramentas, depois do grupo de edição. */
+  tools?: (api: SheetApi) => ReactNode;
+}
 /** As visões do "Modo de exibição" do Project que o cronograma oferece. */
 type View = 'gantt' | 'team' | 'usage' | 'resources';
 const VIEWS: { id: View; label: string; Icon: typeof Check }[] = [
@@ -442,8 +484,9 @@ export function ScheduleSheet({ workId }: { workId: string }) {
   if (context.state !== 'ready') return null;
   const actor = context.planning.data.users.find(u => u.id === context.actorId);
   if (!actor?.workIds.includes(workId)) return null;
+  // O Gantt de legalização da aba 1 usa este mesmo cronograma, mas não é plano do mês (regra 17).
   const plans = context.planning.data.plans
-    .filter(p => p.workId === workId && !p.baselineOf)
+    .filter(p => p.workId === workId && !p.baselineOf && isMonthlyPlan(p))
     .sort((a, b) => b.month.localeCompare(a.month));
   const today = context.planning.today;
   // Abre no cronograma do mês corrente; sem ele, no mais recente.
@@ -543,6 +586,7 @@ export function Sheet({
   execute,
   plans,
   choose,
+  variant,
 }: {
   plan: MediumTermPlan;
   data: PlanningData;
@@ -552,6 +596,8 @@ export function Sheet({
   execute: Extract<ReturnType<typeof usePlanning>, { state: 'ready' }>['execute'];
   plans: MediumTermPlan[];
   choose: (id: string) => void;
+  /** Gantt de legalização da aba 1; sem ele, o cronograma do mês. */
+  variant?: SheetVariant;
 }) {
   const [draft, setDraft] = useState<Draft>(() => initial(data, plan));
   const [base, setBase] = useState(() => planSnapshot(plan, data.planTasks, data.planDependencies));
@@ -568,14 +614,14 @@ export function Sheet({
     [team, setTeam] = useState(''),
     [reference, setReference] = useState(today);
   const [folded, setFolded] = useState<string[]>([]),
-    [hidden, setHidden] = useState<Col[]>(DEFAULT_HIDDEN),
+    [hidden, setHidden] = useState<Col[]>(() => DEFAULT_HIDDEN.filter(k => !variant?.defaultShown?.includes(k))),
     [order, setOrder] = useState<Col[]>(DEFAULT_ORDER),
     [widths, setWidths] = useState<Record<string, number>>({});
   // Arrasto do cabeçalho: a coluna em movimento e a coluna alvo, com o lado em que será solta.
   const [dragCol, setDragCol] = useState<Col | null>(null),
     [drop, setDrop] = useState<{ key: Col; after: boolean } | null>(null);
   const [presentation, setPresentation] = useState<Presentation>('split'),
-    [zoom, setZoom] = useState<GanttZoom>('semana'),
+    [zoom, setZoom] = useState<GanttZoom>(variant?.defaultZoom ?? 'semana'),
     [tableWidth, setTableWidth] = useState(720);
   // "Modo de exibição" e a Linha do Tempo, ligada por padrão como no Project ao abrir um plano novo.
   const [view, setView] = useState<View>('gantt'),
@@ -638,7 +684,13 @@ export function Sheet({
     if (!e) return undefined;
     return teams.some(t => t.id !== e.id && normalize(t.name) === normalize(e.name)) ? `${e.company} · ${e.name}` : e.name;
   };
-  const win = useMemo(() => planWindow(plan.month), [plan.month]);
+  // O Gantt de legalização traz a janela dele (12 meses até a entrega); o plano do mês, os três meses.
+  const windowStart = variant?.window.start,
+    windowEnd = variant?.window.end;
+  const win = useMemo(
+    () => (windowStart && windowEnd ? { start: windowStart, end: windowEnd } : planWindow(plan.month)),
+    [windowStart, windowEnd, plan.month],
+  );
   const roll = useMemo(() => rollUpPlan(draft.tasks), [draft.tasks]);
   // Passada inversa, folgas e caminho crítico sobre o rascunho já agendado: as datas são as mesmas do
   // `scheduleTasks`; o que se lê daqui são as tardias, as folgas e quem segura cada data.
@@ -1285,7 +1337,7 @@ export function Sheet({
       setReason('');
       toast({
         title: 'Cronograma salvo',
-        description: `${count} ${count === 1 ? 'tarefa gravada' : 'tarefas gravadas'} em ${monthLabel(plan.month)}.`,
+        description: `${count} ${count === 1 ? 'tarefa gravada' : 'tarefas gravadas'} ${variant ? `no ${variant.title}` : `em ${monthLabel(plan.month)}`}.`,
         tone: 'success',
       });
     } catch (e) {
@@ -1906,6 +1958,27 @@ export function Sheet({
       begin(t, visibleCols[c].key, e.key);
     }
   }
+  /** Troca as tarefas do rascunho por fora (o "Trazer da Linha de Balanço" do Gantt de legalização):
+   * reagenda, entra como um passo do desfazer e libera a edição, como faria a própria grade. */
+  function replaceTasks(tasks: PlanTask[]) {
+    const current = latest();
+    try {
+      stage({ ...current, tasks: scheduleTasks(tasks, current.links, current.calendar) });
+      setLocked(false);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  const api: SheetApi = {
+    tasks: draft.tasks,
+    links: draft.links,
+    calendar: draft.calendar,
+    analysis,
+    dirty,
+    canEdit: !readOnly && !busy && !plan.frozenAt && !editor,
+    replaceTasks,
+    selectTask: id => selectTask(id, true),
+  };
   const tool =
     'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40';
   const group = 'flex flex-wrap items-center gap-0.5 border-r border-slate-200 pr-2 last:border-r-0';
@@ -1916,32 +1989,45 @@ export function Sheet({
   return (
     // Ctrl+Z e Ctrl+Y valem na tela inteira (barra do Gantt, bloco do Planejador, botões), não só na grade.
     <div onKeyDown={screenKey}>
+      {variant?.summary?.(api)}
       <div ref={workspaceRef} className="flex flex-col" style={{ height: fit ?? 'calc(100dvh - 12rem)' }}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 p-3">
           <div className="mr-auto">
-            <h2 className="font-semibold text-slate-900">Cronograma do mês</h2>
-            <p className="text-xs text-slate-500">
-              Horizonte de três meses: {projectDate(win.start)} a {projectDate(win.end)}
-              {plan.copiedFromPlanId
-                ? ` · copiado de ${monthLabel(data.plans.find(p => p.id === plan.copiedFromPlanId)?.month ?? plan.month)}`
-                : ''}
-            </p>
+            <h2 className="font-semibold text-slate-900">{variant?.title ?? 'Cronograma do mês'}</h2>
+            {variant ? (
+              <div className="text-xs text-slate-500">{variant.subtitle}</div>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Horizonte de três meses: {projectDate(win.start)} a {projectDate(win.end)}
+                {plan.copiedFromPlanId
+                  ? ` · copiado de ${monthLabel(data.plans.find(p => p.id === plan.copiedFromPlanId)?.month ?? plan.month)}`
+                  : ''}
+              </p>
+            )}
           </div>
-          <label data-tour="medio-mes" className="text-xs font-semibold text-slate-600">
-            Mês{' '}
-            <select
-              className="field w-auto py-1.5"
-              value={plan.id}
-              disabled={dirty || !!editor || busy}
-              onChange={e => choose(e.target.value)}
-            >
-              {plans.map(p => (
-                <option key={p.id} value={p.id}>
-                  {monthLabel(p.month)} · {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {variant ? (
+            typeof variant.headerExtra === 'function' ? (
+              variant.headerExtra(api)
+            ) : (
+              variant.headerExtra
+            )
+          ) : (
+            <label data-tour="medio-mes" className="text-xs font-semibold text-slate-600">
+              Mês{' '}
+              <select
+                className="field w-auto py-1.5"
+                value={plan.id}
+                disabled={dirty || !!editor || busy}
+                onChange={e => choose(e.target.value)}
+              >
+                {plans.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {monthLabel(p.month)} · {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div data-tour="medio-salvar" className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span role="status" aria-live="polite" className={`text-xs ${dirty ? 'font-semibold text-warning' : 'text-slate-500'}`}>
               {busy ? 'Salvando…' : dirty ? `${changed.length + removed.length} tarefas alteradas · não salvo` : 'Tudo salvo'}
@@ -2005,6 +2091,7 @@ export function Sheet({
               <span className="sr-only">Refazer</span>
             </button>
           </div>
+          {variant?.tools && <div className={group}>{variant.tools(api)}</div>}
           {view !== 'resources' && (
             <div className={group} aria-label="Tarefa">
               {view === 'gantt' && (
@@ -2245,7 +2332,7 @@ export function Sheet({
                     ['critical', 'Críticas'],
                     ['conflict', 'Com vínculo desrespeitado'],
                     ['deadline', 'Prazo final perdido'],
-                    ['window', 'Fora do horizonte'],
+                    ['window', variant ? 'Fora da janela' : 'Fora do horizonte'],
                     ['changed', 'Alteradas no rascunho'],
                     ['notes', 'Com anotações'],
                   ].map(([v, l]) => (
@@ -2343,7 +2430,9 @@ export function Sheet({
             {error}
           </p>
         )}
-        {outside > 0 && (
+        {/* No Gantt de legalização, tarefa antes da janela é normal (regra 6: só fica fora da sombra);
+            o filtro e o indicador continuam, sem a faixa de aviso. */}
+        {outside > 0 && !variant && (
           <p className="border-b border-warning-ring bg-warning-soft px-3 py-2 text-xs text-amber-900">
             <CircleAlert size={13} className="mr-1 inline text-warning" aria-hidden />
             {outside} {outside === 1 ? 'tarefa está' : 'tarefas estão'} fora do horizonte de três meses ({projectDate(win.start)} a{' '}
@@ -2692,7 +2781,9 @@ export function Sheet({
                                       deadline={info(t.id)?.deadlineMissed ? t.deadline : undefined}
                                       conflict={!!info(t.id)?.conflict}
                                       outside={outOfWindow(t.id)}
+                                      outsideLabel={variant ? `Fora da ${variant.windowLabel}` : undefined}
                                       notes={!!t.notes}
+                                      lob={!!t.lobServiceId}
                                     />
                                   ) : (
                                     <span className={col.key === 'id' ? 'text-slate-400' : ''}>{text}</span>
@@ -3103,9 +3194,13 @@ export function Sheet({
                 <TextField name="name" label="Nome da linha de base" defaultValue={`Base ${formatDate(today)}`} />
               </CommandForm>
             </span>
-            <span data-tour="medio-novo-plano" className="inline-flex">
-              <NewPlanForm workId={plan.workId} plans={plans} today={today} onDone={choose} />
-            </span>
+            {variant ? (
+              variant.footerExtra
+            ) : (
+              <span data-tour="medio-novo-plano" className="inline-flex">
+                <NewPlanForm workId={plan.workId} plans={plans} today={today} onDone={choose} />
+              </span>
+            )}
           </>
         )}
         {dirty && (
@@ -3412,7 +3507,9 @@ function Indicators({
   deadline,
   conflict,
   outside,
+  outsideLabel = 'Fora do horizonte de três meses',
   notes,
+  lob = false,
 }: {
   done: boolean;
   constraint?: { type: ConstraintType; date?: string };
@@ -3420,7 +3517,10 @@ function Indicators({
   deadline?: string;
   conflict: boolean;
   outside: boolean;
+  outsideLabel?: string;
   notes: boolean;
+  /** Linha que veio da Linha de Balanço (Gantt de legalização). */
+  lob?: boolean;
 }) {
   const flexibility = constraint ? constraintFlexibility(constraint.type) : 'flexible';
   const items = [
@@ -3437,7 +3537,7 @@ function Indicators({
       label: 'Vínculo desrespeitado: a restrição ou a data real prendem a tarefa antes do que a predecessora permite',
       tone: 'text-danger',
     },
-    outside && { Icon: CircleAlert, label: 'Fora do horizonte de três meses', tone: 'text-warning' },
+    outside && { Icon: CircleAlert, label: outsideLabel, tone: 'text-warning' },
     notes && { Icon: StickyNote, label: 'Tem anotações', tone: 'text-slate-500' },
   ].filter(Boolean) as { Icon: typeof Check; label: string; tone: string }[];
   return (
@@ -3448,6 +3548,14 @@ function Indicators({
           <span className="sr-only">{label}</span>
         </span>
       ))}
+      {lob && (
+        <span
+          title="Veio da Linha de Balanço: “Trazer da Linha de Balanço” de novo atualiza início, duração e %"
+          className="rounded border border-primary-ring bg-primary-soft px-0.5 text-[9px] leading-3 font-bold text-primary-ink"
+        >
+          LB
+        </span>
+      )}
     </span>
   );
 }

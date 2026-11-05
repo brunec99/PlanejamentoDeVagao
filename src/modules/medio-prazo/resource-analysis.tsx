@@ -6,6 +6,7 @@ import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
 import { HelpNote } from '@/modules/layout/help-note';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
+import { isMonthlyPlan } from '@/domain/legalization';
 import { weeklyTeamLoad, type WeekLoad } from '@/domain/schedule-analysis';
 import { addDays, startOfWeek } from '@/domain/validation';
 import { formatDate, workPath } from '@/shared/format';
@@ -48,9 +49,10 @@ export function ResourceAnalysis({ workId }: { workId: string }) {
   if (!selected || !actor?.workIds.includes(workId)) return <Missing label="Obra não encontrada" />;
   const { data, today } = planning;
 
-  const months = [...new Set(data.plans.filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt).map(p => p.month))].sort((a, b) =>
-    b.localeCompare(a),
-  );
+  // Gantt de legalização (04/11/2026, regra 17): o mês dele não vira período aqui (a carga também o ignora).
+  const months = [
+    ...new Set(data.plans.filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt && isMonthlyPlan(p)).map(p => p.month)),
+  ].sort((a, b) => b.localeCompare(a));
   const chosen = period === NEXT_WEEKS || months.includes(period) ? period : (months[0] ?? NEXT_WEEKS);
   const from = chosen === NEXT_WEEKS ? startOfWeek(today) : `${chosen}-01`;
   const to = chosen === NEXT_WEEKS ? addDays(startOfWeek(today), 12 * 7 - 1) : monthEndOf(chosen);

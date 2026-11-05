@@ -33,6 +33,13 @@ import { addDays, periodDays, requireText, startOfWeek, validateDate, validatePe
 import { canEditWeek, weekLockLastDay } from '../../domain/week-lock';
 import { commitmentCompanyOf } from '../../domain/agent-briefing';
 import { insertionOrder, orderPositions } from '../../domain/commitment-order';
+import {
+  LEGALIZATION_DEFAULT_NAME,
+  LEGALIZATION_KIND,
+  buildLegalizationTasks,
+  isLegalizationPlan,
+  legalizationMonth,
+} from '../../domain/legalization';
 export type ActivityInput = Pick<
   Activity,
   'name' | 'locationId' | 'responsibleId' | 'plannedStart' | 'plannedEnd' | 'weight' | 'mandatory'
@@ -160,6 +167,10 @@ export type Command =
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
   /** `copyFrom`: plano vivo de mês anterior da mesma obra, copiado como ponto de partida. */
   | { type: 'create_plan'; workId: string; month: string; name?: string; copyFrom?: string }
+  /** Gantt de legalização da aba 1 (04/11/2026): um por obra, a partir da entrega contratual, com o
+   * modelo ATR ou em branco. `update_legalization_plan` troca a entrega (e o prazo final do marco). */
+  | { type: 'create_legalization_plan'; workId: string; deliveryDate: string; template: 'atr' | 'blank'; name?: string }
+  | { type: 'update_legalization_plan'; planId: string; deliveryDate: string; name?: string }
   | { type: 'delete_plan'; planId: string }
   | { type: 'freeze_plan_baseline'; planId: string; name: string }
   | {
@@ -1116,10 +1127,12 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     case 'create_plan': {
       checkWork(command.workId);
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(command.month)) throw new Error('Informe o mês no formato AAAA-MM.');
-      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf))
+      // O Gantt de legalização também grava um `month` (o início da janela), mas não ocupa o mês.
+      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf && !isLegalizationPlan(p)))
         throw new Error('Esta obra já tem um plano para este mês.');
       const source = command.copyFrom === undefined ? undefined : planFor(command.copyFrom);
       if (source) {
+        if (isLegalizationPlan(source)) throw new Error('Copie de um cronograma do mês, não do Gantt de legalização.');
         if (source.workId !== command.workId) throw new Error('O plano de origem deve ser da mesma obra.');
         if (source.baselineOf || source.frozenAt) throw new Error('Copie de um plano vivo, não de uma linha de base.');
         if (source.month >= command.month) throw new Error('O plano de origem deve ser de um mês anterior ao novo plano.');
@@ -1143,6 +1156,55 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         data.planTasks.push(...copy.tasks);
         data.planDependencies.push(...copy.links);
       }
+      entityId = plan.id;
+      break;
+    }
+    case 'create_legalization_plan': {
+      checkWork(command.workId);
+      validateDate(command.deliveryDate);
+      if (command.template !== 'atr' && command.template !== 'blank') throw new Error('Escolha o modelo ATR ou em branco.');
+      if (data.plans.some(p => p.workId === command.workId && isLegalizationPlan(p) && !p.baselineOf))
+        throw new Error('Esta obra já tem um Gantt de legalização.');
+      const plan: MediumTermPlan = {
+        ...base(),
+        workId: command.workId,
+        month: legalizationMonth(command.deliveryDate),
+        name: command.name?.trim() || LEGALIZATION_DEFAULT_NAME,
+        createdBy: actorId,
+        kind: LEGALIZATION_KIND,
+        deliveryDate: command.deliveryDate,
+      };
+      const built = buildLegalizationTasks({
+        planId: plan.id,
+        deliveryDate: command.deliveryDate,
+        template: command.template,
+        newId: () => base().id,
+        now,
+      });
+      data.plans.push(plan);
+      data.planTasks.push(...built.tasks);
+      data.planDependencies.push(...built.links);
+      entityId = plan.id;
+      break;
+    }
+    case 'update_legalization_plan': {
+      const plan = planFor(command.planId);
+      checkWork(plan.workId);
+      if (!isLegalizationPlan(plan) || plan.baselineOf || plan.frozenAt) throw new Error('Gantt de legalização não encontrado.');
+      validateDate(command.deliveryDate);
+      const previous = plan.deliveryDate;
+      // O prazo final que acompanhava a entrega anda junto; os outros prazos finais ficam.
+      for (const task of data.planTasks)
+        if (task.planId === plan.id && previous && task.deadline === previous && task.deadline !== command.deliveryDate) {
+          task.deadline = command.deliveryDate;
+          task.version = (task.version ?? 0) + 1;
+          touch(task);
+        }
+      plan.deliveryDate = command.deliveryDate;
+      plan.month = legalizationMonth(command.deliveryDate);
+      if (command.name !== undefined) plan.name = command.name.trim() || LEGALIZATION_DEFAULT_NAME;
+      plan.version = (plan.version ?? 0) + 1;
+      touch(plan);
       entityId = plan.id;
       break;
     }
@@ -1175,6 +1237,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         baselineOf: plan.id,
         frozenAt: now,
         createdBy: actorId,
+        // A linha de base do Gantt de legalização continua dele: fora das listas do plano do mês.
+        ...(isLegalizationPlan(plan) ? { kind: LEGALIZATION_KIND, deliveryDate: plan.deliveryDate } : {}),
       };
       data.plans.push(frozen);
       const copies = new Map<string, string>();
@@ -1264,6 +1328,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
           actualStart: input.actualStart || undefined,
           actualEnd: input.actualEnd || undefined,
           timeline: input.timeline === true || undefined,
+          lobServiceId: typeof input.lobServiceId === 'string' && input.lobServiceId ? input.lobServiceId : undefined,
           version: (old?.version ?? 0) + 1,
           updatedAt: now,
         };

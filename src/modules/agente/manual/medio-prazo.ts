@@ -30,6 +30,8 @@ export const sections: ManualSection[] = [
 
 A aba 3, "Cronograma de médio prazo" (endereço /obras/<obra>/medio-prazo), é o cronograma do mês da obra no padrão do MS Project: tabela à esquerda, Gantt à direita e datas calculadas pela rede de predecessoras. Há **um cronograma por mês**, cada um com **horizonte de três meses** (do dia 1 do mês ao último dia do segundo mês seguinte). O primeiro nasce em branco; cada mês seguinte nasce como cópia do anterior, que fica guardado como estava. Em volta dele ficam seções de apoio à reunião de médio prazo.
 
+O "Gantt de legalização" (os 12 meses até a entrega da obra) usa este mesmo cronograma, com tabela, Gantt, cálculo, linha de base e exportação, mas fica na aba 1 (longo prazo): não aparece na lista de cronogramas do mês nem nas seções desta aba.
+
 ## Quem vê e quem edita
 
 - O módulo está **em desenvolvimento**: só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Médio prazo" liberado pelo admin na lista de usuários das Configurações. Quem não tem acesso é levado ao curto prazo da obra.

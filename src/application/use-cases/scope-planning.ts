@@ -1,4 +1,5 @@
 import type { PlanningData } from '../../domain/entities';
+import { legalizationPlanIds } from '../../domain/legalization';
 
 /** A autorização também limita o payload, antes de ele chegar ao navegador. O adaptador já recorta
  * por obra ao ler (migração 0027); este passo garante o mesmo contrato quando a leitura veio
@@ -113,6 +114,15 @@ export function slimForModules(data: PlanningData, modules: readonly string[]): 
   const keep = new Set<Slice>(modules.flatMap(section => MODULE_DATA[section] ?? []));
   const slim: PlanningData = { ...data };
   for (const key of [...WAGON_DATA, ...PLAN_DATA, ...IFC_DATA]) if (!keep.has(key)) slim[key] = [];
+  // Gantt de legalização (04/11/2026, regra 4): é da aba 1. Quem tem o longo prazo sem o médio prazo
+  // recebe só ele e as linhas de base dele, com tarefas e vínculos; os planos do mês continuam fora.
+  if (!keep.has('plans') && modules.includes('longo-prazo')) {
+    const ids = legalizationPlanIds(data.plans);
+    slim.plans = data.plans.filter(p => ids.has(p.id));
+    slim.planTasks = data.planTasks.filter(t => ids.has(t.planId));
+    const taskIds = new Set(slim.planTasks.map(t => t.id));
+    slim.planDependencies = data.planDependencies.filter(d => taskIds.has(d.successorId));
+  }
   return slim;
 }
 

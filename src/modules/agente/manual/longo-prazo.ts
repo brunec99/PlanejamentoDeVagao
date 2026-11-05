@@ -3,7 +3,8 @@ import type { ManualSection } from './types';
 /** Manual da aba 1, Cronograma de longo prazo (29/10/2026): as duas visões (Planejador e "Vagões e
  * restrições"), o cadastro de serviços, o gráfico, linhas de base e medições, a geração de vagões,
  * o módulo de restrições e a curva de avanço. Escrito a partir do código dos componentes; quando o
- * tour ou a documentação divergiam, valeu o código. */
+ * tour ou a documentação divergiam, valeu o código. Em 04/11/2026 entraram a Linha de Balanço, os
+ * fluxos de serviços, as medições e o Gantt de legalização. */
 export const sections: ManualSection[] = [
   {
     id: 'longo-prazo-visao-geral',
@@ -31,14 +32,15 @@ export const sections: ManualSection[] = [
     body: `## Para que serve
 A aba 1, "Cronograma de longo prazo", é o macro da obra: a sequência de serviços por pavimento e o que deriva dela (datas, prazo, equipes, avanço).
 
-Ela tem cinco visões, alternadas pelo seletor no cabeçalho (desde 04/11/2026):
+Ela tem seis visões, alternadas pelo seletor no cabeçalho (desde 04/11/2026):
 - **"Linha de Balanço"** (padrão): o cronograma de longo prazo no estilo do Prevision, uma atividade por serviço × local, com o que já foi medido. Os blocos nascem do lançamento de um fluxo de serviços; arrastar um bloco empurra as sucessoras. Veja a seção "Linha de Balanço".
 - **"Fluxos de serviços"**: o molde da empresa (o "macrofluxo" do Prevision) com a sequência de serviços, a duração por local e as dependências, pronto para lançar em qualquer obra. Veja "Fluxos de serviços" e "Lançar um fluxo".
 - **"Medições"**: rodadas com data em que se lança o acumulado realizado de cada bloco, com foto de cada avanço. Veja "Medições".
+- **"Gantt de legalização"**: os 12 meses até a entrega da obra, com o caminho crítico da obra e a legalização por órgão até as chaves, no mesmo cronograma do médio prazo (tabela e Gantt do Project). Um por obra. Veja "Gantt de legalização".
 - **"Vagões e restrições"**: as atividades dos vagões em Linha de Balanço, só para leitura, mais o módulo de restrições, a curva de avanço acumulado e as linhas de base da obra. Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
 - **"Planejador"**: a ferramenta anterior, um fluxograma de serviços por pavimento que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. Ainda é o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (aba 2). O plano dele pode ser levado para a Linha de Balanço nova por "Importar do Planejador".
 
-As seções abaixo sobre salvamento, exportar e importar valem para o Planejador; a Linha de Balanço, os fluxos e as medições gravam cada alteração na hora, sem botão de salvar (as medições têm "Salvar medição", que fecha a rodada).
+As seções abaixo sobre salvamento, exportar e importar valem para o Planejador; a Linha de Balanço, os fluxos e as medições gravam cada alteração na hora, sem botão de salvar (as medições têm "Salvar medição", que fecha a rodada). O Gantt de legalização grava como o médio prazo: rascunho e "Revisar e salvar".
 
 O "?" ao lado da descrição ("Como funciona") explica como as visões se encaixam.
 
@@ -569,5 +571,73 @@ A mesma rodada aberta no computador aparece no celular: um local por vez, escolh
 
 ## Quem mede
 Planejador, gestor e admin medem; o perfil de consulta vê as medições e as fotos, mas não lança.`,
+  },
+  {
+    id: 'longo-prazo-gantt-legalizacao',
+    title: 'Gantt de legalização: os 12 meses até a entrega, com o caminho crítico da obra e a legalização por órgão',
+    summary:
+      'A visão "Gantt de legalização" da aba 1: criar pela entrega, modelo ATR, resumo do topo, caminho crítico, alterar entrega e trazer da Linha de Balanço.',
+    keywords: [
+      'gantt de legalização',
+      'legalização',
+      'terminalização',
+      'habite-se',
+      'avcb',
+      'corpo de bombeiros',
+      'concessionárias',
+      'cartório',
+      'cnd da obra',
+      'entrega das chaves',
+      'entrega contratual',
+      'entrega prevista',
+      'alterar entrega',
+      'modelo atr',
+      'janela de 12 meses',
+      'caminho crítico da obra',
+      'trazer da linha de balanço',
+      'linhas lb',
+    ],
+    screen: 'longo-prazo',
+    body: `## Para que serve
+A visão "Gantt de legalização" (barra de visões da aba 1, depois de "Medições") é o cronograma dos 12 meses até a entrega da obra: o caminho crítico da obra e a legalização por órgão até as chaves. Responde se a entrega cabe na data prometida ao cliente e, se não cabe, que cadeia de tarefas a empurra. Um Gantt por obra, vivo até a entrega (não há um por mês).
+
+## É o mesmo cronograma do médio prazo
+Tabela e Gantt no padrão do MS Project, com o mesmo cálculo, linha de base, desfazer, "Informações da tarefa" e "Exportar para o Project (.xml)" da aba 3: o que o manual do médio prazo diz sobre editar a grade, predecessoras, restrições e prazo final vale aqui. Muda: o horizonte é a janela de 12 meses antes da entrega (entrega em 30/09/2027 dá 01/10/2026 a 30/09/2027), sombreada no Gantt; o zoom abre em meses; a coluna "Folga total" vem à mostra. Tarefa que começa antes da janela (projeto de incêndio, aprovação na concessionária) continua no cálculo; o filtro "Fora da janela" mostra quais.
+
+## Criar o Gantt
+Obra sem Gantt mostra o botão "Criar Gantt de legalização" (o perfil de consulta não o vê). O diálogo pede:
+- **"Entrega contratual"**: a data prometida ao cliente, sem a tolerância de 180 dias do contrato. Ela vira o "Prazo final" do marco "Entrega das chaves", e logo abaixo aparece a "Janela" que ela abre.
+- **"Partir de"**: "Modelo ATR de legalização" (abaixo) ou "Em branco", só com o marco "Entrega das chaves" e o prazo final.
+- **"Linha de Balanço"**: caixa que vem marcada; com ela, o botão vira "Criar e revisar a Linha de Balanço" e a lista do "Trazer da Linha de Balanço" abre logo depois.
+- **"Prévia"** (primeira tarefa, entrega prevista, críticas) e "Nome (opcional)".
+Um segundo Gantt na obra é recusado ("Esta obra já tem um Gantt de legalização").
+
+## O modelo ATR
+São 38 linhas em dois grupos, mais o marco final:
+- **"Caminho crítico da obra"**: alvenaria e contrapiso dos últimos pavimentos, instalações, fachada, sistema de incêndio, elevadores, acabamentos internos, áreas comuns, limpeza final, vistoria interna de terminalidade e vistoria com os clientes.
+- **"Legalização"**, com um grupo por órgão: Corpo de Bombeiros (laudos, protocolo, vistoria e AVCB), Concessionárias (energia, água e esgoto, gás e licença dos elevadores), Prefeitura (documentos, protocolo, vistoria e Habite-se), Receita Federal (aferição e CND da obra) e Cartório e condomínio (averbação, instituição do condomínio, assembleia de instalação e manuais do proprietário).
+- **"Entrega das chaves"**, o marco que carrega o prazo final.
+As esperas de órgão estão em dias corridos. O modelo é montado de trás para frente: as tarefas sem predecessora ganham "Não iniciar antes de" calculado para a rede terminar na entrega (ou no dia útil anterior); daí em diante o cálculo anda para a frente, como no Project. As durações são ponto de partida: revise-as com a equipe. Depois de criado, o Gantt é seu, e mudar o modelo não mexe nele.
+Para ver tudo de um órgão, expanda o grupo dele. O responsável vai em "Nomes dos recursos", com as equipes da obra (cadastre despachante e projetista de incêndio como equipes nas Configurações da obra).
+
+## O resumo do topo e o caminho crítico
+Acima do cronograma ficam cinco números: "Entrega contratual"; "Entrega prevista", com os dias úteis depois ou antes do prazo; "Caminho crítico", com as tarefas críticas e a folga do marco da entrega; "Marcos de legalização" cumpridos; e "Próximo marco", que seleciona a tarefa ao ser clicado. Marco de legalização é toda tarefa de duração zero dentro do grupo "Legalização" (AVCB emitido, Habite-se emitido, CND da obra emitida…); cumprido é o que está em 100%. Não renomeie os grupos "Legalização" e "Caminho crítico da obra": o resumo e o "Trazer da Linha de Balanço" os acham pelo nome.
+O caminho crítico vem ligado. Crítica é a tarefa com folga total menor ou igual a zero, como no Project. O prazo final não segura a data: quando a rede passa da entrega contratual, o marco fica vermelho, a folga fica negativa e a cadeia inteira que atrasa aparece com a mesma folga negativa. Aí surge o aviso vermelho "A entrega prevista passa N dias úteis do prazo. O que empurra: …", com a cadeia de tarefas (clique num nome para selecioná-la); ele some quando a entrega prevista volta para dentro do prazo. Para recuperar a data, encurte ou ponha em paralelo uma tarefa dessa cadeia, ou revise um vínculo.
+
+## Alterar a entrega
+"Alterar entrega", no cabeçalho do cronograma, troca a data contratual (e o nome, se quiser) e grava na hora com "Salvar entrega", sem passar pelo rascunho. A janela anda junto, e o prazo final que estava na entrega antiga passa para a nova; outros prazos finais ficam. As tarefas não mudam de data: a folga passa a contar até o novo prazo. Com rascunho aberto o botão trava: salve ou descarte antes.
+
+## Trazer da Linha de Balanço
+"Trazer da Linha de Balanço" (barra de ferramentas) lista os serviços da visão "Linha de Balanço": "Locais", "Início (1º local)", "Término (último)", "% medido" (última medição salva) e "No Gantt" (linha nova, atualiza a linha LB ou fora da janela). Vêm marcados os que tocam a janela; "Trazer N linhas" confirma. Cada um vira uma linha no fim do grupo "Caminho crítico da obra", com o indicador LB, "Não iniciar antes de" no início da Linha de Balanço, duração em dias úteis e o % medido, sem vínculo: ligue-as às sucessoras (por exemplo, à "Limpeza final") e, se cobrirem "Acabamentos internos dos apartamentos", apague a do modelo.
+Tudo entra no rascunho: nada é gravado antes de "Revisar e salvar". Trazer de novo atualiza só início, duração e % das linhas LB; nome, vínculos e as outras linhas ficam. A Linha de Balanço não mexe no Gantt sozinha: ele só muda quando você traz de novo.
+
+## Salvar e linha de base
+Como no médio prazo: a grade abre bloqueada ("Liberar edição"), toda edição fica em rascunho, "Revisar e salvar" pede o motivo e "Definir linha de base" congela as datas gravadas, só quando você clicar.
+
+## Quem vê e quem edita
+Quem tem a aba 1 (módulo "Longo prazo") vê o Gantt, sem precisar do médio prazo. Planejador, gestor e admin criam, alteram a entrega, trazem da Linha de Balanço, salvam e definem linha de base; o perfil de consulta só vê.
+
+## Onde ele não aparece
+Nesta etapa o Gantt de legalização fica só na aba 1. Não entra na lista de cronogramas do mês do médio prazo, em "Próximos 90 dias", em "Cobertura", na carga das equipes ("Equipes" e "Recursos"), na seção "Linha de base" do médio prazo, no quadro do médio prazo do dashboard nem nas respostas da assistente de IA, que não lê as tarefas dele. Ainda não há PDF do Gantt nem anexo do documento emitido (AVCB, Habite-se); para imprimir, exporte o .xml e abra no Project.`,
   },
 ];

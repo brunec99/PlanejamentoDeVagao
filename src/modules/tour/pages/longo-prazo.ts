@@ -1,13 +1,13 @@
 import type { TourStep } from '../tours';
 
-/** Tour da aba 1. A tela tem cinco visões (`?visao=`): os passos das visões fechadas são pulados
+/** Tour da aba 1. A tela tem seis visões (`?visao=`): os passos das visões fechadas são pulados
  * sozinhos, porque os alvos delas não estão na tela. Os passos seguem a ordem visual: primeiro o comum
- * a todas, depois Linha de Balanço, Fluxos de serviços e Medições (04/11/2026), o Planejador e, por
- * fim, "Vagões e restrições". */
+ * a todas, depois Linha de Balanço, Fluxos de serviços e Medições (04/11/2026), o Gantt de legalização
+ * (04/11/2026), o Planejador e, por fim, "Vagões e restrições". */
 export const steps: TourStep[] = [
   {
     title: 'Aba 1 · Cronograma de longo prazo',
-    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, "Vagões e restrições" e o Planejador anterior.',
+    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, o Gantt de legalização dos 12 meses até a entrega, "Vagões e restrições" e o Planejador anterior.',
   },
   {
     target: 'work-nav',
@@ -22,12 +22,12 @@ export const steps: TourStep[] = [
   {
     target: 'tab-ajuda',
     title: 'Como funciona a aba',
-    body: 'O ? ao lado da descrição explica como a Linha de Balanço, os fluxos, as medições, os vagões e o Planejador se encaixam.',
+    body: 'O ? ao lado da descrição explica como a Linha de Balanço, os fluxos, as medições, o Gantt de legalização, os vagões e o Planejador se encaixam.',
   },
   {
     target: 'longo-visoes',
     title: 'As visões da aba',
-    body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos. "Vagões e restrições" mostra as atividades dos vagões, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
+    body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos; o Gantt de legalização mostra os 12 meses até a entrega, com o caminho crítico da obra e a legalização. "Vagões e restrições" mostra as atividades dos vagões, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
   },
 
   // ─── Linha de Balanço ─────────────────────────────────────────────────────────
@@ -144,6 +144,33 @@ export const steps: TourStep[] = [
     target: 'longo-medicoes-salvar',
     title: 'Salvar medição',
     body: 'Fecha a rodada e preenche as datas reais. Fica desabilitado enquanto houver avanço sem foto.',
+  },
+
+  // ─── Gantt de legalização ─────────────────────────────────────────────────────
+  {
+    target: 'longo-legal-criar',
+    title: 'Criar Gantt de legalização',
+    body: 'Informe a entrega contratual (vira o prazo final do marco "Entrega das chaves") e escolha o modelo ATR, com o caminho crítico da obra e a legalização por órgão montados de trás para frente, ou em branco. A prévia mostra a entrega prevista antes de criar; com "Trazer também os serviços da Linha de Balanço" marcado, a lista abre logo em seguida. Um Gantt por obra.',
+  },
+  {
+    target: 'longo-legal-gantt',
+    title: 'Gantt de legalização',
+    body: 'O mesmo cronograma do médio prazo (tabela e Gantt do Project, predecessoras, restrições, linha de base, exportação .xml), com a janela de 12 meses até a entrega sombreada. Crítica é a tarefa com folga total ≤ 0; a coluna Folga total já vem à mostra. Tudo fica em rascunho até "Revisar e salvar", com motivo.',
+  },
+  {
+    target: 'longo-legal-resumo',
+    title: 'Resumo da entrega',
+    body: 'Entrega contratual, entrega prevista, tarefas críticas, marcos de legalização cumpridos e o próximo marco. Quando a entrega prevista passa do prazo, o aviso vermelho mostra a cadeia de tarefas que a empurra.',
+  },
+  {
+    target: 'longo-legal-entrega',
+    title: 'Alterar entrega',
+    body: 'Troca a data contratual e grava na hora: a janela de 12 meses anda junto, e o prazo final do marco da entrega passa para a data nova. As tarefas não mudam de data. Com rascunho aberto, salve ou descarte antes.',
+  },
+  {
+    target: 'longo-legal-trazer-lb',
+    title: 'Trazer da Linha de Balanço',
+    body: 'Uma linha por serviço da Linha de Balanço, com início do primeiro local, término do último e % medido, no grupo "Caminho crítico da obra" com o indicador LB. Entra no rascunho; trazer de novo atualiza só essas linhas.',
   },
 
   // ─── Planejador ───────────────────────────────────────────────────────────────

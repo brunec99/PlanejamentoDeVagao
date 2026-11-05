@@ -7,6 +7,7 @@ import { Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamen
 import { HelpNote } from '@/modules/layout/help-note';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import type { Activity } from '@/domain/entities';
+import { isMonthlyPlan } from '@/domain/legalization';
 import { rollUpPlan, teamLoad, weightedProgress } from '@/domain/rules';
 import { addDays, startOfWeek } from '@/domain/validation';
 import { formatDate, wagonLabel, workPath } from '@/shared/format';
@@ -73,9 +74,10 @@ export function LookAheadOverview({ workId, section }: { workId: string; section
     else fronts.set(nameKey(activity.name), { name: activity.name, rows: [activity] });
   }
   // A linha de base congelada é um retrato, não o plano em que se escreve: a conferência é contra
-  // o plano vivo, o mesmo que o cronograma abre por padrão.
+  // o plano vivo, o mesmo que o cronograma abre por padrão. O Gantt de legalização (04/11/2026,
+  // regra 17) fica só na aba 1 e não entra na cobertura.
   const livePlans = data.plans
-    .filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt)
+    .filter(p => p.workId === workId && !p.baselineOf && !p.frozenAt && isMonthlyPlan(p))
     .sort((a, b) => b.month.localeCompare(a.month));
   const plan = livePlans[0] ? (livePlans.find(p => p.id === planId) ?? livePlans[0]) : undefined;
   const planTasks = plan ? data.planTasks.filter(t => t.planId === plan.id).sort((a, b) => a.order - b.order) : [];

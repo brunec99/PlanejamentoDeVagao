@@ -77,6 +77,13 @@ export interface MediumTermPlan extends RecordBase {
   frozenAt?: string;
   createdBy: Id;
   copiedFromPlanId?: Id;
+  /** 04/11/2026: `legalizacao` é o Gantt de legalização da aba 1 (os 12 meses até a entrega), que
+   * usa o mesmo cronograma do médio prazo mas fica fora de tudo que é do plano do mês. Sem tipo, é
+   * o plano mensal. Os dois campos vivem no `schedule_meta`, sem migração; `month` guarda o mês em
+   * que a janela começa. */
+  kind?: 'legalizacao';
+  /** Entrega contratual (só no Gantt de legalização): o prazo final do marco "Entrega das chaves". */
+  deliveryDate?: LocalDate;
 }
 /** Linha do plano mensal. Escrita à mão; `activityId` liga ao longo prazo quando faz sentido,
  * sem obrigar — é o rastro entre o mês detalhado e o serviço macro. */
@@ -113,6 +120,9 @@ export interface PlanTask extends RecordBase {
   notes?: string;
   /** "Adicionar à Linha do Tempo" do Project: a tarefa aparece na faixa da linha do tempo acima do Gantt. */
   timeline?: boolean;
+  /** Serviço da Linha de Balanço de que a linha veio ("Trazer da Linha de Balanço", Gantt de
+   * legalização): trazer de novo atualiza início, duração e % desta linha. Indicador LB na tabela. */
+  lobServiceId?: Id;
   progress: number;
   order: number;
   level: number;

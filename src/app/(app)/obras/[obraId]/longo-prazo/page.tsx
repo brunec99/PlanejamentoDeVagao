@@ -10,6 +10,7 @@ import { LongTermPlanner } from '@/modules/longo-prazo/planner/long-term-planner
 import { LobView } from '@/modules/longo-prazo/lob/lob-view';
 import { FlowsView } from '@/modules/longo-prazo/lob/flows-view';
 import { MeasurementsView } from '@/modules/longo-prazo/lob/measurements-view';
+import { LegalizationView } from '@/modules/longo-prazo/legalizacao/legalization-view';
 import { TabHeader } from '@/modules/layout/tab-header';
 import { Callout } from '@/modules/planejamento/ui';
 import { workPath } from '@/shared/format';
@@ -18,11 +19,13 @@ export const metadata = { title: 'Cronograma de longo prazo' };
 /** Visões da aba 1 (04/11/2026, modelo aprovado, regra 1): a Linha de Balanço no estilo Prevision é
  * a padrão; Fluxos de serviços e Medições são as outras duas visões novas. "Vagões e restrições"
  * continua, e o Planejador (fluxograma) fica por último até a Linha de Balanço assumir "Gerar
- * vagões". O endereço guarda a visão em `?visao=`. */
+ * vagões". O endereço guarda a visão em `?visao=`. O Gantt de legalização (04/11/2026, segundo modelo
+ * aprovado, regra 1) entra depois de Medições: os 12 meses até a entrega, no cronograma do Project. */
 const VIEWS = [
   { id: 'lob', label: 'Linha de Balanço' },
   { id: 'fluxos', label: 'Fluxos de serviços' },
   { id: 'medicoes', label: 'Medições' },
+  { id: 'legalizacao', label: 'Gantt de legalização' },
   { id: 'prevision', label: 'Vagões e restrições' },
   { id: 'planejador', label: 'Planejador' },
 ] as const;
@@ -31,6 +34,8 @@ const DESCRIPTIONS: Record<View, string> = {
   lob: 'Linha de Balanço da obra: cada bloco é um serviço num local, com o que já foi medido. Arraste para reprogramar; as sucessoras acompanham.',
   fluxos: 'Fluxos de serviços: a sequência padrão da empresa, com duração por local e dependências, pronta para lançar em qualquer obra.',
   medicoes: 'Medições: o acumulado realizado de cada serviço em cada local, com foto do que avançou.',
+  legalizacao:
+    'Gantt de legalização: os 12 meses até a entrega, com o caminho crítico da obra e os documentos de cada órgão até as chaves.',
   prevision: 'As atividades dos vagões em Linha de Balanço, como base para identificar e tratar as restrições de cada frente.',
   planejador:
     'Fluxograma de serviços que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes (ferramenta anterior).',
@@ -62,6 +67,13 @@ export default async function Page({
       <p>
         <strong>Medições</strong> são rodadas com data: o acumulado realizado de cada bloco, com foto obrigatória de cada avanço. Elas
         preenchem os blocos, apontam os atrasos e alimentam o avanço físico.
+      </p>
+      <p>
+        <strong>Gantt de legalização</strong> é o planejamento dos 12 meses até a entrega: o caminho crítico da obra e a legalização por
+        órgão (Corpo de Bombeiros, concessionárias, Prefeitura, Receita Federal, cartório e condomínio) no mesmo cronograma do médio prazo,
+        com a entrega contratual como prazo final do marco "Entrega das chaves". Quando a rede passa da data, o marco fica vermelho e o
+        caminho crítico mostra o que empurra a entrega. Ele nasce do modelo ATR (ou em branco) e pode receber um resumo por serviço da Linha
+        de Balanço.
       </p>
       <p>
         <strong>Vagões e restrições</strong> mostra as atividades dos vagões só para leitura, para criar e acompanhar restrições. O{' '}
@@ -98,6 +110,7 @@ export default async function Page({
       {view === 'lob' && <LobView workId={obraId} />}
       {view === 'fluxos' && <FlowsView workId={obraId} />}
       {view === 'medicoes' && <MeasurementsView workId={obraId} />}
+      {view === 'legalizacao' && <LegalizationView workId={obraId} />}
       {view === 'planejador' && <LongTermPlanner workId={obraId} />}
       {view === 'prevision' && (
         <>

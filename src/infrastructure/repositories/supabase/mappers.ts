@@ -227,7 +227,14 @@ interface PlanDependencyRow extends DependencyRow {
   lag_business: boolean | null;
 }
 interface PlanRow {
-  schedule_meta?: { version?: number; calendar?: MediumTermPlan['calendar']; copiedFromPlanId?: string };
+  schedule_meta?: {
+    version?: number;
+    calendar?: MediumTermPlan['calendar'];
+    copiedFromPlanId?: string;
+    /** Gantt de legalização (04/11/2026): o tipo e a entrega contratual, sem coluna própria. */
+    kind?: MediumTermPlan['kind'];
+    deliveryDate?: string;
+  };
   id: string;
   created_at: string;
   updated_at: string;
@@ -251,6 +258,8 @@ interface PlanTaskRow {
     actualStart?: string;
     actualEnd?: string;
     timeline?: boolean;
+    /** Serviço da Linha de Balanço de que a linha veio (Gantt de legalização, 04/11/2026). */
+    lobServiceId?: string;
   };
   id: string;
   created_at: string;
@@ -805,7 +814,13 @@ export function planningDataToPayload(data: PlanningData) {
       successor_id: d.successorId,
     })),
     medium_term_plans: data.plans.map(p => ({
-      schedule_meta: { version: p.version, calendar: p.calendar, copiedFromPlanId: p.copiedFromPlanId },
+      schedule_meta: {
+        version: p.version,
+        calendar: p.calendar,
+        copiedFromPlanId: p.copiedFromPlanId,
+        kind: p.kind,
+        deliveryDate: p.deliveryDate,
+      },
       id: p.id,
       created_at: p.createdAt,
       updated_at: p.updatedAt,
@@ -826,6 +841,7 @@ export function planningDataToPayload(data: PlanningData) {
         actualStart: t.actualStart,
         actualEnd: t.actualEnd,
         timeline: t.timeline || undefined,
+        lobServiceId: t.lobServiceId,
       },
       id: t.id,
       created_at: t.createdAt,

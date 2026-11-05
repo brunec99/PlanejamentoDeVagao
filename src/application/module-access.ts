@@ -77,7 +77,21 @@ const SECTION_APIS: Record<string, readonly string[]> = {
 /** Comandos de cada módulo em desenvolvimento. Comando sem módulo aqui fica só com quem desenvolve;
  * os papéis e as obras continuam conferidos em `applyCommand`. */
 const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
-  'longo-prazo': ['create_restriction', 'resolve_restriction', 'move_restriction', 'create_baseline'],
+  // 04/11/2026: o Gantt de legalização da aba 1 usa o cronograma do médio prazo (regra 4: quem vê a
+  // aba 1 vê e edita o Gantt), então leva junto a gravação, a linha de base e a exclusão do cronograma.
+  // Esses três comandos não sabem distinguir o tipo do plano antes de ler o banco: quem tem só a aba 1
+  // poderia, por uma chamada feita à mão, gravar um plano do mês. Aceito por enquanto (mesma equipe).
+  'longo-prazo': [
+    'create_restriction',
+    'resolve_restriction',
+    'move_restriction',
+    'create_baseline',
+    'create_legalization_plan',
+    'update_legalization_plan',
+    'save_plan_revision',
+    'freeze_plan_baseline',
+    'delete_plan',
+  ],
   vagoes: [
     'create_sequence',
     'create_wagon',

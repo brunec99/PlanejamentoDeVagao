@@ -137,8 +137,8 @@ test('contagem de usos distingue prazo, atividades e referências históricas', 
   run(data, { type: 'freeze_plan_baseline', planId, name: 'Aprovado' });
   run(data, { type: 'create_commitment', workId: 'obra-1', name: 'Pintura', weekStart: '2026-09-14', responsibleId: 'user-1', teamId });
   run(data, { type: 'assign_team', activityId: 'a1', teamId });
-  assert.deepEqual(teamUsage(data, teamId), { medium: 1, baselines: 1, short: 1, activities: 1, total: 4 });
-  assert.deepEqual(teamUsage(data, 'missing'), { medium: 0, baselines: 0, short: 0, activities: 0, total: 0 });
+  assert.deepEqual(teamUsage(data, teamId), { medium: 1, baselines: 1, legalization: 0, short: 1, activities: 1, total: 4 });
+  assert.deepEqual(teamUsage(data, 'missing'), { medium: 0, baselines: 0, legalization: 0, short: 0, activities: 0, total: 0 });
   assert.equal(teamLabel({ company: 'Alfa', name: 'Pintura' }), 'Alfa · Pintura');
   assert.equal(teamLabel({ company: '', name: 'Pintura' }), 'Pintura');
 });

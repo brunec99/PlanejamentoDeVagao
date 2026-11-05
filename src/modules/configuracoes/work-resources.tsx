@@ -489,6 +489,7 @@ function TeamRow({
         </Link>
         {usage.activities > 0 && <span className="text-slate-500">{usage.activities} em atividades</span>}
         {usage.baselines > 0 && <span className="text-slate-500">{usage.baselines} em linhas de base</span>}
+        {usage.legalization > 0 && <span className="text-slate-500">{usage.legalization} no Gantt de legalização</span>}
       </div>
       {!readOnly && (
         <div data-tour="obra-config-team-actions" className="flex items-center gap-1">

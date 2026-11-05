@@ -1,6 +1,7 @@
 import type { PlanningData, PlanTask, Team, User, WeeklyCommitment } from '../../domain/entities';
 import { NON_FULFILLMENT_CAUSES, type NonFulfillmentCause } from '../../domain/entities';
 import { commitmentCompanyOf, nameKey, type BriefingLevel } from '../../domain/agent-briefing';
+import { isMonthlyPlan } from '../../domain/legalization';
 import { daysBetween, floorSchedule, latestPercents, type LongTermPlanDocument } from '../../domain/long-term-plan';
 import { ppc, rollUpPlan, targetPercent } from '../../domain/rules';
 import { addDays, startOfWeek } from '../../domain/validation';
@@ -246,8 +247,9 @@ function listWeek(input: Record<string, unknown>, ctx: ToolContext): ToolOutcome
 }
 
 function livePlan(ctx: ToolContext) {
+  // Gantt de legalização (04/11/2026, regra 17): a Claudia não lista nem propõe tarefas dele.
   const plan = ctx.data.plans
-    .filter(p => p.workId === ctx.workId && !p.baselineOf && !p.frozenAt)
+    .filter(p => p.workId === ctx.workId && !p.baselineOf && !p.frozenAt && isMonthlyPlan(p))
     .sort((a, b) => b.month.localeCompare(a.month))[0];
   if (!plan) return undefined;
   const tasks = ctx.data.planTasks.filter(t => t.planId === plan.id).sort((a, b) => a.order - b.order);

@@ -1,4 +1,5 @@
 import type { Id, LocalDate, MediumTermPlan, PlanningData, PlanTask } from '@/domain/entities';
+import { isMonthlyPlan } from '@/domain/legalization';
 import { DEFAULT_CALENDAR, analyzeSchedule, isMilestone, type ScheduleAnalysis } from '@/domain/plan-schedule';
 import { rollUpPlan } from '@/domain/rules';
 import { baselineVariance, weeklyTeamLoad } from '@/domain/schedule-analysis';
@@ -77,9 +78,10 @@ const byFrozenDesc = (a: MediumTermPlan, b: MediumTermPlan) => (b.frozenAt ?? b.
 const isLive = (plan: MediumTermPlan) => !plan.baselineOf && !plan.frozenAt;
 
 /** O plano vivo do mês da data; sem ele, o vivo mais recente até aquele mês; sem nenhum, o vivo mais
- * recente. Linha de base e plano congelado nunca entram: retrato não é o plano em que se escreve. */
+ * recente. Linha de base e plano congelado nunca entram: retrato não é o plano em que se escreve. O Gantt
+ * de legalização (04/11/2026, regra 17) também não: ele fica só na aba 1. */
 export function pickPlan(plans: MediumTermPlan[], workId: Id, date: LocalDate): MediumTermPlan | undefined {
-  const live = plans.filter(p => p.workId === workId && isLive(p)).sort((a, b) => b.month.localeCompare(a.month));
+  const live = plans.filter(p => p.workId === workId && isLive(p) && isMonthlyPlan(p)).sort((a, b) => b.month.localeCompare(a.month));
   const month = monthOf(date);
   return live.find(p => p.month === month) ?? live.find(p => p.month <= month) ?? live[0];
 }

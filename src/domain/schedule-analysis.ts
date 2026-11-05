@@ -1,4 +1,5 @@
 import type { Id, LocalDate, PlanningData, PlanTask, Team } from './entities';
+import { isMonthlyPlan } from './legalization';
 import { DEFAULT_CALENDAR, countedDays, type WorkCalendar } from './plan-schedule';
 import { rollUpPlan } from './rules';
 import { addDays, startOfWeek, validatePeriod } from './validation';
@@ -63,7 +64,8 @@ export function weeklyTeamLoad(data: PlanningData, workId: Id, from: LocalDate, 
       teamId: a.teamId,
       source: `Vagão ${String(wagons.get(a.wagonId)!.number).padStart(2, '0')}`,
     }));
-  for (const plan of data.plans.filter(p => p.workId === workId && !p.frozenAt && !p.baselineOf)) {
+  // Gantt de legalização (04/11/2026, regra 17): fica só na aba 1, fora da carga de equipe.
+  for (const plan of data.plans.filter(p => p.workId === workId && !p.frozenAt && !p.baselineOf && isMonthlyPlan(p))) {
     const tasks = data.planTasks.filter(t => t.planId === plan.id);
     const rollUp = rollUpPlan(tasks);
     for (const task of tasks)

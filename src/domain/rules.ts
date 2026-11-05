@@ -15,6 +15,7 @@ import type {
   WagonStatus,
   WeeklyCommitment,
 } from './entities';
+import { isLegalizationPlan } from './legalization';
 import { addBusinessDays, addDays, periodDays } from './validation';
 
 /** O Admin herda tudo o que o Gestor pode — cadastrar obra, reabrir vagão terminal e liberar
@@ -70,9 +71,12 @@ export function teamLoad(teamId: string, start: LocalDate, end: LocalDate, data:
   // linha do plano do mês. Contar só o cronograma dizia "dentro da capacidade" com o mês
   // estourado, justamente para quem planeja na grade nova.
   const activities = data.activities.filter(a => a.teamId === teamId && a.plannedStart <= end && a.plannedEnd >= start);
-  const tasks = data.planTasks.filter(
-    t => t.teamId === teamId && t.plannedStart <= end && t.plannedEnd >= start && !data.plans.find(p => p.id === t.planId)?.frozenAt,
-  );
+  // Gantt de legalização (04/11/2026, regra 17): fica só na aba 1 e não é carga do plano do mês.
+  const tasks = data.planTasks.filter(t => {
+    if (t.teamId !== teamId || t.plannedStart > end || t.plannedEnd < start) return false;
+    const plan = data.plans.find(p => p.id === t.planId);
+    return !plan?.frozenAt && !isLegalizationPlan(plan);
+  });
   const assigned = activities.length + tasks.length;
   return {
     assigned,
