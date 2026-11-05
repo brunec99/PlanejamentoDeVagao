@@ -354,8 +354,9 @@ Embaixo da lista, **"Alocar recursos: Curto prazo"** leva à planilha onde as eq
   },
   {
     id: 'obra-configuracoes-semana-local',
-    title: 'Configurações da obra: semana 1 e local da obra',
-    summary: 'Definir a semana 1 que numera o curto prazo (por número ou data) e o local da obra que traz o tempo aos PDFs.',
+    title: 'Configurações da obra: semana 1, local da obra e locais da obra',
+    summary:
+      'Semana 1 que numera o curto prazo, local da obra (tempo nos PDFs) e locais da obra: torres e pavimentos da coluna Local do curto prazo.',
     keywords: [
       'semana 1',
       'numeração das semanas',
@@ -370,6 +371,12 @@ Embaixo da lista, **"Alocar recursos: Curto prazo"** leva à planilha onde as eq
       'tempo no pdf',
       'ver o tempo desta semana',
       'remover local',
+      'locais da obra',
+      'cadastrar locais',
+      'onde cadastro os locais',
+      'torre',
+      'pavimento',
+      'coluna local',
     ],
     screen: 'configuracoes',
     body: `## Numeração das semanas (semana 1)
@@ -407,6 +414,24 @@ Quem não é Consulta vê o campo **"Buscar o local"** (ou "Trocar o local"). Di
 ### Ver o tempo desta semana
 
 Com local salvo, o botão **"Ver o tempo desta semana"** (disponível também para Consulta) mostra a semana atual dia a dia: "segunda · Chuva · 18/27 °C · 12 mm". Os dias já medidos aparecem com "(observado)". "Previsão do tempo indisponível no momento." indica falha passageira do serviço de clima.
+
+## Locais da obra
+
+Não confundir com o "Local da obra" acima (a cidade). Aqui ficam os **locais dentro da obra**: torres, pavimentos e áreas ("Térreo", "5º pavimento", "Cobertura"), de cima para baixo como o prédio. É uma lista só por obra: ela dá as opções da coluna **"Local"** do curto prazo (e o filtro de local do PDF) e o eixo vertical da **Linha de Balanço** da aba 1, que abre a mesma lista em "Locais da obra".
+
+O painel mostra os locais do topo para a base e a contagem, ou "Nenhum local cadastrado. Sem locais, a coluna Local do curto prazo fica travada."
+
+### Cadastrar, renomear, ordenar e excluir
+
+Quem não é Consulta clica em **"Cadastrar locais"** (ou "Cadastrar e ordenar locais", quando já há algum). Abre a gaveta "Locais da obra":
+
+- **Cadastrar**: em "Cadastrar locais", um nome por linha, **da base ao topo**, e o botão "Cadastrar N locais". Os novos entram acima dos existentes. Nome repetido é recusado ("Já existe: …"); a obra aceita até 300 locais.
+- **"Usar os locais dos vagões"** preenche a caixa com os locais do planejamento dos vagões, em ordem de altura, pulando os que já existem.
+- **Renomear**: edite o nome na própria lista; grava ao sair do campo. O nome novo aparece em todas as linhas do curto prazo.
+- **Ordenar**: as setas sobem e descem o local.
+- **Excluir**: a lixeira, depois de confirmar. As linhas do curto prazo que usavam o local ficam sem local. Local com blocos na Linha de Balanço não pode ser excluído (o aviso diz quantos blocos).
+
+Consulta vê a lista, mas não edita ("Seu perfil permite consulta aos locais.").
 
 ## Quem pode alterar e avisos
 

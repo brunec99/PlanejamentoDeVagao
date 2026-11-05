@@ -404,7 +404,7 @@ Início e duração (em dias úteis) editáveis, término calculado, equipe e un
 
 ## Locais, linhas de base e outras ações
 - "Lançar fluxo" abre o lançamento de um fluxo de serviços (veja "Lançar um fluxo"). Sem locais cadastrados, a tela pede para cadastrá-los primeiro.
-- No menu "⋯": "Locais da obra" (cadastrar em lote, um nome por linha, renomear, reordenar com as setas e excluir; "Usar os locais da obra" traz os locais já importados do Prevision em ordem de altura; um local com blocos não pode ser excluído), "Importar do Planejador" (converte o plano do Planejador em blocos: cada pavimento vira um local e cada serviço × pavimento um bloco; só funciona com a Linha de Balanço ainda sem blocos) e "Exportar CSV".
+- No menu "⋯": "Locais da obra" (cadastrar em lote, um nome por linha, renomear, reordenar com as setas e excluir; "Usar os locais dos vagões" traz os locais já importados do Prevision em ordem de altura; um local com blocos não pode ser excluído; é a mesma lista da seção "Locais da obra" das Configurações da obra e da coluna Local do curto prazo), "Importar do Planejador" (converte o plano do Planejador em blocos: cada pavimento vira um local e cada serviço × pavimento um bloco; só funciona com a Linha de Balanço ainda sem blocos) e "Exportar CSV".
 - "Salvar linha de base" abre a gaveta de linhas de base: criar com nome, "Comparar" (sobrepõe no gráfico), "Restaurar" (volta as datas dos blocos para as da foto) e "Excluir". Antes de cada lançamento de fluxo o sistema grava sozinho a linha de base "Antes do lançamento <data>".
 - "Nova medição" leva à visão "Medições".
 - A tela avisa quando o banco ainda não tem a migração da Linha de Balanço ("indisponível"): avise o administrador.`,

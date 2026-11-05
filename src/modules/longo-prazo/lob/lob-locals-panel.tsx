@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, Building2, Trash2 } from 'lucide-react';
-import { LOB_LIMITS, normalizeName, type LobCommand, type LobData } from '@/domain/lob';
+import { LOB_LIMITS, normalizeName, type LobCommand, type LobLocal } from '@/domain/lob';
 import { Drawer } from '@/modules/layout/drawer';
 import { useConfirm } from '@/modules/layout/confirm';
 import { useToast } from '@/modules/layout/toast';
@@ -9,10 +9,12 @@ import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { byHeight } from '@/modules/longo-prazo/line-of-balance';
 import { CommitField } from './lob-activity-panel';
 
-/** Gaveta "Locais da obra" da Linha de Balanço: o cadastro próprio dos locais (regra 13), listado
- * como um prédio, de cima para baixo, com o último `orderIndex` no topo. Renomear é inline, a ordem
- * muda pelas setas e o cadastro em lote aceita um nome por linha; "Usar os locais da obra" traz os
- * locais do planejamento (vagões) ordenados por altura, pulando os que já existem. */
+/** Gaveta "Locais da obra": o cadastro próprio dos locais (regra 13), listado como um prédio, de cima
+ * para baixo, com o último `orderIndex` no topo. Renomear é inline, a ordem muda pelas setas e o
+ * cadastro em lote aceita um nome por linha; "Usar os locais dos vagões" traz os locais do
+ * planejamento (vagões) ordenados por altura, pulando os que já existem. Abre na Linha de Balanço
+ * (aba 1) e nas Configurações da obra (05/11/2026), cada uma com a sua rota: a lista é a mesma e
+ * também alimenta a coluna Local do curto prazo. */
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const errorMessage = (error: unknown) => (error instanceof Error && error.message ? error.message : 'Falha na comunicação com o servidor.');
@@ -21,13 +23,16 @@ const drawerFooter = 'sticky bottom-0 -mx-5 -mb-4 mt-6 border-t border-slate-100
 
 export function LobLocalsPanel({
   workId,
-  data,
+  locals,
+  blocksOf,
   readOnly,
   onExecute,
   onClose,
 }: {
   workId: string;
-  data: LobData;
+  locals: LobLocal[];
+  /** Quantos blocos da Linha de Balanço usam o local: com algum, a exclusão é recusada. */
+  blocksOf: (localId: string) => number;
   readOnly: boolean;
   onExecute: (command: LobCommand) => Promise<unknown>;
   onClose: () => void;
@@ -39,8 +44,8 @@ export function LobLocalsPanel({
   const [batch, setBatch] = useState('');
 
   // Do topo para a base, como se olha um prédio.
-  const ordered = [...data.locals].sort((a, b) => b.orderIndex - a.orderIndex);
-  const existing = new Set(data.locals.map(l => normalizeName(l.name)));
+  const ordered = [...locals].sort((a, b) => b.orderIndex - a.orderIndex);
+  const existing = new Set(locals.map(l => normalizeName(l.name)));
   const ready = context.state === 'ready' ? context : undefined;
   const planningLocals = ready
     ? ready.planning.data.locations
@@ -58,7 +63,7 @@ export function LobLocalsPanel({
     ),
   ];
   const duplicates = names.filter(n => existing.has(normalizeName(n)));
-  const remaining = LOB_LIMITS.locals - data.locals.length;
+  const remaining = LOB_LIMITS.locals - locals.length;
 
   const send = async (command: LobCommand) => {
     setBusy(true);
@@ -81,12 +86,12 @@ export function LobLocalsPanel({
     send({ type: 'reorder_locals', workId, localIds: next.reverse().map(l => l.id) });
   };
   const remove = async (id: string, name: string) => {
-    const blocks = data.activities.filter(a => a.localId === id).length;
+    const blocks = blocksOf(id);
     const ok = await confirm({
       title: `Excluir o local "${name}"?`,
       description: blocks
         ? `Este local tem ${plural(blocks, 'bloco', 'blocos')}: a exclusão será recusada até eles saírem.`
-        : 'O local sai da Linha de Balanço. Os locais dos vagões não mudam.',
+        : 'O local sai da lista da obra, e as linhas do curto prazo que o usavam ficam sem local. Os locais dos vagões não mudam.',
       confirmLabel: 'Excluir',
       tone: 'danger',
     });
@@ -101,10 +106,16 @@ export function LobLocalsPanel({
   };
 
   return (
-    <Drawer open onClose={onClose} title="Locais da obra" description="Linha de Balanço · de cima para baixo, como o prédio">
+    <Drawer
+      open
+      onClose={onClose}
+      title="Locais da obra"
+      description="De cima para baixo, como o prédio · valem na Linha de Balanço e no curto prazo"
+    >
       {!ordered.length && (
         <p className="py-6 text-center text-sm text-slate-500">
-          Nenhum local ainda. Cadastre abaixo, um por linha, começando pela base{planningLocals.length ? ', ou use os locais da obra' : ''}.
+          Nenhum local ainda. Cadastre abaixo, um por linha, começando pela base
+          {planningLocals.length ? ', ou use os locais dos vagões' : ''}.
         </p>
       )}
       <ol className="space-y-1.5" aria-label="Locais, do topo para a base">
@@ -192,7 +203,7 @@ export function LobLocalsPanel({
               }
               onClick={() => setBatch(current => [...current.split(/\r?\n/).filter(l => l.trim()), ...fresh].join('\n'))}
             >
-              <Building2 size={13} aria-hidden /> Usar os locais da obra
+              <Building2 size={13} aria-hidden /> Usar os locais dos vagões
             </button>
           </div>
           <textarea

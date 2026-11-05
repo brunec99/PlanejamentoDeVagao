@@ -984,7 +984,7 @@ Pedido do usuário: "no curto prazo, adicione um campo de local (opcional) para 
 
 ### De onde vem a lista
 
-Dos **"Locais da obra" da Linha de Balanço** (aba 1, gaveta "Locais da obra", tabela `lob_locals` da 0038), de cima para baixo como na gaveta. É a lista do longo prazo atual; a gaveta também traz os locais do planejamento dos vagões ("Usar os locais da obra"). A linha guarda o **id** do local (`weekly_commitments.local_id`, migração **0039, criada e não aplicada**): renomear o local muda o nome em todas as linhas, e apagar o local deixa a linha sem local (`on delete set null`). Como `/api/lob` é restrita ao módulo do longo prazo e o curto prazo é aberto a todos, a lista sai de uma rota própria, `GET /api/curto-prazo/locais?workId=` (só id, nome e ordem, para quem tem a obra), lida pelo hook `src/modules/curto-prazo/use-work-locals.ts`. Obra sem local cadastrado: a célula fica travada com a dica "Cadastre os locais na aba 1 (Linha de Balanço → Locais da obra)".
+Dos **"Locais da obra" da Linha de Balanço** (aba 1, gaveta "Locais da obra", tabela `lob_locals` da 0038), de cima para baixo como na gaveta. É a lista do longo prazo atual; a gaveta também traz os locais do planejamento dos vagões ("Usar os locais da obra"). A linha guarda o **id** do local (`weekly_commitments.local_id`, migração **0039, criada e não aplicada**): renomear o local muda o nome em todas as linhas, e apagar o local deixa a linha sem local (`on delete set null`). Como `/api/lob` é restrita ao módulo do longo prazo e o curto prazo é aberto a todos, a lista sai de uma rota própria, `GET /api/curto-prazo/locais?workId=` (só id, nome e ordem, para quem tem a obra), lida pelo hook `src/modules/curto-prazo/use-work-locals.ts`. Obra sem local cadastrado: a célula fica travada com a dica "Cadastre os locais em Configurações da obra (Locais da obra)" (até 05/11/2026 a dica mandava para a aba 1; ver a seção seguinte).
 
 ### O que mudou
 
@@ -1003,3 +1003,27 @@ Testes novos: `tests/commitment-local.test.ts` (11), `tests/commitment-local-com
 - **Aplicar a 0039 no takt-hub antes de publicar o código.** Sem ela o código funciona, mas a coluna Local não grava.
 - Comando em lote para o local (a alça manda uma gravação por linha); a assistente ainda não lê o local; quem tinha larguras de coluna salvas vê a planilha 128 px mais larga até "Ajustar à tela"; o nome do arquivo do PDF não cita o recorte por local.
 
+## Configurações da obra: cadastro dos locais da obra (05/11/2026)
+
+**Pedido do usuário:** "onde fica o campo para inserir os locais? deveria estar em configuração da obra". Até aqui os locais da coluna Local do curto prazo só se cadastravam na aba 1 (Linha de Balanço → "⋯" → "Locais da obra"), que é restrita ao módulo do longo prazo: quem só tem o curto prazo via a coluna travada e não tinha onde cadastrar.
+
+### O que mudou
+
+- **Seção "Locais da obra"** nas Configurações da obra (`src/modules/configuracoes/work-locals.tsx`), logo abaixo de "Local da obra" (a cidade, que é outra coisa). Mostra os locais do topo para a base e a contagem, ou "Nenhum local cadastrado. Sem locais, a coluna Local do curto prazo fica travada.". O botão "Cadastrar locais" ("Cadastrar e ordenar locais" quando já há algum) abre **a mesma gaveta da Linha de Balanço** (`lob-locals-panel.tsx`, carregada só ao abrir): cadastro em lote da base ao topo, renomear na lista, setas para a ordem, lixeira e "Usar os locais dos vagões". Consulta vê a lista sem o botão.
+- **A lista é a mesma** (`lob_locals`, migração 0038, já aplicada): o que se cadastra aqui aparece na Linha de Balanço e na coluna Local do curto prazo, e vice-versa. Nada de banco mudou; **nenhuma migração nova**.
+- **Rota própria, aberta:** `GET/POST /api/work-locals` (`src/app/api/work-locals/route.ts`). Lê quem tem a obra; grava quem tem a obra e não é Consulta. Aceita só os quatro comandos do cadastro (`create_locals`, `rename_local`, `reorder_locals`, `delete_local`, filtrados por `parseWorkLocalCommand` em `src/application/use-cases/work-locals.ts`) e aplica as regras de sempre (`planLobCommand`): nome repetido recusado, limite de 300, local com blocos na Linha de Balanço não sai. `/api/lob/commands` continua restrita ao longo prazo.
+- **Gaveta:** passou a receber `locals` e `blocksOf` em vez da Linha de Balanço inteira, para servir às duas telas. Textos: descrição "De cima para baixo, como o prédio · valem na Linha de Balanço e no curto prazo"; a confirmação de exclusão sem blocos avisa que as linhas do curto prazo que usavam o local ficam sem local; o botão "Usar os locais da obra" virou **"Usar os locais dos vagões"** (o título da gaveta já é "Locais da obra").
+- **Curto prazo:** a dica da coluna sem locais passou a "Cadastre os locais em Configurações da obra (Locais da obra)".
+- **Manual da Claudia** (seção "Configurações da obra: semana 1, local da obra e locais da obra", com palavras-chave como "onde cadastro os locais"; curto prazo e longo prazo ajustados) e **tour** das Configurações da obra (passos "Locais da obra" e "Cadastrar e ordenar locais").
+- Decisões tomadas sem perguntar, por seguirem o padrão das outras seções da página: quem edita é quem edita o resto das Configurações da obra (todos menos Consulta); a gaveta da aba 1 continua lá. Não houve modelo de UX antes: a seção reaproveita a gaveta que já existia.
+
+### Validação (05/11/2026)
+
+- `tests/work-locals.test.ts` (4 testes: os quatro comandos aceitos, os demais e entrada inválida recusados, a lista de baixo para cima com os blocos, e as regras da Linha de Balanço valendo pela rota nova); manual e tour passam nos testes deles.
+- **Navegador:** `next dev` local com o acesso sem login apontado para um Supabase falso (só o perfil) e `/api/planning` e `/api/work-locals` respondidas no Playwright pelas regras reais (`parseWorkLocalCommand`, `planLobCommand`, `workLocalsView`), fora do repositório. Planejador em 1440 px: seção com 3 locais, gaveta aberta, cadastro de "Cobertura" (entra no topo), renomear "2º pavimento", descer "Cobertura", excluir "Térreo" com bloco (confirmação avisa e o servidor recusa: "O local "Térreo" tem 1 bloco…"), excluir "1º pavimento" (confirmação cita o curto prazo); a seção acompanha cada passo. Consulta: lista sem botão, com "Seu perfil permite consulta aos locais.". Obra sem locais: texto do vazio e "Cadastrar locais". Celular em 400 px sem rolagem horizontal; nenhum erro de console.
+- **Não foi aberta no app logado** nem contra o banco real.
+
+### Pendências
+
+- Conferir logado, numa obra real: cadastrar os locais nas Configurações da obra e escolher um na coluna Local do curto prazo.
+- A terminalidade tem o seu próprio cadastro de "Pavimentos e unidades" na mesma página; as duas listas são independentes. Unificar, se fizer sentido, é outra decisão.

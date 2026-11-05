@@ -125,13 +125,13 @@ O botão "Inserir linha acima" (ícone de linhas com seta, ao lado do ✕, no fi
 
 ## O local da linha
 
-"Local" (ao lado de "Atividade") diz onde a atividade acontece. É opcional e vem da mesma lista do longo prazo: os locais cadastrados na aba 1, em Linha de Balanço → "Locais da obra", de cima para baixo. A lista não aceita digitar um local novo; para incluir, renomear ou excluir um local, use a aba 1. Linha sem local mostra a célula vazia; para tirar o local de uma linha, escolha "(sem local)" na lista.
+"Local" (ao lado de "Atividade") diz onde a atividade acontece. É opcional e vem da mesma lista do longo prazo: os "Locais da obra", de cima para baixo, cadastrados em **Configurações da obra** (seção "Locais da obra", aberta a todos que têm a obra, menos Consulta) ou na aba 1, em Linha de Balanço → "Locais da obra". A lista não aceita digitar um local novo; para incluir, renomear ou excluir um local, use as Configurações da obra. Linha sem local mostra a célula vazia; para tirar o local de uma linha, escolha "(sem local)" na lista.
 
 - **Para que serve**: filtrar a planilha pelo funil da coluna "Local" e gerar o PDF só de alguns locais (veja a seção dos PDFs).
-- **Obra sem locais**: a lista fica travada e o cabeçalho da coluna explica: "Cadastre os locais na aba 1 (Linha de Balanço → Locais da obra)". No celular, o campo "Local" só aparece quando a obra tem locais.
+- **Obra sem locais**: a lista fica travada e o cabeçalho da coluna explica: "Cadastre os locais em Configurações da obra (Locais da obra)". No celular, o campo "Local" só aparece quando a obra tem locais.
 - **Copiar para as vizinhas**: o quadradinho no canto da célula "Local" é a alça do Sheets: arraste para baixo ou para cima e o local passa para as linhas por onde passou. Linhas que não podem ser editadas (semana encerrada para quem não é administrador, semana anterior nas vizinhas) ficam de fora, com aviso.
 - **O local acompanha a linha**: "Levar ›" cria a linha da semana seguinte com o mesmo local; trocar a "Semana" da linha mantém o local; o "Desfazer" devolve o local anterior (inclusive "sem local") e a exclusão desfeita recria a linha com o local.
-- **Local excluído na aba 1**: as linhas que o usavam ficam sem local. Renomear um local muda o nome em todas as linhas.
+- **Local excluído** (nas Configurações da obra ou na aba 1): as linhas que o usavam ficam sem local. Renomear um local muda o nome em todas as linhas.
 - Segue a regra das outras células da linha: semana encerrada, só administradores; Consulta só lê.
 
 ## Início, Término e o calendário

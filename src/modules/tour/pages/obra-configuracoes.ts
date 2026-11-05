@@ -3,7 +3,7 @@ import type { TourStep } from '../tours';
 export const steps: TourStep[] = [
   {
     title: 'Configurações da obra',
-    body: 'Os cadastros desta obra: empreiteiros e equipes, numeração das semanas, local da obra e as listas da terminalidade. Quem tem perfil de consulta vê tudo, mas não edita.',
+    body: 'Os cadastros desta obra: empreiteiros e equipes, numeração das semanas, local da obra, locais da obra (torres e pavimentos) e as listas da terminalidade. Quem tem perfil de consulta vê tudo, mas não edita.',
   },
   {
     target: 'obra-config-ajuda',
@@ -99,6 +99,16 @@ export const steps: TourStep[] = [
     target: 'obra-config-weather',
     title: 'Ver o tempo desta semana',
     body: 'Consulta o tempo da semana atual no local salvo, dia a dia: condição, mínima e máxima, e chuva. Os dias já medidos aparecem marcados como observados.',
+  },
+  {
+    target: 'obra-config-locais',
+    title: 'Locais da obra',
+    body: 'Torres, pavimentos e áreas, de cima para baixo. É a lista da coluna Local do curto prazo (e do filtro de local do PDF) e do eixo da Linha de Balanço da aba 1: uma lista só por obra.',
+  },
+  {
+    target: 'obra-config-locais-editar',
+    title: 'Cadastrar e ordenar locais',
+    body: 'Abre a gaveta dos locais: um nome por linha, da base ao topo; setas para mudar a ordem; renomear na própria lista; lixeira para excluir. Excluir deixa sem local as linhas do curto prazo que o usavam.',
   },
   {
     target: 'obra-config-terminality',

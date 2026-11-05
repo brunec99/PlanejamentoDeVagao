@@ -847,7 +847,14 @@ function LobViewInner({ workId }: { workId: string }) {
       </div>
 
       {panel === 'locals' && (
-        <LobLocalsPanel workId={workId} data={data} readOnly={readOnly} onExecute={run} onClose={() => setPanel(undefined)} />
+        <LobLocalsPanel
+          workId={workId}
+          locals={data.locals}
+          blocksOf={id => data.activities.filter(a => a.localId === id).length}
+          readOnly={readOnly}
+          onExecute={run}
+          onClose={() => setPanel(undefined)}
+        />
       )}
       {panel === 'baselines' && (
         <LobBaselinesPanel

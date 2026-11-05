@@ -11,7 +11,7 @@ import { addDays } from '@/domain/validation';
 export const NO_LOCAL = '';
 export const NO_LOCAL_LABEL = '(sem local)';
 /** O que a coluna diz quando a obra ainda não tem locais. */
-export const LOCALS_HINT = 'Cadastre os locais na aba 1 (Linha de Balanço → Locais da obra)';
+export const LOCALS_HINT = 'Cadastre os locais em Configurações da obra (Locais da obra)';
 
 export type LocalOption = { id: string; name: string };
 
