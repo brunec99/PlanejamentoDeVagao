@@ -887,6 +887,31 @@ Artigos do suporte (suporteprevision.freshdesk.com): "Criando um Macrofluxo", "C
 - O dashboard da aba 0 (outra sessão, também só no disco) lê o longo prazo do Planejador (`/api/long-term-plan`), não da Linha de Balanço: quando a Linha de Balanço virar a fonte, o quadro de longo prazo do dashboard deve passar a ler `/api/lob` (blocos, medições e avanço físico).
 - Lacunas conhecidas: corrigir para cima um valor da última medição já salva não exige foto no servidor (a tela marca em âmbar); o motivo do atraso é pedido pela tela, mas o servidor não o exige; não há limpeza periódica de fotos órfãs no bucket (mesma pendência da Terminalidade); o takt padrão do diálogo de lançamento é 10 dias úteis, sem ler a sequência de vagões.
 
+## Médio prazo: tabela do cronograma com altura de tela no notebook (04/11/2026)
+
+**Pedido do usuário:** "o campo de adição de informações no médio prazo está muito pequeno", com print da Essenza num notebook: a tabela e o Gantt mostravam cinco linhas.
+
+### Causa
+
+A área de trabalho (barras, Linha do Tempo, visão e barra de status) era medida do lugar dela até o pé da janela, para a barra de status ficar à vista sem rolar (correção "barra de status abaixo da dobra", 21/10). Com o cabeçalho da aba acima, numa janela de cerca de 800 px de altura, o que sobrava para a visão era menor que o piso `MIN_VIEW` (200 px), e a visão ficava presa nele: cinco linhas e meia.
+
+### O que mudou (`schedule-sheet.tsx`)
+
+- Se, medida do lugar dela, a área de trabalho deixa a visão com pelo menos `COMFORT_VIEW` (360 px, cerca de 11 linhas), nada muda: monitor grande continua com a barra de status à vista sem rolar.
+- Abaixo disso, a área de trabalho passa a ter a altura de uma tela inteira, descontada a barra fixa da trilha (medida: elementos `sticky` filhos do contêiner que rola). Rolando a página até o cronograma, a tabela ocupa todo o espaço livre e a barra de status fica no pé da tela.
+- `MIN_VIEW` continua valendo para janela baixa demais até para isso.
+
+### Validação (04/11/2026)
+
+- Typecheck, ESLint (sem aviso novo; os dois avisos do arquivo já existiam) e Prettier no arquivo.
+- A regra rodou em Chromium headless numa maquete do layout (barra fixa da trilha, cabeçalho da aba, área de trabalho com as faixas do print), fora do repositório: em 1470×800 a visão foi de 200 px para 357 px (de ~5 para ~11 linhas) e a área de trabalho cabe na tela depois de rolar; em 1920×1000, de 318 para 557 px; em 2560×1360 ficou igual (678 px).
+- **Não foi aberta no app logado.**
+
+### Pendências
+
+- Conferir logado no notebook, na Essenza: rolar até o cronograma e ver a tabela até o pé da tela.
+- Se o pedido era o campo "Anotações e encaminhamentos" do painel de detalhes (hoje com altura mínima de 96 px), aumentá-lo é outra mudança, não feita aqui.
+
 ## Curto prazo: local da linha e filtro de local no PDF (05/11/2026)
 
 Pedido do usuário: "no curto prazo, adicione um campo de local (opcional) para que as tarefas possam ser filtradas por local ao gerar o PDF. O local deve ser o mesmo do longo prazo (lista suspensa que vem de configuração de obra)". Implementado sem modelo de UX (é uma coluna nova e uma seção na janela do PDF, no padrão das que já existem).

@@ -119,6 +119,9 @@ const VIEWS: { id: View; label: string; Icon: typeof Check }[] = [
 ];
 /** Altura mínima da visão (tabela e Gantt, Planejador…) quando a janela é baixa demais para tudo. */
 const MIN_VIEW = 200;
+/** Abaixo disto a visão fica apertada (cerca de 11 linhas da tabela): a área de trabalho deixa de caber
+ * do lugar dela até o pé da janela e passa a ocupar uma tela inteira, alcançada rolando a página. */
+const COMFORT_VIEW = 360;
 /** O ancestral que rola na vertical (o miolo do layout do app); sem nenhum, a própria janela. */
 function scrollParent(node: HTMLElement): HTMLElement | null {
   for (let el = node.parentElement; el && el !== document.body; el = el.parentElement)
@@ -1568,7 +1571,10 @@ export function Sheet({
   /* A área de trabalho ocupa da posição dela até o pé da janela, para a barra de status ficar à
    * vista sem rolar a página; a visão é quem cresce e encolhe. A altura é fixa enquanto a janela não
    * muda: esconder as linhas Exibir e de filtros ao trocar de visão dá o espaço à visão, e a barra de
-   * status não pula. Em janela baixa, a visão fica com pelo menos MIN_VIEW e a página rola. */
+   * status não pula. Quando o cabeçalho da aba acima deixaria a visão com menos de COMFORT_VIEW (tela
+   * de notebook), a área de trabalho passa a ter a altura de uma tela inteira, abaixo da barra fixa da
+   * trilha: rolando a página até ela, a tabela usa o espaço todo em vez de ficar com cinco linhas
+   * (04/11/2026). Em janela baixa demais até para isso, a visão fica com pelo menos MIN_VIEW. */
   useEffect(() => {
     const node = workspaceRef.current;
     if (!node) return;
@@ -1583,7 +1589,16 @@ export function Sheet({
         const box = scroller?.getBoundingClientRect();
         const top = node.getBoundingClientRect().top - (box?.top ?? 0) + (scroller ? scroller.scrollTop : window.scrollY);
         const height = scroller ? scroller.clientHeight : window.innerHeight;
-        const next = Math.round(Math.max(fixed + MIN_VIEW, height - top - 12));
+        // A barra da trilha é fixa no topo do contêiner e cobre a área de trabalho quando a página rola.
+        const cover = scroller
+          ? Array.from(scroller.children).reduce(
+              (n, el) => (getComputedStyle(el).position === 'sticky' ? n + el.getBoundingClientRect().height : n),
+              0,
+            )
+          : 0;
+        const below = height - top - 12,
+          screen = height - cover - 16;
+        const next = Math.round(Math.max(fixed + MIN_VIEW, below - fixed >= COMFORT_VIEW ? below : screen));
         setFit(f => (f === next ? f : next));
       });
     };
