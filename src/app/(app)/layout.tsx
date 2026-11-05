@@ -93,7 +93,8 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
-            <p className="truncate text-xs text-brand-300">{roleLabels[profile.role]}</p>
+            {/* O TST é o papel consulta com a marca de técnico de segurança (0040): mostra o tipo, não o papel. */}
+            <p className="truncate text-xs text-brand-300">{profile.role === 'viewer' && profile.tst ? 'TST' : roleLabels[profile.role]}</p>
           </div>
           <form action={signOut}>
             <button

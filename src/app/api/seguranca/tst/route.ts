@@ -10,7 +10,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Marca ou desmarca alguém como TST (`profiles.tst`), o tipo que libera gravar na aba 6. Fica fora dos
  * comandos do planejamento: o `commit_planning` não conhece a coluna, então quem a grava é só esta rota, e
- * só para admin. Corpo `{ userId, enabled }`. O admin que não é TST continua só consultando a aba 6. */
+ * só para admin. Corpo `{ userId, enabled }`. O admin grava na aba 6 mesmo sem a marca. */
 export async function POST(request: Request) {
   const profile = await getRouteProfile().catch(() => null);
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);

@@ -9,6 +9,8 @@ import {
   listUsers,
   matchesUser,
   nextUserSort,
+  typeToProfile,
+  userType,
   worksByName,
 } from '../src/modules/configuracoes/user-list';
 
@@ -99,4 +101,20 @@ test('colunas de obra em ordem alfabética, sem mexer na lista recebida', () => 
     works.map(w => w.code),
     ['TAU', 'ATM', 'BLT'],
   );
+});
+
+test('TST é um tipo de usuário: consulta com a marca, com filtro e ordem próprios', () => {
+  const tst: User = { ...base, id: 'u6', name: 'Carla', role: 'viewer', workIds: ['blt'], tst: true };
+  const all = [...users, tst];
+  assert.equal(userType(tst), 'tst');
+  assert.equal(userType({ role: 'viewer' }), 'viewer');
+  // A marca só vira tipo no papel consulta; admin já grava na aba 6 sem ela.
+  assert.equal(userType({ role: 'admin', tst: true }), 'admin');
+  assert.deepEqual(typeToProfile('tst'), { role: 'viewer', tst: true });
+  assert.deepEqual(typeToProfile('planner'), { role: 'planner', tst: false });
+  const names = (list: User[]) => list.map(u => u.name);
+  assert.deepEqual(names(listUsers(all, {}, { ...EMPTY_USER_FILTER, role: 'tst' }, DEFAULT_USER_SORT)), ['Carla']);
+  assert.deepEqual(names(listUsers(all, {}, { ...EMPTY_USER_FILTER, role: 'viewer' }, DEFAULT_USER_SORT)), ['Bruno']);
+  const byType = names(listUsers(all, {}, EMPTY_USER_FILTER, { key: 'role', dir: 'asc' }));
+  assert.deepEqual(byType.slice(0, 2), ['Bruno', 'Carla'], 'consulta, depois TST, depois planejador…');
 });

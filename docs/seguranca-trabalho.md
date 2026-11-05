@@ -27,10 +27,12 @@ O processo é o da terminalidade (aba 5, ver [terminalidade.md](terminalidade.md
 
 ## Decisões de desenho
 
-- **TST é uma marca no perfil, não um papel.** A coluna `profiles.tst` soma-se ao papel (consulta, planejador, gestor, admin), como os módulos liberados por pessoa.
-  - Só quem tem `tst = true` grava na aba 6: lançar, editar, editar em lote, finalizar, reabrir, excluir, fotos e a lista de tipos. Os demais com a obra liberada só consultam, **inclusive administradores**.
-  - Por que não um quinto papel: cerca de 45 telas e rotas testam `role === 'viewer'` para decidir quem edita. Um papel "tst" passaria nesses testes e ganharia escrita no planejamento. A marca não mexe em nada fora da aba 6.
-  - A marca é gravada pela rota `POST /api/seguranca/tst`, só para admin, na grade de Configurações → Usuários (coluna "TST"). O `commit_planning` não conhece a coluna: o upsert de `profiles` só atualiza `name`, `role`, `work_ids` e `module_access`, então salvar o planejamento não apaga a marca. A leitura do planejamento (`planning_snapshot`) devolve o perfil inteiro (`to_jsonb(p)`), e `rowsToPlanningData` põe `tst: true` no `User`.
+- **TST é um tipo de usuário na lista "Papel"** (Consulta, TST, Planejador, Gestor, Admin), na grade de Configurações → Usuários e em "Cadastrar usuário". No banco, o TST é o papel `viewer` com a marca `profiles.tst = true` (`typeToProfile` e `userType` em `src/modules/configuracoes/user-list.ts`).
+  - Gravam na aba 6 o TST e o admin (`canWriteSafety`): lançar, editar, editar em lote, finalizar, reabrir, excluir, fotos e a lista de tipos. Consulta, Planejador e Gestor só consultam. No resto do sistema, o TST é consulta.
+  - Por que não um quinto valor em `role`: cerca de 45 telas e rotas testam `role === 'viewer'` para decidir quem edita. Um papel "tst" passaria nesses testes e ganharia escrita no planejamento. Guardado como consulta + marca, o TST não ganha nada fora da aba 6.
+  - Trocar o papel para TST grava `set_role viewer` pelo planejamento e a marca pela rota `POST /api/seguranca/tst` (só admin); trocar de TST para outro papel grava o papel e tira a marca. O `commit_planning` não conhece a coluna: o upsert de `profiles` só atualiza `name`, `role`, `work_ids` e `module_access`, então salvar o planejamento não apaga a marca. A leitura do planejamento (`planning_snapshot`) devolve o perfil inteiro (`to_jsonb(p)`), e `rowsToPlanningData` põe `tst: true` no `User`. O cadastro (`/api/admin/invite`) aceita `tst: true` com o papel consulta.
+  - O rodapé da lateral mostra "TST" no lugar de "Consulta" para quem tem a marca.
+  - **Histórico da decisão:** a primeira entrega (05/11/2026) tinha uma coluna "TST" separada na grade e deixava só o TST gravar, nem o admin. No mesmo dia o usuário disse que o TST "não apareceu" e pediu "como tipo de usuário" e "eu como admin quero ter acesso ao módulo como TST": a coluna virou a opção "TST" do Papel, e o admin passou a gravar na aba 6.
 - **Tipos de apontamento: uma lista só para todas as obras** (`safety_types`, sem `work_id`). A equipe de TST é a mesma em todas as obras, e a planilha compara os tipos entre obras mês a mês (aba "Página15"). A lista nasce com os 16 tipos da "Página15"; o TST acrescenta, renomeia, desativa e reordena.
 - **Consequência e probabilidade:** listas fixas, tiradas dos valores da planilha (`SAFETY_CONSEQUENCES` e `SAFETY_PROBABILITIES` em `src/domain/safety.ts`, e `check` no banco).
 - **Local:** texto livre, com sugestões dos locais já usados na obra. A planilha tinha 490 grafias (ex.: "2 pavimento", "2° Pavimento", "terriu"), e não há cadastro de locais que sirva aos TSTs (áreas de vivência, canteiro, fachada).
@@ -67,9 +69,9 @@ Reaproveitado da aba 5, sem cópia: compressão das fotos (`compress-image.ts`),
 
 ### Quem grava
 
-- **Servidor:** toda rota de gravação confere `canWriteSafety(profile)` (só `profile.tst === true`) antes de qualquer coisa e responde 403 com "Só técnicos de segurança (TST) lançam e finalizam apontamentos." Vale para comandos, envio de foto e lista de tipos. Ler exige só a obra liberada no perfil.
-- **Tela:** o GET devolve `canEdit` (a pessoa é TST) e `inspectors` (os TSTs com a obra liberada, por nome). A tela só esconde os botões; quem decide é o servidor.
-- **Marcar TST:** `POST /api/seguranca/tst` `{ userId, enabled }`, só para admin ("Só administradores marcam quem é TST."). A grade de usuários recarrega o planejamento depois de gravar.
+- **Servidor:** toda rota de gravação confere `canWriteSafety(profile)` (`profile.tst === true` ou `profile.role === 'admin'`) antes de qualquer coisa e responde 403 com "Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos." Vale para comandos, envio de foto e lista de tipos. Ler exige só a obra liberada no perfil.
+- **Tela:** o GET devolve `canEdit` (a pessoa é TST ou admin) e `inspectors` (os TSTs com a obra liberada, por nome). A tela só esconde os botões; quem decide é o servidor.
+- **Dar o papel TST:** o seletor "Papel" da grade chama `set_role` e `POST /api/seguranca/tst` `{ userId, enabled }`, só para admin ("Só administradores marcam quem é TST."), e recarrega o planejamento.
 
 ### Comandos e regras (`planSafetyCommand`)
 
@@ -82,27 +84,27 @@ Todos passam por `POST /api/seguranca/commands?workId=<obra aberta>`. O `workId`
 - **Finalizar** (`resolve_item`): só aberto; data da correção entre a data do apontamento e hoje; exige ao menos uma foto da correção, **exceto na importação** (`importing: true`); "Como foi corrigido" opcional, até 1000.
 - **Reabrir** (`reopen_item`): limpa data da correção, quem finalizou e "Como foi corrigido"; as fotos ficam. A coluna `resolution_note` nasceu na 0040, então o repositório grava o nulo direto, sem o cuidado que a aba 5 precisou depois da 0034.
 - **Excluir** (`delete_item`): apaga a linha (fotos em cascata) e depois os arquivos.
-- **Respostas HTTP:** 400 regra, 403 sem acesso ou não TST, 404 registro sumiu, 409 conflito, 503 sem a 0040, 502 falha inesperada.
+- **Respostas HTTP:** 400 regra, 403 sem acesso ou sem permissão (nem TST nem admin), 404 registro sumiu, 409 conflito, 503 sem a 0040, 502 falha inesperada.
 - **Gravação em lotes:** inserções de 500 linhas, exclusões de 100 ids, atualizações uma por linha (até 50 ao mesmo tempo). Uma gravação grande (a importação) não é atômica: se um lote falhar, os anteriores ficam; rodar a importação de novo completa sem duplicar.
 
 ## A tela (aba 6)
 
 `SafetyOverview`, com a lógica pura em `safety-view.ts` (testada).
 
-- **Cabeçalho:** "Novo apontamento" e "Tipos de apontamento" (só TST), "Usar no celular, sem sinal" e "Gerar PDF". Quem não é TST vê o aviso de consulta com os TSTs da obra, ou como o admin marca um.
+- **Cabeçalho:** "Novo apontamento" e "Tipos de apontamento" (só TST e admin), "Usar no celular, sem sinal" e "Gerar PDF". Quem não grava vê o aviso de consulta com os TSTs da obra, ou como o admin dá o papel TST a alguém.
 - **Cartões:** total, abertos, finalizados (com %), média de dias para resolver (só finalizados, uma casa decimal) e abertos há mais de 7 dias. Contam a seleção dos filtros nas duas situações.
 - **Roscas:** por tipo, por consequência e por probabilidade, no máximo 6 fatias (5 maiores + "Outros"). Cada uma ignora o próprio filtro; clicar na legenda liga ou desliga o valor no filtro. O centro diz "apontamentos" (o `DonutRing` da aba 5 ganhou a propriedade `noun`).
 - **"Apontamentos por tipo, mês a mês":** o comparativo da aba "Página15" da planilha. Os 4 últimos meses até o mês atual, pela data do apontamento, com a diferença do mês atual (em andamento) para o anterior ("(novo)" quando o anterior foi zero) e a linha GERAL. Segue os filtros, menos a situação.
 - **Filtros:** situação (abre em Abertos), tipo, consequência, probabilidade e local, cada um com várias escolhas e contagem, e busca sem acento na descrição, no local, no tipo e em "Como foi corrigido". O local junta grafias que só diferem em acento, caixa, espaço e "°"/"º"; a tabela mostra a grafia de cada linha, e filtros, grupos e roscas usam a mais frequente na obra.
 - **Lista:** colunas da planilha, classificáveis (crescente → decrescente → padrão, vazios no fim); ordem padrão do mais recente para o mais antigo. Consequência em chip colorido (Morte vermelho, Severa laranja, Significativa âmbar, Leve verde, Nenhuma cinza, Autuação/Multa violeta), sempre com o texto. Selo "Planilha" no histórico importado. "Dias para resolver": "N dias" no finalizado; "há N dias" no aberto, em âmbar e em vermelho depois de 7 dias. 100 linhas por vez, com "Mostrar mais".
-- **Ações do TST:** Finalizar, Reabrir e ✕ por linha; marcação e edição em lote (bloqueada acima de 500 marcados). Um 409 recarrega a lista e avisa.
+- **Ações do TST e do admin:** Finalizar, Reabrir e ✕ por linha; marcação e edição em lote (bloqueada acima de 500 marcados). Um 409 recarrega a lista e avisa.
 - **Diálogos:**
   - *Novo/Editar apontamento:* tipo obrigatório no apontamento novo ("Sem tipo" só aparece se o apontamento já não tinha tipo), consequência, probabilidade, descrição, local com sugestões, data e fotos (opcionais, como na aba 5; uma vaga fica reservada para a correção). "Salvar e lançar outro" mantém tipo, local e data e limpa descrição e risco, porque cada apontamento tem a própria avaliação. O último tipo e local ficam lembrados no navegador, por obra. Se uma foto falha depois de salvar, "Tentar de novo" reenvia só o que faltou. A leitura mostra situação, dias para resolver, "Apontado por" (ou "Planilha SST - Controle geral") e "Como foi corrigido".
   - *Finalizar apontamento:* foto da correção (salvo se já houver), data da correção e "Como foi corrigido".
   - *Edição em lote:* tipo, consequência, probabilidade e local, todos em "Manter como está" com o valor atual embaixo.
   - *Tipos de apontamento:* a lista única (o diálogo avisa), com uso nesta obra, incluir, renomear, desativar/reativar e subir/descer.
 - **Textos reaproveitados da aba 5:** o seletor de fotos (`noun`) e o visualizador (`issueLabel`) ganharam propriedades opcionais para dizer "apontamento" e "Apontamento"; a aba 5 continua igual.
-- **Tour:** `src/modules/tour/pages/seguranca.ts` (13 passos), ligado em `tours.ts`. Na grade de usuários, o passo "Técnico de segurança (TST)".
+- **Tour:** `src/modules/tour/pages/seguranca.ts` (13 passos), ligado em `tours.ts`. Na grade de usuários, o passo do "Papel" explica o TST.
 
 ## PDF
 
@@ -119,7 +121,7 @@ Todos passam por `POST /api/seguranca/commands?workId=<obra aberta>`. O `workId`
 
 - **Pacote:** `GET /api/seguranca/campo` (obras sem `workId`; a obra com `workId`). Miniaturas só dos abertos (até 300, os mais recentes). Com sinal e pacote com mais de 45 minutos, baixa de novo em silêncio, uma vez por obra.
 - **IndexedDB próprio:** `obra360-seguranca`.
-- **Só TST lança.** O aparelho recusa antes de guardar, com a mesma mensagem; os demais veem a lista, os filtros, as fotos e o aviso com os TSTs da obra.
+- **Só TST e admin lançam.** O aparelho recusa antes de guardar, com a mesma mensagem; os demais veem a lista, os filtros, as fotos e o aviso com os TSTs da obra.
 - **No campo:** lançar apontamento (**com foto obrigatória no campo**, embora o servidor não exija), juntar fotos, finalizar (data, "Como foi corrigido" e foto da correção, se ainda não houver) e reabrir. Editar, editar em lote, excluir e a lista de tipos ficam no computador.
 - **Lista:** abre em Abertos, 25 por vez; filtros de tipo, consequência e local num painel recolhível; busca. Filtro, ordem e sugestões de local vêm de `safety-view.ts`, como na aba 6.
 - **Envio:** como o da aba 5 (ao abrir, ao voltar o sinal, depois de cada lançamento e pelo botão; recusas com "Descartar"; "Entrar de novo" sem perder nada e voltando à obra aberta). Diferenças: as fotos pedem a URL de envio com o id de foto já guardado na fila (o `uploadSafetyPhoto` sorteia um id a cada chamada, e uma resposta perdida duplicaria a foto); 408, 409 e 429 são tentados de novo em vez de recusados.
@@ -198,7 +200,7 @@ Divergências achadas ao escrever o manual, deixadas como estão de propósito:
 
 - **Planilha e sistema ao mesmo tempo:** enquanto os TSTs lançarem nas duas, rodar a importação de novo traz só as linhas novas e as finalizações novas da planilha; o que for editado no sistema não volta para a planilha, e uma linha editada na planilha depois da importação (descrição, local, tipo ou data) vira apontamento novo.
 - **Fotos da planilha:** os endereços das imagens só saem pela API do Google Sheets (precisa de uma chave de API ou conta de serviço) ou pela planilha publicada na web. Com eles, o `--photos` anexa as fotos aos apontamentos já importados.
-- **Marcar os TSTs** em Configurações → Usuários e liberar para eles as obras.
+- **Dar o papel TST** aos técnicos em Configurações → Usuários e liberar para eles as obras.
 - **Não testado:** a aba logada em produção, o envio real de fotos ao bucket, o modo de campo num celular de verdade (e num build sem rede) e a câmera real.
 - **Resposta grande:** cada comando devolve a obra inteira com as URLs de todas as fotos. Com 1.200 apontamentos isso pesa no dado móvel do campo; uma resposta curta fica como melhoria.
 - **Achados no navegador, não corrigidos:** no modo de campo, com alterações na fila, a faixa amarela aumenta o cabeçalho e a barra de situação fica meio escondida embaixo dele ao rolar (o modo de campo da aba 5 tem o mesmo código); no diálogo, a mensagem "Escolha o tipo de apontamento." continua na tela depois de escolher o tipo, até salvar de novo (como na aba 5); na edição em lote, "Aplicar" desabilitado com "Trocar por…" e local vazio não diz por quê; campos só de leitura não têm aparência de desabilitados.

@@ -3,7 +3,7 @@
  * Risco: consequência, Risco: probabilidade, Descrição, Local, Data do apontamento, Foto do apontamento,
  * Data de correção, Foto da correção e Dias para resolver. O processo é o da terminalidade (aba 5):
  * o apontamento nasce com foto e só se finaliza com a foto da correção e a data. A diferença é quem grava:
- * só quem está marcado como TST (`profiles.tst`) lança, edita, finaliza, reabre e exclui; os demais com a
+ * só quem é do tipo TST (`profiles.tst`) e os administradores lançam, editam, finalizam, reabrem e excluem; os demais com a
  * obra liberada só consultam. Vive fora do snapshot do planejamento (migração 0040), com API própria em
  * /api/seguranca. */
 
@@ -109,7 +109,7 @@ export const SAFETY_LIMITS = {
 } as const;
 
 /** Mensagem única de recusa para quem não é TST, no servidor e na tela. */
-export const SAFETY_TST_ONLY_MESSAGE = 'Só técnicos de segurança (TST) lançam e finalizam apontamentos.';
+export const SAFETY_TST_ONLY_MESSAGE = 'Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos.';
 
 /** Comandos de POST /api/seguranca/commands. Ids de apontamento e de foto vêm do navegador (UUID), para a
  * foto subir logo depois de o apontamento nascer, sem ida e volta extra. */

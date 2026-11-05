@@ -115,11 +115,14 @@ function resolved(): SafetyData {
 
 // ----- Quem grava -----
 
-test('só quem é TST grava; papel, inclusive admin, não basta', () => {
+test('grava quem é TST ou admin; os demais papéis não', () => {
   assert.equal(canWriteSafety({ tst: true }), true);
   assert.equal(canWriteSafety({ tst: false }), false);
   assert.equal(canWriteSafety({}), false);
-  assert.equal(canWriteSafety({ role: 'admin' } as { tst?: boolean }), false);
+  assert.equal(canWriteSafety({ role: 'admin' }), true);
+  assert.equal(canWriteSafety({ role: 'manager' }), false);
+  assert.equal(canWriteSafety({ role: 'planner', tst: false }), false);
+  assert.equal(canWriteSafety({ role: 'viewer', tst: true }), true);
   assert.equal(canWriteSafety(null), false);
   assert.equal(canWriteSafety(undefined), false);
   assert.equal(canWriteSafety({ tst: 'true' as unknown as boolean }), false);

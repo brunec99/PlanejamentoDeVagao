@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const profile = await getRouteProfile();
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Somente administradores podem cadastrar usuários.' }, { status: 403 });
 
-  let body: { email?: string; name?: string; role?: string; workIds?: string[] };
+  let body: { email?: string; name?: string; role?: string; tst?: boolean; workIds?: string[] };
   try {
     body = await request.json();
   } catch {
@@ -40,7 +40,12 @@ export async function POST(request: NextRequest) {
 
   // O perfil já nasce com papel e obras definidos.
   const name = (body.name ?? '').trim() || email.split('@')[0].replace(/[._]/g, ' ');
-  const { error: profileError } = await service.from('profiles').upsert({ id: userId, name, role, work_ids: workIds });
+  // TST (técnico de segurança, 0040): a marca só vai junto quando pedida, para o cadastro comum não depender
+  // da coluna. Admin não precisa dela (já grava na aba 6).
+  const tst = body.tst === true && role === 'viewer';
+  const { error: profileError } = await service
+    .from('profiles')
+    .upsert({ id: userId, name, role, work_ids: workIds, ...(tst ? { tst: true } : {}) });
   if (profileError) return NextResponse.json({ error: `Conta criada, mas o perfil falhou: ${profileError.message}` }, { status: 500 });
 
   // Quem tinha pedido acesso sai da lista de pedidos. Falha aqui não desfaz o cadastro (a tabela pode
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
     .eq('email', email)
     .eq('status', 'pending');
 
-  return NextResponse.json({ email, role }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ email, role, tst }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 /** A conta já existente no Auth compartilhado; a lista é pequena, então paginar basta. */

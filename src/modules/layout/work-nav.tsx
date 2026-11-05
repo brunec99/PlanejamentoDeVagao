@@ -30,7 +30,7 @@ export const WORK_TABS = [
   // com fotos. Aberta a todos desde o primeiro dia, como o curto prazo (não está em RESTRICTED_SECTIONS).
   { section: 'terminalidade', number: 5, short: 'Terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento · Fotos' },
   // 05/11/2026: a vistoria de segurança do trabalho, no processo da terminalidade (foto do apontamento,
-  // finalização com foto da correção). Aberta a todos para consulta; só quem é TST grava.
+  // finalização com foto da correção). Aberta a todos para consulta; só o TST e o admin gravam.
   { section: 'seguranca', number: 6, short: 'Segurança', label: 'Segurança do trabalho', hint: 'Vistorias dos TSTs · Fotos' },
 ] as const;
 

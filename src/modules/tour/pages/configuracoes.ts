@@ -48,7 +48,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-invite-role',
     title: 'Papel',
-    body: 'Consulta só vê; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela. Dá para trocar depois, na grade.',
+    body: 'Consulta só vê; TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6 e consulta o resto; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela e também lança na aba 6. Dá para trocar depois, na grade.',
   },
   {
     target: 'config-users',
@@ -68,12 +68,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-user-role',
     title: 'Papel do usuário',
-    body: 'Troca o papel da pessoa assim que você escolhe outro. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
-  },
-  {
-    target: 'config-user-tst',
-    title: 'Técnico de segurança (TST)',
-    body: 'Marca a pessoa como técnico de segurança do trabalho. Só quem é TST lança, edita, finaliza e reabre apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa; os demais, inclusive administradores, só consultam. O TST soma-se ao papel: para o resto do sistema vale o papel escolhido ao lado.',
+    body: 'Troca o papel da pessoa assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, e consulta o resto do sistema; o Admin também lança na aba 6. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
   },
   {
     target: 'config-user-works',

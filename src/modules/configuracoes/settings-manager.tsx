@@ -4,10 +4,11 @@ import { Database, Inbox, Mail, RefreshCw, Timer, UserPlus, Users } from 'lucide
 import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
-import { formatTimestamp, roleLabels } from '@/shared/format';
+import { formatTimestamp } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
 import type { AccessRequest } from '@/application/access-request';
 import { UsersTable } from './users-table';
+import { USER_TYPE_LABELS, USER_TYPE_ORDER, typeToProfile, type UserType } from './user-list';
 
 function useCommand() {
   const c = usePlanning();
@@ -193,7 +194,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('viewer');
+  const [role, setRole] = useState<UserType>('viewer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
@@ -209,7 +210,8 @@ function InviteForm({ onDone }: { onDone: () => void }) {
           const res = await fetch('/api/admin/invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name, role }),
+            // TST vai como papel consulta com a marca de técnico de segurança (`typeToProfile`).
+            body: JSON.stringify({ email, name, ...typeToProfile(role) }),
           });
           const body = await res.json();
           if (!res.ok) throw new Error(body.error ?? 'Não foi possível cadastrar.');
@@ -255,10 +257,10 @@ function InviteForm({ onDone }: { onDone: () => void }) {
         </label>
         <label data-tour="config-invite-role" className="block text-xs font-semibold text-slate-600">
           <span className="mb-1.5 block">Papel</span>
-          <select className="field w-40" value={role} onChange={e => setRole(e.target.value)}>
-            {(['viewer', 'planner', 'manager', 'admin'] as const).map(r => (
-              <option key={r} value={r}>
-                {roleLabels[r]}
+          <select className="field w-40" value={role} onChange={e => setRole(e.target.value as UserType)}>
+            {USER_TYPE_ORDER.map(type => (
+              <option key={type} value={type}>
+                {USER_TYPE_LABELS[type]}
               </option>
             ))}
           </select>

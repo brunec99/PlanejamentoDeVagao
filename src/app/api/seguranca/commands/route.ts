@@ -28,7 +28,7 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
 
 /** Um comando da aba 6 por requisição. `?workId=` é a obra aberta na tela: é a obra que volta na resposta
  * e, nos comandos de tipo (lista única, sem obra), a que serve de conferência de acesso. Só quem é TST
- * grava — papel nenhum, nem admin, basta. Aplica as regras (`planSafetyCommand`) sobre os dados atuais,
+ * ou admin grava (`canWriteSafety`). Aplica as regras (`planSafetyCommand`) sobre os dados atuais,
  * grava e devolve a obra já atualizada, no mesmo formato do GET. */
 export async function POST(request: NextRequest) {
   const profile = await getRouteProfile().catch(() => null);

@@ -80,8 +80,8 @@ import {
 
 /** Aba 6, Segurança do trabalho (05/11/2026): a planilha "SST - Controle geral" dentro do sistema, no
  * desenho da terminalidade (aba 5) — cartões, roscas, quadro mês a mês por tipo, filtros e a lista com
- * classificação por coluna. Só o TST grava (`canEdit`, decidido pelo servidor); os demais consultam,
- * inclusive o administrador. */
+ * classificação por coluna. Só o TST e o admin gravam (`canEdit`, decidido pelo servidor); os demais
+ * consultam. */
 
 type DialogState =
   { kind: 'new' } | { kind: 'edit'; itemId: string } | { kind: 'resolve'; itemId: string } | { kind: 'bulk' } | { kind: 'types' };
@@ -157,8 +157,8 @@ export function SafetyOverview({ workId }: { workId: string }) {
               (consequência e probabilidade), descrição, local, data e foto.
             </p>
             <p>
-              Só os técnicos de segurança (TST) lançam, editam, finalizam, reabrem e excluem apontamentos. Os demais com acesso à obra,
-              inclusive o administrador, consultam a lista, as fotos e o PDF.
+              Só os técnicos de segurança (TST) e os administradores lançam, editam, finalizam, reabrem e excluem apontamentos. Os demais
+              com acesso à obra consultam a lista, as fotos e o PDF.
             </p>
             <p>
               O apontamento só é finalizado com a foto da correção e a data. “Dias para resolver” conta do apontamento até a correção; nos
@@ -416,10 +416,10 @@ export function SafetyOverview({ workId }: { workId: string }) {
       {!canEdit && (
         <div data-tour="safety-readonly" className="mb-4">
           <Callout tone="info" role="status">
-            Consulta: só os técnicos de segurança (TST) lançam e finalizam apontamentos.{' '}
+            Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos.{' '}
             {inspectors.length > 0
               ? `TSTs desta obra: ${inspectors.map(person => person.name).join(', ')}.`
-              : 'Nenhum TST tem acesso a esta obra. O administrador marca quem é TST em Configurações → Usuários.'}
+              : 'Nenhum TST tem acesso a esta obra. O administrador escolhe o papel “TST” em Configurações → Usuários.'}
           </Callout>
         </div>
       )}

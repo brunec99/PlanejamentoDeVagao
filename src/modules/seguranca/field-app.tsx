@@ -487,7 +487,8 @@ function WorkList({
     <div className="space-y-3 p-3">
       <p className="px-1 text-xs text-slate-500">
         {works.actor.name}
-        {works.actor.tst ? ' (TST)' : ''} · obras liberadas para você. Baixe antes de ir para o canteiro.
+        {works.actor.role === 'admin' ? ' (admin)' : works.actor.tst ? ' (TST)' : ''} · obras liberadas para você. Baixe antes de ir para o
+        canteiro.
       </p>
       {works.works.map(work => {
         const pkg = packages[work.id];

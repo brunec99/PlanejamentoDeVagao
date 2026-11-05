@@ -160,6 +160,9 @@ Cada pessoa cadastrada tem um papel, mostrado embaixo do nome na lateral, que va
 | Reabrir vagão terminal | Não | Não | Sim | Sim |
 | Cadastrar usuários, definir papel, liberar obras e módulos, excluir perfil, tratar pedidos de acesso | Não | Não | Não | Sim |
 | Ver todos os módulos sem liberação; abrir Configurações e Agente de IA | Não | Não | Não | Sim |
+| Lançar e finalizar apontamentos na Segurança do trabalho (aba 6) | Só o papel TST | Não | Não | Sim |
+
+O papel **TST** (técnico de segurança do trabalho) é, no resto do sistema, igual ao Consulta: só vê. A diferença é a aba 6, onde ele lança, edita, finaliza e reabre os apontamentos da vistoria de segurança.
 
 Regras que valem para todos:
 
@@ -275,7 +278,7 @@ O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mai
 
 ### Cadastrar usuário
 
-Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"**, e clique em **"Cadastrar"**. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
+Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
 
 Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuário já cadastrado. Altere o papel e as obras na lista abaixo."
 
@@ -286,8 +289,7 @@ Uma linha por pessoa (nome, e-mail e, na sua, o selo "você") e uma coluna por o
 - **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo em desenvolvimento (longo prazo, vagões, médio prazo, modelo federado, arquivos IFC, dívidas, integrações). Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
 - **"Pesquisar nome ou e-mail"**: cada palavra digitada precisa aparecer, sem diferença de acento. Filtros **"Todos os papéis"** e **"Todas as obras"** (com "Sem obra liberada" e "Com acesso a [obra]"); "Limpar filtros" desfaz. O contador diz "N de M usuários".
 - Clique em **"Usuário"** ou **"Papel"** no cabeçalho para ordenar; de novo, inverte.
-- **"Papel"**: a lista troca o papel assim que você escolhe outro. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador.").
-- **"TST"** (ícone de capacete, logo depois de "Papel", nas visões "Obras" e "Módulos"): marca quem é técnico de segurança do trabalho. Clique na célula para marcar ou desmarcar; vale na hora, sem botão de salvar ("[nome] agora é TST." ou "[nome] deixou de ser TST."), e o número no cabeçalho conta os TSTs entre os listados. Só quem está marcado lança, edita, finaliza, reabre e exclui apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa; os demais, inclusive administradores, só consultam. O TST soma-se ao papel: no resto do sistema vale o papel escolhido, e mesmo quem é Consulta grava na aba 6 se for TST. O administrador pode marcar a si mesmo. A aba 6 é aberta a todos e não aparece na visão "Módulos". Quem estava com a aba aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo) para a mudança aparecer.
+- **"Papel"**: a lista troca o papel assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O **TST** (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa, e consulta o resto do sistema; ao escolher, aparece "[nome] agora é TST.". O Admin também lança na aba 6. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador."). Quem estava com a aba 6 aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo).
 - **Excluir**: a lixeira no fim da linha, depois de confirmar "Excluir [nome]?". A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo; **a conta Google e o acesso aos outros sistemas da ATR continuam**. Não aparece na sua própria linha.
 
 ## Banco de dados

@@ -10,7 +10,8 @@ export const DEFAULT_USER_SORT: UserSort = { key: 'name', dir: 'asc' };
 export const NO_WORK = 'sem-obra';
 export interface UserFilter {
   query: string;
-  role: User['role'] | '';
+  /** Tipo de usuário (papel ou "tst"); vazio = todos. */
+  role: UserType | '';
   /** Id da obra, `NO_WORK` ou vazio (todas). */
   workId: string;
 }
@@ -18,6 +19,24 @@ export const EMPTY_USER_FILTER: UserFilter = { query: '', role: '', workId: '' }
 
 /** Do menor ao maior poder, a ordem do seletor de papel. */
 export const ROLE_ORDER: readonly User['role'][] = ['viewer', 'planner', 'manager', 'admin'];
+
+/** Tipo de usuário mostrado no seletor "Papel" (05/11/2026): os quatro papéis e o TST, técnico de segurança
+ * do trabalho. No banco, o TST é o papel consulta com a marca `profiles.tst`: ele lança e finaliza na aba 6
+ * (Segurança do trabalho) e, no resto do sistema, consulta. Guardar assim evita um quinto papel que
+ * passaria pelos testes de "não é consulta" das outras telas e ganharia escrita no planejamento. */
+export type UserType = User['role'] | 'tst';
+export const USER_TYPE_ORDER: readonly UserType[] = ['viewer', 'tst', 'planner', 'manager', 'admin'];
+export const USER_TYPE_LABELS: Record<UserType, string> = {
+  viewer: 'Consulta',
+  tst: 'TST',
+  planner: 'Planejador',
+  manager: 'Gestor',
+  admin: 'Admin',
+};
+export const userType = (user: Pick<User, 'role' | 'tst'>): UserType => (user.role === 'viewer' && user.tst ? 'tst' : user.role);
+/** O que gravar para dar à pessoa um tipo: o papel e a marca de TST. */
+export const typeToProfile = (type: UserType): { role: User['role']; tst: boolean } =>
+  type === 'tst' ? { role: 'viewer', tst: true } : { role: type, tst: false };
 
 const textKey = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim();
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true });
@@ -35,13 +54,13 @@ export function listUsers(users: readonly User[], emails: Record<string, string>
   const sign = sort.dir === 'asc' ? 1 : -1;
   return users
     .filter(user => {
-      if (filter.role && user.role !== filter.role) return false;
+      if (filter.role && userType(user) !== filter.role) return false;
       if (filter.workId === NO_WORK ? user.workIds.length > 0 : filter.workId && !user.workIds.includes(filter.workId)) return false;
       return matchesUser(user, emails[user.id], filter.query);
     })
     .sort((a, b) =>
       sort.key === 'role'
-        ? sign * (ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)) || byName(a, b)
+        ? sign * (USER_TYPE_ORDER.indexOf(userType(a)) - USER_TYPE_ORDER.indexOf(userType(b))) || byName(a, b)
         : sign * byName(a, b) || a.id.localeCompare(b.id),
     );
 }

@@ -12,7 +12,7 @@ export const steps: TourStep[] = [
   {
     target: 'safety-readonly',
     title: 'Quem lança e finaliza',
-    body: 'Só quem está marcado como TST lança, edita, finaliza e reabre apontamentos. Os demais, inclusive administradores, consultam, filtram, abrem as fotos e geram o PDF. O aviso diz quais TSTs têm esta obra; quem marca alguém como TST é o administrador, em Configurações → Usuários.',
+    body: 'Só os técnicos de segurança (TST) e os administradores lançam, editam, finalizam e reabrem apontamentos. Os demais consultam, filtram, abrem as fotos e geram o PDF. O aviso diz quais TSTs têm esta obra; quem dá a alguém o papel TST é o administrador, em Configurações → Usuários.',
   },
   {
     target: 'safety-new',

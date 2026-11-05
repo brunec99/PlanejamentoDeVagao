@@ -1,10 +1,9 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, HardHat, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Search, Trash2 } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
-import { roleLabels } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
 import type { User, Work } from '@/domain/entities';
 import { MODULES, type ModuleInfo } from '@/application/module-access';
@@ -12,7 +11,8 @@ import {
   DEFAULT_USER_SORT,
   EMPTY_USER_FILTER,
   NO_WORK,
-  ROLE_ORDER,
+  USER_TYPE_LABELS,
+  USER_TYPE_ORDER,
   isFiltered,
   listUsers,
   nextUserSort,
@@ -20,6 +20,9 @@ import {
   type UserFilter,
   type UserSort,
   type UserSortKey,
+  type UserType,
+  typeToProfile,
+  userType,
 } from './user-list';
 
 /** Grade de acessos (28/10/2026): uma linha por pessoa e uma coluna por obra, ou por módulo em
@@ -125,59 +128,57 @@ function ModuleCell({ user, module }: { user: User; module: ModuleInfo }) {
   );
 }
 
-/** Tipo de usuário TST (técnico de segurança do trabalho, 05/11/2026): só quem está marcado lança e
- * finaliza apontamentos na aba 6 (Segurança do trabalho), e soma-se ao papel. Não passa pelo planejamento
- * (a coluna `profiles.tst` fica fora do `commit_planning`): grava pela rota própria e recarrega a lista. */
-function TstCell({ user }: { user: User }) {
+/** Seletor "Papel", o tipo de usuário (05/11/2026): Consulta, TST, Planejador, Gestor e Admin. O TST
+ * (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6 e consulta o resto do sistema;
+ * no banco ele é o papel consulta com a marca `profiles.tst` (`typeToProfile`). O papel passa pelo
+ * planejamento (`set_role`); a marca, que fica fora do `commit_planning`, pela rota própria, e a lista
+ * recarrega depois. Admin já grava na aba 6 sem a marca. */
+function RoleSelect({ user, self }: { user: User; self: boolean }) {
   const c = usePlanning();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const on = user.tst === true;
-  return (
-    <Toggle
-      tourId="config-user-tst"
-      on={on}
-      busy={busy}
-      label={`TST: ${user.name}`}
-      title={`${user.name}: ${on ? 'é técnico de segurança (TST) e lança e finaliza apontamentos na aba 6. Clique para desmarcar.' : 'não é TST. Clique para marcar como técnico de segurança.'}`}
-      onClick={async () => {
-        if (busy) return;
-        setBusy(true);
-        try {
-          const res = await fetch('/api/seguranca/tst', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, enabled: !on }),
-          });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error((body as { error?: string }).error ?? 'Não foi possível salvar.');
-          if (c.state === 'ready') await c.refresh();
-          toast({ title: on ? `${user.name} deixou de ser TST.` : `${user.name} agora é TST.`, tone: 'success' });
-        } catch (cause) {
-          toast({ title: 'Não foi possível salvar.', description: cause instanceof Error ? cause.message : undefined, tone: 'danger' });
-        } finally {
-          setBusy(false);
-        }
-      }}
-    />
-  );
-}
-
-function RoleSelect({ user, self }: { user: User; self: boolean }) {
-  const { busy, run } = useAccessCommand();
+  const current = userType(user);
+  const change = async (next: UserType) => {
+    if (busy || c.state !== 'ready' || next === current) return;
+    const target = typeToProfile(next);
+    setBusy(true);
+    try {
+      if (target.role !== user.role) await c.execute({ type: 'set_role', userId: user.id, role: target.role });
+      if (target.tst !== (user.tst === true)) {
+        const res = await fetch('/api/seguranca/tst', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, enabled: target.tst }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((body as { error?: string }).error ?? 'Não foi possível salvar.');
+        await c.refresh();
+      }
+      if (next === 'tst')
+        toast({
+          title: `${user.name} agora é TST.`,
+          description: 'Lança e finaliza apontamentos na aba 6, Segurança do trabalho, nas obras liberadas; no resto do sistema, consulta.',
+          tone: 'success',
+        });
+    } catch (cause) {
+      toast({ title: 'Não foi possível salvar.', description: cause instanceof Error ? cause.message : undefined, tone: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <select
       data-tour="config-user-role"
       className="field w-auto py-1 text-xs"
-      value={user.role}
+      value={current}
       disabled={busy || self}
       aria-label={`Papel de ${user.name}`}
-      title={self ? 'Ninguém tira o próprio acesso de administrador.' : undefined}
-      onChange={e => run({ type: 'set_role', userId: user.id, role: e.target.value as User['role'] })}
+      title={self ? 'Ninguém tira o próprio acesso de administrador.' : current === 'tst' ? 'Técnico de segurança do trabalho' : undefined}
+      onChange={e => void change(e.target.value as UserType)}
     >
-      {ROLE_ORDER.map(r => (
-        <option key={r} value={r}>
-          {roleLabels[r]}
+      {USER_TYPE_ORDER.map(type => (
+        <option key={type} value={type}>
+          {USER_TYPE_LABELS[type]}
         </option>
       ))}
     </select>
@@ -286,7 +287,7 @@ export function UsersTable({
   const patch = (change: Partial<UserFilter>) => setFilter(current => ({ ...current, ...change }));
   const total = users.length === 1 ? '1 usuário' : `${users.length} usuários`;
   const shown = rows.length === users.length ? total : `${rows.length} de ${total}`;
-  const span = 4 + (view === 'obras' ? columns.length : RESTRICTED_MODULES.length);
+  const span = 3 + (view === 'obras' ? columns.length : RESTRICTED_MODULES.length);
 
   return (
     <div data-tour="config-users" className="panel overflow-hidden">
@@ -309,9 +310,9 @@ export function UsersTable({
           onChange={e => patch({ role: e.target.value as UserFilter['role'] })}
         >
           <option value="">Todos os papéis</option>
-          {ROLE_ORDER.map(r => (
-            <option key={r} value={r}>
-              {roleLabels[r]}
+          {USER_TYPE_ORDER.map(type => (
+            <option key={type} value={type}>
+              {USER_TYPE_LABELS[type]}
             </option>
           ))}
         </select>
@@ -377,17 +378,6 @@ export function UsersTable({
                 onSort={key => setSort(current => nextUserSort(current, key))}
                 className={`${HEAD} text-left`}
               />
-              <th
-                scope="col"
-                title={`Técnico de segurança do trabalho: só quem é TST lança e finaliza apontamentos na aba 6. ${rows.filter(u => u.tst).length} de ${rows.length} usuários listados.`}
-                className={`${HEAD} min-w-[4.5rem] text-center align-bottom`}
-              >
-                <HardHat size={14} aria-hidden className="mx-auto mb-0.5" />
-                <span className="block">TST</span>
-                <span className="mt-0.5 block text-[10px] font-semibold normal-case tracking-normal tabular-nums text-slate-500">
-                  {rows.filter(u => u.tst).length}
-                </span>
-              </th>
               {view === 'obras'
                 ? columns.map(work => {
                     const count = rows.filter(u => u.workIds.includes(work.id)).length;
@@ -458,9 +448,6 @@ export function UsersTable({
                   <td className={CELL}>
                     <RoleSelect user={user} self={self} />
                   </td>
-                  <td className={`${CELL} text-center`}>
-                    <TstCell user={user} />
-                  </td>
                   {view === 'obras'
                     ? columns.map(work => (
                         <td key={work.id} className={`${CELL} text-center`}>
@@ -481,8 +468,8 @@ export function UsersTable({
       </div>
 
       <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
-        TST (técnico de segurança do trabalho) é um tipo que se soma ao papel: só quem está marcado lança e finaliza apontamentos na aba 6,
-        Segurança do trabalho, nas obras liberadas para a pessoa; os demais só consultam.{' '}
+        O papel TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, nas obras liberadas
+        para a pessoa, e consulta o resto do sistema; o admin também lança na aba 6.{' '}
         {view === 'obras'
           ? 'Clique na célula para liberar ou revogar a obra; vale na hora, sem botão de salvar. Quem não tem a obra liberada não a vê na lista de obras. O número no cabeçalho é quantos dos usuários listados têm a obra.'
           : `${OPEN_MODULES.map(m => m.label).join(', ')} são abertos a todos e não aparecem aqui. Administradores veem todos os módulos, por isso as células deles ficam marcadas em cinza, sem clique. O número no cabeçalho é quantos dos usuários listados têm o módulo.`}

@@ -8,7 +8,7 @@ export const sections: ManualSection[] = [
   {
     id: 'seguranca-visao-geral',
     title: 'Segurança do trabalho: para que serve e quem pode o quê',
-    summary: 'Aba 6: vistoria dos TSTs, colunas, quem grava (só TST) e o histórico da planilha SST (selo "Planilha").',
+    summary: 'Aba 6: vistoria dos TSTs, colunas, quem grava (TST e admin) e o histórico da planilha SST (selo "Planilha").',
     keywords: [
       'segurança do trabalho',
       'aba 6',
@@ -32,11 +32,11 @@ A aba fica logo abaixo da Terminalidade na lateral e é aberta a todos que têm 
 
 ## Quem pode fazer o quê
 
-- **TST**: só quem está marcado como TST lança, edita, edita em lote, finaliza, reabre e exclui apontamentos, junta e exclui fotos e mexe na lista de "Tipos de apontamento". Vale nas obras liberadas para a pessoa, qualquer que seja o papel dela, inclusive Consulta.
-- **Todos os demais com a obra liberada, inclusive administradores, gestores e planejadores**: só consultam. Veem a lista, os indicadores e as fotos, abrem o apontamento ("Ver"), filtram, classificam e geram o PDF. Não aparecem "Novo apontamento", "Tipos de apontamento", as caixas de marcar, "Finalizar", "Reabrir" nem o "✕".
-- Para quem só consulta, o topo mostra "Consulta: só os técnicos de segurança (TST) lançam e finalizam apontamentos." com os nomes ("TSTs desta obra: …") ou o aviso de que nenhum TST tem acesso à obra.
-- Se algo tentar gravar sem ser TST, o servidor recusa: "Só técnicos de segurança (TST) lançam e finalizam apontamentos."
-- Quem marca a pessoa como TST é o administrador, em Configurações → Usuários, na coluna "TST" da grade de acessos. A obra também precisa estar liberada para ela. O TST soma-se ao papel: no resto do sistema vale o papel escolhido.
+- **TST e Admin**: só quem tem o papel **TST** (técnico de segurança do trabalho) e os **administradores** lançam, editam, editam em lote, finalizam, reabrem e excluem apontamentos, juntam e excluem fotos e mexem na lista de "Tipos de apontamento". Vale nas obras liberadas para a pessoa.
+- **Consulta, Planejador e Gestor**: só consultam. Veem a lista, os indicadores e as fotos, abrem o apontamento ("Ver"), filtram, classificam e geram o PDF. Não aparecem "Novo apontamento", "Tipos de apontamento", as caixas de marcar, "Finalizar", "Reabrir" nem o "✕".
+- Para quem só consulta, o topo mostra "Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos." com os nomes ("TSTs desta obra: …") ou o aviso de que nenhum TST tem acesso à obra.
+- Se algo tentar gravar sem permissão, o servidor recusa: "Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos."
+- O papel TST é dado pelo administrador, em Configurações → Usuários, no campo "Papel" da grade (ou ao cadastrar a pessoa). A obra também precisa estar liberada para ela. No resto do sistema, o TST só consulta, como o papel Consulta.
 
 ## Colunas da lista
 
@@ -83,7 +83,7 @@ A lista abre nos abertos, do apontamento mais recente para o mais antigo (no mes
     screen: 'seguranca',
     body: `## Lançar: "Novo apontamento"
 
-Só para TST. O botão "Novo apontamento" fica no cabeçalho da aba. Na janela:
+Só para TST e admin. O botão "Novo apontamento" fica no cabeçalho da aba. Na janela:
 
 1. "Tipo de apontamento": obrigatório no lançamento ("Escolha o tipo"); só aparecem os tipos ativos. Sem nenhum ativo, a tela pede: "Não há tipos de apontamento ativos. Cadastre ou reative um em "Tipos de apontamento"."
 2. "Risco: consequência": obrigatório (Morte, Severa, Significativa, Leve, Nenhuma, Autuação/Multa).
@@ -134,7 +134,7 @@ Quem não é TST abre a mesma janela com o título "Apontamento", tudo travado, 
     screen: 'seguranca',
     body: `## Finalizar: o risco foi corrigido
 
-Quem: só TST. Onde: "Finalizar", no fim da linha de um apontamento aberto (ou no cartão, no celular). Abre a janela "Finalizar apontamento", com a descrição, "Apontado: dd/mm/aaaa (há N dias)", o local, o risco (consequência · probabilidade) e as fotos em "Antes (fotos do apontamento)", para comparar ("O apontamento foi registrado sem foto." quando não há).
+Quem: só TST e admin. Onde: "Finalizar", no fim da linha de um apontamento aberto (ou no cartão, no celular). Abre a janela "Finalizar apontamento", com a descrição, "Apontado: dd/mm/aaaa (há N dias)", o local, o risco (consequência · probabilidade) e as fotos em "Antes (fotos do apontamento)", para comparar ("O apontamento foi registrado sem foto." quando não há).
 
 Preencha:
 
@@ -163,7 +163,7 @@ Use "Reabrir" quando o risco voltou ou a correção foi recusada na vistoria seg
 
 O "✕" no fim da linha ("Excluir apontamento") e o botão "Excluir apontamento" no rodapé da janela de edição apagam o apontamento com todas as fotos. A confirmação avisa que ele "sai da lista com as fotos dele. Isto não pode ser desfeito." Não existe lixeira nem desfazer; por isso, se o risco voltou num apontamento finalizado, prefira "Reabrir", que preserva o histórico. Aviso: "Apontamento excluído."
 
-- Só TST exclui, inclusive apontamento do histórico importado.
+- Só TST e admin excluem, inclusive apontamento do histórico importado.
 - No celular, a lista em cartões não tem o "✕": a exclusão fica no rodapé da janela aberta por "Editar".
 - O modo de campo não exclui.`,
   },
@@ -251,7 +251,7 @@ Contam os apontamentos da seleção dos filtros nas duas situações, qualquer q
     screen: 'seguranca',
     body: `## "Tipos de apontamento": uma lista para todas as obras
 
-O botão "Tipos de apontamento" fica no cabeçalho, só para TST. A lista é a mesma em todas as obras, porque a equipe de TST é a mesma e o quadro mês a mês compara os tipos: incluir, renomear, desativar ou reordenar um tipo vale para os apontamentos de todas elas. A contagem ao lado de cada tipo ("N apontamentos nesta obra" ou "sem uso nesta obra") é só da obra aberta.
+O botão "Tipos de apontamento" fica no cabeçalho, só para TST e admin. A lista é a mesma em todas as obras, porque a equipe de TST é a mesma e o quadro mês a mês compara os tipos: incluir, renomear, desativar ou reordenar um tipo vale para os apontamentos de todas elas. A contagem ao lado de cada tipo ("N apontamentos nesta obra" ou "sem uso nesta obra") é só da obra aberta.
 
 - **Incluir**: digite o nome (até 80 caracteres; ex.: "Içamento de cargas") e clique em "Adicionar tipo". Nome repetido é recusado, sem diferença de acento, maiúscula ou espaços: "Já existe o tipo …" ou, se estiver desativado, "Já existe o tipo …, desativado. Reative-o na lista."
 - **Renomear**: o lápis ao lado do nome; Enter salva, Esc cancela. O nome novo aparece em todos os apontamentos que usam o tipo, em todas as obras.
@@ -343,11 +343,11 @@ Depois, um bloco por grupo, com o título repetido em cada folha ("· N apontame
 ## Como abrir e baixar a obra (com sinal)
 
 1. Na aba 6, toque em "Usar no celular, sem sinal", ou digite "/campo/seguranca" no navegador do celular, com o mesmo login.
-2. Na primeira vez aparece "Prepare com sinal": toque em "Carregar minhas obras". A lista mostra o seu nome, com "(TST)" se você for TST.
+2. Na primeira vez aparece "Prepare com sinal": toque em "Carregar minhas obras". A lista mostra o seu nome, com "(TST)" se você for TST ou "(admin)" se for administrador.
 3. Toque na obra ("Toque para baixar e usar sem sinal"): ela é baixada com as fotos dos apontamentos abertos e passa a mostrar "Pronta sem sinal · N abertos". Daí em diante abre mesmo em modo avião. As fotos do histórico finalizado só aparecem com sinal.
 4. Com sinal, "Atualizar a obra com o que está no servidor", no fim da lista, traz o que foi lançado no computador e em outros celulares, sem perder a fila do aparelho.
 
-O aparelho guarda também se você é TST, do momento em que a obra foi baixada. Quem acabou de ser marcado como TST precisa atualizar a obra, com sinal, para os botões aparecerem; quem deixou de ser TST tem o que lançou recusado no envio.
+O aparelho guarda também se você é TST, do momento em que a obra foi baixada. Quem acabou de receber o papel TST precisa atualizar a obra, com sinal, para os botões aparecerem; quem deixou de ser TST tem o que lançou recusado no envio.
 
 ## Lançar, fotografar e finalizar
 
@@ -393,12 +393,12 @@ A fila sobe sozinha, na ordem em que foi lançada: ao abrir a tela com sinal, qu
     screen: 'seguranca',
     body: `## Não vejo "Novo apontamento" nem "Finalizar"
 
-Esses botões são só do TST. O aviso "Consulta: só os técnicos de segurança (TST) lançam e finalizam apontamentos." no topo confirma que você não está marcado como TST e lista os TSTs da obra. Ser administrador, gestor ou planejador não basta. Para virar TST, peça a um administrador, que marca a coluna "TST" na grade de Configurações → Usuários. Depois, recarregue a aba (no modo de campo, atualize a obra com sinal).
+Esses botões são só do TST e do admin. O aviso "Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos." no topo confirma que o seu papel não grava nesta aba e lista os TSTs da obra. Ser gestor ou planejador não basta. Para virar TST, peça a um administrador, que escolhe "TST" no campo "Papel" da grade de Configurações → Usuários. Depois, recarregue a aba (no modo de campo, atualize a obra com sinal).
 
 ## Sou TST e não consigo gravar
 
 - "Você não tem acesso a esta obra.": a obra também precisa estar liberada para você na grade de acessos.
-- "Só técnicos de segurança (TST) lançam e finalizam apontamentos.": a marcação de TST foi tirada, ou a tela foi aberta antes de você ser marcado; recarregue.
+- "Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos.": o seu papel deixou de ser TST, ou a tela foi aberta antes da troca; recarregue.
 - No modo de campo, a marcação vale a partir da próxima vez que a obra for baixada ou atualizada.
 
 ## Não consigo finalizar

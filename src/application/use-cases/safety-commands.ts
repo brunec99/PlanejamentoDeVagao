@@ -14,7 +14,7 @@ import {
 
 /** Regras da aba 6 (Segurança do trabalho), sem banco: recebe os tipos (todos, a lista é única) e os
  * apontamentos de UMA obra e devolve o que gravar. O processo é o da terminalidade
- * (`terminality-commands.ts`); quem pode gravar (só TST) não é assunto daqui: a rota confere antes,
+ * (`terminality-commands.ts`); quem pode gravar (TST ou admin) não é assunto daqui: a rota confere antes,
  * com `canWriteSafety`. Toda recusa de regra sai como erro com mensagem pronta para o usuário. */
 
 export type SafetyTable = 'types' | 'items' | 'photos';
@@ -69,9 +69,11 @@ export const SAFETY_COMMAND_TYPES = [
   'delete_item',
 ] as const satisfies readonly SafetyCommand['type'][];
 
-/** Só quem está marcado como TST grava na aba 6; papel (nem admin) não basta. Os demais com a obra
- * liberada consultam. Usada pelas rotas, e pela tela só para esconder botões. */
-export const canWriteSafety = (profile: { tst?: boolean } | null | undefined): boolean => profile?.tst === true;
+/** Gravam na aba 6 quem é do tipo TST e, desde 05/11/2026 a pedido do usuário ("eu como admin quero ter
+ * acesso ao módulo como TST"), os administradores. Planejador, gestor e consulta só consultam. Usada pelas
+ * rotas, e pela tela só para esconder botões. */
+export const canWriteSafety = (profile: { tst?: boolean; role?: string } | null | undefined): boolean =>
+  profile?.tst === true || profile?.role === 'admin';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_IMAGE_SIDE = 20_000;
