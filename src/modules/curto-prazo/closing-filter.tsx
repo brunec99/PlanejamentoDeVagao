@@ -13,7 +13,8 @@ export function FilterPicker({
   onChange,
 }: {
   label: string;
-  values: { value: string; count: number }[];
+  /** `count` ausente: a opção não tem contagem natural (as obras do Dashboard geral) e o número não aparece. */
+  values: { value: string; count?: number }[];
   selected: Set<string> | undefined;
   onChange: (next: Set<string> | undefined) => void;
 }) {
@@ -154,7 +155,7 @@ export function FilterPicker({
                       onChange={event => mark([v.value], event.target.checked)}
                     />
                     <span className={`flex-1 truncate ${v.value ? '' : 'italic text-slate-500'}`}>{text(v.value)}</span>
-                    <span className="tabular-nums text-slate-400">{v.count}</span>
+                    {v.count !== undefined && <span className="tabular-nums text-slate-400">{v.count}</span>}
                   </label>
                 </li>
               ))}

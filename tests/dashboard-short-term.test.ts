@@ -5,9 +5,12 @@ import { addDays } from '../src/domain/validation';
 import { MIN_RANKED_WEEKS, rankWorks, type ClosingRankingResponse, type RankingEntry } from '../src/domain/closing-ranking';
 import { closingDashboard, type Segment } from '../src/modules/curto-prazo/closing-dashboard';
 import { referenceOf, type DashboardFilters } from '../src/modules/dashboard/model';
+import { resolvePeriod, type PeriodContext, type PeriodSelection } from '../src/modules/dashboard/period';
 import {
+  bucketPpc,
   buildHistory,
   buildShortTermPanel,
+  periodCompanies,
   shortTermCompanies,
   shortTermSummary,
   yearsSentence,
@@ -351,4 +354,250 @@ test('resumo: semana igual à anterior, abaixo da média, sem semana e com recor
     text(filtered.sentence),
     /No PPC geral desde a semana 1 \(\d+% em 12 semanas apuradas, obra inteira\), a obra está em 2º lugar entre 6 obras\./,
   );
+});
+
+// ─── Escalas de tempo (04/11/2026, modelo "Dashboard geral e escalas de tempo", regras 5 a 9) ───────────
+// Hoje é 04/11/2026: a semana atual começa em 02/11. Outubro tem as semanas de 05, 12, 19 e 26/10 (a de 28/09
+// é de setembro, pela segunda-feira).
+const TODAY = '2026-11-04';
+const ctx: PeriodContext = { currentWeek: '2026-11-02', since: FIRST_WEEK, anchorWeek: '2026-10-26' };
+const periodRef = (selection: PeriodSelection) => referenceOf('2026-10-26', TODAY, FIRST_WEEK, resolvePeriod(selection, ctx));
+const buildIn = (
+  commitments: WeeklyCommitment[],
+  selection: PeriodSelection,
+  filters?: Partial<DashboardFilters>,
+  rk: ClosingRankingResponse | undefined = undefined,
+) => {
+  const r = periodRef(selection);
+  const data = buildShortTermPanel({ commitments, teams, work, ranking: rk }, r, { week: r.week, selection, ...filters });
+  return { data: data!, ref: r };
+};
+const months = [
+  ...week('2025-11-03', 1, ['Retrabalho']),
+  ...week('2026-08-03', 4, ['Falta de Material']),
+  ...week('2026-09-07', 7, repeat(3, 'Retrabalho')),
+  ...week('2026-09-28', 7, repeat(3, 'Falta de Material')),
+  // Outubro: 18/20, 3/10, a semana de 19/10 em aberto (2 linhas sem Status) e 9/10.
+  ...week('2026-10-05', 18, ['Falta de Material', 'Falta de Material']),
+  ...week('2026-10-12', 3, ['Intempéries', 'Intempéries', 'Intempéries', 'Intempéries', 'Falta de Material', 'Falta de Material', '']),
+  ...week('2026-10-19', 5, ['Retrabalho'], 2),
+  ...week('2026-10-26', 9, ['Intempéries']),
+];
+
+test('período mensal: PPC soma as linhas das semanas apuradas; a semana em aberto fica fora', () => {
+  const later = [...months, ...week('2026-11-02', 0, repeat(5, 'Retrabalho'))];
+  const { data } = buildIn(later, { scale: 'mes', key: '2026-10' });
+  const p = data.period;
+  assert.deepEqual(p.current, {
+    key: '2026-10',
+    label: 'outubro de 2026',
+    short: 'out/26',
+    start: '2026-10-05',
+    end: '2026-10-31',
+    planned: 40,
+    fulfilled: 30,
+    closedWeeks: 3,
+    openWeeks: 1,
+    pending: 2,
+    percent: 75,
+  });
+  // Não é a média dos percentuais das semanas apuradas ((90 + 30 + 90) ÷ 3 = 70%): é 30 ÷ 40.
+  assert.notEqual(p.current.percent, 70);
+  assert.deepEqual([p.previous!.key, p.previous!.planned, p.previous!.fulfilled, p.previous!.percent], ['2026-09', 20, 14, 70]);
+  // A série são os 12 meses até outubro; mês sem linha fica sem PPC e fora da média simples.
+  assert.equal(p.series.length, 12);
+  assert.deepEqual([p.series[0].key, p.series.at(-1)!.key], ['2025-11', '2026-10']);
+  assert.deepEqual(p.series.at(-1), p.current);
+  assert.deepEqual(
+    p.series.filter(b => b.percent !== undefined).map(b => [b.short, b.percent]),
+    [
+      ['nov/25', 50],
+      ['ago/26', 80],
+      ['set/26', 70],
+      ['out/26', 75],
+    ],
+  );
+  assert.equal(p.average, (50 + 80 + 70 + 75) / 4);
+  assert.equal(p.closedInSeries, 4);
+  // Causas das linhas com Não de todas as semanas do período, inclusive a em aberto; nada de novembro.
+  assert.deepEqual(
+    p.causes.map(item => [item.cause, item.total]),
+    [
+      ['Intempéries', 5],
+      ['Falta de Material', 4],
+      ['Retrabalho', 1],
+    ],
+  );
+  assert.deepEqual([p.failures, p.uncaused], [11, 1]);
+  assert.deepEqual(data.periodInfo, {
+    scale: 'mes',
+    grouping: 'mes',
+    label: 'outubro de 2026',
+    short: 'out/26',
+    of: 'do mês',
+    start: '2026-10-05',
+    end: '2026-10-31',
+    partial: false,
+    weeks: 4,
+    nominalWeeks: 4,
+    analyzedKey: '2026-10',
+  });
+  // Os campos da semana continuam sendo os da última semana do período.
+  assert.equal(data.closing.week, '2026-10-26');
+  assert.equal(data.weekNumber, 117);
+});
+
+test('bucketPpc: semanas do balde, apuradas e em aberto, e balde sem semana apurada', () => {
+  const bucket = { key: 'x', label: 'L', short: 'S', start: '2026-10-05', end: '2026-10-31' };
+  assert.deepEqual(bucketPpc(months, { ...bucket, weeks: ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'] }), {
+    ...bucket,
+    planned: 40,
+    fulfilled: 30,
+    closedWeeks: 3,
+    openWeeks: 1,
+    pending: 2,
+    percent: 75,
+  });
+  const open = bucketPpc(months, { ...bucket, weeks: ['2026-10-19'] });
+  assert.equal(open.percent, undefined);
+  assert.equal('percent' in open, false);
+  assert.deepEqual([open.planned, open.closedWeeks, open.openWeeks, open.pending], [0, 0, 1, 2]);
+  const empty = bucketPpc(months, { ...bucket, weeks: ['2026-06-01'] });
+  assert.deepEqual([empty.planned, empty.closedWeeks, empty.openWeeks, empty.percent], [0, 0, 0, undefined]);
+});
+
+test('escala semanal: o período é a semana e repete os números do painel', () => {
+  const data = build(blentt, ANALYZED)!;
+  assert.equal(data.periodInfo.scale, 'semana');
+  assert.equal(data.period.current.key, ANALYZED);
+  assert.deepEqual([data.period.current.planned, data.period.current.fulfilled], [41, 32]);
+  assert.equal(data.period.current.percent, data.closing.current!.percent);
+  assert.equal(data.period.previous!.percent, data.closing.previous!.percent);
+  assert.deepEqual(
+    data.period.series.map(b => b.percent),
+    data.closing.series.map(point => point.percent),
+  );
+  assert.deepEqual(data.period.causes, data.closing.weekCauses);
+});
+
+test('resumo na escala mensal: cartão "PPC do mês", selo parcial e a frase do período', () => {
+  const { data, ref } = buildIn(months, { scale: 'mes', key: '2026-10' }, {}, ranking);
+  const { kpi, sentence } = shortTermSummary(data, ref);
+  assert.deepEqual(kpi, {
+    module: 'curto-prazo',
+    label: 'PPC do mês',
+    value: '75%',
+    tag: { text: 'parcial · 3 de 4 semanas apuradas', tone: 'warn' },
+    hint: '30 de 40 compromissos · ▲ 5 p.p. vs set/26',
+    main: true,
+  });
+  // PPC geral até 31/10: 49 de 67 nas 7 semanas apuradas (73%), 2º no ranking.
+  assert.equal(
+    text(sentence),
+    'Em outubro de 2026 a obra cumpriu 75% do que assumiu (30 de 40 compromissos em 3 semanas apuradas; 1 semana em aberto fica fora), ' +
+      '5 p.p. acima de setembro. No PPC geral desde a semana 1 (73% em 7 semanas apuradas), a obra está em 2º lugar entre 6 obras.',
+  );
+  assert.deepEqual(strong(sentence), ['75%', '2º lugar entre 6 obras']);
+
+  // Mês todo apurado: o selo compara com a média da série, como na semanal.
+  const september = buildIn(months, { scale: 'mes', key: '2026-09' });
+  const s = shortTermSummary(september.data, september.ref);
+  assert.deepEqual(s.kpi.tag, { text: 'acima da média', tone: 'good' });
+  assert.equal(s.kpi.hint, '14 de 20 compromissos · ▼ 10 p.p. vs ago/26');
+  assert.equal(
+    text(s.sentence),
+    'Em setembro de 2026 a obra cumpriu 70% do que assumiu (14 de 20 compromissos em 2 semanas apuradas), 10 p.p. abaixo de agosto. ' +
+      'Desde a semana 1, o PPC geral da obra é de 70% em 4 semanas apuradas.',
+  );
+});
+
+test('resumo: mês atual sem semana apurada, trimestre, ano e personalizado', () => {
+  const lines = [...months, ...week('2026-11-02', 2, [], 3)];
+  const november = buildIn(lines, { scale: 'mes', key: '2026-11' });
+  const n = shortTermSummary(november.data, november.ref);
+  assert.deepEqual(
+    [n.kpi.label, n.kpi.value, n.kpi.tag, n.kpi.hint],
+    ['PPC do mês', '—', { text: 'parcial · 0 de 5 semanas apuradas', tone: 'warn' }, 'Nenhuma semana apurada · 3 linhas sem Status'],
+  );
+  assert.equal(
+    text(n.sentence),
+    'Em novembro de 2026 ainda não há semana apurada: 1 semana está em aberto, com 3 linhas sem Status. ' +
+      'Desde a semana 1, o PPC geral da obra é de 73% em 7 semanas apuradas.',
+  );
+
+  const quarter = buildIn(lines, { scale: 'trimestre', key: '2026-T4' });
+  const q = shortTermSummary(quarter.data, quarter.ref);
+  assert.deepEqual([q.kpi.label, q.kpi.value, q.kpi.hint], ['PPC do trimestre', '75%', '30 de 40 compromissos · ▲ 3 p.p. vs 3T26']);
+  assert.deepEqual(q.kpi.tag, { text: 'parcial · 3 de 13 semanas apuradas', tone: 'warn' });
+  assert.match(
+    text(q.sentence),
+    /^No 4º trimestre de 2026 \(out–dez\), até agora, a obra cumpriu 75% do que assumiu \(30 de 40 compromissos em 3 semanas apuradas; 2 semanas em aberto ficam fora\), 3 p\.p\. acima do 3º trimestre\./,
+  );
+
+  const year = buildIn(lines, { scale: 'ano', key: '2026' });
+  const y = shortTermSummary(year.data, year.ref);
+  assert.equal(y.kpi.label, 'PPC do ano');
+  assert.equal(y.kpi.hint, '48 de 65 compromissos · ▲ 24 p.p. vs 2025');
+  assert.match(
+    text(y.sentence),
+    /^Em 2026, até agora, a obra cumpriu 74% do que assumiu \(48 de 65 compromissos em 6 semanas apuradas; 2 semanas em aberto ficam fora\), 24 p\.p\. acima de 2025\./,
+  );
+
+  // Personalizado de 01/09 a 31/10: semanas inteiras de 31/08 a 31/10 (9), por semana; o anterior são as 9 semanas antes.
+  const custom = buildIn(months, { scale: 'personalizado', from: '2026-09-01', to: '2026-10-31' });
+  assert.equal(custom.data.periodInfo.analyzedKey, undefined);
+  assert.equal(custom.data.periodInfo.grouping, 'semana');
+  assert.equal(custom.data.period.series.length, 9);
+  assert.equal(custom.data.period.previous!.percent, 80);
+  const c = shortTermSummary(custom.data, custom.ref);
+  assert.deepEqual(
+    [c.kpi.label, c.kpi.value, c.kpi.tag, c.kpi.hint],
+    [
+      'PPC do período',
+      '73%',
+      { text: 'parcial · 5 de 9 semanas apuradas', tone: 'warn' },
+      '44 de 60 compromissos · ▼ 7 p.p. vs período anterior',
+    ],
+  );
+  assert.match(
+    text(c.sentence),
+    /^De 31\/08 a 31\/10\/2026 a obra cumpriu 73% do que assumiu \(44 de 60 compromissos em 5 semanas apuradas; 1 semana em aberto fica fora\), 7 p\.p\. abaixo das 9 semanas anteriores\./,
+  );
+});
+
+test('recorte de empreiteiro vale no período; periodCompanies apura a semana pela obra inteira', () => {
+  const lines = [
+    ...week('2026-10-05', 8, ['Falta de Material', 'Falta de Material'], 0, { supplier: 'Alfa' }),
+    ...week('2026-10-05', 4, ['Retrabalho'], 0, { teamId: 't1' }),
+    ...week('2026-10-05', 1, []),
+    // 12/10 fica em aberto para a obra (uma linha da Alfa sem Status), mas a Hidrotec apurou.
+    ...week('2026-10-12', 5, [], 1, { supplier: 'Alfa' }),
+    ...week('2026-10-12', 3, ['Retrabalho'], 0, { supplier: 'HIDROTEC' }),
+    ...week('2026-10-19', 10, [], 0, { supplier: 'Alfa' }),
+    ...week('2026-10-19', 1, [], 0, { supplier: 'ALFA ' }),
+  ];
+  const whole = buildIn(lines, { scale: 'mes', key: '2026-10' }).data.period;
+  assert.deepEqual([whole.current.planned, whole.current.fulfilled, whole.current.closedWeeks, whole.current.openWeeks], [27, 24, 2, 1]);
+  const { data, ref } = buildIn(lines, { scale: 'mes', key: '2026-10' }, { companies: new Set(['hidrotec']) });
+  const p = data.period;
+  // Só as linhas da Hidrotec: 4 de 5 em 05/10 e 3 de 4 em 12/10, as duas apuradas no recorte.
+  assert.deepEqual([p.current.planned, p.current.fulfilled, p.current.closedWeeks, p.current.openWeeks], [9, 7, 2, 0]);
+  assert.deepEqual(
+    p.causes.map(item => [item.cause, item.total]),
+    [['Retrabalho', 2]],
+  );
+  assert.deepEqual([p.failures, p.uncaused], [2, 0]);
+  assert.match(text(shortTermSummary(data, ref).sentence), /^Em outubro de 2026 o recorte de empreiteiro cumpriu 78% do que assumiu/);
+
+  const october = ref.period.weeks;
+  assert.deepEqual(periodCompanies(lines, teams, october), [
+    { name: 'Alfa', key: 'alfa', planned: 21, fulfilled: 19 },
+    { name: 'Hidrotec', key: 'hidrotec', planned: 5, fulfilled: 4 },
+  ]);
+  assert.deepEqual(periodCompanies(lines, teams, ['2026-10-05']), [
+    { name: 'Alfa', key: 'alfa', planned: 10, fulfilled: 8 },
+    { name: 'Hidrotec', key: 'hidrotec', planned: 5, fulfilled: 4 },
+  ]);
+  assert.deepEqual(periodCompanies(lines, teams, ['2026-10-12']), []);
+  assert.deepEqual(periodCompanies([], teams, october), []);
 });

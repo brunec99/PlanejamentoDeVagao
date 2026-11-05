@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { Boxes, Layers, Wallet, RefreshCw, Settings2 } from 'lucide-react';
+import { BarChart3, Boxes, Layers, Wallet, RefreshCw, Settings2 } from 'lucide-react';
 import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
 import { hasSectionAccess } from '@/application/module-access';
 import { workPath } from '@/shared/format';
@@ -39,6 +39,40 @@ export const SUPPORT = [
   { section: 'importar', label: 'Integrações', Icon: RefreshCw },
   { section: 'configuracoes', label: 'Configurações da obra', Icon: Settings2 },
 ];
+
+/** Dashboard geral (04/11/2026, regras 1 e 2 do modelo "Dashboard geral e escalas de tempo"): item em
+ * Empreendimentos, abaixo de Obras, para quem tem duas obras ou mais (com uma só não há o que comparar) e
+ * sempre para admin e desenvolvedor. Fica aqui, no cliente, para acender quando é a página aberta. */
+export const canComparePortfolio = (workCount: number, role: string | undefined, developer: boolean) =>
+  developer || role === 'admin' || workCount >= 2;
+
+export function PortfolioLink() {
+  const pathname = usePathname();
+  const context = usePlanning();
+  const developer = useDeveloper();
+  if (context.state !== 'ready') return null;
+  const { data } = context.planning;
+  const actor = data.users.find(u => u.id === context.actorId);
+  // A mesma contagem do botão "Comparar obras" da lista: as obras liberadas que existem.
+  const works = data.works.filter(w => actor?.workIds.includes(w.id)).length;
+  if (!canComparePortfolio(works, actor?.role, developer)) return null;
+  const active = pathname === '/dashboard';
+  return (
+    <Link
+      href="/dashboard"
+      aria-current={active ? 'page' : undefined}
+      className={`relative flex items-start gap-3 rounded-lg px-3 py-2 transition-colors ${active ? 'bg-white/12 shadow-sm ring-1 ring-white/10 before:absolute before:top-1/2 before:-left-3 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-brand-300' : 'hover:bg-white/6'}`}
+    >
+      <BarChart3 size={17} aria-hidden className="mt-0.5 shrink-0 text-brand-300" />
+      <span className="min-w-0">
+        <span className={`block text-sm font-medium leading-snug ${active ? 'text-white' : 'text-brand-50/90'}`}>Dashboard geral</span>
+        <span className={`block truncate text-xs leading-4 ${active ? 'text-brand-200' : 'text-brand-300/75'}`}>
+          Todas as obras · Comparativos
+        </span>
+      </span>
+    </Link>
+  );
+}
 
 function useWork() {
   const pathname = usePathname();

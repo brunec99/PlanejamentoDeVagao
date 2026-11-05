@@ -3,11 +3,13 @@ import type { TourStep } from '../tours';
 /** Tour da aba 0, Dashboard da obra (04/11/2026, modelo aprovado pelo usuário). Os alvos ficam em
  * `dashboard/dashboard-overview.tsx`; os que se repetem por módulo (quadro, "Abrir aba") marcam só a primeira
  * ocorrência. A aba só lê: nenhum passo descreve edição. Passo cujo alvo não está na tela (obra sem nenhum
- * módulo com dado, celular) é pulado sozinho. */
+ * módulo com dado, celular) é pulado sozinho. Escalas de tempo (04/11/2026, modelo "Dashboard geral e escalas
+ * de tempo"): o passo da "Semana analisada" (`dash-semana`) virou dois, a escala (`dash-escala`) e o período
+ * (`dash-periodo`). */
 export const steps: TourStep[] = [
   {
     title: 'Aba 0 · Dashboard da obra',
-    body: 'Os cinco níveis da obra numa página só: curto prazo, longo prazo, vagões, médio prazo e terminalidade, lidos até a semana analisada. Só entram os módulos que você pode abrir e que têm dado nesta obra. Aqui nada se edita: cada quadro leva à aba de origem.',
+    body: 'Os cinco níveis da obra numa página só: curto prazo, longo prazo, vagões, médio prazo e terminalidade, no período escolhido (uma semana, um mês, um trimestre, um ano ou um intervalo). Só entram os módulos que você pode abrir e que têm dado nesta obra. Aqui nada se edita: cada quadro leva à aba de origem.',
   },
   {
     target: 'tab-header',
@@ -17,17 +19,22 @@ export const steps: TourStep[] = [
   {
     target: 'tab-ajuda',
     title: 'Como funciona',
-    body: 'Abre a explicação da aba: de onde vem cada quadro, o que a semana analisada faz com os números, o que cada filtro recorta e por que um módulo pode não aparecer.',
+    body: 'Abre a explicação da aba: de onde vem cada quadro, como o período é montado, o que é somado dentro dele e o que é o retrato do sábado final, o que cada filtro recorta e por que um módulo pode não aparecer.',
   },
   {
     target: 'dash-filtros',
     title: 'Filtros',
-    body: 'Quatro filtros, que valem ao mesmo tempo para a tela e para o PDF: “Semana analisada” é a data de referência; “Empreiteiro”, “Pavimento” e “Quadros” recortam o que entra. Os filtros seguem no endereço da página de impressão.',
+    body: 'Os filtros valem ao mesmo tempo para a tela e para o PDF: “Escala” e “Período” escolhem o intervalo analisado; “Empreiteiro”, “Pavimento” e “Quadros” recortam o que entra. Escala e período vão para o endereço da página, então o link copiado reproduz a visão; todos os filtros seguem no endereço da página de impressão.',
   },
   {
-    target: 'dash-semana',
-    title: 'Semana analisada',
-    body: 'A data de referência de tudo: cada quadro conta só até o sábado dela e ignora o que veio depois. Pendência resolvida depois conta como aberta; medição posterior não entra. Abre na semana atual; escolha uma semana antiga para ver a obra como estava, e o PDF dela sai igual depois.',
+    target: 'dash-escala',
+    title: 'Escala',
+    body: 'Semanal, Mensal, Trimestral, Anual ou Personalizado, o mesmo seletor do Dashboard geral. A aba abre em Semanal, na semana atual, como antes; vindo do Dashboard geral, abre na escala e no período de lá. Trocar a escala mantém o lugar: da última semana de outubro, o Mensal abre em outubro.',
+  },
+  {
+    target: 'dash-periodo',
+    title: 'Período',
+    body: 'A lista dos períodos, com as setas ‹ › para andar um de cada vez; no Semanal as semanas vêm numeradas como na planilha, e o período em andamento aparece como “parcial”. No Personalizado, escolha “de” e “até” e, se quiser, “Agrupar por” semana, mês ou trimestre. O período é feito de semanas inteiras (a semana conta no mês da sua segunda-feira) e cada quadro conta só até o sábado da última semana: pendência resolvida depois conta como aberta, medição posterior não entra, e o PDF de um período antigo sai igual depois.',
   },
   {
     target: 'dash-empreiteiro',
@@ -47,22 +54,22 @@ export const steps: TourStep[] = [
   {
     target: 'dash-escopo',
     title: 'Até quando, e o que falta',
-    body: 'Diz a data até a qual tudo conta (o sábado da semana analisada), qual é a semana atual e quais módulos não têm dados nesta obra. Esses módulos não aparecem na página; a linha é o único lugar que os cita.',
+    body: 'Diz o período e as semanas da obra que ele cobre (fora da escala semanal), a data até a qual tudo conta (o sábado da última semana), qual é a semana atual e quais módulos não têm dados nesta obra. Esses módulos não aparecem na página; a linha é o único lugar que os cita.',
   },
   {
     target: 'dash-resumo',
     title: 'Resumo em uma frase',
-    body: 'O estado da obra na semana analisada, escrito com os números já arredondados dos cartões: a frase nunca contradiz o cartão abaixo dela.',
+    body: 'O estado da obra no período escolhido, escrito com os números já arredondados dos cartões: a frase nunca contradiz o cartão abaixo dela.',
   },
   {
     target: 'dash-cartoes',
     title: 'Cartões',
-    body: 'Até seis indicadores, um por módulo presente: PPC da semana, avanço físico, takt vencido, tarefas atrasadas, pendências abertas e restrições vencidas. Cada cartão diz de que aba vem, e o estado aparece em cor e em texto.',
+    body: 'Até seis indicadores, um por módulo presente: PPC da semana (ou do mês, do trimestre, do período), avanço físico, takt vencido, tarefas atrasadas, pendências abertas e restrições vencidas. Cada cartão diz de que aba vem, e o estado aparece em cor e em texto. Fora da escala semanal, o cartão diz se o número é o que aconteceu no período ou o retrato do sábado final.',
   },
   {
     target: 'dash-quadro',
     title: 'Um quadro por módulo',
-    body: 'Os mesmos números da aba de origem, contados até a semana analisada e com os filtros de agora. Cada quadro aparece quando o dado dele chega; se um falhar, só ele fica “indisponível” e os outros continuam.',
+    body: 'Os mesmos números da aba de origem, contados até o sábado final do período e com os filtros de agora. Fora da escala semanal, cada quadro soma também o que aconteceu dentro do período: no longo prazo, o “Avanço no mês” e a faixa “Período analisado” na curva S; na terminalidade, as abertas e resolvidas no mês. Cada quadro aparece quando o dado dele chega; se um falhar, só ele fica “indisponível” e os outros continuam.',
   },
   {
     target: 'dash-abrir-aba',
@@ -72,7 +79,7 @@ export const steps: TourStep[] = [
   {
     target: 'dash-pdf',
     title: 'Gerar PDF',
-    body: 'Abre a página de impressão numa aba nova, com os filtros de agora, e chama o “Salvar como PDF” do navegador, como os PDFs das outras abas. A4 paisagem: folha 1 com o resumo e o curto prazo, depois uma folha por módulo presente. O PDF sai pelo computador.',
+    body: 'Abre a página de impressão numa aba nova, com a escala, o período e os filtros de agora, e chama o “Salvar como PDF” do navegador, como os PDFs das outras abas. A4 paisagem, com a escala e o período no cabeçalho: folha 1 com o resumo e o curto prazo, depois uma folha por módulo presente. O PDF sai pelo computador.',
   },
   {
     target: 'dash-rodape',

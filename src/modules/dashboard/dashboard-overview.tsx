@@ -7,12 +7,15 @@ import { LoadState, Missing } from '@/modules/planejamento/ui';
 import { TourMark } from '@/modules/planejamento/wagon-actions';
 import { FilterPicker } from '@/modules/curto-prazo/closing-filter';
 import { addDays } from '@/domain/validation';
+import { periodSearchEntries, type PeriodSelection } from './period';
+import { PeriodControl, ScaleButtons } from './period-picker';
 import { formatDate, workPath } from '@/shared/format';
 import { DASHBOARD_STYLE } from './styles';
 import {
   DASHBOARD_MODULES,
   dayMonth,
   floorKey,
+  isWeekly,
   moduleInfo,
   plural,
   printDashboardPath,
@@ -30,9 +33,11 @@ import { ShortTermPanel } from './panels/short-term';
 import { TerminalityPanel } from './panels/terminality';
 
 /** Aba 0, Dashboard da obra (04/11/2026, modelo aprovado): os cinco níveis numa página, até a semana
- * analisada, só com os módulos que a pessoa pode abrir e que têm dado nesta obra. Filtros no topo (semana,
- * empreiteiro, pavimento, quadros), a frase e os cartões do resumo, um quadro por módulo com o link para a
- * aba de origem, e "Gerar PDF", que abre a impressão com os mesmos filtros. Nada aqui se edita. */
+ * analisada, só com os módulos que a pessoa pode abrir e que têm dado nesta obra. Filtros no topo (escala e
+ * período, empreiteiro, pavimento, quadros), a frase e os cartões do resumo, um quadro por módulo com o link
+ * para a aba de origem, e "Gerar PDF", que abre a impressão com os mesmos filtros. Nada aqui se edita.
+ * Escalas de tempo (04/11/2026, segundo modelo aprovado): "Semana analisada" virou escala (semanal, mensal,
+ * trimestral, anual, personalizado) e período; a escala semanal mostra o que a aba mostrava antes. */
 
 export function Text({ segments }: { segments: Segment[] }) {
   return (
@@ -106,6 +111,18 @@ function subtitleOf(key: keyof DashboardPanels, panels: DashboardPanels, dash: D
     case 'short': {
       const d = panels.short.status === 'ready' ? panels.short.data : undefined;
       if (!d) return '';
+      if (!isWeekly(dash.ref)) {
+        const p = d.period.current;
+        const weeks = p.closedWeeks
+          ? `${plural(p.closedWeeks, 'semana apurada', 'semanas apuradas')} · ${plural(p.planned, 'compromisso', 'compromissos')}`
+          : 'nenhuma semana apurada';
+        const open = p.openWeeks ? ` · ${plural(p.openWeeks, 'semana em aberto', 'semanas em aberto')}` : '';
+        const rank =
+          d.whole.ranking && d.whole.position !== undefined && d.whole.ranked >= 2
+            ? ` · ${d.whole.position}º de ${d.whole.ranked} obras no PPC geral`
+            : '';
+        return `${dash.period.label} · ${weeks}${open}${rank}${d.companyFiltered ? ' · recorte por empreiteiro' : ''}`;
+      }
       const current = d.closing.current;
       const week = !current
         ? `Semana ${d.weekNumber} sem linhas`
@@ -190,9 +207,15 @@ function ModuleCard({
 const HELP = (
   <>
     <p>
-      <strong>Uma página, até a semana analisada.</strong> Cada quadro conta só até o sábado da semana escolhida e nada depois: uma
-      pendência resolvida depois conta como aberta, uma medição posterior não entra. É o que deixa o PDF de uma semana antiga sair igual
-      quando for gerado de novo.
+      <strong>Uma página, no período escolhido.</strong> A escala pode ser semanal, mensal, trimestral, anual ou um intervalo de datas, e o
+      período é sempre feito de semanas inteiras (a semana conta no mês da sua segunda-feira). Cada quadro conta só até o sábado da última
+      semana do período e nada depois: uma pendência resolvida depois conta como aberta, uma medição posterior não entra. É o que deixa o
+      PDF de um período antigo sair igual quando for gerado de novo.
+    </p>
+    <p>
+      <strong>No período e no sábado final.</strong> PPC, causas, pendências abertas e resolvidas e o avanço físico do período somam o que
+      aconteceu dentro dele (o PPC soma as linhas das semanas apuradas, não faz média). Status dos vagões, restrições vencidas, tarefas
+      atrasadas e pendências em aberto são o retrato do sábado final.
     </p>
     <p>
       <strong>Só o que existe nesta obra.</strong> Aparecem os módulos que você pode abrir e que têm dado na obra; os demais não ocupam
@@ -210,15 +233,17 @@ const HELP = (
   </>
 );
 
-export function DashboardOverview({ workId }: { workId: string }) {
-  const [chosenWeek, setChosenWeek] = useState('');
+/** `initial` vem da URL (`escala`, `periodo`, `de`, `ate`, `agrupar` ou o antigo `semana`): o Dashboard geral
+ * abre a aba 0 no mesmo período, e o link copiado reproduz a visão. */
+export function DashboardOverview({ workId, initial }: { workId: string; initial?: PeriodSelection }) {
+  const [selection, setSelection] = useState<PeriodSelection | undefined>(initial);
   const [companies, setCompanies] = useState<Set<string>>();
   // O seletor guarda os nomes como aparecem; o filtro compara pela chave normalizada.
   const [floorNames, setFloorNames] = useState<Set<string>>();
   const [modulesChosen, setModulesChosen] = useState<Set<DashboardModule>>();
   const dash = useDashboard({
     workId,
-    week: chosenWeek || undefined,
+    selection,
     companies,
     floors: floorNames && new Set([...floorNames].map(floorKey)),
     modules: modulesChosen,
@@ -228,7 +253,13 @@ export function DashboardOverview({ workId }: { workId: string }) {
   if (dash.status === 'error') return <LoadState error />;
   if (dash.status === 'missing') return <Missing label="Obra não encontrada" />;
 
-  const { ref, panels, summary, weeks, access } = dash;
+  const { ref, panels, summary, access } = dash;
+  const choosePeriod = (next: PeriodSelection) => {
+    setSelection(next);
+    // A URL acompanha a escolha (sem recarregar a página), para o link e o "voltar" do PDF reproduzirem a visão.
+    const query = new URLSearchParams(periodSearchEntries(next)).toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  };
   const filtering = !!companies || !!floorNames || !!modulesChosen;
   const available = DASHBOARD_MODULES.filter(m => access[m.id]);
   const toggleModule = (id: DashboardModule) => {
@@ -253,7 +284,7 @@ export function DashboardOverview({ workId }: { workId: string }) {
       <TabHeader
         workId={workId}
         section="dashboard"
-        description="Os cinco níveis da obra numa página, até a semana analisada: só os módulos liberados e com dados nesta obra."
+        description="Os cinco níveis da obra numa página, no período escolhido: só os módulos liberados e com dados nesta obra."
         helpTitle="Como funciona: dashboard da obra"
         help={HELP}
       >
@@ -269,17 +300,30 @@ export function DashboardOverview({ workId }: { workId: string }) {
         aria-label="Filtros do dashboard"
         className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600"
       >
-        <label data-tour="dash-semana" className="flex items-center gap-2">
-          Semana analisada
-          <select className="field max-w-64 py-1.5" value={ref.week} onChange={e => setChosenWeek(e.target.value)}>
-            {[...weeks].reverse().map(w => (
-              <option key={w} value={w}>
-                {weekNumberOf(ref, w)} · {dayMonth(w)} a {dayMonth(addDays(w, 5))}
-                {w === ref.currentWeek ? ' (atual)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        <span className="flex flex-wrap items-center gap-2">
+          Escala
+          <span data-tour="dash-escala" className="inline-flex">
+            <ScaleButtons period={dash.period} onChange={choosePeriod} />
+          </span>
+        </span>
+        <span className="flex flex-wrap items-center gap-2">
+          Período
+          <span data-tour="dash-periodo" className="inline-flex">
+            <PeriodControl
+              period={dash.period}
+              context={dash.periodContext}
+              onChange={choosePeriod}
+              idPrefix="aba0-periodo"
+              // Na escala semanal a lista numera as semanas como a planilha, como o antigo "Semana analisada".
+              optionLabel={
+                dash.period.scale === 'semana'
+                  ? option =>
+                      `${weekNumberOf(ref, option.key)} · ${dayMonth(option.key)} a ${dayMonth(addDays(option.key, 5))}${option.current ? ' (atual)' : ''}`
+                  : undefined
+              }
+            />
+          </span>
+        </span>
         <span data-tour="dash-empreiteiro" className="inline-flex">
           <FilterPicker label="Empreiteiro" values={dash.companyOptions} selected={companies} onChange={setCompanies} />
         </span>
@@ -321,6 +365,15 @@ export function DashboardOverview({ workId }: { workId: string }) {
         )}
       </div>
       <p data-tour="dash-escopo" className="mb-4 text-xs text-slate-500">
+        {!isWeekly(ref) && (
+          <>
+            Período: <b className="font-semibold text-slate-700">{dash.period.label}</b>
+            {dash.period.weeks.length > 1
+              ? ` (semanas ${weekNumberOf(ref, dash.period.weeks[0])} a ${weekNumberOf(ref, dash.period.lastWeek)})`
+              : ` (semana ${weekNumberOf(ref, dash.period.lastWeek)})`}
+            {dash.period.partial && ' · parcial'} ·{' '}
+          </>
+        )}
         Dados até <b className="font-semibold text-slate-700">sáb {formatDate(ref.weekEnd)}</b> · semana atual:{' '}
         {weekNumberOf(ref, ref.currentWeek)}
         {!dash.settingsReady && ' · numeração provisória'} · Módulos sem dados nesta obra:{' '}

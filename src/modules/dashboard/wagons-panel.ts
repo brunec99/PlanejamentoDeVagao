@@ -4,6 +4,7 @@ import type { Activity, LocalDate, Restriction, WagonStatus } from '@/domain/ent
 import { isOverdue, leadTimeDeadline, weightedProgress } from '@/domain/rules';
 import {
   dayMonth,
+  isWeekly,
   matchesCompany,
   plural,
   type DashboardFilters,
@@ -11,6 +12,8 @@ import {
   type PanelSummary,
   type Segment,
 } from '@/modules/dashboard/model';
+import type { DashboardScale } from '@/modules/dashboard/period';
+import type { WagonsPeriodView } from '@/modules/dashboard/period-views';
 import { statusLabels, wagonLabel } from '@/shared/format';
 
 /** Quadro de vagões da aba 0 (aba 2 de origem, regra 7 do modelo aprovado em 04/11/2026): os vagões da
@@ -21,7 +24,12 @@ import { statusLabels, wagonLabel } from '@/shared/format';
  * percentual guarda só o valor de hoje), então saem como estão; o takt vencido e o limite das
  * restrições são comparados com a data de referência, não com o hoje do servidor; e registros
  * criados depois da data (dívidas, restrições) ficam fora, porque na semana analisada eles não existiam.
- * Vagão com início previsto depois da data continua contando como "não iniciado": é planejamento. */
+ * Vagão com início previsto depois da data continua contando como "não iniciado": é planejamento.
+ *
+ * Escalas de tempo (04/11/2026, regra 9): o sábado de referência é o sábado final do período, e os números
+ * acima continuam sendo o retrato nesse dia. O fluxo dentro do período (restrições resolvidas e criadas entre
+ * a segunda-feira inicial e o sábado final) sai em `period`, em toda escala; a aba 0 só o mostra fora da
+ * semanal, que continua exatamente como era. */
 
 /** Ordem e cores fixas da barra empilhada, as da paleta do sistema. */
 const STATUS_ORDER: { status: WagonStatus; color: string }[] = [
@@ -73,7 +81,22 @@ export interface WagonsPanelData {
   restrictions: RestrictionsPanelData;
   sequences: { name: string; takt: string }[];
   companyFiltered: boolean;
+  /** Fluxo de restrições dentro do período, com o mesmo recorte de empreiteiro do resto do quadro. */
+  period: WagonsPeriodView;
+  /** Escala do período: na semanal o quadro diz o que dizia antes das escalas de tempo. */
+  scale: DashboardScale;
+  /** Sábado final do período (`ref.weekEnd`): a data dos retratos, "em 31/10" fora da semanal. */
+  refDate: LocalDate;
 }
+
+/** "no mês", "no trimestre": o fluxo dentro do período ("Restrições resolvidas no mês"). */
+export const SCALE_IN: Record<DashboardScale, string> = {
+  semana: 'na semana',
+  mes: 'no mês',
+  trimestre: 'no trimestre',
+  ano: 'no ano',
+  personalizado: 'no período',
+};
 
 const dateOf = (timestamp: string): LocalDate => timestamp.slice(0, 10);
 /** O limite exibido pelo quadro de restrições: com lead time e atividade, sai do início previsto atual
@@ -155,6 +178,12 @@ export function buildWagonsPanel(
     .filter(({ deadline }) => deadline < date)
     .sort((a, b) => a.deadline.localeCompare(b.deadline) || a.r.createdAt.localeCompare(b.r.createdAt));
 
+  // Fluxo do período (regra 9): resolvidas e criadas entre a segunda-feira inicial e o sábado final, nos
+  // mesmos vagões. A data é a do registro, como no retrato acima (resolvida não volta ao quadro).
+  const { start, end } = ref.period;
+  const within = (timestamp: string | undefined) => !!timestamp && dateOf(timestamp) >= start && dateOf(timestamp) <= end;
+  const ofWagons = data.restrictions.filter(r => wagonIds.has(r.wagonId));
+
   return {
     total: wagons.length,
     byStatus,
@@ -175,6 +204,14 @@ export function buildWagonsPanel(
     },
     sequences: selected.sequences.map(s => ({ name: s.name, takt: taktText(s.defaultTaktDays, s.calendar) })),
     companyFiltered,
+    period: {
+      start,
+      end,
+      restrictionsResolved: ofWagons.filter(r => r.status === 'resolved' && within(r.resolvedAt)).length,
+      restrictionsCreated: ofWagons.filter(r => within(r.createdAt)).length,
+    },
+    scale: ref.period.scale,
+    refDate: date,
   };
 }
 
@@ -191,9 +228,34 @@ export function wagonNumbersText(numbers: readonly number[], max = 3): string {
   return `Vagões ${rest > 0 ? `${shown.join(', ')} e mais ${rest}` : listText(shown)}`;
 }
 
+const weeklyData = (data: Pick<WagonsPanelData, 'scale'>) => data.scale === 'semana';
+
 /** Ajuda do cartão "Takt vencido": quais vagões, ou por que nenhum. */
 export const overdueHint = (data: WagonsPanelData) =>
-  data.overdue.count ? wagonNumbersText(data.overdue.numbers) : 'Nenhum vagão com término previsto antes da data';
+  data.overdue.count
+    ? wagonNumbersText(data.overdue.numbers)
+    : `Nenhum vagão com término previsto antes ${weeklyData(data) ? 'da data' : `de ${dayMonth(data.refDate)}`}`;
+
+/** Textos que mudam com a escala: na semanal, os de antes das escalas de tempo; fora dela, os retratos dizem
+ * o dia ("em 31/10") e o bloco de restrições ganha o fluxo do período. */
+export const wagonsTexts = (data: WagonsPanelData) => {
+  const weekly = weeklyData(data);
+  const day = dayMonth(data.refDate);
+  return {
+    /** Explicação do bloco "Vagões por status" na tela. */
+    statusNote: weekly ? 'Na data analisada.' : `Em ${day}.`,
+    /** Explicação do bloco "Restrições" na tela. */
+    restrictionsNote: weekly
+      ? 'Coluna atual do quadro; vencidas pelo limite do lead time.'
+      : `Coluna atual do quadro; vencidas em ${day} pelo limite do lead time.`,
+    /** Fim da descrição do painel de status no papel. */
+    paperStatusNote: weekly ? 'Status atual; takt vencido pela data analisada.' : `Status atual; takt vencido em ${day}.`,
+    /** Descrição do painel de restrições no papel. */
+    paperRestrictionsNote: `Coluna atual do quadro de restrições; vencida é a aberta com limite (início previsto menos lead time) antes ${weekly ? 'da data' : `de ${day}`}.`,
+    /** "Restrições resolvidas no mês: 4"; ausente na semanal. */
+    resolvedInPeriod: weekly ? undefined : `Restrições resolvidas ${SCALE_IN[data.scale]}: ${data.period.restrictionsResolved}`,
+  };
+};
 
 /** Ajuda do cartão "Dívidas abertas". */
 export const debtsHint = (data: WagonsPanelData) =>
@@ -264,11 +326,17 @@ export function wagonsSentence(data: WagonsPanelData): Segment[] {
   return [...taktSentence(data), say(' e '), { ...first, text: first.text.replace(/^./, c => c.toLowerCase()) }, ...rest, say('.')];
 }
 
+/** Os dois cartões. Fora da semanal as dicas dizem o dia do retrato ("em 31/10") e a de restrições troca o
+ * "prazo pelo lead time" pelas resolvidas no período ("4 resolvidas no mês"). */
 export function wagonsSummary(data: WagonsPanelData, ref: DashboardReference): { takt: PanelSummary; restrictions: PanelSummary } {
   const overdue = data.overdue.count;
   const restricted = data.byStatus.find(s => s.status === 'restricted')?.value ?? 0;
   const r = data.restrictions;
   const blocking = r.overdueBlockingExecution;
+  const weekly = isWeekly(ref);
+  const day = dayMonth(ref.weekEnd);
+  const blockingText = `${blocking === 1 ? '1 bloqueia' : `${blocking} bloqueiam`} execução`;
+  const resolvedText = `${plural(data.period.restrictionsResolved, 'resolvida', 'resolvidas')} ${SCALE_IN[ref.period.scale]}`;
   return {
     takt: {
       kpi: {
@@ -276,7 +344,9 @@ export function wagonsSummary(data: WagonsPanelData, ref: DashboardReference): {
         label: 'Takt vencido',
         value: String(overdue),
         tag: overdue > 0 ? { text: overdue === 1 ? 'vagão' : 'vagões', tone: 'warn' } : { text: 'em dia', tone: 'good' },
-        hint: `De ${data.producing} em produção · ${restricted} com restrição aberta`,
+        hint: weekly
+          ? `De ${data.producing} em produção · ${restricted} com restrição aberta`
+          : `Em ${day} · de ${data.producing} em produção · ${restricted} com restrição aberta`,
         ...(overdue > 0 ? { tone: 'warn' as const } : {}),
       },
       sentence: taktSentence(data),
@@ -290,10 +360,13 @@ export function wagonsSummary(data: WagonsPanelData, ref: DashboardReference): {
           text: r.open === 0 ? 'nenhuma aberta' : `de ${plural(r.open, 'aberta', 'abertas')}`,
           tone: r.overdue > 0 ? 'bad' : 'good',
         },
-        hint:
-          r.overdue > 0
-            ? `${blocking === 1 ? '1 bloqueia' : `${blocking} bloqueiam`} execução · prazo pelo lead time`
-            : `Nenhuma vencida até ${dayMonth(ref.weekEnd)} · prazo pelo lead time`,
+        hint: weekly
+          ? r.overdue > 0
+            ? `${blockingText} · prazo pelo lead time`
+            : `Nenhuma vencida até ${day} · prazo pelo lead time`
+          : r.overdue > 0
+            ? `Em ${day} · ${blockingText} · ${resolvedText}`
+            : `Nenhuma vencida em ${day} · ${resolvedText}`,
         ...(r.overdue > 0 ? { tone: 'bad' as const } : {}),
       },
       sentence: restrictionsSentence(data),

@@ -26,6 +26,8 @@ import {
   type Segment,
   type Tone,
 } from '@/modules/dashboard/model';
+import type { DashboardScale } from '@/modules/dashboard/period';
+import type { LongTermPeriodView } from '@/modules/dashboard/period-views';
 
 /** Quadro do longo prazo (aba 1) na aba 0 (04/11/2026, regra 6 do modelo aprovado): o avanço físico medido
  * contra o planejado na data de referência, a curva S, os serviços com maior desvio e o prazo do plano.
@@ -35,7 +37,12 @@ import {
  * O planejado é a mesma ponderação por pavimento-dias de `physicalProgress`, com cada pavimento avançando
  * em reta entre o início e o primeiro dia livre (`FloorSlot.start`/`end`), a mesma convenção de `plannedAt`
  * em `domain/rules`. Ele sai da linha de base mais recente quando houver (comparar o medido com um plano
- * reprogramado é comparar a obra com a desculpa dela) e, sem linha de base, do próprio plano vivo. */
+ * reprogramado é comparar a obra com a desculpa dela) e, sem linha de base, do próprio plano vivo.
+ *
+ * Escalas de tempo (04/11/2026, modelo "Dashboard geral e escalas de tempo", regra 9): o acumulado continua
+ * tirado no sábado final do período; `period` diz quanto o medido e o planejado andaram dentro dele (fim −
+ * véspera da segunda-feira inicial). A tela só mostra o período fora da escala semanal; o Dashboard geral usa
+ * `period` em toda escala. */
 
 /** Meses da curva S, no máximo: um plano de mais de cinco anos é cortado, não amostrado. */
 export const CURVE_MONTHS = 60;
@@ -51,9 +58,18 @@ export interface LongTermDeviation {
   delta: number;
 }
 export interface LongTermPanelData {
-  /** O sábado da semana analisada e o rótulo "semana N", para o gráfico marcar a data. */
+  /** O sábado final do período e o rótulo que o gráfico põe na data ("semana N" na escala semanal; "31/10"
+   * nas demais, porque a faixa do período já diz qual é o período). */
   refDate: LocalDate;
   refLabel: string;
+  /** A escala do período (a tela só mostra o avanço do período fora da semanal). */
+  scale: DashboardScale;
+  /** "outubro de 2026", "01/06/2026 a 31/10/2026". */
+  periodLabel: string;
+  /** "no mês", "no trimestre", "no período". */
+  periodIn: string;
+  /** O avanço feito dentro do período, sempre preenchido (na escala semanal, a semana). */
+  period: LongTermPeriodView;
   /** Avanço físico medido até a data; ausente sem medição até ela. */
   measured?: number;
   /** Avanço planejado na data, pela linha de base mais recente ou pelo plano vivo. */
@@ -142,6 +158,8 @@ const touches = (activity: Pick<LongTermActivity, 'firstFloor' | 'lastFloor'>, f
 
 const byDateThenNumber = (a: LongTermMeasurement, b: LongTermMeasurement) => a.date.localeCompare(b.date) || a.number - b.number;
 const round = Math.round;
+/** "do mês" → "no mês", "da semana" → "na semana". */
+const periodInOf = (of: string) => of.replace(/^d/, 'n');
 
 export function buildLongTermPanel(
   document: LongTermPlanDocument,
@@ -222,10 +240,32 @@ export function buildLongTermPanel(
   const baseSpan = baseline ? planSpan(baseline.activities) : undefined;
   const slip = span && baseSpan ? daysBetween(baseSpan.finish, span.finish) : undefined;
 
+  // Avanço no período (regra 9): o medido e o planejado na véspera da segunda-feira inicial, pelas mesmas
+  // funções, os mesmos serviços, o mesmo recorte de pavimentos e a mesma fonte do planejado do fim. Os ganhos
+  // saem dos valores arredondados, como o desvio, para nunca contradizer os números da tela.
+  const periodStart = ref.period.start;
+  const eve = addDays(periodStart, -1);
+  const before = measurements.filter(m => m.date < periodStart);
+  const measuredAtStart = before.length ? physicalProgress(activities, before, eve) : undefined;
+  const plannedAtStart = plannedShare(plannedSlots, eve) ?? 0;
+  const period: LongTermPeriodView = {
+    start: periodStart,
+    end: until,
+    ...(measuredAtStart !== undefined ? { measuredAtStart } : {}),
+    plannedAtStart,
+    ...(measured !== undefined ? { measuredGain: round(measured) - (measuredAtStart === undefined ? 0 : round(measuredAtStart)) } : {}),
+    plannedGain: round(planned) - round(plannedAtStart),
+  };
+  const weekly = ref.period.scale === 'semana';
+
   const baselineDate = baseline ? localDateOf(baseline.createdAt) : undefined;
   return {
     refDate: until,
-    refLabel: `semana ${ref.weekNumber}`,
+    refLabel: weekly ? `semana ${ref.weekNumber}` : dayMonth(until),
+    scale: ref.period.scale,
+    periodLabel: ref.period.label,
+    periodIn: periodInOf(ref.period.of),
+    period,
     ...(measured !== undefined ? { measured, delta: round(measured) - round(planned) } : {}),
     planned,
     plannedSource: baseline ? 'baseline' : 'plan',
@@ -262,9 +302,26 @@ export function plannedSourceText(data: PlannedSource): string {
 /** A mesma fonte com a preposição: "pela linha de base …" / "pelo plano atual …". */
 export const plannedByText = (data: PlannedSource) => `${data.plannedSource === 'plan' ? 'pelo' : 'pela'} ${plannedSourceText(data)}`;
 
+const pointsText = (n: number) => `${n} ${n === 1 ? 'ponto' : 'pontos'}`;
+/** A primeira letra em maiúscula, para começar frase com "No mês". */
+export const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** "no mês: +3 p.p. × planejado +4 p.p." (sem medição até o fim: "no mês: planejado +4 p.p."). */
+export function periodGainText(data: Pick<LongTermPanelData, 'period' | 'periodIn'>): string {
+  const { measuredGain, plannedGain } = data.period;
+  return measuredGain === undefined
+    ? `${data.periodIn}: planejado ${signedPoints(plannedGain)}`
+    : `${data.periodIn}: ${signedPoints(measuredGain)} × planejado ${signedPoints(plannedGain)}`;
+}
+/** "avançou 3 pontos", "não avançou", "recuou 1 ponto" (uma medição corrigida para baixo). */
+const movedText = (gain: number) => (gain > 0 ? `avançou ${pointsText(gain)}` : gain < 0 ? `recuou ${pointsText(-gain)}` : 'não avançou');
+const plannedCount = (gain: number) => (gain === 0 ? 'nenhum planejado' : `${gain} ${gain === 1 ? 'planejado' : 'planejados'}`);
+
 export function longTermSummary(data: LongTermPanelData, ref: DashboardReference): PanelSummary {
   const origin = 'longo-prazo' as const;
   const label = 'Avanço físico';
+  // Fora da escala semanal, o cartão continua sendo o acumulado no sábado final, e a dica e a frase dizem
+  // quanto ele andou dentro do período.
+  const weekly = data.scale === 'semana';
   if (!data.services) {
     return {
       kpi: {
@@ -278,40 +335,43 @@ export function longTermSummary(data: LongTermPanelData, ref: DashboardReference
     };
   }
   if (data.measured === undefined) {
+    const plannedGain = data.period.plannedGain;
     return {
       kpi: {
         module: origin,
         label,
         value: pct(data.planned),
         tag: { text: 'sem medição', tone: 'neutral' },
-        hint: `Planejado na data ${plannedByText(data)}; nenhuma medição até ${dayMonth(ref.weekEnd)}`,
+        hint: `Planejado na data ${plannedByText(data)}; nenhuma medição até ${dayMonth(ref.weekEnd)}${weekly ? '' : ` · ${periodGainText(data)}`}`,
       },
       sentence: [
         { text: 'O longo prazo ainda não tem medição até a data; o avanço planejado para a data é de ' },
         { text: pct(data.planned), strong: true },
-        { text: '.' },
+        { text: weekly ? '.' : `; ${data.periodIn}, o planejado ${movedText(plannedGain)}.` },
       ],
     };
   }
   const delta = data.delta ?? round(data.measured) - round(data.planned);
   const tone = deviationTone(delta);
-  const sentence: Segment[] = [
-    { text: 'O avanço físico medido é de ' },
-    { text: pct(data.measured), strong: true },
-    {
-      text:
-        delta === 0
-          ? ', igual ao planejado para a data.'
-          : `, ${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'ponto' : 'pontos'} ${delta > 0 ? 'acima' : 'abaixo'} do planejado para a data.`,
-    },
-  ];
+  const versus =
+    delta === 0
+      ? ', igual ao planejado para a data'
+      : `, ${pointsText(Math.abs(delta))} ${delta > 0 ? 'acima' : 'abaixo'} do planejado para a data`;
+  const gain = data.period.measuredGain ?? 0;
+  const sentence: Segment[] = weekly
+    ? [{ text: 'O avanço físico medido é de ' }, { text: pct(data.measured), strong: true }, { text: `${versus}.` }]
+    : [
+        { text: `Em ${dayMonth(data.refDate)}, o avanço físico medido é de ` },
+        { text: pct(data.measured), strong: true },
+        { text: `${versus}; ${data.periodIn}, ${movedText(gain)} contra ${plannedCount(data.period.plannedGain)}.` },
+      ];
   return {
     kpi: {
       module: origin,
       label,
       value: pct(data.measured),
       tag: { text: `${signedPoints(delta)} vs planejado`, tone },
-      hint: `Medido em ${dayMonth(data.lastMeasurement ?? ref.weekEnd)} · planejado na data: ${pct(data.planned)}`,
+      hint: `Medido em ${dayMonth(data.lastMeasurement ?? ref.weekEnd)} · planejado na data: ${pct(data.planned)}${weekly ? '' : ` · ${periodGainText(data)}`}`,
       ...(tone === 'good' ? {} : { tone }),
     },
     sentence,

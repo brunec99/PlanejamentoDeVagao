@@ -3,11 +3,19 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { StackBar } from '@/modules/dashboard/charts';
 import { dayMonth, plural, signedDays } from '@/modules/dashboard/model';
-import { mediumTermCallout, shortList, varianceSegments, type MediumTermPanelData } from '@/modules/dashboard/medium-term-panel';
+import {
+  mediumTermCallout,
+  mediumTermSnapshot,
+  shortList,
+  varianceSegments,
+  type MediumTermPanelData,
+} from '@/modules/dashboard/medium-term-panel';
 import { workPath } from '@/shared/format';
 
 /** Quadro da aba 3 na aba 0: na tela, três blocos lado a lado; no papel, três painéis que o PDF
- * distribui na folha do médio prazo. O mesmo dado desenha os dois, com as classes `dsh-*`. */
+ * distribui na folha do médio prazo. O mesmo dado desenha os dois, com as classes `dsh-*`. Fora da escala
+ * semanal, o retrato diz o dia e o plano ("Em 31/10 · plano de outubro") e a superalocação diz que é a da
+ * última semana do período; na semanal, nada muda. */
 
 const statusAria = (d: MediumTermPanelData) =>
   `Tarefas do plano por status: ${d.done} concluídas, ${d.inProgress} em andamento, ${d.notStarted} não iniciadas`;
@@ -21,11 +29,13 @@ const StatusChart = ({ d }: { d: MediumTermPanelData }) =>
     <p className="dsh-empty">{d.companyFiltered ? 'Nenhuma tarefa deste empreiteiro no plano.' : 'O plano ainda não tem tarefas.'}</p>
   );
 
+const weeklyData = (d: MediumTermPanelData) => d.scale === 'semana';
+
 /** Os três cartões pequenos da tela: atrasadas na data, caminho crítico e equipes superalocadas. */
 const Minis = ({ d }: { d: MediumTermPanelData }) => (
   <div className="dsh-mini" style={{ marginTop: 10 }}>
     <div>
-      <div className="l">Atrasadas na data</div>
+      <div className="l">{weeklyData(d) ? 'Atrasadas na data' : `Atrasadas em ${dayMonth(d.reference)}`}</div>
       <div className={`v${d.late.count > 0 ? ' t-bad' : ''}`}>{d.late.count}</div>
       <div className="h">término previsto antes de {dayMonth(d.reference)} e &lt; 100%</div>
     </div>
@@ -42,7 +52,9 @@ const Minis = ({ d }: { d: MediumTermPanelData }) => (
       <div className="l">Equipes superalocadas</div>
       <div className={`v${d.overloaded.count > 0 ? ' t-warn' : ''}`}>{d.overloaded.count}</div>
       <div className="h">
-        {d.overloaded.count > 0 ? shortList(d.overloaded.names) : 'nenhuma acima da capacidade na semana'}
+        {d.overloaded.count > 0
+          ? `${shortList(d.overloaded.names)}${weeklyData(d) ? '' : ' · última semana'}`
+          : `nenhuma acima da capacidade na ${weeklyData(d) ? 'semana' : 'última semana'}`}
         {d.companyFiltered ? ' · plano inteiro' : ''}
       </div>
     </div>
@@ -133,7 +145,12 @@ const Milestones = ({ d }: { d: MediumTermPanelData }) => (
 );
 
 const DESC = {
-  status: 'Pelo % concluída e pelo término previsto até a data.',
+  /** Fora da semanal, começa pelo retrato: "Em 31/10 · plano de outubro. Pelo % concluída…". */
+  status: (d: MediumTermPanelData) => {
+    const text = 'Pelo % concluída e pelo término previsto até a data.';
+    const snapshot = mediumTermSnapshot(d);
+    return snapshot ? `${snapshot.replace(/^./, c => c.toUpperCase())}. ${text}` : text;
+  },
   baseline: 'Variação do término em dias úteis; positivo é atraso.',
   milestones: (d: MediumTermPanelData) => `Tarefas de 0 dias com término até ${dayMonth(d.milestoneHorizonEnd)}.`,
 };
@@ -152,7 +169,7 @@ export function MediumTermPanel({
       <>
         <div className="dsh-panel">
           <h3>Aba 3 · Tarefas do plano</h3>
-          <p className="dsh-desc">{DESC.status}</p>
+          <p className="dsh-desc">{DESC.status(data)}</p>
           <StatusChart d={data} />
           <p className={`dsh-callout${data.late.count > 0 ? ' alert' : ''}`}>{mediumTermCallout(data)}</p>
         </div>
@@ -172,7 +189,7 @@ export function MediumTermPanel({
     <div className="dsh-mod-b dsh-cols-3">
       <div className="dsh-blk">
         <h5>Tarefas do plano</h5>
-        <p className="dsh-d">{DESC.status}</p>
+        <p className="dsh-d">{DESC.status(data)}</p>
         <StatusChart d={data} />
         <Minis d={data} />
       </div>

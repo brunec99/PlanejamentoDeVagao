@@ -303,7 +303,8 @@ export function HistoryBars({
 const ms = (date: string) => Date.parse(`${date}T00:00:00Z`);
 
 /** Curva S do longo prazo: o planejado contínuo (tracejado, como a curva de avanço da aba 1 distingue
- * planejado de executado também sem cor) e as medições como pontos ligados, com a data analisada marcada. */
+ * planejado de executado também sem cor) e as medições como pontos ligados, com a data analisada marcada.
+ * `highlight` (escalas de tempo, 04/11/2026) pinta a faixa âmbar do período analisado, de `from` a `to`. */
 export function SCurve({
   points,
   measured,
@@ -311,6 +312,7 @@ export function SCurve({
   refLabel,
   plannedLabel,
   measuredLabel,
+  highlight,
   width: W = 620,
   height: H = 230,
 }: {
@@ -320,6 +322,8 @@ export function SCurve({
   refLabel: string;
   plannedLabel: string;
   measuredLabel: string;
+  /** A janela do período analisado e o texto dela na legenda. */
+  highlight?: { from: string; to: string; label: string };
   width?: number;
   height?: number;
 }) {
@@ -341,11 +345,18 @@ export function SCurve({
   const plannedAtRef = [...points].reverse().find(p => p.date <= refDate) ?? points[0];
   const last = measured[measured.length - 1];
   const inRange = ms(refDate) >= from && ms(refDate) <= to;
+  // A faixa do período, cortada nas bordas do eixo; fora do eixo inteiro, não aparece. Nunca mais fina que
+  // 3 px, para uma semana caber num plano de anos.
+  const band =
+    highlight && ms(highlight.to) >= from && ms(highlight.from) <= to
+      ? { x: x(highlight.from), width: Math.max(3, x(highlight.to) - x(highlight.from)) }
+      : undefined;
   // Rótulos do eixo: cerca de dez, sempre o primeiro e o último.
   const every = Math.max(1, Math.ceil(points.length / 10));
   return (
     <>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Curva S: ${plannedLabel} e ${measuredLabel}`}>
+        {band && <rect x={band.x} y={TOP - 4} width={band.width} height={PH + 4} fill={CHART.today} opacity={0.12} />}
         {[0, 25, 50, 75, 100].map(mark => (
           <g key={mark}>
             <line x1={LEFT} y1={y(mark)} x2={W - RIGHT} y2={y(mark)} stroke={CHART.grid} />
@@ -394,6 +405,7 @@ export function SCurve({
           { color: CHART.planned, line: true, text: plannedLabel },
           ...(measured.length ? [{ color: CHART.executed, line: true, text: measuredLabel }] : []),
           { color: CHART.today, line: true, text: 'Data analisada' },
+          ...(band && highlight ? [{ color: '#fbe9d4', outline: CHART.today, text: highlight.label }] : []),
         ]}
       />
     </>
@@ -506,17 +518,24 @@ export function Donut({
 
 /** Evolução da terminalidade: dois painéis com o mesmo eixo de semanas (o saldo em aberto como linha em
  * cima; abertas e resolvidas por semana como barras embaixo), porque são escalas diferentes e um eixo
- * duplo mentiria. */
+ * duplo mentiria. Nas escalas de tempo (04/11/2026) os itens podem ser baldes (mês, trimestre, ano): o
+ * rótulo vem como texto ("out/26") em vez do número da semana, e `bucket` ajusta a legenda ("do mês", "meses"). */
 export function EvolutionChart({
   weeks,
+  bucket = { of: 'da semana', many: 'semanas' },
   width: W = 560,
   height: H = 230,
 }: {
-  weeks: { weekStart: string; label: number; opened: number; resolved: number; balance: number }[];
+  /** `weekStart` é a chave de cada item; `label` numérico sai como "S43", texto sai como está. */
+  weeks: { weekStart: string; label: number | string; opened: number; resolved: number; balance: number }[];
+  /** "da semana"/"semanas" por padrão; "do mês"/"meses" na série mensal. */
+  bucket?: { of: string; many: string };
   width?: number;
   height?: number;
 }) {
-  if (!weeks.length) return <p className="dsh-empty">Sem semanas para mostrar.</p>;
+  if (!weeks.length) return <p className="dsh-empty">Sem {bucket.many} para mostrar.</p>;
+  /** "do mês" → "no mês". */
+  const within = bucket.of.replace(/^d/, 'n');
   const LEFT = 30,
     RIGHT = 10,
     TOP = 12,
@@ -536,12 +555,14 @@ export function EvolutionChart({
   const line = weeks.map((w, i) => `${i ? 'L' : 'M'}${(LEFT + step * (i + 0.5)).toFixed(1)} ${y1(w.balance).toFixed(1)}`).join(' ');
   const first = weeks[0],
     last = weeks[n - 1];
+  // Rótulos do eixo: todos até 16 itens (as 12 semanas de sempre); acima disso, cerca de 12, sempre o último.
+  const every = n > 16 ? Math.ceil(n / 12) : 1;
   return (
     <>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`Saldo em aberto de ${first.balance} para ${last.balance} pendências em ${n} semanas`}
+        aria-label={`Saldo em aberto de ${first.balance} para ${last.balance} pendências em ${n} ${bucket.many}`}
       >
         {[minB, (minB + maxB) / 2, maxB].map(mark => (
           <g key={`b-${mark}`}>
@@ -585,9 +606,11 @@ export function EvolutionChart({
             <g key={w.weekStart}>
               <rect x={cx - bw - 1} y={y2(w.opened)} width={bw} height={Math.max(0, y2(0) - y2(w.opened))} rx={2} fill={CHART.late} />
               <rect x={cx + 1} y={y2(w.resolved)} width={bw} height={Math.max(0, y2(0) - y2(w.resolved))} rx={2} fill={CHART.onTime} />
-              <text x={cx} y={H - BOTTOM + 13} textAnchor="middle" fontSize={9} fill={CHART.inkMuted}>
-                S{w.label}
-              </text>
+              {(i % every === 0 || i === n - 1) && (
+                <text x={cx} y={H - BOTTOM + 13} textAnchor="middle" fontSize={9} fill={CHART.inkMuted}>
+                  {typeof w.label === 'number' ? `S${w.label}` : w.label}
+                </text>
+              )}
             </g>
           );
         })}
@@ -595,9 +618,9 @@ export function EvolutionChart({
       </svg>
       <Legend
         items={[
-          { color: CHART.ink, line: true, text: 'Saldo em aberto no fim da semana' },
-          { color: CHART.late, text: 'Abertas na semana' },
-          { color: CHART.onTime, text: 'Resolvidas na semana' },
+          { color: CHART.ink, line: true, text: `Saldo em aberto no fim ${bucket.of}` },
+          { color: CHART.late, text: `Abertas ${within}` },
+          { color: CHART.onTime, text: `Resolvidas ${within}` },
         ]}
       />
     </>

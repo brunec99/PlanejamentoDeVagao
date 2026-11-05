@@ -4,7 +4,14 @@ import type { MediumTermPlan, PlanDependency, PlanningData, PlanTask } from '../
 import { DEFAULT_CALENDAR } from '../src/domain/plan-schedule';
 import { createMockData } from '../src/mocks/planning';
 import { referenceOf, type DashboardFilters } from '../src/modules/dashboard/model';
-import { buildMediumTermPanel, mediumTermCallout, mediumTermSummary, pickPlan } from '../src/modules/dashboard/medium-term-panel';
+import {
+  buildMediumTermPanel,
+  mediumTermCallout,
+  mediumTermSnapshot,
+  mediumTermSummary,
+  pickPlan,
+} from '../src/modules/dashboard/medium-term-panel';
+import { resolvePeriod, type PeriodContext, type PeriodSelection } from '../src/modules/dashboard/period';
 
 /** Quadro do médio prazo da aba 0: plano de novembro de 2026 com resumo, marcos, vínculos e uma linha
  * de base congelada em 30/10; a semana analisada é a de 02/11 a 07/11. */
@@ -256,4 +263,62 @@ test('resumo: cartão de tarefas atrasadas e a frase do topo', () => {
   assert.equal(ok.kpi.value, '0');
   assert.equal(ok.kpi.hint, 'Plano de outubro de 2026 · sem linha de base');
   assert.equal(ok.sentence.map(s => s.text).join(''), 'No plano de outubro, nenhuma tarefa está atrasada na data.');
+});
+
+// ─── Escalas de tempo (04/11/2026, regra 9) ──────────────────────────────────────────────────────────
+// 04/11/2026 é uma quarta-feira: a semana atual começa em 02/11.
+const periodCtx: PeriodContext = { currentWeek: '2026-11-02', since: '2026-01-05', anchorWeek: '2026-11-02' };
+const periodRef = (selection: PeriodSelection) =>
+  referenceOf('2026-11-02', '2026-11-04', '2026-01-05', resolvePeriod(selection, periodCtx));
+
+test('período mensal: o plano é o do mês do sábado final e o retrato diz o dia e o plano', () => {
+  const october = periodRef({ scale: 'mes', key: '2026-10' });
+  assert.equal(october.weekEnd, '2026-10-31');
+  const d = buildMediumTermPanel(setup(), WORK, october, { week: october.week })!;
+  assert.equal(d.plan.id, 'plan-out');
+  assert.equal(d.reference, '2026-10-31');
+  assert.equal(d.scale, 'mes');
+  assert.equal(mediumTermSnapshot(d), 'em 31/10 · plano de outubro');
+  const summary = mediumTermSummary(d, october);
+  assert.equal(summary.kpi.hint, 'Em 31/10 · plano de outubro · sem linha de base');
+  assert.equal(summary.sentence.map(s => s.text).join(''), 'No plano de outubro, nenhuma tarefa está atrasada em 31/10.');
+  // A superalocação continua sendo a da última semana do período (26/10 a 31/10): A, O1 e O2 na Revestimentos.
+  assert.deepEqual(d.overloaded, buildMediumTermPanel(setup(), WORK, refFor('2026-10-26'), { week: '2026-10-26' })!.overloaded);
+  assert.equal(d.overloaded.count, 1);
+
+  // Novembro está em andamento: o sábado final é o da semana atual (07/11), e o plano é o de novembro.
+  const november = periodRef({ scale: 'mes', key: '2026-11' });
+  const n = buildMediumTermPanel(setup(), WORK, november, { week: november.week })!;
+  assert.equal(n.plan.id, 'plan-nov');
+  const nSummary = mediumTermSummary(n, november);
+  assert.equal(nSummary.kpi.hint, 'Em 07/11 · plano de novembro · 3 atrasadas contra a linha de base');
+  assert.equal(nSummary.sentence.map(s => s.text).join(''), 'No plano de novembro, 3 tarefas terminariam até 07/11 e não terminaram.');
+  // Os números são o retrato no sábado final: os mesmos da semana de 02/11, só a escala muda.
+  const { scale: _month, ...monthly } = n;
+  const { scale: _week, ...weekly } = buildMediumTermPanel(setup(), WORK, ref, noFilter)!;
+  assert.deepEqual(monthly, weekly);
+});
+
+test('período trimestral: o plano é o do mês do sábado final, mesmo quando ele cai no mês seguinte ao trimestre', () => {
+  // 4º trimestre em andamento: termina no sábado 07/11, plano de novembro.
+  const q4 = periodRef({ scale: 'trimestre', key: '2026-T4' });
+  assert.equal(q4.weekEnd, '2026-11-07');
+  const d4 = buildMediumTermPanel(setup(), WORK, q4, { week: q4.week })!;
+  assert.equal(d4.plan.id, 'plan-nov');
+  assert.equal(mediumTermSnapshot(d4), 'em 07/11 · plano de novembro');
+  // 3º trimestre: a última semana começa na segunda 28/09 e termina no sábado 03/10, que é de outubro.
+  const q3 = periodRef({ scale: 'trimestre', key: '2026-T3' });
+  assert.equal(q3.week, '2026-09-28');
+  assert.equal(q3.weekEnd, '2026-10-03');
+  const d3 = buildMediumTermPanel(setup(), WORK, q3, { week: q3.week })!;
+  assert.equal(d3.plan.id, 'plan-out');
+  assert.equal(mediumTermSnapshot(d3), 'em 03/10 · plano de outubro');
+  assert.equal(mediumTermSummary(d3, q3).kpi.hint, 'Em 03/10 · plano de outubro · sem linha de base');
+});
+
+test('na escala semanal o médio prazo não muda: sem rótulo de retrato, dica e frase de antes', () => {
+  const d = buildMediumTermPanel(setup(), WORK, ref, noFilter)!;
+  assert.equal(d.scale, 'semana');
+  assert.equal(mediumTermSnapshot(d), undefined);
+  assert.equal(mediumTermSummary(d, ref).kpi.hint, 'Plano de novembro de 2026 · 3 atrasadas contra a linha de base');
 });

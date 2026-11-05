@@ -4,6 +4,7 @@ import { weekNumberFrom } from '@/domain/week-numbering';
 import { textKey } from '@/modules/curto-prazo/sheet-view';
 import { formatDate } from '@/shared/format';
 import type { Segment } from '@/modules/curto-prazo/closing-dashboard';
+import { parsePeriodParams, periodSearchEntries, weekPeriod, type DashboardPeriod, type PeriodSelection } from './period';
 
 /** Aba 0, Dashboard da obra (04/11/2026, modelo aprovado pelo usuário): os cinco níveis numa página, até a
  * semana analisada, só com os módulos que a pessoa pode abrir e que têm dado nesta obra. Este arquivo é o
@@ -38,6 +39,8 @@ export const moduleInfo = (id: DashboardModule): DashboardModuleInfo => DASHBOAR
  * marcados; ausente = todos. Conjunto ausente = sem recorte. */
 export interface DashboardFilters {
   week: LocalDate;
+  /** Escala e período escolhidos (04/11/2026, escalas de tempo); ausente = a semana `week`. Viaja na URL da impressão. */
+  selection?: PeriodSelection;
   companies?: ReadonlySet<string>;
   floors?: ReadonlySet<string>;
   modules?: ReadonlySet<DashboardModule>;
@@ -62,9 +65,10 @@ export const hasFloorFilter = (filters: Pick<DashboardFilters, 'floors'>) => !!f
 
 /** A data de referência (regra 3): todo quadro conta até o sábado da semana analisada e nada depois.
  * `firstWeek` é a semana 1 da obra (configurações ou a primeira semana com linha), para numerar as semanas
- * como a planilha. */
+ * como a planilha. Com as escalas de tempo (04/11/2026), a "semana analisada" é a última semana do período:
+ * `week`/`weekEnd` são `period.lastWeek`/`period.end`, e os retratos continuam tirados nesse sábado. */
 export interface DashboardReference {
-  /** Segunda-feira da semana analisada. */
+  /** Segunda-feira da semana analisada (a última semana do período). */
   week: LocalDate;
   /** Sábado da semana analisada: a data até a qual tudo conta. */
   weekEnd: LocalDate;
@@ -72,9 +76,14 @@ export interface DashboardReference {
   currentWeek: LocalDate;
   today: LocalDate;
   firstWeek: LocalDate;
+  /** O período analisado (escala, semanas, série, anterior). Na escala semanal, a própria semana. */
+  period: DashboardPeriod;
 }
-export function referenceOf(week: LocalDate, today: LocalDate, firstWeek: LocalDate): DashboardReference {
-  const monday = startOfWeek(week);
+/** Sem `period`, o período é a semana `week` (escala semanal), como antes das escalas de tempo. Com `period`,
+ * `week` é ignorada: a semana de referência é a última do período. */
+export function referenceOf(week: LocalDate, today: LocalDate, firstWeek: LocalDate, period?: DashboardPeriod): DashboardReference {
+  const resolved = period ?? weekPeriod(week, firstWeek);
+  const monday = resolved.lastWeek;
   return {
     week: monday,
     weekEnd: addDays(monday, 5),
@@ -82,8 +91,14 @@ export function referenceOf(week: LocalDate, today: LocalDate, firstWeek: LocalD
     currentWeek: startOfWeek(today),
     today,
     firstWeek,
+    period: resolved,
   };
 }
+/** "semana 64" na escala semanal; o rótulo do período nas demais ("outubro de 2026"). */
+export const periodName = (ref: Pick<DashboardReference, 'period' | 'weekNumber'>) =>
+  ref.period.scale === 'semana' ? `semana ${ref.weekNumber}` : ref.period.label;
+/** A escala é a semanal (os quadros mostram o que mostravam antes das escalas de tempo). */
+export const isWeekly = (ref: Pick<DashboardReference, 'period'>) => ref.period.scale === 'semana';
 export const weekNumberOf = (ref: Pick<DashboardReference, 'firstWeek'>, weekStart: LocalDate) => weekNumberFrom(ref.firstWeek, weekStart);
 
 /** Estados de cor, sempre acompanhados de texto (regra 10): bom, atenção, crítico, neutro e "esta obra/semana". */
@@ -115,7 +130,9 @@ const isLocalDate = (value: unknown): value is LocalDate => typeof value === 'st
 const list = (value: string | string[] | undefined): string[] => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
 
 export function dashboardSearchParams(filters: DashboardFilters): URLSearchParams {
-  const params = new URLSearchParams({ semana: filters.week });
+  const entries =
+    filters.selection && filters.selection.scale !== 'semana' ? periodSearchEntries(filters.selection) : [['semana', filters.week]];
+  const params = new URLSearchParams(entries);
   if (filters.companies) for (const company of filters.companies) params.append('empreiteiro', company);
   if (filters.floors) for (const floor of filters.floors) params.append('pavimento', floor);
   if (filters.modules) params.set('quadros', [...filters.modules].join(','));
@@ -125,7 +142,8 @@ export const printDashboardPath = (workId: string, filters: DashboardFilters) =>
   `/imprimir/dashboard/${encodeURIComponent(workId)}?${dashboardSearchParams(filters)}`;
 
 /** Lê os filtros da URL. Semana inválida ou ausente fica indefinida (a página usa a semana atual); lista
- * vazia de quadros vale como "todos". */
+ * vazia de quadros vale como "todos". Escala e período (`escala`, `periodo`, `de`, `ate`, `agrupar`) vêm em
+ * `selection`; o link antigo só com `semana` vira a escala semanal. */
 export function parseDashboardParams(raw: Record<string, string | string[] | undefined>): Partial<DashboardFilters> {
   const semana = Array.isArray(raw.semana) ? raw.semana[0] : raw.semana;
   const companies = list(raw.empreiteiro);
@@ -134,8 +152,10 @@ export function parseDashboardParams(raw: Record<string, string | string[] | und
     .flatMap(value => value.split(','))
     .map(value => value.trim())
     .filter(isDashboardModule);
+  const selection = parsePeriodParams(raw);
   return {
     ...(isLocalDate(semana) ? { week: startOfWeek(semana) } : {}),
+    ...(selection ? { selection } : {}),
     ...(companies.length ? { companies: new Set(companies) } : {}),
     ...(floors.length ? { floors: new Set(floors) } : {}),
     ...(modules.length ? { modules: new Set(modules) } : {}),

@@ -17,6 +17,8 @@ function useCrumbs(): Crumb[] {
   const landing = 'dashboard';
   const data = context.state === 'ready' ? context.planning.data : undefined;
   if (pathname.startsWith('/configuracoes')) return [{ label: 'Configurações' }];
+  // Dashboard geral (04/11/2026): fora das obras, ao lado da lista de obras no menu.
+  if (pathname === '/dashboard') return [{ label: 'Obras', href: '/obras' }, { label: 'Dashboard geral' }];
   const match = pathname.match(/^\/obras\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/);
   if (!match) return [{ label: 'Obras' }];
   const workId = decodeURIComponent(match[1]);

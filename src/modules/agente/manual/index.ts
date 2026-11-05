@@ -3,6 +3,7 @@ import type { ManualSection } from './types';
 import { sections as geral } from './geral';
 import { sections as acessoConfiguracoes } from './acesso-configuracoes';
 import { sections as dashboard } from './dashboard';
+import { sections as dashboardGeral } from './dashboard-geral';
 import { sections as longoPrazo } from './longo-prazo';
 import { sections as vagoes } from './vagoes';
 import { sections as medioPrazo } from './medio-prazo';
@@ -22,6 +23,7 @@ export const MANUAL_SECTIONS: readonly ManualSection[] = [
   ...geral,
   ...acessoConfiguracoes,
   ...dashboard,
+  ...dashboardGeral,
   ...longoPrazo,
   ...vagoes,
   ...medioPrazo,
@@ -37,6 +39,7 @@ export const SCREEN_LABEL: Readonly<Record<string, string>> = {
   obras: 'Lista de obras (/obras)',
   'configuracoes-gerais': 'Configurações do sistema, só admin (/configuracoes)',
   dashboard: 'Aba 0 · Dashboard da obra',
+  'dashboard-geral': 'Dashboard geral (todas as obras)',
   'longo-prazo': 'Aba 1 · Cronograma de longo prazo',
   vagoes: 'Aba 2 · Planejamento por vagões',
   'medio-prazo': 'Aba 3 · Cronograma de médio prazo',
@@ -163,6 +166,7 @@ const index = (): Indexed[] =>
  * aba de longo prazo") é forte indício, mesmo que as palavras em si sejam comuns demais para pontuar. */
 const SCREEN_NAMES: Readonly<Record<string, readonly string[]>> = {
   dashboard: ['dashboard', 'aba 0', 'painel da obra', 'visao geral da obra'],
+  'dashboard-geral': ['dashboard geral', 'comparar obras', 'todas as obras', 'comparativo das obras'],
   'longo-prazo': ['longo prazo', 'aba 1'],
   vagoes: ['vagoes', 'vagao', 'aba 2'],
   'medio-prazo': ['medio prazo', 'cronograma do mes', 'plano do mes', 'aba 3'],

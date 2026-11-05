@@ -5,7 +5,7 @@ import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { SidebarWrapper } from '@/modules/layout/sidebar-wrapper';
 import { MobileDrawer } from '@/modules/layout/mobile-drawer';
-import { WorkNav, WorkTabsMobile } from '@/modules/layout/work-nav';
+import { PortfolioLink, WorkNav, WorkTabsMobile } from '@/modules/layout/work-nav';
 import { TopBar } from '@/modules/layout/top-bar';
 import { ToastProvider } from '@/modules/layout/toast';
 import { ConfirmProvider } from '@/modules/layout/confirm';
@@ -60,6 +60,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
             <Building2 size={17} className="shrink-0 text-brand-300" />
             Obras
           </Link>
+          <PortfolioLink />
         </div>
         <WorkNav />
         {profile?.role === 'admin' && (

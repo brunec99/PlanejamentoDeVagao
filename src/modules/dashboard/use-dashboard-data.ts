@@ -22,6 +22,7 @@ import {
   type PanelState,
   type Segment,
 } from './model';
+import { resolvePeriod, selectionOf, type DashboardPeriod, type PeriodContext, type PeriodSelection } from './period';
 import { composeSummary, type SummaryKey } from './summary';
 import { buildLongTermPanel, longTermFloorNames, longTermSummary, type LongTermPanelData } from './long-term-panel';
 import { buildWagonsPanel, wagonsSummary, type WagonsPanelData } from './wagons-panel';
@@ -90,8 +91,10 @@ const parseRanking = (body: unknown): Fetched<ClosingRankingResponse> => {
 
 export interface DashboardInput {
   workId: string;
-  /** Semana pedida (qualquer dia dela); ausente ou fora das opções = semana atual. */
+  /** Semana pedida (qualquer dia dela); ausente ou fora das opções = semana atual. Vale só sem `selection`. */
   week?: LocalDate;
+  /** Escala e período (04/11/2026, escalas de tempo); ausente = escala semanal na semana `week`. */
+  selection?: PeriodSelection;
   companies?: ReadonlySet<string>;
   /** Chaves normalizadas (`floorKey`). */
   floors?: ReadonlySet<string>;
@@ -111,6 +114,9 @@ export interface DashboardReady {
   filters: DashboardFilters;
   /** Semanas que o seletor oferece (segundas-feiras), da mais antiga à atual. */
   weeks: LocalDate[];
+  /** O período analisado (igual a `ref.period`) e o que o seletor precisa para listar e andar entre períodos. */
+  period: DashboardPeriod;
+  periodContext: PeriodContext;
   companyOptions: { value: string; count: number }[];
   floorOptions: { value: string; count: number }[];
   /** Quais módulos a pessoa pode abrir (os demais não existem para ela nesta página). */
@@ -190,9 +196,26 @@ export function useDashboard(input: DashboardInput): DashboardState {
       ...new Set([...weekOptions(firstWeek, currentWeek, 0), ...commitments.map(c => c.weekStart).filter(w => w <= currentWeek)]),
     ].sort();
   }, [firstWeek, currentWeek, commitments]);
+  // O período (escalas de tempo, 04/11/2026): a primeira semana oferecida limita a lista e a série anual; sem
+  // período escolhido, a escala semanal na semana pedida, ou na atual, como antes.
+  const periodContext = useMemo<PeriodContext | undefined>(
+    () => (currentWeek && weeks.length ? { currentWeek, since: weeks[0], anchorWeek: currentWeek } : undefined),
+    [currentWeek, weeks],
+  );
   const requested = input.week ? startOfWeek(input.week) : '';
-  const week = requested && weeks.includes(requested) ? requested : currentWeek;
-  const ref = useMemo(() => (week && today && firstWeek ? referenceOf(week, today, firstWeek) : undefined), [week, today, firstWeek]);
+  const selection: PeriodSelection | undefined =
+    input.selection ?? (requested && weeks.includes(requested) ? { scale: 'semana', key: requested } : undefined);
+  const selectionKey = selection ? JSON.stringify(selection) : '';
+  const period = useMemo(
+    () =>
+      periodContext ? resolvePeriod(selectionKey ? (JSON.parse(selectionKey) as PeriodSelection) : undefined, periodContext) : undefined,
+    [periodContext, selectionKey],
+  );
+  const week = period?.lastWeek ?? currentWeek;
+  const ref = useMemo(
+    () => (period && today && firstWeek ? referenceOf(period.lastWeek, today, firstWeek, period) : undefined),
+    [period, today, firstWeek],
+  );
 
   const shown = (module: DashboardModule) => allowed && access[module] && moduleShown({ modules: input.modules }, module);
   const longTerm = useFetched(`/api/long-term-plan?workId=${encodeURIComponent(workId)}`, ready && shown('longo-prazo'), parseLongTerm);
@@ -208,7 +231,13 @@ export function useDashboard(input: DashboardInput): DashboardState {
   );
 
   const filters = useMemo<DashboardFilters>(
-    () => ({ week: ref?.week ?? week, companies: input.companies, floors: input.floors, modules: input.modules }),
+    () => ({
+      week: ref?.week ?? week,
+      ...(ref ? { selection: selectionOf(ref.period) } : {}),
+      companies: input.companies,
+      floors: input.floors,
+      modules: input.modules,
+    }),
     [ref, week, input.companies, input.floors, input.modules],
   );
 
@@ -284,7 +313,7 @@ export function useDashboard(input: DashboardInput): DashboardState {
   );
 
   if (context.state === 'error') return { status: 'error', message: context.message, retry: context.retry };
-  if (!ready || !panels || !ref || !work) return { status: 'loading' };
+  if (!ready || !panels || !ref || !work || !periodContext) return { status: 'loading' };
   if (!allowed) return { status: 'missing' };
   const byStatus = (status: PanelState<unknown>['status']) =>
     (Object.keys(panels) as (keyof DashboardPanels)[])
@@ -299,6 +328,8 @@ export function useDashboard(input: DashboardInput): DashboardState {
     ref,
     filters,
     weeks,
+    period: ref.period,
+    periodContext,
     companyOptions,
     floorOptions,
     access,

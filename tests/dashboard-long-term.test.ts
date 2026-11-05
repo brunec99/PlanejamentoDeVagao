@@ -11,6 +11,7 @@ import {
   plannedShare,
 } from '../src/modules/dashboard/long-term-panel';
 import { floorSchedule } from '../src/domain/long-term-plan';
+import { resolvePeriod, type PeriodContext } from '../src/modules/dashboard/period';
 
 /** Serviço de um pavimento, 10 dias, começando na segunda 05/01/2026 (sem unidade de medição por padrão). */
 const activity = (id: string, over: Partial<LongTermActivity> = {}): LongTermActivity => ({
@@ -54,6 +55,7 @@ const measurement = (date: string, values: Record<string, number>): LongTermMeas
 /** A semana de 05/01/2026 (semana 1 da obra): a data de referência é o sábado 10/01, cinco dias depois do início. */
 const ref = referenceOf('2026-01-05', '2026-11-04', '2026-01-05');
 const filters: DashboardFilters = { week: '2026-01-05' };
+const text = (segments: { text: string }[]) => segments.map(s => s.text).join('');
 
 test('planejado linear por pavimento-dias: no meio do primeiro de dois pavimentos iguais vale 25%', () => {
   const a = activity('a', { lastFloor: 2 }); // 1º: 05/01–14/01; 2º: 15/01–24/01
@@ -260,4 +262,129 @@ test('resumo: cartão e frase com os tons do desvio', () => {
 test('os nomes dos pavimentos saem na ordem, com "Nº" onde não há nome', () => {
   assert.deepEqual(longTermFloorNames({ floorCount: 3, floorNames: { '2': 'Mezanino' } }), ['1º', 'Mezanino', '3º']);
   assert.deepEqual(longTermFloorNames({ floorCount: 0, floorNames: {} }), []);
+});
+
+// ─── Escalas de tempo (04/11/2026): o avanço dentro do período ─────────────────────────────────────
+
+/** Contexto dos períodos: hoje em 04/11/2026, obra desde a semana de 05/01/2026. */
+const periodCtx: PeriodContext = { currentWeek: '2026-11-02', since: '2026-01-05', anchorWeek: '2026-11-02' };
+/** Fevereiro de 2026: semanas de 02/02 a 23/02, do dia 02/02 ao sábado 28/02; véspera no domingo 01/02. */
+const february = referenceOf('2026-02-02', '2026-11-04', '2026-01-05', resolvePeriod({ scale: 'mes', key: '2026-02' }, periodCtx));
+/** Um pavimento de 100 dias a partir de 05/01: planejado 27% em 01/02 e 54% em 28/02. */
+const long = (over: Partial<LongTermActivity> = {}) => activity('a', { unit: '%', duration: 100, interval: 100, ...over });
+
+test('período: medido e planejado na véspera e no fim, ganhos sobre valores arredondados', () => {
+  const measurements = [
+    measurement('2026-01-20', { a: 10 }),
+    // Domingo antes da segunda-feira inicial: é a véspera, conta no início.
+    measurement('2026-02-01', { a: 20 }),
+    measurement('2026-02-15', { a: 45 }),
+    // Depois do sábado final: não existe para o quadro.
+    measurement('2026-03-02', { a: 70 }),
+  ];
+  const data = buildLongTermPanel(doc([long()], { measurements }), february, filters)!;
+  assert.equal(data.scale, 'mes');
+  assert.equal(data.periodLabel, 'fevereiro de 2026');
+  assert.equal(data.periodIn, 'no mês');
+  assert.equal(data.refDate, '2026-02-28');
+  assert.equal(data.refLabel, '28/02');
+  assert.equal(data.measured, 45);
+  assert.equal(data.planned, 54);
+  assert.deepEqual(data.period, {
+    start: '2026-02-02',
+    end: '2026-02-28',
+    measuredAtStart: 20,
+    plannedAtStart: 27,
+    measuredGain: 25,
+    plannedGain: 27,
+  });
+
+  const summary = longTermSummary(data, february);
+  assert.equal(summary.kpi.label, 'Avanço físico');
+  assert.equal(summary.kpi.value, '45%');
+  assert.deepEqual(summary.kpi.tag, { text: '−9 p.p. vs planejado', tone: 'warn' });
+  assert.equal(summary.kpi.hint, 'Medido em 15/02 · planejado na data: 54% · no mês: +25 p.p. × planejado +27 p.p.');
+  assert.equal(
+    text(summary.sentence),
+    'Em 28/02, o avanço físico medido é de 45%, 9 pontos abaixo do planejado para a data; no mês, avançou 25 pontos contra 27 planejados.',
+  );
+  assert.deepEqual(
+    summary.sentence.filter(s => s.strong).map(s => s.text),
+    ['45%'],
+  );
+});
+
+test('período sem medição antes: o ganho é o medido no fim; sem medição até o fim, só o planejado', () => {
+  const only = buildLongTermPanel(doc([long()], { measurements: [measurement('2026-02-15', { a: 45 })] }), february, filters)!;
+  assert.equal(only.period.measuredAtStart, undefined);
+  assert.equal(only.period.measuredGain, 45);
+  assert.equal(only.period.plannedGain, 27);
+
+  // Medição no dia da segunda-feira inicial já é do período, não da véspera.
+  const monday = buildLongTermPanel(doc([long()], { measurements: [measurement('2026-02-02', { a: 30 })] }), february, filters)!;
+  assert.equal(monday.period.measuredAtStart, undefined);
+  assert.equal(monday.period.measuredGain, 30);
+
+  const none = buildLongTermPanel(doc([long()], { measurements: [measurement('2026-03-02', { a: 70 })] }), february, filters)!;
+  assert.equal(none.measured, undefined);
+  assert.equal(none.period.measuredAtStart, undefined);
+  assert.equal(none.period.measuredGain, undefined);
+  assert.equal(none.period.plannedGain, 27);
+  const summary = longTermSummary(none, february);
+  assert.equal(
+    summary.kpi.hint,
+    'Planejado na data pelo plano atual (sem linha de base); nenhuma medição até 28/02 · no mês: planejado +27 p.p.',
+  );
+  assert.equal(
+    text(summary.sentence),
+    'O longo prazo ainda não tem medição até a data; o avanço planejado para a data é de 54%; no mês, o planejado avançou 27 pontos.',
+  );
+});
+
+test('período: planejado no início pela linha de base mais recente, e o recorte de pavimentos vale nos dois extremos', () => {
+  // O plano vivo foi reprogramado para março (0% em fevereiro); a linha de base mantém o início em 05/01.
+  const lb = baseline('lb', '2025-12-20T10:00:00Z', [long()]);
+  const data = buildLongTermPanel(doc([long({ start: '2026-03-02' })], { baselines: [lb] }), february, filters)!;
+  assert.equal(data.plannedSource, 'baseline');
+  assert.equal(data.period.plannedAtStart, 27);
+  assert.equal(data.planned, 54);
+  assert.equal(data.period.plannedGain, 27);
+  const live = buildLongTermPanel(doc([long({ start: '2026-03-02' })]), february, filters)!;
+  assert.equal(live.period.plannedAtStart, 0);
+  assert.equal(live.period.plannedGain, 0);
+
+  // Dois pavimentos de 100 dias: o 2º começa em 15/04. Sem recorte, 13,5% na véspera e 27% no fim; o ganho
+  // sai dos arredondados (27 − 14), como o desvio. Só o 1º pavimento: 27% e 54%.
+  const twoFloors = doc([long({ lastFloor: 2 })], { floorNames: { '1': 'Térreo', '2': '1º Pav' } });
+  const whole = buildLongTermPanel(twoFloors, february, filters)!;
+  assert.equal(whole.period.plannedAtStart, 13.5);
+  assert.equal(whole.planned, 27);
+  assert.equal(whole.period.plannedGain, 13);
+  const ground = buildLongTermPanel(twoFloors, february, { ...filters, floors: new Set([floorKey('Térreo')]) })!;
+  assert.equal(ground.period.plannedAtStart, 27);
+  assert.equal(ground.period.plannedGain, 27);
+});
+
+test('na escala semanal o período é a semana e o quadro continua como antes', () => {
+  const data = buildLongTermPanel(
+    doc([activity('a', { unit: '%' })], { measurements: [measurement('2026-01-09', { a: 55 })] }),
+    ref,
+    filters,
+  )!;
+  assert.equal(data.scale, 'semana');
+  assert.equal(data.refLabel, 'semana 1');
+  assert.equal(data.periodIn, 'na semana');
+  assert.deepEqual(data.period, { start: '2026-01-05', end: '2026-01-10', plannedAtStart: 0, measuredGain: 55, plannedGain: 50 });
+  assert.equal(longTermSummary(data, ref).kpi.hint, 'Medido em 09/01 · planejado na data: 50%');
+  // Personalizado: "no período", a partir da segunda-feira do "de".
+  const custom = referenceOf(
+    '2026-01-05',
+    '2026-11-04',
+    '2026-01-05',
+    resolvePeriod({ scale: 'personalizado', from: '2026-01-21', to: '2026-02-28' }, periodCtx),
+  );
+  const p = buildLongTermPanel(doc([long()]), custom, filters)!;
+  assert.equal(p.periodIn, 'no período');
+  assert.equal(p.period.start, '2026-01-19');
+  assert.equal(p.period.plannedAtStart, 13);
 });

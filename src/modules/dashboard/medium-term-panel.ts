@@ -7,6 +7,7 @@ import {
   daysBetween,
   dayMonth,
   hasCompanyFilter,
+  isWeekly,
   matchesCompany,
   monthLong,
   monthOf,
@@ -16,11 +17,17 @@ import {
   type PanelSummary,
   type Segment,
 } from '@/modules/dashboard/model';
+import type { DashboardScale } from '@/modules/dashboard/period';
 
 /** Quadro do médio prazo na aba 0 (regra 8 do modelo aprovado em 04/11/2026): o plano do mês da data de
  * referência, lido como a aba 3 lê — tarefas folha, status pelo % concluída, atraso na data pelo término
  * previsto, variação contra a linha de base congelada em dias úteis, caminho crítico do motor e marcos
- * dos 30 dias seguintes. Tudo puro; a tela e o PDF só desenham o que sai daqui. */
+ * dos 30 dias seguintes. Tudo puro; a tela e o PDF só desenham o que sai daqui.
+ *
+ * Escalas de tempo (04/11/2026, regra 9): a data de referência é o sábado final do período, e o plano é o do
+ * mês desse sábado (um trimestre de julho a setembro termina no sábado 03/10 e lê o plano de outubro). O
+ * quadro é um retrato nesse dia; a superalocação continua sendo a da última semana do período. Fora da
+ * semanal, a tela e o resumo dizem o dia e o plano ("em 31/10 · plano de outubro"). */
 
 export const STATUS_COLORS = { done: '#1baf7a', inProgress: '#2a78d6', notStarted: '#c4d3df' } as const;
 export const VARIANCE_COLORS = { late: '#be123c', onTime: '#c4d3df', early: '#2a78d6' } as const;
@@ -62,6 +69,8 @@ export interface MediumTermPanelData {
   /** Há recorte de empreiteiro: status, atrasos, base e marcos são só das tarefas da empresa; caminho
    * crítico e superalocação continuam do plano inteiro. */
   companyFiltered: boolean;
+  /** Escala do período: na semanal o quadro diz o que dizia antes das escalas de tempo. */
+  scale: DashboardScale;
 }
 
 const byFrozenDesc = (a: MediumTermPlan, b: MediumTermPlan) => (b.frozenAt ?? b.createdAt).localeCompare(a.frozenAt ?? a.createdAt);
@@ -87,6 +96,10 @@ const status = (task: PlanTask): 'done' | 'inProgress' | 'notStarted' =>
 
 const monthName = (month: string) =>
   new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`));
+
+/** O rótulo do retrato fora da semanal: "em 31/10 · plano de outubro"; ausente na semanal. */
+export const mediumTermSnapshot = (d: Pick<MediumTermPanelData, 'scale' | 'reference' | 'plan'>): string | undefined =>
+  d.scale === 'semana' ? undefined : `em ${dayMonth(d.reference)} · plano de ${monthName(d.plan.month)}`;
 
 export function buildMediumTermPanel(
   data: PlanningData,
@@ -159,7 +172,8 @@ export function buildMediumTermPanel(
     };
   }
 
-  // Superalocação da semana analisada, do plano inteiro (e do cronograma): a conta é por equipe, não por tarefa.
+  // Superalocação da semana analisada (a última do período), do plano inteiro (e do cronograma): a conta é
+  // por equipe, não por tarefa.
   const load = weeklyTeamLoad(data, workId, ref.week, ref.weekEnd);
   const overloadedTeams = load.teams.filter(t => t.overloadedWeeks > 0);
 
@@ -194,6 +208,7 @@ export function buildMediumTermPanel(
     overloaded: { count: overloadedTeams.length, names: overloadedTeams.map(t => `${t.team.company} · ${t.team.name}`) },
     milestones,
     companyFiltered,
+    scale: ref.period.scale,
   };
 }
 
@@ -230,24 +245,30 @@ export function mediumTermCallout(d: MediumTermPanelData): string {
   return `${first} ${second}`;
 }
 
-export function mediumTermSummary(d: MediumTermPanelData, _ref: DashboardReference): PanelSummary {
+/** O cartão e a frase. Fora da semanal, a dica diz o dia e o plano ("Em 31/10 · plano de outubro · …") e a
+ * frase troca "a data" pelo dia. */
+export function mediumTermSummary(d: MediumTermPanelData, ref: DashboardReference): PanelSummary {
   const late = d.late.count;
   const name = monthName(d.plan.month);
+  const weekly = isWeekly(ref);
+  const day = dayMonth(ref.weekEnd);
   const against = d.baseline ? `${plural(d.baseline.late, 'atrasada', 'atrasadas')} contra a linha de base` : 'sem linha de base';
   const sentence: Segment[] = late
     ? [
         { text: `No plano de ${name}, ` },
         { text: plural(late, 'tarefa', 'tarefas'), strong: true },
-        { text: ` ${late === 1 ? 'terminaria' : 'terminariam'} até a data e não ${late === 1 ? 'terminou' : 'terminaram'}.` },
+        {
+          text: ` ${late === 1 ? 'terminaria' : 'terminariam'} até ${weekly ? 'a data' : day} e não ${late === 1 ? 'terminou' : 'terminaram'}.`,
+        },
       ]
-    : [{ text: `No plano de ${name}, nenhuma tarefa está atrasada na data.` }];
+    : [{ text: `No plano de ${name}, nenhuma tarefa está atrasada ${weekly ? 'na data' : `em ${day}`}.` }];
   return {
     kpi: {
       module: 'medio-prazo',
       label: 'Tarefas atrasadas',
       value: String(late),
       tag: late > 0 ? { text: `de ${d.plan.taskCount}`, tone: 'bad' } : { text: 'em dia', tone: 'good' },
-      hint: `Plano de ${d.plan.monthLabel} · ${against}`,
+      hint: weekly ? `Plano de ${d.plan.monthLabel} · ${against}` : `Em ${day} · plano de ${name} · ${against}`,
       tone: late > 0 ? 'bad' : 'good',
     },
     sentence,

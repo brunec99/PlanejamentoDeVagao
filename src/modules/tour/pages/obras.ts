@@ -6,6 +6,11 @@ export const steps: TourStep[] = [
     body: 'Esta é a lista das obras a que você tem acesso. Use "Próximo" para avançar e "Sair" a qualquer momento: o tour só explica, não altera nada.',
   },
   {
+    target: 'obras-comparar',
+    title: 'Comparar obras',
+    body: 'Abre o Dashboard geral: as obras liberadas para você lado a lado, no período escolhido (semana, mês, trimestre, ano ou um intervalo), com o PPC de cada uma, o comparativo dos módulos e o PDF. Aparece para quem tem duas obras ou mais, e sempre para admin e desenvolvedor; o mesmo atalho fica no menu, em Empreendimentos, como “Dashboard geral”.',
+  },
+  {
     target: 'obras-actions',
     title: 'Cadastrar obra',
     body: 'Abre o formulário com o nome e o código da obra (o código não pode repetir o de outra). Ao salvar, a obra já fica liberada para você e abre em seguida. Só gestor e administrador veem este botão.',
@@ -38,7 +43,7 @@ export const steps: TourStep[] = [
   {
     target: 'obras-card-open',
     title: 'Abrir a obra',
-    body: 'O cartão inteiro é um link: clique em qualquer ponto dele para abrir a obra no cronograma de curto prazo. Quem desenvolve o sistema entra pelo longo prazo.',
+    body: 'O cartão inteiro é um link: clique em qualquer ponto dele para abrir a obra na aba 0, o Dashboard da obra, com os módulos que você pode abrir. As outras abas ficam na lista de abas da obra.',
   },
   {
     target: 'modo-reuniao',

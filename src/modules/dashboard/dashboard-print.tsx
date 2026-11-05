@@ -3,8 +3,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays } from '@/domain/validation';
 import { formatDate } from '@/shared/format';
 import { DASHBOARD_STYLE } from './styles';
+import { scaleLabel } from './period';
 import {
   dayMonth,
+  isWeekly,
   moduleInfo,
   monthLong,
   pct,
@@ -23,7 +25,8 @@ import { ShortTermPanel } from './panels/short-term';
 import { TerminalityPanel } from './panels/terminality';
 
 /** O PDF da aba 0 (regra 11 do modelo aprovado): A4 paisagem, cabeçalho igual ao do painel do fechamento
- * (logos, nome da obra, semana analisada e atual). Folha 1: resumo e curto prazo; depois uma folha por
+ * (logos, nome da obra, semana analisada e atual; fora da escala semanal, a escala e o período — escalas de
+ * tempo, 04/11/2026, regra 14). Folha 1: resumo e curto prazo; depois uma folha por
  * módulo presente: longo prazo e vagões juntos, médio prazo, terminalidade. Abre numa aba própria, fora do
  * layout do sistema, com os filtros na URL, e chama a impressão do navegador ("Salvar como PDF") quando os
  * quadros terminam de chegar, ou passado o limite de espera, saindo com o que houver. */
@@ -46,15 +49,24 @@ function Head({ dash, title, filters }: { dash: DashboardReady; title: string; f
       </div>
       <div className="title">DASHBOARD DA OBRA {work.name.toUpperCase()}</div>
       <div className="week">
-        <span>
-          Semana analisada: <span className="pill">{ref.weekNumber}</span>
-          <br />
-          Semana atual: {weekNumberOf(ref, ref.currentWeek)}
-        </span>
+        {isWeekly(ref) ? (
+          <span>
+            Semana analisada: <span className="pill">{ref.weekNumber}</span>
+            <br />
+            Semana atual: {weekNumberOf(ref, ref.currentWeek)}
+          </span>
+        ) : (
+          <span>
+            {scaleLabel(ref.period.scale)}: <span className="pill">{ref.period.short}</span>
+            <br />
+            Semanas {weekNumberOf(ref, ref.period.weeks[0])} a {ref.weekNumber}
+            {ref.period.partial ? ' · parcial' : ''}
+          </span>
+        )}
       </div>
       <div className="sub">
         <span>
-          <b>{title}</b> · {dayMonth(ref.week)} a {formatDate(ref.weekEnd)}
+          <b>{title}</b> · {dayMonth(ref.period.start)} a {formatDate(ref.weekEnd)}
         </span>
         <span>{filters}</span>
       </div>
@@ -66,8 +78,9 @@ function Foot({ dash, page, total, generated }: { dash: DashboardReady; page: nu
   return (
     <div className="dsh-foot">
       <span>
-        Todos os quadros contam até sáb {formatDate(dash.ref.weekEnd)}; nada depois da semana analisada. Ranking das obras e avanço físico
-        consideram a obra inteira. Gerado em {generated}
+        Todos os quadros contam até sáb {formatDate(dash.ref.weekEnd)}; nada depois{' '}
+        {isWeekly(dash.ref) ? 'da semana analisada' : `do período (${dash.ref.period.label})`}. Ranking das obras e avanço físico consideram
+        a obra inteira. Gerado em {generated}
         {dash.actorName ? ` por ${dash.actorName}` : ''}.
       </span>
       <span>
@@ -95,7 +108,14 @@ function filtersText(filters: DashboardFilters): string {
 }
 
 export function DashboardPrint({ workId, filters }: { workId: string; filters: Partial<DashboardFilters> }) {
-  const dash = useDashboard({ workId, week: filters.week, companies: filters.companies, floors: filters.floors, modules: filters.modules });
+  const dash = useDashboard({
+    workId,
+    week: filters.week,
+    selection: filters.selection,
+    companies: filters.companies,
+    floors: filters.floors,
+    modules: filters.modules,
+  });
   const printed = useRef(false);
   const [expired, setExpired] = useState(false);
   useEffect(() => {
@@ -104,7 +124,9 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
   }, []);
   const ready = dash.status === 'ready' && dash.settingsReady && (expired || dash.loading.length === 0);
   const title =
-    dash.status === 'ready' ? `Dashboard ${dash.work.code || dash.work.name} - Semana ${dash.ref.weekNumber}` : 'Dashboard da obra';
+    dash.status === 'ready'
+      ? `Dashboard ${dash.work.code || dash.work.name} - ${isWeekly(dash.ref) ? `Semana ${dash.ref.weekNumber}` : dash.ref.period.label}`
+      : 'Dashboard da obra';
   useEffect(() => {
     if (!ready || printed.current) return;
     printed.current = true;
@@ -159,7 +181,7 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
         <div className="dsh-row" style={{ gridTemplateColumns: '1fr' }}>
           <div className="dsh-panel">
             <h3>Curto prazo</h3>
-            <p className="dsh-desc">Sem compromissos registrados nesta obra até a semana analisada, ou módulo fora do PDF.</p>
+            <p className="dsh-desc">Sem compromissos registrados nesta obra até o fim do período, ou módulo fora do PDF.</p>
           </div>
         </div>
       )}
@@ -264,22 +286,51 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
     ));
   }
   if (terminality) {
-    const kpis: KpiCard[] = [
-      kpi('terminalidade', 'Pendências abertas', String(terminality.open), `${terminality.olderThan30} há mais de 30 dias`, true),
-      kpi('terminalidade', 'Resolvidas', String(terminality.resolved), `de ${terminality.total} registradas até a data`),
-      kpi(
-        'terminalidade',
-        'Resolvido',
-        terminality.percentLabel,
-        `pendência resolvida depois de ${dayMonth(ref.weekEnd)} conta como aberta`,
-      ),
-      kpi(
-        'terminalidade',
-        'Tempo médio em aberto',
-        terminality.averageOpenDays === undefined ? '—' : plural(terminality.averageOpenDays, 'dia', 'dias'),
-        `das ${terminality.open} abertas, desde a data de observação`,
-      ),
-    ];
+    const flow = terminality.period;
+    const kpis: KpiCard[] = !isWeekly(ref)
+      ? [
+          kpi(
+            'terminalidade',
+            `Em aberto em ${dayMonth(ref.weekEnd)}`,
+            String(terminality.open),
+            `${flow.openAtStart} no início do período · ${terminality.olderThan30} há mais de 30 dias`,
+            true,
+          ),
+          kpi(
+            'terminalidade',
+            `Abertas ${ref.period.of}`,
+            String(flow.opened),
+            `observadas de ${dayMonth(ref.period.start)} a ${dayMonth(ref.weekEnd)}`,
+          ),
+          kpi(
+            'terminalidade',
+            `Resolvidas ${ref.period.of}`,
+            String(flow.resolved),
+            `${terminality.percentLabel} resolvido desde a primeira pendência`,
+          ),
+          kpi(
+            'terminalidade',
+            'Tempo médio até a correção',
+            flow.averageDaysToResolve === undefined ? '—' : plural(Math.round(flow.averageDaysToResolve), 'dia', 'dias'),
+            `das ${flow.resolved} resolvidas no período`,
+          ),
+        ]
+      : [
+          kpi('terminalidade', 'Pendências abertas', String(terminality.open), `${terminality.olderThan30} há mais de 30 dias`, true),
+          kpi('terminalidade', 'Resolvidas', String(terminality.resolved), `de ${terminality.total} registradas até a data`),
+          kpi(
+            'terminalidade',
+            'Resolvido',
+            terminality.percentLabel,
+            `pendência resolvida depois de ${dayMonth(ref.weekEnd)} conta como aberta`,
+          ),
+          kpi(
+            'terminalidade',
+            'Tempo médio em aberto',
+            terminality.averageOpenDays === undefined ? '—' : plural(terminality.averageOpenDays, 'dia', 'dias'),
+            `das ${terminality.open} abertas, desde a data de observação`,
+          ),
+        ];
     sheets.push((page, total) => (
       <Sheet key="terminalidade">
         <Head dash={dash} title="TERMINALIDADE" filters={filtersLine} />
@@ -303,8 +354,9 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
           Imprimir / Salvar PDF
         </button>
         <span style={{ color: '#59738a' }}>
-          No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {plural(sheets.length, 'folha', 'folhas')}, semana{' '}
-          {ref.weekNumber} ({dayMonth(ref.week)} a {dayMonth(addDays(ref.week, 5))}). {filtersLine}.
+          No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {plural(sheets.length, 'folha', 'folhas')},{' '}
+          {isWeekly(ref) ? `semana ${ref.weekNumber} (${dayMonth(ref.week)} a ${dayMonth(addDays(ref.week, 5))})` : ref.period.label}.{' '}
+          {filtersLine}.
         </span>
       </div>
       {sheets.map((sheet, index) => sheet(index + 1, sheets.length))}

@@ -5,8 +5,10 @@ import type { Restriction } from '../src/domain/entities';
 import { MockPlanningRepository } from '../src/infrastructure/repositories/mock/planning-repository';
 import { createMockData, DEMO_DATE } from '../src/mocks/planning';
 import { referenceOf, type DashboardFilters } from '../src/modules/dashboard/model';
+import { resolvePeriod, type PeriodContext } from '../src/modules/dashboard/period';
 import {
   buildWagonsPanel,
+  overdueHint,
   producingLegend,
   restrictionsCallout,
   restrictionsSentence,
@@ -14,6 +16,7 @@ import {
   wagonNumbersText,
   wagonsSentence,
   wagonsSummary,
+  wagonsTexts,
 } from '../src/modules/dashboard/wagons-panel';
 
 /* Dados de exemplo (hoje = 08/09/2026): v1 terminal (22→26/08); v2 em produção 75% (27→31/08) com a dívida d1
@@ -344,4 +347,201 @@ test('lista de números de vagão com até três no texto', () => {
   assert.equal(wagonNumbersText([2, 3]), 'Vagões 02 e 03');
   assert.equal(wagonNumbersText([2, 3, 4]), 'Vagões 02, 03 e 04');
   assert.equal(wagonNumbersText([2, 3, 4, 6, 12]), 'Vagões 02, 03, 04 e mais 2');
+});
+
+// ─── Escalas de tempo (04/11/2026, regra 9) ──────────────────────────────────────────────────────────
+/* Agosto de 2026 tem as semanas de 03/08 a 31/08: o período vai da segunda 03/08 ao sábado 05/09, e o
+ * retrato é tirado nesse sábado, o mesmo da semana de 31/08. */
+const periodCtx: PeriodContext = { currentWeek: '2026-09-07', since: '2026-08-03', anchorWeek: '2026-09-07' };
+const monthRef = (key: string) => referenceOf('2026-09-07', DEMO_DATE, '2026-08-17', resolvePeriod({ scale: 'mes', key }, periodCtx));
+/** Restrições em volta de agosto: antes, nas bordas (segunda inicial e sábado final, inclusive) e depois. */
+const aroundAugust = () => [
+  restriction({
+    id: 'antes',
+    wagonId: 'v2',
+    createdAt: '2026-07-20T12:00:00Z',
+    status: 'resolved',
+    boardStatus: 'resolvida',
+    resolvedAt: '2026-08-01T12:00:00Z',
+  }),
+  restriction({
+    id: 'segunda',
+    wagonId: 'v2',
+    createdAt: '2026-07-25T12:00:00Z',
+    status: 'resolved',
+    boardStatus: 'resolvida',
+    resolvedAt: '2026-08-03T09:00:00Z',
+  }),
+  restriction({
+    id: 'dentro',
+    wagonId: 'v4',
+    createdAt: '2026-08-10T12:00:00Z',
+    status: 'resolved',
+    boardStatus: 'resolvida',
+    resolvedAt: '2026-09-05T20:00:00Z',
+  }),
+  restriction({ id: 'sabado', wagonId: 'v5', createdAt: '2026-09-05T15:00:00Z' }),
+  restriction({
+    id: 'depois',
+    wagonId: 'v5',
+    createdAt: '2026-09-06T12:00:00Z',
+    status: 'resolved',
+    boardStatus: 'resolvida',
+    resolvedAt: '2026-09-07T12:00:00Z',
+  }),
+  restriction({
+    id: 'resolvida-depois',
+    wagonId: 'v6',
+    createdAt: '2026-08-12T12:00:00Z',
+    status: 'resolved',
+    boardStatus: 'resolvida',
+    resolvedAt: '2026-09-07T12:00:00Z',
+  }),
+];
+
+test('período: restrições resolvidas e criadas entre a segunda inicial e o sábado final, bordas inclusive', async () => {
+  const data = createMockData();
+  data.restrictions.push(...aroundAugust());
+  const planning = await load(data);
+  const august = buildWagonsPanel(planning, 'obra-1', monthRef('2026-08'), all)!;
+  // Resolvidas: "segunda" (03/08) e "dentro" (05/09); "antes" (01/08) e as resolvidas em 07/09 ficam fora.
+  // Criadas: r1 do exemplo (20/08), "dentro", "sabado" e "resolvida-depois"; "depois" (06/09) já é setembro.
+  assert.deepEqual(august.period, { start: '2026-08-03', end: '2026-09-05', restrictionsResolved: 2, restrictionsCreated: 4 });
+  assert.equal(august.scale, 'mes');
+  assert.equal(august.refDate, '2026-09-05');
+  // Na semanal o fluxo também sai (o Dashboard geral usa), só que da semana: "dentro" resolvida e "sabado" criada.
+  const week = buildWagonsPanel(planning, 'obra-1', ref('2026-08-31'), all)!;
+  assert.deepEqual(week.period, { start: '2026-08-31', end: '2026-09-05', restrictionsResolved: 1, restrictionsCreated: 1 });
+  assert.equal(week.scale, 'semana');
+  // Setembro (parcial até a semana de 07/09, sábado 12/09): as resolvidas em 07/09 e "depois", criada em 06/09.
+  const september = buildWagonsPanel(planning, 'obra-1', monthRef('2026-09'), all)!;
+  assert.deepEqual(september.period, { start: '2026-09-07', end: '2026-09-12', restrictionsResolved: 2, restrictionsCreated: 0 });
+});
+
+test('período: o retrato do mês é o do sábado final, igual ao da última semana', async () => {
+  const data = createMockData();
+  data.restrictions.push(...aroundAugust());
+  const planning = await load(data);
+  const { period: _monthFlow, scale: _month, ...august } = buildWagonsPanel(planning, 'obra-1', monthRef('2026-08'), all)!;
+  const { period: _weekFlow, scale: _week, ...lastWeek } = buildWagonsPanel(planning, 'obra-1', ref('2026-08-31'), all)!;
+  assert.deepEqual(august, lastWeek);
+});
+
+test('período: o recorte de empreiteiro vale também para o fluxo de restrições', async () => {
+  const data = createMockData();
+  // Como no teste do filtro: revestimentos com a SM MARTINS, elétrica com a ATR ENG, e o v5 sem equipe.
+  for (const activity of data.activities) {
+    if (activity.id.startsWith('a')) activity.teamId = 'equipe-1';
+    else if (activity.wagonId !== 'v5') activity.teamId = 'equipe-2';
+  }
+  data.restrictions.push(
+    restriction({ id: 'v5-criada', wagonId: 'v5', createdAt: '2026-08-10T12:00:00Z' }),
+    restriction({
+      id: 'v5-resolvida',
+      wagonId: 'v5',
+      createdAt: '2026-08-10T12:00:00Z',
+      status: 'resolved',
+      boardStatus: 'resolvida',
+      resolvedAt: '2026-08-20T12:00:00Z',
+    }),
+    restriction({
+      id: 'v4-resolvida',
+      wagonId: 'v4',
+      createdAt: '2026-08-11T12:00:00Z',
+      status: 'resolved',
+      boardStatus: 'resolvida',
+      resolvedAt: '2026-08-21T12:00:00Z',
+    }),
+  );
+  const planning = await load(data);
+  const at = monthRef('2026-08');
+  const everyone = buildWagonsPanel(planning, 'obra-1', at, all)!.period;
+  assert.deepEqual([everyone.restrictionsResolved, everyone.restrictionsCreated], [2, 4]);
+  // A ATR não alcança o v5: as duas restrições dele saem do fluxo, como saem do retrato.
+  const atr = buildWagonsPanel(planning, 'obra-1', at, { ...all, companies: new Set(['atr eng']) })!.period;
+  assert.deepEqual([atr.restrictionsResolved, atr.restrictionsCreated], [1, 2]);
+  const nobody = buildWagonsPanel(planning, 'obra-1', at, { ...all, companies: new Set(['Outra']) })!.period;
+  assert.deepEqual([nobody.restrictionsResolved, nobody.restrictionsCreated], [0, 0]);
+});
+
+test('fora da semanal os textos dizem o dia do retrato e o bloco de restrições ganha as resolvidas no período', async () => {
+  const data = createMockData();
+  data.restrictions.push(...aroundAugust());
+  const planning = await load(data);
+  const week = wagonsTexts(buildWagonsPanel(planning, 'obra-1', ref('2026-08-31'), all)!);
+  assert.deepEqual(week, {
+    statusNote: 'Na data analisada.',
+    restrictionsNote: 'Coluna atual do quadro; vencidas pelo limite do lead time.',
+    paperStatusNote: 'Status atual; takt vencido pela data analisada.',
+    paperRestrictionsNote:
+      'Coluna atual do quadro de restrições; vencida é a aberta com limite (início previsto menos lead time) antes da data.',
+    resolvedInPeriod: undefined,
+  });
+  const month = wagonsTexts(buildWagonsPanel(planning, 'obra-1', monthRef('2026-08'), all)!);
+  assert.deepEqual(month, {
+    statusNote: 'Em 05/09.',
+    restrictionsNote: 'Coluna atual do quadro; vencidas em 05/09 pelo limite do lead time.',
+    paperStatusNote: 'Status atual; takt vencido em 05/09.',
+    paperRestrictionsNote:
+      'Coluna atual do quadro de restrições; vencida é a aberta com limite (início previsto menos lead time) antes de 05/09.',
+    resolvedInPeriod: 'Restrições resolvidas no mês: 2',
+  });
+  // O 3º trimestre vai até a semana atual (07/09, sábado 12/09): entram também as resolvidas em 01/08 e 07/09.
+  const quarter = referenceOf('2026-09-07', DEMO_DATE, '2026-08-17', resolvePeriod({ scale: 'trimestre', key: '2026-T3' }, periodCtx));
+  assert.equal(wagonsTexts(buildWagonsPanel(planning, 'obra-1', quarter, all)!).resolvedInPeriod, 'Restrições resolvidas no trimestre: 5');
+  // Sem vagão vencido, a dica do takt também diz o dia (personalizado de uma semana, sábado 15/08).
+  const customRef = referenceOf(
+    '2026-09-07',
+    DEMO_DATE,
+    '2026-08-17',
+    resolvePeriod({ scale: 'personalizado', from: '2026-08-10', to: '2026-08-15' }, periodCtx),
+  );
+  assert.equal(overdueHint(buildWagonsPanel(planning, 'obra-1', customRef, all)!), 'Nenhum vagão com término previsto antes de 15/08');
+  assert.equal(
+    overdueHint(buildWagonsPanel(planning, 'obra-1', ref('2026-08-10'), all)!),
+    'Nenhum vagão com término previsto antes da data',
+  );
+});
+
+test('cartões do resumo fora da semanal: "em 05/09" nas dicas e as resolvidas no período', async () => {
+  const data = createMockData();
+  data.restrictions.push(
+    restriction({ id: 'r2', wagonId: 'v4', activityId: 'a4', leadTimeDays: 10, blocksExecution: true }),
+    ...aroundAugust(),
+  );
+  const planning = await load(data);
+  const weekRef = ref('2026-08-31');
+  const weekly = wagonsSummary(buildWagonsPanel(planning, 'obra-1', weekRef, all)!, weekRef);
+  const at = monthRef('2026-08');
+  const panel = buildWagonsPanel(planning, 'obra-1', at, all)!;
+  const { takt, restrictions } = wagonsSummary(panel, at);
+  // Os números são os do retrato no sábado final, os mesmos da semana de 31/08; só as dicas mudam.
+  assert.equal(takt.kpi.value, weekly.takt.kpi.value);
+  assert.equal(restrictions.kpi.value, weekly.restrictions.kpi.value);
+  assert.deepEqual(restrictions.kpi.tag, weekly.restrictions.kpi.tag);
+  assert.equal(weekly.takt.kpi.hint, `De ${panel.producing} em produção · 2 com restrição aberta`);
+  assert.equal(takt.kpi.hint, `Em 05/09 · de ${panel.producing} em produção · 2 com restrição aberta`);
+  assert.equal(weekly.restrictions.kpi.hint, '1 bloqueia execução · prazo pelo lead time');
+  assert.equal(restrictions.kpi.hint, 'Em 05/09 · 1 bloqueia execução · 2 resolvidas no mês');
+  assert.equal(text(restrictions.sentence), text(weekly.restrictions.sentence));
+  // Sem vencida: "Nenhuma vencida em 15/08", com a resolvida no singular.
+  const calm = createMockData();
+  calm.restrictions.push(
+    restriction({
+      id: 'r9',
+      wagonId: 'v2',
+      createdAt: '2026-08-10T12:00:00Z',
+      status: 'resolved',
+      boardStatus: 'resolvida',
+      resolvedAt: '2026-08-12T12:00:00Z',
+    }),
+  );
+  const custom = referenceOf(
+    '2026-09-07',
+    DEMO_DATE,
+    '2026-08-17',
+    resolvePeriod({ scale: 'personalizado', from: '2026-08-10', to: '2026-08-15' }, periodCtx),
+  );
+  const calmSummary = wagonsSummary(buildWagonsPanel(await load(calm), 'obra-1', custom, all)!, custom).restrictions.kpi;
+  assert.equal(calmSummary.hint, 'Nenhuma vencida em 15/08 · 1 resolvida no período');
 });

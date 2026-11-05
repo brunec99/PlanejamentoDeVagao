@@ -4,13 +4,25 @@ import { MIN_RANKED_WEEKS } from '@/domain/closing-ranking';
 import type { CauseTally } from '@/domain/rules';
 import { paretoCallout, SERIES_WEEKS, topCauses, vitalCauses, type ClosingDashboard } from '@/modules/curto-prazo/closing-dashboard';
 import { HistoryBars, PpcBars } from '@/modules/dashboard/charts';
-import { monthLong, monthOf, monthsBetween, pct, plural, type Segment } from '@/modules/dashboard/model';
-import { yearsSentence, type ShortTermHistory, type ShortTermPanelData } from '@/modules/dashboard/short-term-panel';
+import { PeriodPpcBars } from '@/modules/dashboard/charts-period';
+import { monthLong, monthOf, monthsBetween, pct, plural, signedPoints, type Segment } from '@/modules/dashboard/model';
+import { GROUPING_NOUN, SCALE_OF } from '@/modules/dashboard/period';
+import {
+  periodDelta,
+  periodNoun,
+  yearsSentence,
+  type ShortTermHistory,
+  type ShortTermPanelData,
+} from '@/modules/dashboard/short-term-panel';
 import { workPath } from '@/shared/format';
 
 /** Quadro do curto prazo da aba 0 (04/11/2026, modelo aprovado): na tela, dois blocos (o painel do fechamento
  * e o histórico desde a semana 1); no papel, três painéis para a folha 1 do PDF. Os números são os de
- * `buildShortTermPanel`, os mesmos da primeira página do PDF do fechamento para a mesma semana. */
+ * `buildShortTermPanel`, os mesmos da primeira página do PDF do fechamento para a mesma semana.
+ *
+ * Fora da escala semanal (escalas de tempo, 04/11/2026): o bloco da série mostra o PPC por balde
+ * (`PeriodPpcBars`) com os números miúdos do período, e "Causas na semana" vira "Causas do mês/período". O
+ * Pareto da obra, o histórico e o ranking ficam como estão. Na escala semanal, nada muda. */
 
 const PARETO_CAUSES = 5;
 const WEEK_CAUSES = 6;
@@ -49,18 +61,30 @@ export function ShortTermPanel({
 function Screen({ data, workId }: { data: ShortTermPanelData; workId: string }) {
   const d = data.closing;
   const n = data.weekNumber;
+  const weekly = data.periodInfo.scale === 'semana';
   return (
     <>
       <div className="dsh-mod-b dsh-cols-2">
         <div className="dsh-blk">
-          <h5>PPC da semana e das anteriores</h5>
-          <p className="dsh-d">
-            As {SERIES_WEEKS} semanas até a analisada; a faixa âmbar é a semana {n}. Tracejado: média das semanas apuradas.
-          </p>
-          {d.series.length ? (
-            <PpcBars series={d.series} week={d.week} average={d.average} label={data.label} />
+          {weekly ? (
+            <>
+              <h5>PPC da semana e das anteriores</h5>
+              <p className="dsh-d">
+                As {SERIES_WEEKS} semanas até a analisada; a faixa âmbar é a semana {n}. Tracejado: média das semanas apuradas.
+              </p>
+              {d.series.length ? (
+                <PpcBars series={d.series} week={d.week} average={d.average} label={data.label} />
+              ) : (
+                <p className="dsh-empty">{emptySeries(data)}</p>
+              )}
+            </>
           ) : (
-            <p className="dsh-empty">{emptySeries(data)}</p>
+            <>
+              <h5>{periodTitle(data)}</h5>
+              <p className="dsh-d">{periodDescription(data)}</p>
+              <PeriodNumbers data={data} />
+              <PeriodSeries data={data} />
+            </>
           )}
           <RankingNote d={d} />
         </div>
@@ -71,8 +95,17 @@ function Screen({ data, workId }: { data: ShortTermPanelData; workId: string }) 
             {data.companyFiltered ? ', no recorte de empreiteiro' : ''}.
           </p>
           <Pareto d={d} />
-          <h5 style={{ marginTop: 12 }}>Causas na semana {n}</h5>
-          <WeekCauses d={d} />
+          {weekly ? (
+            <>
+              <h5 style={{ marginTop: 12 }}>Causas na semana {n}</h5>
+              <WeekCauses d={d} />
+            </>
+          ) : (
+            <>
+              <h5 style={{ marginTop: 12 }}>Causas {data.periodInfo.of}</h5>
+              <PeriodCauses data={data} />
+            </>
+          )}
           <p className="dsh-legend">
             <a href={`${workPath(workId, 'curto-prazo')}?secao=fechamento`}>Abrir o fechamento da aba 4</a>
           </p>
@@ -100,6 +133,113 @@ const emptySeries = (data: ShortTermPanelData) =>
   data.companyFiltered
     ? `Nenhum compromisso do empreiteiro escolhido até a semana ${data.weekNumber}.`
     : `Nenhum compromisso registrado até a semana ${data.weekNumber}.`;
+
+// ─── Período (fora da escala semanal) ────────────────────────────────────────────────────────────────
+
+/** "PPC do mês e dos anteriores"; no personalizado, "PPC do período por mês". */
+function periodTitle(data: ShortTermPanelData) {
+  const info = data.periodInfo;
+  return info.scale === 'personalizado' ? `PPC do período por ${GROUPING_NOUN[info.grouping].one}` : `PPC ${info.of} e dos anteriores`;
+}
+
+/** O balde analisado na frase da faixa âmbar: "o mês analisado", "o trimestre analisado", "o ano analisado". */
+const ANALYZED = { semana: 'a semana analisada', mes: 'o mês analisado', trimestre: 'o trimestre analisado', ano: 'o ano analisado' };
+
+function periodDescription(data: ShortTermPanelData) {
+  const info = data.periodInfo;
+  const g = info.grouping;
+  const many = `${g === 'semana' ? 'das' : 'dos'} ${GROUPING_NOUN[g].many}`;
+  const each = `cada barra soma cumpridos ÷ assumidos das semanas apuradas ${SCALE_OF[g]}`;
+  return info.scale === 'personalizado'
+    ? `${plural(info.weeks, 'semana', 'semanas')} de ${info.label}, por ${GROUPING_NOUN[g].one}: ${each}. Tracejado: média simples ${many} com PPC.`
+    : `Série por ${GROUPING_NOUN[g].one} até ${info.label}: ${each}; a faixa âmbar é ${ANALYZED[g]}. Tracejado: média simples ${many} com PPC.`;
+}
+
+/** O balde anterior nos números miúdos: "set/26: 74%". */
+function previousText(data: ShortTermPanelData) {
+  const previous = data.period.previous;
+  if (!previous) return 'sem período anterior';
+  return `${previous.short}: ${previous.percent === undefined ? 'sem semana apurada' : pct(previous.percent)}`;
+}
+
+/** Semanas apuradas: o que falta para o período estar todo apurado. */
+function weeksText(data: ShortTermPanelData) {
+  const c = data.period.current;
+  const info = data.periodInfo;
+  const empty = info.weeks - c.closedWeeks - c.openWeeks;
+  const parts = [
+    c.openWeeks ? `${plural(c.openWeeks, 'em aberto', 'em aberto')}, fora do PPC` : '',
+    info.partial ? 'período em andamento' : '',
+    empty > 0 ? plural(empty, 'sem compromissos', 'sem compromissos') : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'todas apuradas';
+}
+
+/** Os números miúdos do período: PPC, comparação com o anterior e semanas apuradas. */
+function PeriodNumbers({ data }: { data: ShortTermPanelData }) {
+  const c = data.period.current;
+  const delta = periodDelta(data.period);
+  return (
+    <div className="dsh-mini" style={{ marginBottom: 6 }}>
+      <div>
+        <div className="l">PPC {data.periodInfo.of}</div>
+        <div className="v">{c.percent === undefined ? '—' : pct(c.percent)}</div>
+        <div className="h">
+          {c.closedWeeks ? `${c.fulfilled} de ${plural(c.planned, 'compromisso', 'compromissos')}` : 'nenhuma semana apurada'}
+        </div>
+      </div>
+      <div>
+        <div className="l">vs anterior</div>
+        <div className="v">{delta === undefined ? '—' : signedPoints(delta)}</div>
+        <div className="h">{previousText(data)}</div>
+      </div>
+      <div>
+        <div className="l">Semanas apuradas</div>
+        <div className="v">
+          {c.closedWeeks} de {data.periodInfo.nominalWeeks}
+        </div>
+        <div className="h">{weeksText(data)}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Os mesmos números numa linha, para o papel. */
+function periodNumbersLine(data: ShortTermPanelData) {
+  const c = data.period.current;
+  const delta = periodDelta(data.period);
+  const previous = data.period.previous;
+  return [
+    `PPC ${data.periodInfo.of}: ${c.percent === undefined ? '—' : `${pct(c.percent)} (${c.fulfilled} de ${plural(c.planned, 'compromisso', 'compromissos')})`}`,
+    delta === undefined || !previous
+      ? ''
+      : `${signedPoints(delta)} vs ${data.periodInfo.scale === 'personalizado' ? 'período anterior' : previous.short}`,
+    `${c.closedWeeks} de ${plural(data.periodInfo.nominalWeeks, 'semana apurada', 'semanas apuradas')}${c.openWeeks ? ` (${plural(c.openWeeks, 'em aberto', 'em aberto')})` : ''}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function PeriodSeries({ data, width, height }: { data: ShortTermPanelData; width?: number; height?: number }) {
+  const series = data.period.series;
+  if (!series.some(bucket => bucket.closedWeeks || bucket.openWeeks))
+    return (
+      <p className="dsh-empty">
+        {data.companyFiltered ? 'Nenhum compromisso do empreiteiro escolhido' : 'Nenhum compromisso registrado'} na série até{' '}
+        {data.periodInfo.label}.
+      </p>
+    );
+  return (
+    <PeriodPpcBars
+      buckets={series}
+      grouping={data.periodInfo.grouping}
+      analyzedKey={data.periodInfo.analyzedKey}
+      average={data.period.average}
+      width={width}
+      height={height}
+    />
+  );
+}
 
 /** A posição no ranking das obras pelo PPC geral, sempre da obra inteira, com a média das obras. */
 function RankingNote({ d }: { d: ClosingDashboard }) {
@@ -182,9 +322,6 @@ function Share({ share, color }: { share: number; color: string }) {
 
 /** As causas da semana analisada, com a posição de cada uma no Pareto da obra (como o painel do PDF). */
 function WeekCauses({ d }: { d: ClosingDashboard }) {
-  const { rows, rest } = topCauses(d.weekCauses, WEEK_CAUSES);
-  const peak = Math.max(1, ...rows.map(item => item.total));
-  const rankOf = (cause: string) => d.pareto.findIndex(item => item.cause === cause) + 1;
   const c = d.current;
   const note = !c
     ? 'Semana sem compromissos.'
@@ -195,6 +332,64 @@ function WeekCauses({ d }: { d: ClosingDashboard }) {
         : d.failures
           ? `Semana apurada: as ${c.planned} linhas têm Status, e todas as ${d.failures} com Não têm causa.`
           : `Semana apurada: as ${c.planned} linhas têm Status e nenhuma ficou como Não.`;
+  return (
+    <CauseList
+      causes={d.weekCauses}
+      pareto={d.pareto}
+      failures={d.failures}
+      none={d.failures ? 'Nenhuma falha da semana tem causa apontada.' : 'Nenhum compromisso não cumprido.'}
+      note={note}
+    />
+  );
+}
+
+/** As causas das semanas do período (todas, inclusive as em aberto), com a posição no Pareto da obra. */
+function PeriodCauses({ data }: { data: ShortTermPanelData }) {
+  const p = data.period;
+  const c = p.current;
+  const of = data.periodInfo.of;
+  const note =
+    !c.closedWeeks && !c.openWeeks
+      ? `${periodNoun(data.periodInfo.scale)} sem compromissos.`
+      : [
+          p.uncaused > 0
+            ? `${plural(p.uncaused, 'linha com Não está', 'linhas com Não estão')} sem causa e fora desta lista.`
+            : p.failures === 1
+              ? 'A linha com Não tem causa.'
+              : p.failures
+                ? `Todas as ${p.failures} linhas com Não têm causa.`
+                : `Nenhuma linha ficou como Não nas semanas ${of}.`,
+          c.openWeeks && p.failures ? 'Inclui as linhas com Não das semanas em aberto.' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+  return (
+    <CauseList
+      causes={p.causes}
+      pareto={data.closing.pareto}
+      failures={p.failures}
+      none={p.failures ? `Nenhuma falha ${of} tem causa apontada.` : 'Nenhum compromisso não cumprido.'}
+      note={note}
+    />
+  );
+}
+
+function CauseList({
+  causes,
+  pareto,
+  failures,
+  none,
+  note,
+}: {
+  causes: CauseTally[];
+  pareto: CauseTally[];
+  failures: number;
+  none: string;
+  note: string;
+}) {
+  const { rows, rest } = topCauses(causes, WEEK_CAUSES);
+  const peak = Math.max(1, ...rows.map(item => item.total));
+  const rankOf = (cause: string) => pareto.findIndex(item => item.cause === cause) + 1;
   return (
     <>
       {rows.length > 0 ? (
@@ -223,13 +418,13 @@ function WeekCauses({ d }: { d: ClosingDashboard }) {
         <div className="dsh-hb">
           <div>
             <span className="none" style={{ gridColumn: '1 / -1' }}>
-              {d.failures ? 'Nenhuma falha da semana tem causa apontada.' : 'Nenhum compromisso não cumprido.'}
+              {none}
             </span>
           </div>
         </div>
       )}
       <p className="dsh-legend">
-        {d.failures ? `${plural(d.failures, 'compromisso não cumprido', 'compromissos não cumpridos')}. ` : ''}
+        {failures ? `${plural(failures, 'compromisso não cumprido', 'compromissos não cumpridos')}. ` : ''}
         {note}
       </p>
     </>
@@ -312,18 +507,31 @@ function Paper({ data }: { data: ShortTermPanelData }) {
   const h = data.history;
   const n = data.weekNumber;
   const open = h.totalWeeks - h.closedWeeks;
+  const weekly = data.periodInfo.scale === 'semana';
   return (
     <>
       <div className="dsh-panel">
-        <h3>Aba 4 · PPC da semana e das anteriores</h3>
-        <p className="dsh-desc">
-          As {SERIES_WEEKS} semanas até a semana {n}. Cada barra é uma semana; a faixa âmbar é a semana analisada; o tracejado, a média das
-          apuradas.
-        </p>
-        {d.series.length ? (
-          <PpcBars series={d.series} week={d.week} average={d.average} label={data.label} width={640} height={205} />
+        {weekly ? (
+          <>
+            <h3>Aba 4 · PPC da semana e das anteriores</h3>
+            <p className="dsh-desc">
+              As {SERIES_WEEKS} semanas até a semana {n}. Cada barra é uma semana; a faixa âmbar é a semana analisada; o tracejado, a média
+              das apuradas.
+            </p>
+            {d.series.length ? (
+              <PpcBars series={d.series} week={d.week} average={d.average} label={data.label} width={640} height={205} />
+            ) : (
+              <p className="dsh-empty">{emptySeries(data)}</p>
+            )}
+          </>
         ) : (
-          <p className="dsh-empty">{emptySeries(data)}</p>
+          <>
+            <h3>Aba 4 · {periodTitle(data)}</h3>
+            <p className="dsh-desc">
+              <strong>{periodNumbersLine(data)}.</strong> {periodDescription(data)}
+            </p>
+            <PeriodSeries data={data} width={640} height={190} />
+          </>
         )}
         <RankingNote d={d} />
       </div>

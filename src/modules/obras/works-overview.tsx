@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ArrowRight, Building2, CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
+import { ArrowRight, BarChart3, Building2, CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { WorkActions } from '@/modules/planejamento/planning-actions';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
+import { canComparePortfolio } from '@/modules/layout/work-nav';
 import { Empty, LoadState } from '@/modules/planejamento/ui';
 import { selectWorkPlanning } from '@/application/use-cases/get-planning';
 import { formatDate, workPath } from '@/shared/format';
@@ -58,6 +59,7 @@ function Indicator({ label, value, state, tone }: { label: string; value: ReactN
 
 export function WorksOverview() {
   const context = usePlanning();
+  const developer = useDeveloper();
   // Abrir uma obra cai no dashboard (aba 0, 04/11/2026), que mostra só os módulos que a pessoa pode abrir.
   const landing = 'dashboard';
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
@@ -75,12 +77,21 @@ export function WorksOverview() {
             Cada cartão mostra a saúde da obra: PPC da última semana, restrições vencidas e vagões com takt estourado.
           </p>
         </div>
-        {/* `WorkActions` traz um `mt-6` próprio, feito para a posição antiga; aqui o botão fica ao lado do título. */}
-        {actsAsManager(actor?.role) && (
-          <div data-tour="obras-actions" className="[&>div]:mt-0">
-            <WorkActions />
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Dashboard geral (04/11/2026): as obras comparadas no período escolhido, para quem tem duas ou mais. */}
+          {canComparePortfolio(works.length, actor?.role, developer) && (
+            <Link href="/dashboard" data-tour="obras-comparar" className="button-secondary">
+              <BarChart3 size={16} aria-hidden />
+              Comparar obras
+            </Link>
+          )}
+          {/* `WorkActions` traz um `mt-6` próprio, feito para a posição antiga; aqui o botão fica ao lado do título. */}
+          {actsAsManager(actor?.role) && (
+            <div data-tour="obras-actions" className="[&>div]:mt-0">
+              <WorkActions />
+            </div>
+          )}
+        </div>
       </header>
       {works.length === 0 ? (
         <div data-tour="obras-empty" className="panel mt-6 p-6">

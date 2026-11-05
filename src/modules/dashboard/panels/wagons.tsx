@@ -9,6 +9,7 @@ import {
   producingLegend,
   restrictionsCallout,
   statusAriaLabel,
+  wagonsTexts,
   type ProducingWagon,
   type WagonsPanelData,
 } from '@/modules/dashboard/wagons-panel';
@@ -16,14 +17,19 @@ import { wagonLabel, wagonPath } from '@/shared/format';
 
 /** Quadro de vagões da aba 0 (aba 2 de origem). Na tela é um corpo de módulo com três blocos; no papel são
  * dois painéis que o PDF coloca na folha 2. Os textos vêm de `wagons-panel.ts`, para a tela e o papel
- * dizerem a mesma coisa. */
+ * dizerem a mesma coisa. Fora da escala semanal, os retratos dizem o dia ("em 31/10") e o bloco de
+ * restrições mostra as resolvidas no período; na semanal, nada muda. */
 export function WagonsPanel({ data, variant, workId }: { data: WagonsPanelData; variant: 'screen' | 'paper'; workId: string }): ReactNode {
   if (variant === 'paper') return <Paper data={data} />;
+  const texts = wagonsTexts(data);
   return (
     <div className="dsh-mod-b dsh-cols-3">
       <div className="dsh-blk">
         <h5>Vagões por status</h5>
-        <p className="dsh-d">Na data analisada.{data.companyFiltered ? ' Só vagões com atividade das empresas escolhidas.' : ''}</p>
+        <p className="dsh-d">
+          {texts.statusNote}
+          {data.companyFiltered ? ' Só vagões com atividade das empresas escolhidas.' : ''}
+        </p>
         <StatusBar data={data} />
         <div className="dsh-mini">
           <Mini label="Takt vencido" value={data.overdue.count} tone={data.overdue.count ? 't-warn' : undefined} hint={overdueHint(data)} />
@@ -47,8 +53,9 @@ export function WagonsPanel({ data, variant, workId }: { data: WagonsPanelData; 
       </div>
       <div className="dsh-blk">
         <h5>Restrições</h5>
-        <p className="dsh-d">Coluna atual do quadro; vencidas pelo limite do lead time.</p>
+        <p className="dsh-d">{texts.restrictionsNote}</p>
         <RestrictionsMini data={data} />
+        <PeriodFlow text={texts.resolvedInPeriod} />
         <Callout data={data} />
       </div>
     </div>
@@ -57,13 +64,14 @@ export function WagonsPanel({ data, variant, workId }: { data: WagonsPanelData; 
 
 function Paper({ data }: { data: WagonsPanelData }) {
   const sequences = data.sequences.map(s => `${s.name} (takt ${s.takt})`).join('; ');
+  const texts = wagonsTexts(data);
   return (
     <>
       <div className="dsh-panel">
         <h3>Aba 2 · Vagões por status e em produção</h3>
         <p className="dsh-desc">
           {plural(data.total, 'vagão', 'vagões')}
-          {sequences ? ` em ${sequences}` : ''}. Status atual; takt vencido pela data analisada.
+          {sequences ? ` em ${sequences}` : ''}. {texts.paperStatusNote}
           {data.companyFiltered ? ' Só vagões com atividade das empresas escolhidas.' : ''}
         </p>
         <div className="dsh-stack-blocks">
@@ -87,10 +95,9 @@ function Paper({ data }: { data: WagonsPanelData }) {
       </div>
       <div className="dsh-panel">
         <h3>Aba 2 · Restrições</h3>
-        <p className="dsh-desc">
-          Coluna atual do quadro de restrições; vencida é a aberta com limite (início previsto menos lead time) antes da data.
-        </p>
+        <p className="dsh-desc">{texts.paperRestrictionsNote}</p>
         <RestrictionsMini data={data} compact />
+        <PeriodFlow text={texts.resolvedInPeriod} />
         <Callout data={data} />
       </div>
     </>
@@ -161,6 +168,16 @@ function RestrictionsMini({ data, compact }: { data: WagonsPanelData; compact?: 
       <Mini label="Em tratativa" value={r.inTreatment} />
       <Mini label="Resolvida" value={r.resolved} />
     </div>
+  );
+}
+
+/** O fluxo do período sob as colunas ("Restrições resolvidas no mês: 4"); a semanal não tem esta linha. */
+function PeriodFlow({ text }: { text?: string }) {
+  if (!text) return null;
+  return (
+    <p className="dsh-legend">
+      <span>{text}</span>
+    </p>
   );
 }
 
