@@ -9,6 +9,7 @@ import { sections as vagoes } from './vagoes';
 import { sections as medioPrazo } from './medio-prazo';
 import { sections as curtoPrazo } from './curto-prazo';
 import { sections as terminalidade } from './terminalidade';
+import { sections as seguranca } from './seguranca';
 import { sections as apoioBim } from './apoio-bim';
 import { sections as agente } from './agente';
 
@@ -29,6 +30,7 @@ export const MANUAL_SECTIONS: readonly ManualSection[] = [
   ...medioPrazo,
   ...curtoPrazo,
   ...terminalidade,
+  ...seguranca,
   ...apoioBim,
   ...agente,
 ];
@@ -45,6 +47,7 @@ export const SCREEN_LABEL: Readonly<Record<string, string>> = {
   'medio-prazo': 'Aba 3 · Cronograma de médio prazo',
   'curto-prazo': 'Aba 4 · Cronograma de curto prazo',
   terminalidade: 'Aba 5 · Terminalidade',
+  seguranca: 'Aba 6 · Segurança do trabalho',
   federacao: 'Apoio · Modelo federado',
   ifc: 'Apoio · Arquivos IFC',
   dividas: 'Apoio · Dívidas',
@@ -172,6 +175,7 @@ const SCREEN_NAMES: Readonly<Record<string, readonly string[]>> = {
   'medio-prazo': ['medio prazo', 'cronograma do mes', 'plano do mes', 'aba 3'],
   'curto-prazo': ['curto prazo', 'planilha da semana', 'planilha semanal', 'aba 4'],
   terminalidade: ['terminalidade', 'aba 5'],
+  seguranca: ['seguranca do trabalho', 'aba 6', 'tst', 'vistoria de seguranca'],
   federacao: ['modelo federado', 'federacao', 'federado'],
   ifc: ['arquivos ifc', 'ifc'],
   dividas: ['dividas', 'divida'],

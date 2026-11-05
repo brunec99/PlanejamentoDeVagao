@@ -55,6 +55,8 @@ export const MODULES: readonly ModuleInfo[] = [
   { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
   { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento', open: true },
   { section: 'terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento, com fotos', group: 'Planejamento', open: true },
+  // 05/11/2026: aberta a todos para consulta; só quem é TST (`User.tst`) lança e finaliza apontamentos.
+  { section: 'seguranca', label: 'Segurança do trabalho', hint: 'Vistorias dos TSTs, com fotos', group: 'Planejamento', open: true },
   { section: 'federacao', label: 'Modelo federado', hint: 'Modelos IFC combinados', group: 'Apoio' },
   { section: 'ifc', label: 'Arquivos IFC', hint: 'Repositório e versões dos modelos', group: 'Apoio' },
   { section: 'dividas', label: 'Dívidas', hint: 'Pendências que passam de um vagão para outro', group: 'Apoio' },

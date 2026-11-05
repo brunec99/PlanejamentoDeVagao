@@ -56,6 +56,7 @@ const loadProfile = cache(async (id: string): Promise<User | null> => {
     role: data.role,
     workIds: data.work_ids,
     modules: Array.isArray(data.module_access) ? data.module_access : [],
+    ...(data.tst === true ? { tst: true } : {}),
   };
 });
 

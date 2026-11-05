@@ -342,6 +342,9 @@ export interface User extends RecordBase {
   /** Módulos em desenvolvimento liberados pelo admin para a pessoa (seções da obra, como
    * "medio-prazo"), sem torná-la admin nem desenvolvedora. Os abertos a todos não entram aqui. */
   modules?: string[];
+  /** Técnico de segurança do trabalho (migração 0040, `profiles.tst`): tipo que se soma ao papel. Só quem
+   * é TST lança e finaliza apontamentos na aba 6 (Segurança do trabalho). Ausente = não é TST. */
+  tst?: boolean;
 }
 export interface HistoryEvent {
   id: Id;

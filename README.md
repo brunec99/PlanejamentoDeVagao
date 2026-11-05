@@ -4,7 +4,7 @@ Gestão de projetos e obras da ATR Incorporadora. O nome "Obra 360" aparece na l
 
 Aplicação em Next.js, TypeScript, Tailwind CSS e App Router. O vagão é um **período temporal**, sem pavimento ou local próprio. Os locais pertencem às atividades.
 
-A interface de cada obra é organizada em **cinco abas numeradas**: os quatro níveis, do planejamento macro para a semana, e a terminalidade.
+A interface de cada obra é organizada em **seis abas numeradas**: os quatro níveis, do planejamento macro para a semana, a terminalidade e a segurança do trabalho.
 
 1. **Cronograma de longo prazo** — planejador próprio (fluxograma de serviços que se expande em Linha de Balanço) e, na visão dos vagões, Linha de Balanço das atividades e módulo de restrições (mais curva de avanço e linhas de base).
 2. **Planejamento por vagões** — períodos de takt, terminalidade e liberações; é onde a execução é registrada.
@@ -16,6 +16,11 @@ A interface de cada obra é organizada em **cinco abas numeradas**: os quatro n�
    - Lista classificável por qualquer coluna, como no Excel, e PDF (20/10/2026) agrupado por pavimento, empreiteiro ou tipo, só com os grupos escolhidos, com fotos, responsáveis e três gráficos de rosca na primeira folha; as mesmas roscas ficam no topo da aba e filtram a lista.
    - Fica fora do snapshot (migração 0028) e é aberta a todos.
    - Veja [docs/terminalidade.md](docs/terminalidade.md).
+6. **Segurança do trabalho** (05/11/2026): a vistoria dos técnicos de segurança (TST), com o mesmo processo da terminalidade e as colunas da planilha "SST - Controle geral": tipo de apontamento, risco (consequência e probabilidade), descrição, local, data, foto do apontamento, data e foto da correção e dias para resolver.
+   - **Só quem é TST lança, edita, finaliza, reabre e exclui.** TST é uma marca no perfil, que o admin liga na coluna "TST" de Configurações → Usuários; ela se soma ao papel. Os demais com a obra liberada, inclusive administradores, só consultam.
+   - Tipos de apontamento numa lista única para todas as obras; quadro "mês a mês por tipo" (o comparativo da planilha), roscas por tipo, consequência e probabilidade, PDF agrupado por tipo, local ou consequência, e modo de campo sem sinal em `/campo/seguranca`.
+   - Fica fora do snapshot (migração 0040). O histórico da planilha entra por `scripts/import-seguranca.ts`: em 05/11/2026 entraram 3.261 apontamentos de Essenza, Mozine, Blentt, Atmos, Brizz e Tauá (sem as fotos, por ora; My Sunset e Amariles ficaram fora).
+   - Veja [docs/seguranca-trabalho.md](docs/seguranca-trabalho.md).
 
 Em todas as telas, o botão **"Como usar"** (?) do cabeçalho abre um tour que escurece a tela e explica cada botão e campo, um por vez (20/10/2026) — veja [Tour guiado](docs/tour-guiado.md).
 
@@ -296,3 +301,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0036 | coluna `weekly_commitments.order_index` (ordem da planilha do curto prazo: inserir linha no meio e arrastar linhas; ver [30/10](docs/planejamento-tres-niveis.md#curto-prazo-inserir-linha-no-meio-e-arrastar-linhas-30102026)) | sim | aplicada pelo usuário no `takt-hub` em 30/10/2026 (não conferida pela sondagem: o modo automático bloqueia a leitura de produção a partir do Claude Code); código ainda não publicado |
 | 0037 | função `delete_work` (admin exclui a obra com tudo o que é dela; ver [Exclusão de obra](docs/exclusao-de-obra.md)) e exceção da linha de base congelada só para a obra em exclusão | não | aplicada no `takt-hub` (a função `delete_work` existe; conferido em 04/11/2026) |
 | 0038 | Linha de Balanço no estilo Prevision, fluxos de serviços e medições com fotos: `service_flows`, `lob_locals`, `lob_services`, `lob_launches`, `lob_activities`, `lob_dependencies`, `lob_baselines`, `lob_measurements`, `lob_measurement_items`, `lob_photos` e o bucket privado `medicoes` | não | **aplicada no `takt-hub` em 04/11/2026** por conexão direta ao banco, numa transação; conferidos as 10 tabelas, o `grant` para `service_role`, o bucket privado (JPEG até 2 MB) e a leitura pela API REST (200) |
+| 0040 | segurança do trabalho: `profiles.tst`, `safety_types` (lista global com 16 tipos semeados), `safety_items`, `safety_photos` e o bucket privado `seguranca`; ver [Segurança do trabalho](docs/seguranca-trabalho.md) | não | **aplicada no `takt-hub` em 05/11/2026** por conexão direta ao banco, numa transação; conferidos as 3 tabelas, a coluna `tst`, os 16 tipos, os grants, o bucket privado (JPEG até 2 MB) e a leitura pela API REST (200). Em seguida, 3.261 apontamentos de 6 obras importados da planilha SST, sem fotos |

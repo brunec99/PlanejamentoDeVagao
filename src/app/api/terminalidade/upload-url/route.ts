@@ -53,9 +53,11 @@ export async function POST(request: Request) {
   try {
     const item = await findItemForUpload(itemId);
     if (!item || item.workId !== workId) return responseError('Pendência não encontrada. Recarregue a página.', 404);
+    // "Já registrada" antes do limite (05/11/2026): no modo de campo, se a resposta do envio da 10ª foto se
+    // perde, a nova tentativa usa o mesmo id e precisa ouvir "já registrada" (conta como enviada), não o limite.
+    if (await findWorkIdForEntity('photos', photoId)) return responseError('Esta foto já foi registrada.', 400);
     if (item.photoCount >= TERMINALITY_LIMITS.maxPhotosPerItem)
       return responseError(`A pendência já tem ${TERMINALITY_LIMITS.maxPhotosPerItem} fotos, o máximo permitido.`, 400);
-    if (await findWorkIdForEntity('photos', photoId)) return responseError('Esta foto já foi registrada.', 400);
     const tickets = await createPhotoUploadUrls(terminalityPhotoPaths(workId, itemId, photoId));
     if (!tickets) return responseError('Não foi possível liberar o envio da foto. Tente novamente.', 502);
     return NextResponse.json(tickets, { headers });

@@ -6,7 +6,7 @@ export const sections: ManualSection[] = [
   {
     id: 'geral-o-que-e-o-obra-360',
     title: 'O que é o Obra 360',
-    summary: 'O que o sistema faz, para quem é, como a obra está organizada em cinco abas e o grupo Apoio.',
+    summary: 'O que o sistema faz, para quem é, como a obra está organizada em seis abas e o grupo Apoio.',
     keywords: [
       'obra 360',
       'o que é o sistema',
@@ -27,19 +27,20 @@ O Obra 360 é o sistema de gestão de projetos e obras da ATR Incorporadora. Ele
 
 ## Como uma obra está organizada
 
-Ao abrir uma obra, a barra lateral mostra o nome dela e **cinco abas numeradas**, na ordem em que o planejamento desce do macro para a semana:
+Ao abrir uma obra, a barra lateral mostra o nome dela e **seis abas numeradas**, na ordem em que o planejamento desce do macro para a semana:
 
 1. **Cronograma de longo prazo** — o plano macro da obra: fluxograma de serviços que vira Linha de Balanço, linhas de base, medições e o módulo de restrições.
 2. **Planejamento por vagões** — os períodos de takt (vagões) com as atividades, a terminalidade de cada período e as liberações; é onde a execução é registrada.
 3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt), recursos e linha de base.
 4. **Cronograma de curto prazo** — a planilha semanal de produção: o que cada empresa e equipe faz na semana, o Status (Sim/Não), a causa de não cumprimento e o PPC.
 5. **Terminalidade** — a lista de pendências por pavimento, apartamento e empreiteiro, com fotos de antes e depois, PDF e modo de campo para o celular.
+6. **Segurança do trabalho** — a vistoria dos técnicos de segurança (TST): apontamentos de risco com foto, finalizados com a foto da correção, PDF e modo de campo. Só quem é TST lança e finaliza; os demais consultam.
 
 Abaixo das abas fica o grupo **Apoio**: Modelo federado, Arquivos IFC, Dívidas, Integrações (Prevision) e Configurações da obra. Fora da obra ficam a lista de obras (/obras) e, para administradores, Configurações (/configuracoes), com usuários, acessos, banco de dados e o painel do Agente de IA.
 
 ## O que aparece para cada pessoa
 
-Nem todo mundo vê as cinco abas. Desde o go-live (07/10/2026), **Cronograma de curto prazo, Terminalidade, Configurações da obra e a lista de obras estão abertos a todos** que têm acesso à obra. As outras abas (longo prazo, vagões, médio prazo) e as telas de apoio Modelo federado, Arquivos IFC, Dívidas e Integrações ainda estão em desenvolvimento e aparecem só para administradores e para quem o administrador liberou módulo a módulo em Configurações. Se uma aba não aparece para você, é isso: peça ao administrador para liberar o módulo. Além disso, cada pessoa só vê as obras que um administrador liberou para ela, e o papel (consulta, planejador, gestor ou admin) decide o que pode editar.
+Nem todo mundo vê as seis abas. Desde o go-live (07/10/2026), **Cronograma de curto prazo, Terminalidade, Configurações da obra e a lista de obras estão abertos a todos** que têm acesso à obra, e a **Segurança do trabalho** também, desde 05/11/2026 (para consulta; só quem é TST grava). As outras abas (longo prazo, vagões, médio prazo) e as telas de apoio Modelo federado, Arquivos IFC, Dívidas e Integrações ainda estão em desenvolvimento e aparecem só para administradores e para quem o administrador liberou módulo a módulo em Configurações. Se uma aba não aparece para você, é isso: peça ao administrador para liberar o módulo. Além disso, cada pessoa só vê as obras que um administrador liberou para ela, e o papel (consulta, planejador, gestor ou admin) decide o que pode editar.
 
 ## Ajuda dentro do sistema
 

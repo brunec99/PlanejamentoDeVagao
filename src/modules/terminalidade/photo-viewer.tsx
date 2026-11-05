@@ -13,7 +13,19 @@ const SWIPE = 50;
  * inerte (o foco não sai dele) e o Esc fecha. Setas do teclado, botões e arrasto lateral no celular
  * trocam a foto; o rótulo diz se é a foto do problema ou a da correção. Quem o abre passa as fotos
  * já atualizadas (`refreshPhotos`): uma imagem com link vencido pede releitura e volta com URL nova. */
-export function PhotoViewer({ photos, startIndex, onClose }: { photos: TerminalityPhoto[]; startIndex: number; onClose: () => void }) {
+/** `issueLabel` é o rótulo da foto do problema: a aba 6 (Segurança do trabalho) usa "Apontamento". */
+export function PhotoViewer({
+  photos,
+  startIndex,
+  onClose,
+  issueLabel = KIND_LABELS.issue,
+}: {
+  photos: TerminalityPhoto[];
+  startIndex: number;
+  onClose: () => void;
+  issueLabel?: string;
+}) {
+  const kindLabel = (kind: TerminalityPhoto['kind']) => (kind === 'issue' ? issueLabel : KIND_LABELS[kind]);
   const dialog = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const swipeStart = useRef<number | undefined>(undefined);
@@ -45,7 +57,7 @@ export function PhotoViewer({ photos, startIndex, onClose }: { photos: Terminali
     <dialog
       ref={dialog}
       onClose={onClose}
-      aria-label={photo ? `Foto ${index + 1} de ${count}: ${KIND_LABELS[photo.kind]}` : 'Fotos'}
+      aria-label={photo ? `Foto ${index + 1} de ${count}: ${kindLabel(photo.kind)}` : 'Fotos'}
       onKeyDown={event => {
         if (event.key === 'ArrowRight') go(1);
         if (event.key === 'ArrowLeft') go(-1);
@@ -59,7 +71,7 @@ export function PhotoViewer({ photos, startIndex, onClose }: { photos: Terminali
               <span
                 className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${photo.kind === 'issue' ? 'bg-rose-500/20 text-rose-200' : 'bg-emerald-500/20 text-emerald-200'}`}
               >
-                {KIND_LABELS[photo.kind]}
+                {kindLabel(photo.kind)}
               </span>
             )}
             <span className="tabular-nums text-slate-300">

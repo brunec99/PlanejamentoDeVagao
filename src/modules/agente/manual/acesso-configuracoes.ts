@@ -241,7 +241,7 @@ Clique em **"Salvar"** (ou "Cancelar"). Ao salvar, a obra **já fica liberada pa
     id: 'configuracoes-usuarios-acessos',
     title: 'Configurações (admin): usuários, acessos e banco de dados',
     summary:
-      'Tela do administrador: cadastrar usuário sem e-mail, pedidos de acesso, grade pessoa × obra ou × módulo, papel, excluir perfil, migrações.',
+      'Tela do administrador: cadastrar usuário sem e-mail, pedidos de acesso, grade pessoa × obra ou × módulo, papel, TST, excluir perfil, migrações.',
     keywords: [
       'configurações',
       'cadastrar usuário',
@@ -254,6 +254,7 @@ Clique em **"Salvar"** (ou "Cancelar"). Ao salvar, a obra **já fica liberada pa
       'módulos',
       'definir papel',
       'mudar papel',
+      'marcar como tst',
       'excluir usuário',
       'pedidos de acesso',
       'banco de dados',
@@ -282,10 +283,11 @@ Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuári
 
 Uma linha por pessoa (nome, e-mail e, na sua, o selo "você") e uma coluna por obra, com código, nome e quantos dos listados têm aquela obra. Célula marcada é obra liberada: **clique para liberar ou revogar; vale na hora, sem botão de salvar.** Quem não tem a obra não a vê na lista de obras; quem não tem nenhuma recebe "Sem obra liberada" na linha. Se o servidor recusar, o aviso "Não foi possível salvar." explica e a célula volta.
 
-- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo em desenvolvimento (longo prazo, vagões, médio prazo, modelo federado, arquivos IFC, dívidas, integrações). Curto prazo, terminalidade e configurações da obra são abertos a todos e não aparecem. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
+- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo em desenvolvimento (longo prazo, vagões, médio prazo, modelo federado, arquivos IFC, dívidas, integrações). Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
 - **"Pesquisar nome ou e-mail"**: cada palavra digitada precisa aparecer, sem diferença de acento. Filtros **"Todos os papéis"** e **"Todas as obras"** (com "Sem obra liberada" e "Com acesso a [obra]"); "Limpar filtros" desfaz. O contador diz "N de M usuários".
 - Clique em **"Usuário"** ou **"Papel"** no cabeçalho para ordenar; de novo, inverte.
 - **"Papel"**: a lista troca o papel assim que você escolhe outro. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador.").
+- **"TST"** (ícone de capacete, logo depois de "Papel", nas visões "Obras" e "Módulos"): marca quem é técnico de segurança do trabalho. Clique na célula para marcar ou desmarcar; vale na hora, sem botão de salvar ("[nome] agora é TST." ou "[nome] deixou de ser TST."), e o número no cabeçalho conta os TSTs entre os listados. Só quem está marcado lança, edita, finaliza, reabre e exclui apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa; os demais, inclusive administradores, só consultam. O TST soma-se ao papel: no resto do sistema vale o papel escolhido, e mesmo quem é Consulta grava na aba 6 se for TST. O administrador pode marcar a si mesmo. A aba 6 é aberta a todos e não aparece na visão "Módulos". Quem estava com a aba aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo) para a mudança aparecer.
 - **Excluir**: a lixeira no fim da linha, depois de confirmar "Excluir [nome]?". A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo; **a conta Google e o acesso aos outros sistemas da ATR continuam**. Não aparece na sua própria linha.
 
 ## Banco de dados
@@ -441,7 +443,7 @@ Planejador, gestor e admin com a obra liberada alteram a semana 1 e o local; Con
     id: 'navegacao-geral',
     title: 'Navegação: lateral, abas, cabeçalho, ajuda, modo reunião e celular',
     summary:
-      'Onde fica cada coisa na tela: lateral com as 5 abas e o Apoio, trilha, "Como funciona", "Como usar", Claudia, modo reunião, celular.',
+      'Onde fica cada coisa na tela: lateral com as 6 abas e o Apoio, trilha, "Como funciona", "Como usar", Claudia, modo reunião, celular.',
     keywords: [
       'onde fica',
       'menu',
@@ -466,7 +468,7 @@ No computador, a barra azul à esquerda é o menu. De cima para baixo:
 
 - Os logos e **"Obra 360"**: voltam à lista de obras.
 - **"Empreendimentos" → "Obras"**: a lista de obras.
-- Dentro de uma obra, o **nome da obra** e as abas numeradas: **1 Cronograma de longo prazo**, **2 Planejamento por vagões**, **3 Cronograma de médio prazo**, **4 Cronograma de curto prazo** e **5 Terminalidade**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
+- Dentro de uma obra, o **nome da obra** e as abas numeradas: **1 Cronograma de longo prazo**, **2 Planejamento por vagões**, **3 Cronograma de médio prazo**, **4 Cronograma de curto prazo**, **5 Terminalidade** e **6 Segurança do trabalho**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
 - **"Administração"** (só admin): **"Configurações"** e **"Agente de IA"**.
 - Embaixo, o cartão com suas iniciais, nome e papel e o botão **"Sair do sistema"**.
 

@@ -9,8 +9,22 @@ export const DONUT_OTHERS_COLOR = '#d6d5cf';
 export const donutColor = (slice: DonutSlice, i: number) => (slice.others ? DONUT_OTHERS_COLOR : DONUT_COLORS[i % DONUT_COLORS.length]);
 export const sharePercent = (slice: DonutSlice) => `${Math.round(slice.share * 100)}%`;
 
-/** O anel em SVG, com o total no centro. Cada fatia tem um <title> (dica ao passar o mouse na tela). */
-export function DonutRing({ slices, total, title, className }: { slices: DonutSlice[]; total: number; title: string; className?: string }) {
+/** O anel em SVG, com o total no centro. Cada fatia tem um <title> (dica ao passar o mouse na tela).
+ * `noun` é o nome do que se conta, no singular e no plural: a aba 6 (Segurança do trabalho) conta
+ * "apontamentos" com o mesmo anel. */
+export function DonutRing({
+  slices,
+  total,
+  title,
+  className,
+  noun = ['pendência', 'pendências'],
+}: {
+  slices: DonutSlice[];
+  total: number;
+  title: string;
+  className?: string;
+  noun?: readonly [string, string];
+}) {
   const size = 120;
   const radius = 46;
   const thickness = 20;
@@ -20,7 +34,12 @@ export function DonutRing({ slices, total, title, className }: { slices: DonutSl
   // Onde cada fatia começa, somando as anteriores; calculado antes de desenhar.
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((sum, slice) => sum + slice.share * circumference, 0));
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${title}: ${total} pendências`} className={className}>
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={`${title}: ${total} ${total === 1 ? noun[0] : noun[1]}`}
+      className={className}
+    >
       <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
         {slices.map((slice, i) => {
           const visible = Math.max(slice.share * circumference - gap, 0.6);
@@ -45,7 +64,7 @@ export function DonutRing({ slices, total, title, className }: { slices: DonutSl
         {total}
       </text>
       <text x={size / 2} y={size / 2 + 14} textAnchor="middle" fontSize="9" fill="#52514e">
-        {total === 1 ? 'pendência' : 'pendências'}
+        {total === 1 ? noun[0] : noun[1]}
       </text>
     </svg>
   );

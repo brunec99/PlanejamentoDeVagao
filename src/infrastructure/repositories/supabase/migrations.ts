@@ -252,6 +252,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
       'O campo Local da planilha da semana só vale até recarregar: o local não fica gravado, e o filtro de local do PDF não acha linhas.',
     critical: false,
   },
+  {
+    migration: '0040_safety',
+    label: 'Segurança do trabalho: vistorias dos TSTs, com fotos',
+    probe: { kind: 'table', table: 'safety_photos' },
+    effect: 'A aba 6 (Segurança do trabalho) responde "indisponível" e ninguém pode ser marcado como TST; as demais seguem normais.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

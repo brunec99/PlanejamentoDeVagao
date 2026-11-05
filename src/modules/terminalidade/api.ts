@@ -124,6 +124,14 @@ const expiredPhotoListeners = new Set<(url: string) => void>();
 export function reportExpiredPhoto(url: string) {
   for (const listener of expiredPhotoListeners) listener(url);
 }
+/** Assina o aviso de foto vencida. A aba 6 (Segurança do trabalho, 05/11/2026) reaproveita o visualizador
+ * e a grade de fotos desta aba, que avisam por `reportExpiredPhoto`; assim o módulo dela também relê. */
+export function subscribeExpiredPhoto(listener: (url: string) => void): () => void {
+  expiredPhotoListeners.add(listener);
+  return () => {
+    expiredPhotoListeners.delete(listener);
+  };
+}
 
 /** Estado da aba para uma obra: carrega, executa comandos e recarrega com o retorno do servidor.
  * As URLs das fotos valem uma hora: ao voltar ao foco com leitura velha, ou quando uma imagem

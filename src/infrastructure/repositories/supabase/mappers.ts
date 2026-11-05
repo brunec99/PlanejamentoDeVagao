@@ -347,6 +347,9 @@ interface ProfileRow {
   work_ids: string[];
   /** Módulos em desenvolvimento liberados (migração 0031); ausente em banco sem ela. */
   module_access?: string[] | null;
+  /** Técnico de segurança do trabalho (migração 0040); ausente em banco sem ela. Gravado só pela rota
+   * /api/seguranca/tst: o commit_planning não conhece a coluna e não a altera. */
+  tst?: boolean | null;
 }
 
 export function rowsToPlanningData(rows: Rows): PlanningData {
@@ -611,6 +614,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       role: r.role,
       workIds: r.work_ids,
       modules: r.module_access ?? [],
+      ...(r.tst ? { tst: true } : {}),
     })),
     history: rows.history_events.map((r): HistoryEvent => ({
       id: r.id,

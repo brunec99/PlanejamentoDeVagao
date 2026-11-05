@@ -1,4 +1,4 @@
-// Service worker do modo de campo (terminalidade no celular, sem sinal).
+// Service worker do modo de campo (terminalidade e segurança do trabalho no celular, sem sinal).
 //
 // Mesmo desenho da vistoria da Obra do Mês no App-ATR, escrito à mão, sem biblioteca: o que precisa
 // abrir sem sinal são as telas de /campo/, e uma lista de precache com nomes de chunk do Next
@@ -13,8 +13,10 @@
 // Os dados (pacote da obra, fila e fotos) NÃO passam por aqui: ficam no IndexedDB, que é o dono do
 // rascunho. O service worker só garante que a tela abra.
 
+// A versão continua v1 ao entrar a segurança (05/11/2026): trocar o nome apagaria, na ativação, a casca
+// da terminalidade já guardada nos celulares; a instalação nova só acrescenta a casca da segurança.
 const VERSAO = 'obra360-campo-v1';
-const CASCAS = ['/campo/terminalidade'];
+const CASCAS = ['/campo/terminalidade', '/campo/seguranca'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -47,7 +49,8 @@ self.addEventListener('fetch', event => {
 
   // Navegação: tenta a rede para pegar a versão nova; sem rede, devolve a cópia da mesma tela (sem a
   // busca da URL, para ?obra= abrir a casca guardada). Só guarda as telas de campo e respostas 200:
-  // um desvio para o login não pode virar a casca.
+  // um desvio para o login não pode virar a casca. Uma tela de campo conhecida nunca abre a casca de
+  // outra (a segurança não guardada não vira a terminalidade); só um caminho desconhecido cai na primeira.
   if (req.mode === 'navigate') {
     const chave = url.pathname.replace(/\/$/, '');
     event.respondWith(
@@ -59,7 +62,12 @@ self.addEventListener('fetch', event => {
           }
           return resposta;
         })
-        .catch(() => caches.match(chave).then(c => c ?? caches.match(CASCAS[0])).then(c => c ?? Response.error())),
+        .catch(() =>
+          caches
+            .match(chave)
+            .then(c => c ?? (CASCAS.includes(chave) ? undefined : caches.match(CASCAS[0])))
+            .then(c => c ?? Response.error()),
+        ),
     );
     return;
   }

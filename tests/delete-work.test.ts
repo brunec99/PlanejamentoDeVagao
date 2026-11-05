@@ -166,6 +166,16 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
     storage_path: `${w}/${p}-mitem/foto.jpg`,
     thumb_path: `${w}/${p}-mitem/foto-thumb.jpg`,
   });
+  // 0040: a segurança do trabalho cai com a obra pelo `on delete cascade` de work_id (delete_work não as cita).
+  await insert('safety_items', { id: `${p}-sst`, work_id: w, type_id: 'sst-tipo-01', consequence: 'Morte', probability: 'Possível' });
+  await insert('safety_photos', {
+    id: `${p}-sstphoto`,
+    item_id: `${p}-sst`,
+    work_id: w,
+    kind: 'issue',
+    storage_path: `${w}/${p}-sst/foto.jpg`,
+    thumb_path: `${w}/${p}-sst/foto-thumb.jpg`,
+  });
   await insert('agent_insights', { work_id: w });
   await insert('agent_usage', { work_id: w, actor_id: ADMIN, month: '2026-10', kind: 'leitura', cost_usd: 0.05 });
   await insert('history_events', { id: `${p}-h`, entity_id: `${p}-v1`, entity_type: 'wagon', action: 'release', author_id: ADMIN });

@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, HardHat, Search, Trash2 } from 'lucide-react';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
@@ -121,6 +121,44 @@ function ModuleCell({ user, module }: { user: User; module: ModuleInfo }) {
           : `${user.name} · ${module.label} (${module.hint}): ${granted ? 'liberado. Clique para bloquear.' : 'bloqueado. Clique para liberar.'}`
       }
       onClick={() => run({ type: 'set_module_access', userId: user.id, section: module.section, enabled: !granted })}
+    />
+  );
+}
+
+/** Tipo de usuário TST (técnico de segurança do trabalho, 05/11/2026): só quem está marcado lança e
+ * finaliza apontamentos na aba 6 (Segurança do trabalho), e soma-se ao papel. Não passa pelo planejamento
+ * (a coluna `profiles.tst` fica fora do `commit_planning`): grava pela rota própria e recarrega a lista. */
+function TstCell({ user }: { user: User }) {
+  const c = usePlanning();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const on = user.tst === true;
+  return (
+    <Toggle
+      tourId="config-user-tst"
+      on={on}
+      busy={busy}
+      label={`TST: ${user.name}`}
+      title={`${user.name}: ${on ? 'é técnico de segurança (TST) e lança e finaliza apontamentos na aba 6. Clique para desmarcar.' : 'não é TST. Clique para marcar como técnico de segurança.'}`}
+      onClick={async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+          const res = await fetch('/api/seguranca/tst', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, enabled: !on }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error((body as { error?: string }).error ?? 'Não foi possível salvar.');
+          if (c.state === 'ready') await c.refresh();
+          toast({ title: on ? `${user.name} deixou de ser TST.` : `${user.name} agora é TST.`, tone: 'success' });
+        } catch (cause) {
+          toast({ title: 'Não foi possível salvar.', description: cause instanceof Error ? cause.message : undefined, tone: 'danger' });
+        } finally {
+          setBusy(false);
+        }
+      }}
     />
   );
 }
@@ -248,7 +286,7 @@ export function UsersTable({
   const patch = (change: Partial<UserFilter>) => setFilter(current => ({ ...current, ...change }));
   const total = users.length === 1 ? '1 usuário' : `${users.length} usuários`;
   const shown = rows.length === users.length ? total : `${rows.length} de ${total}`;
-  const span = 3 + (view === 'obras' ? columns.length : RESTRICTED_MODULES.length);
+  const span = 4 + (view === 'obras' ? columns.length : RESTRICTED_MODULES.length);
 
   return (
     <div data-tour="config-users" className="panel overflow-hidden">
@@ -339,6 +377,17 @@ export function UsersTable({
                 onSort={key => setSort(current => nextUserSort(current, key))}
                 className={`${HEAD} text-left`}
               />
+              <th
+                scope="col"
+                title={`Técnico de segurança do trabalho: só quem é TST lança e finaliza apontamentos na aba 6. ${rows.filter(u => u.tst).length} de ${rows.length} usuários listados.`}
+                className={`${HEAD} min-w-[4.5rem] text-center align-bottom`}
+              >
+                <HardHat size={14} aria-hidden className="mx-auto mb-0.5" />
+                <span className="block">TST</span>
+                <span className="mt-0.5 block text-[10px] font-semibold normal-case tracking-normal tabular-nums text-slate-500">
+                  {rows.filter(u => u.tst).length}
+                </span>
+              </th>
               {view === 'obras'
                 ? columns.map(work => {
                     const count = rows.filter(u => u.workIds.includes(work.id)).length;
@@ -409,6 +458,9 @@ export function UsersTable({
                   <td className={CELL}>
                     <RoleSelect user={user} self={self} />
                   </td>
+                  <td className={`${CELL} text-center`}>
+                    <TstCell user={user} />
+                  </td>
                   {view === 'obras'
                     ? columns.map(work => (
                         <td key={work.id} className={`${CELL} text-center`}>
@@ -429,6 +481,8 @@ export function UsersTable({
       </div>
 
       <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
+        TST (técnico de segurança do trabalho) é um tipo que se soma ao papel: só quem está marcado lança e finaliza apontamentos na aba 6,
+        Segurança do trabalho, nas obras liberadas para a pessoa; os demais só consultam.{' '}
         {view === 'obras'
           ? 'Clique na célula para liberar ou revogar a obra; vale na hora, sem botão de salvar. Quem não tem a obra liberada não a vê na lista de obras. O número no cabeçalho é quantos dos usuários listados têm a obra.'
           : `${OPEN_MODULES.map(m => m.label).join(', ')} são abertos a todos e não aparecem aqui. Administradores veem todos os módulos, por isso as células deles ficam marcadas em cinza, sem clique. O número no cabeçalho é quantos dos usuários listados têm o módulo.`}

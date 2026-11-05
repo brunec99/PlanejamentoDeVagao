@@ -13,6 +13,7 @@ import { steps as medioPrazo } from './pages/medio-prazo';
 import { steps as obraConfiguracoes } from './pages/obra-configuracoes';
 import { steps as obras } from './pages/obras';
 import { steps as prevision } from './pages/prevision';
+import { steps as seguranca } from './pages/seguranca';
 import { steps as terminalidade } from './pages/terminalidade';
 import { steps as vagao } from './pages/vagao';
 import { steps as planejamento } from './pages/vagoes';
@@ -36,6 +37,7 @@ export type TourKey =
   | 'medioPrazo'
   | 'curtoPrazo'
   | 'terminalidade'
+  | 'seguranca'
   | 'planejamento'
   | 'vagao'
   | 'ifc'
@@ -69,6 +71,7 @@ const pages: Record<TourKey, TourStep[]> = {
   medioPrazo,
   curtoPrazo,
   terminalidade,
+  seguranca,
   planejamento,
   vagao,
   ifc,
@@ -93,6 +96,7 @@ export function resolveTourKey(pathname: string): TourKey | null {
   if (/^\/obras\/[^/]+\/medio-prazo$/.test(pathname)) return 'medioPrazo';
   if (/^\/obras\/[^/]+\/curto-prazo$/.test(pathname)) return 'curtoPrazo';
   if (/^\/obras\/[^/]+\/terminalidade$/.test(pathname)) return 'terminalidade';
+  if (/^\/obras\/[^/]+\/seguranca$/.test(pathname)) return 'seguranca';
   if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
   if (/^\/obras\/[^/]+\/ifc$/.test(pathname)) return 'ifc';

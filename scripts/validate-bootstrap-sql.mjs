@@ -89,8 +89,8 @@ try {
     await db.query("select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where nspname='public' and relkind='r'")
   ).rows.map(r => r.relname);
   // 32 do planejamento + 6 da terminalidade (0028) + pedidos de acesso (0032) + 3 do agente de IA (0035)
-  // + 10 da Linha de Balanço, fluxos e medições (0038).
-  assert.equal(tables.length, 52, `esperava 52 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
+  // + 10 da Linha de Balanço, fluxos e medições (0038) + 3 da segurança do trabalho (0040).
+  assert.equal(tables.length, 55, `esperava 55 tabelas, há ${tables.length}: ${tables.sort().join(', ')}`);
   const overloads = (await db.query("select count(*)::int n from pg_proc where proname='commit_planning'")).rows[0].n;
   assert.equal(overloads, 1, 'commit_planning deveria ter só a assinatura de três parâmetros');
 
@@ -196,6 +196,32 @@ try {
   assert.equal((await db.query('select count(*)::int n from terminality_photos')).rows[0].n, 0);
   assert.equal(Object.keys((await db.query('select planning_snapshot($1::text[]) as s', [['w']])).rows[0].s).length, 23);
   steps.push('terminalidade (0028): status coerente com a data da correção, fotos em cascata, fora do snapshot: OK');
+
+  // 0040: segurança do trabalho. Tipos globais semeados, listas fixas de risco, finalizado exige data da
+  // correção, fotos caem com o apontamento, tudo cai com a obra; TST é coluna do perfil, fora do snapshot.
+  assert.equal((await db.query('select count(*)::int n from safety_types')).rows[0].n, 16);
+  await db.exec(`
+    insert into safety_items (id, work_id, type_id, consequence, probability, description, location, observed_on, created_by)
+      values ('s1', 'w', 'sst-tipo-01', 'Morte', 'Possível', 'Periferia sem guarda-corpo', 'Térreo', '2026-11-03', 'tester');
+    insert into safety_photos (id, item_id, work_id, kind, storage_path, thumb_path, created_by)
+      values ('sp1', 's1', 'w', 'issue', 'w/s1/sp1.jpg', 'w/s1/sp1-thumb.jpg', 'tester');`);
+  await assert.rejects(
+    db.query(
+      "insert into safety_items (id, work_id, consequence, probability, description, observed_on, created_by) values ('s2', 'w', 'Grave', 'Possível', 'x', '2026-11-03', 't')",
+    ),
+    /check constraint/,
+  );
+  await assert.rejects(db.query("update safety_items set status = 'resolved' where id = 's1'"), /check constraint/);
+  await db.query("update safety_items set status = 'resolved', corrected_on = '2026-11-04' where id = 's1'");
+  await db.query("delete from safety_items where id = 's1'");
+  assert.equal((await db.query('select count(*)::int n from safety_photos')).rows[0].n, 0);
+  assert.equal(
+    (await db.query("select count(*)::int n from information_schema.columns where table_name = 'profiles' and column_name = 'tst'")).rows[0]
+      .n,
+    1,
+  );
+  assert.equal(Object.keys((await db.query('select planning_snapshot($1::text[]) as s', [['w']])).rows[0].s).length, 23);
+  steps.push('segurança do trabalho (0040): 16 tipos, risco só nas listas, finalizado exige data, fotos em cascata, fora do snapshot: OK');
 
   // Sondagens da tela de saúde do banco, com o papel do servidor.
   const { MIGRATION_CHECKS, interpretProbe, summarizeMigrations } = await tsImport(

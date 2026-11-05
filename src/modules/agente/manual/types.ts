@@ -13,7 +13,7 @@ export interface ManualSection {
   /** Palavras e expressões que a pessoa usaria na pergunta (minúsculas; acentos são ignorados na busca). */
   keywords: string[];
   /** Seção da obra a que a tela pertence (`longo-prazo`, `vagoes`, `medio-prazo`, `curto-prazo`,
-   * `terminalidade`, `federacao`, `ifc`, `dividas`, `importar`, `configuracoes`) ou uma tela fora da
+   * `terminalidade`, `seguranca`, `federacao`, `ifc`, `dividas`, `importar`, `configuracoes`) ou uma tela fora da
    * obra (`obras`, `configuracoes-gerais`, `agente`, `geral`). Serve ao teste que confere a cobertura. */
   screen: string;
   /** O texto do manual, em markdown simples (## e ###, listas com -, negrito com **), em português do

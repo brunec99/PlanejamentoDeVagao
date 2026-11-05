@@ -71,6 +71,11 @@ export const steps: TourStep[] = [
     body: 'Troca o papel da pessoa assim que você escolhe outro. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
   },
   {
+    target: 'config-user-tst',
+    title: 'Técnico de segurança (TST)',
+    body: 'Marca a pessoa como técnico de segurança do trabalho. Só quem é TST lança, edita, finaliza e reabre apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa; os demais, inclusive administradores, só consultam. O TST soma-se ao papel: para o resto do sistema vale o papel escolhido ao lado.',
+  },
+  {
     target: 'config-user-works',
     title: 'Obras liberadas',
     body: 'Cada célula cruza uma pessoa com uma obra: preenchida, com o visto, é obra liberada. Clique para liberar ou revogar; quem não tem a obra liberada não a vê na lista de obras.',
@@ -78,7 +83,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-user-modules',
     title: 'Módulos liberados',
-    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo em desenvolvimento para a pessoa. Curto prazo, terminalidade e configurações da obra são abertos a todos e não aparecem. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
+    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo em desenvolvimento para a pessoa. Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
   },
   {
     target: 'config-user-delete',

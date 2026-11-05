@@ -27,6 +27,7 @@ export function PhotoInput({
   disabled = false,
   onBusyChange,
   emptyHint,
+  noun = 'pendência',
 }: {
   value: PendingPhoto[];
   onChange: (next: PendingPhoto[]) => void;
@@ -36,6 +37,8 @@ export function PhotoInput({
   /** Avisa enquanto há foto sendo preparada, para o pai segurar o botão de salvar. */
   onBusyChange?: (busy: boolean) => void;
   emptyHint?: string;
+  /** O que recebe as fotos, nas mensagens de limite: "pendência" (aba 5) ou "apontamento" (aba 6). */
+  noun?: string;
 }) {
   const latest = useRef(value);
   useEffect(() => {
@@ -57,7 +60,7 @@ export function PhotoInput({
     if (files.length > free)
       problems.push(
         free === 0
-          ? 'O limite de fotos desta pendência já foi atingido.'
+          ? `O limite de fotos ${noun === 'apontamento' ? 'deste' : 'desta'} ${noun} já foi atingido.`
           : `Só cabem mais ${free} ${free === 1 ? 'foto' : 'fotos'}; ${files.length - free} ${files.length - free === 1 ? 'ficou' : 'ficaram'} de fora.`,
       );
     setErrors([]);
@@ -129,7 +132,7 @@ export function PhotoInput({
           ) : room === 0 && max > 0 ? (
             'Limite de fotos atingido.'
           ) : max === 0 ? (
-            'Esta pendência já tem o máximo de fotos.'
+            `${noun === 'apontamento' ? 'Este' : 'Esta'} ${noun} já tem o máximo de fotos.`
           ) : value.length === 0 && emptyHint ? (
             emptyHint
           ) : null}
