@@ -8,7 +8,7 @@ import { FilterPicker } from '@/modules/curto-prazo/closing-filter';
 import { formatDate, workPath } from '@/shared/format';
 import { DASHBOARD_STYLE } from '../styles';
 import { KpiCards, Text } from '../dashboard-overview';
-import { DASHBOARD_MODULES, dayMonth, moduleInfo, pct, plural, type DashboardModule } from '../model';
+import { companyKey, DASHBOARD_MODULES, dayMonth, moduleInfo, pct, plural, type DashboardModule } from '../model';
 import { GROUPING_NOUN, periodSearchEntries, selectionOf, type PeriodSelection } from '../period';
 import { PeriodControl, ScaleButtons } from '../period-picker';
 import { portfolioPath, printPortfolioPath, type PortfolioParams } from './params';
@@ -74,7 +74,12 @@ const HELP = (
 export function PortfolioOverview({ initial }: { initial: PortfolioParams }) {
   const [params, setParams] = useState<PortfolioParams>(initial);
   const [sort, setSort] = useState<ComparisonSort>(DEFAULT_SORT);
-  const state = usePortfolio({ selection: params.selection, workIds: params.workIds, modules: params.modules });
+  const state = usePortfolio({
+    selection: params.selection,
+    workIds: params.workIds,
+    modules: params.modules,
+    companies: params.companies,
+  });
   // A URL acompanha cada escolha (regra 4), sem recarregar nem rolar a página: o link copiado reproduz a mesma
   // visão. O History API nativo conversa com o roteador do Next (como na aba 0) e evita ida ao servidor.
   const update = (next: PortfolioParams) => {
@@ -185,6 +190,15 @@ function Ready({
     update({ ...params, selection: pinned, workIds: next && ids.length && ids.length < works.length ? new Set(ids) : undefined });
   };
 
+  // Empreiteiro (05/11/2026): o seletor guarda os nomes como aparecem nas opções; a URL e o recorte comparam sem
+  // acento nem caixa, então um nome vindo da URL com outra grafia acende a opção equivalente.
+  const companyKeys = params.companies ? new Set([...params.companies].map(companyKey)) : undefined;
+  const selectedCompanies = companyKeys
+    ? new Set(state.companyOptions.filter(option => companyKeys.has(companyKey(option.value))).map(option => option.value))
+    : undefined;
+  const chooseCompanies = (next: Set<string> | undefined) =>
+    update({ ...params, selection: pinned, companies: next && next.size < state.companyOptions.length ? next : undefined });
+
   const toggleModule = (id: DashboardModule) => {
     const current = new Set(chosen ?? available.map(m => m.id));
     if (current.has(id)) current.delete(id);
@@ -194,12 +208,20 @@ function Ready({
     if (!kept.length) return;
     update({ ...params, selection: pinned, modules: kept.length === available.length ? undefined : new Set(kept) });
   };
-  const filtering = !!selectedLabels || !!chosen;
+  const filtering = !!selectedLabels || !!chosen || !!params.companies;
   const clear = () => update({ selection: pinned });
 
   const generate = () =>
-    window.open(printPortfolioPath({ selection: pinned, workIds: params.workIds, modules: chosen }), '_blank', 'noopener');
-  const workQuery = new URLSearchParams(periodSearchEntries(selectionOf(period))).toString();
+    window.open(
+      printPortfolioPath({ selection: pinned, workIds: params.workIds, modules: chosen, companies: params.companies }),
+      '_blank',
+      'noopener',
+    );
+  // A aba 0 abre no mesmo período e com o mesmo recorte de empreiteiro.
+  const workQuery = new URLSearchParams([
+    ...periodSearchEntries(selectionOf(period)),
+    ...[...(params.companies ?? [])].map(company => ['empreiteiro', company] as [string, string]),
+  ]).toString();
   const hrefOf = (row: PortfolioRow) => `${workPath(row.work.id, 'dashboard')}${workQuery ? `?${workQuery}` : ''}`;
 
   // Linha de escopo.
@@ -265,6 +287,9 @@ function Ready({
         <span data-tour="geral-obras" className="inline-flex">
           <FilterPicker label="Obras" values={workOptions} selected={selectedLabels} onChange={chooseWorks} />
         </span>
+        <span data-tour="geral-empreiteiro" className="inline-flex">
+          <FilterPicker label="Empreiteiro" values={state.companyOptions} selected={selectedCompanies} onChange={chooseCompanies} />
+        </span>
         {available.length > 0 && (
           <span data-tour="geral-quadros" role="group" aria-label="Quadros" className="inline-flex flex-wrap items-center gap-1">
             <span className="text-slate-500">Quadros</span>
@@ -313,6 +338,15 @@ function Ready({
             )}
             {period.scale === 'personalizado' &&
               ` · agrupado por ${GROUPING_NOUN[period.grouping].one}${(period.groupingChoice ?? 'auto') === 'auto' ? ' (automático)' : ''}`}
+            {params.companies && (
+              <>
+                {' '}
+                · Recorte: {plural(params.companies.size, 'empreiteiro', 'empreiteiros')} ({[...params.companies].join(', ')})
+                {state.withoutCompany.length > 0 &&
+                  `; não ${state.withoutCompany.length === 1 ? 'aparece' : 'aparecem'} em ${state.withoutCompany.map(work => work.name).join(', ')}`}
+                ; longo prazo e PPC geral consideram a obra inteira
+              </>
+            )}
             {data.notStarted.length > 0 &&
               ` · ${data.notStarted.map(work => work.name).join(', ')} ${data.notStarted.length === 1 ? 'começou' : 'começaram'} depois do período`}
             {hiddenByChoice.length > 0 && ` · fora por escolha: ${hiddenByChoice.join(', ')}`}

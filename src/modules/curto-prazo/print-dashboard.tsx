@@ -120,6 +120,7 @@ export function PrintDashboard({
   commitments,
   ranking,
   excluded,
+  localCut,
 }: {
   work: Work;
   week: string;
@@ -130,6 +131,8 @@ export function PrintDashboard({
   /** Ausente: a rota do ranking falhou ou passou do tempo. */
   ranking: ClosingRankingResponse | undefined;
   excluded: readonly string[];
+  /** Recorte por local da planilha ("Local: Torre A, Torre B"), quando houver: o painel não o segue. */
+  localCut?: string;
 }) {
   const d = closingDashboard(commitments, work, week, ranking);
   const n = label(week);
@@ -201,7 +204,10 @@ export function PrintDashboard({
           PPC = compromissos cumpridos ÷ compromissos assumidos. Semana com linha sem Status fica fora das médias e do ranking. Gerado em{' '}
           {generated}.
           {excluded.length > 0 &&
+            !localCut &&
             ` O painel considera todos os empreiteiros; a planilha a seguir não inclui ${excluded.map(c => c || '(sem empreiteiro)').join(', ')}.`}
+          {localCut &&
+            ` O painel considera a obra inteira; a planilha a seguir${excluded.length ? ` não inclui ${excluded.map(c => c || '(sem empreiteiro)').join(', ')} e` : ''} segue o recorte por local (${localCut.replace(/^Local: /, '')}).`}
         </span>
         <span>Página 1 · a planilha de resultados segue nas próximas páginas</span>
       </div>

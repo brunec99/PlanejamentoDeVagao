@@ -12,6 +12,7 @@ import { PeriodControl, ScaleButtons } from './period-picker';
 import { formatDate, workPath } from '@/shared/format';
 import { DASHBOARD_STYLE } from './styles';
 import {
+  companyKey,
   DASHBOARD_MODULES,
   dayMonth,
   floorKey,
@@ -235,9 +236,18 @@ const HELP = (
 
 /** `initial` vem da URL (`escala`, `periodo`, `de`, `ate`, `agrupar` ou o antigo `semana`): o Dashboard geral
  * abre a aba 0 no mesmo período, e o link copiado reproduz a visão. */
-export function DashboardOverview({ workId, initial }: { workId: string; initial?: PeriodSelection }) {
+export function DashboardOverview({
+  workId,
+  initial,
+  initialCompanies,
+}: {
+  workId: string;
+  initial?: PeriodSelection;
+  /** Recorte de empreiteiro vindo do Dashboard geral (`empreiteiro=`); comparado sem acento nem caixa. */
+  initialCompanies?: ReadonlySet<string>;
+}) {
   const [selection, setSelection] = useState<PeriodSelection | undefined>(initial);
-  const [companies, setCompanies] = useState<Set<string>>();
+  const [companies, setCompanies] = useState<Set<string> | undefined>(initialCompanies && new Set(initialCompanies));
   // O seletor guarda os nomes como aparecem; o filtro compara pela chave normalizada.
   const [floorNames, setFloorNames] = useState<Set<string>>();
   const [modulesChosen, setModulesChosen] = useState<Set<DashboardModule>>();
@@ -325,7 +335,16 @@ export function DashboardOverview({ workId, initial }: { workId: string; initial
           </span>
         </span>
         <span data-tour="dash-empreiteiro" className="inline-flex">
-          <FilterPicker label="Empreiteiro" values={dash.companyOptions} selected={companies} onChange={setCompanies} />
+          <FilterPicker
+            label="Empreiteiro"
+            values={dash.companyOptions}
+            // O nome vindo do Dashboard geral pode ter outra grafia: acende a opção equivalente.
+            selected={
+              companies &&
+              new Set(dash.companyOptions.filter(o => [...companies].some(c => companyKey(c) === companyKey(o.value))).map(o => o.value))
+            }
+            onChange={setCompanies}
+          />
         </span>
         <span data-tour="dash-pavimento" className="inline-flex">
           <FilterPicker label="Pavimento" values={dash.floorOptions} selected={floorNames} onChange={setFloorNames} />

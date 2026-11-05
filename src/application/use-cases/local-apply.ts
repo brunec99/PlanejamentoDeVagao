@@ -100,6 +100,8 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
           activityId: command.activityId ?? undefined,
           startDate,
           endDate: command.endDate ?? startDate,
+          // Local da linha (05/11/2026), a mesma regra do servidor: vazio ou nulo = sem local.
+          ...(command.localId ? { localId: command.localId } : {}),
         },
       ];
       if (command.order === undefined && !command.beforeId) return commitments(next);
@@ -122,6 +124,8 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
         startDate: command.startDate,
         endDate: command.endDate,
         order: weekStart === c.weekStart ? c.order : undefined,
+        // Sem `localId` no comando, o local da linha fica; nulo ou vazio tira (a mesma regra do servidor).
+        localId: command.localId === undefined ? c.localId : command.localId || undefined,
         updatedAt: now,
       }));
     }

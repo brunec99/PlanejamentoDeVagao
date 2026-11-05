@@ -48,6 +48,8 @@ test('desfazer edição devolve as células; desfazer exclusão recria a linha c
     weekStart: '2026-10-19',
     startDate: '2026-10-20',
     endDate: '2026-10-21',
+    // Sempre explícito: sem local antes, desfazer tira o local que a edição pôs (05/11/2026).
+    localId: null,
   });
   assert.deepEqual(recreateCommand({ ...base, activityId: 'act-1' }, 'user-1'), {
     type: 'create_commitment',

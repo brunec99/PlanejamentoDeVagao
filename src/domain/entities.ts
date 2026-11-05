@@ -261,6 +261,9 @@ export interface WeeklyCommitment extends RecordBase {
   /** Posição na planilha da semana, gravada quando alguém insere uma linha no meio ou arrasta uma linha
    * (30/10/2026). Sem ela, a linha segue a ordem de inclusão (`sheetOrder`). */
   order?: number;
+  /** Local da linha (05/11/2026, opcional): o id de um dos "Locais da obra" da Linha de Balanço do longo prazo
+   * (`lob_locals`), para filtrar as tarefas por local no PDF. Sem ele, a linha não tem local. */
+  localId?: Id;
 }
 /** Cópia imutável das datas planejadas de uma obra num momento. Reprogramar o
  * planejamento atual nunca altera uma linha de base já salva. */

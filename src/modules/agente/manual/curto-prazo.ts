@@ -43,7 +43,7 @@ Um seletor no topo troca entre as seções, que ficam no endereço da página (o
 
 ## As colunas
 
-Na ordem da tela: a alça ⠿ de arrastar a linha e a caixa de marcar (para apontar várias linhas), "Empresa", "Semana", "Início", "Término", "Atividade", "Equipe", os dias "SEG" a "SÁB", "Status", "Causas", "Justificativas", a coluna "Apontamento" (botões "Levar ›" e "Limpar"; só aparece quando a semana já tem algum apontamento ou com "Semanas vizinhas" ligado) e, no fim, "Inserir linha acima" e o ✕ de excluir. Os dias não se clicam: ficam marcados com "x" sozinhos, a partir de "Início" e "Término".
+Na ordem da tela: a alça ⠿ de arrastar a linha e a caixa de marcar (para apontar várias linhas), "Empresa", "Semana", "Início", "Término", "Atividade", "Local" (opcional), "Equipe", os dias "SEG" a "SÁB", "Status", "Causas", "Justificativas", a coluna "Apontamento" (botões "Levar ›" e "Limpar"; só aparece quando a semana já tem algum apontamento ou com "Semanas vizinhas" ligado) e, no fim, "Inserir linha acima" e o ✕ de excluir. Os dias não se clicam: ficam marcados com "x" sozinhos, a partir de "Início" e "Término".
 
 ## O que fica acima da planilha
 
@@ -70,13 +70,13 @@ No cabeçalho da aba, "Como funciona" abre a explicação longa e "Como usar" in
 
 ## No celular
 
-Abaixo de 1024 px de largura, cada linha vira um cartão com os mesmos campos: atividade e ✕ no topo, "Empresa" e "Equipe", "Semana", "Início" e "Término", os dias como pílulas, "Status" e "Causa", "Justificativa" e os botões de apontamento. A linha nova vira o cartão "Nova linha", com o botão "Adicionar". Os filtros de coluna só existem na tabela de telas largas; a barra de linhas marcadas fica fixa no rodapé; a alça de arrastar não existe no cartão, então use as caixas de marcar para apontar várias linhas.`,
+Abaixo de 1024 px de largura, cada linha vira um cartão com os mesmos campos: atividade e ✕ no topo, "Empresa" e "Equipe", "Local" (só na obra que tem locais cadastrados), "Semana", "Início" e "Término", os dias como pílulas, "Status" e "Causa", "Justificativa" e os botões de apontamento. A linha nova vira o cartão "Nova linha", com o botão "Adicionar". Os filtros de coluna só existem na tabela de telas largas; a barra de linhas marcadas fica fixa no rodapé; a alça de arrastar não existe no cartão, então use as caixas de marcar para apontar várias linhas.`,
   },
   {
     id: 'curto-prazo-incluir-editar-linhas',
     title: 'Incluir, editar, mover, excluir e filtrar linhas',
     summary:
-      'Como criar uma linha (embaixo ou no meio), o que é obrigatório, as listas de Empresa/Equipe/Semana, o calendário, o funil de filtro e a ordem (arrastar linhas).',
+      'Como criar uma linha (embaixo ou no meio), o obrigatório, as listas de Empresa/Local/Equipe/Semana, o calendário, o funil de filtro e a ordem.',
     keywords: [
       'incluir linha',
       'nova linha',
@@ -88,6 +88,9 @@ Abaixo de 1024 px de largura, cada linha vira um cartão com os mesmos campos: a
       'descer linha',
       'adicionar atividade',
       'empresa',
+      'coluna local',
+      'local da linha',
+      'locais da obra',
       'equipe nova',
       'capacidade 3',
       'semana da linha',
@@ -106,19 +109,30 @@ Abaixo de 1024 px de largura, cada linha vira um cartão com os mesmos campos: a
 A última linha da planilha é a linha em branco (fundo azulado). Escreva o que será feito em "Atividade" ("Escreva a atividade e tecle Enter") e tecle Enter, ou saia da linha: a linha passa a existir. No celular, use o cartão "Nova linha" e "Adicionar".
 
 - **Obrigatório**: só a atividade. Linha sem atividade não existe.
-- **Opcionais**: "Empresa", "Equipe", "Início" e "Término". Sem período, a linha nasce na segunda-feira da semana, com término igual ao início.
+- **Opcionais**: "Empresa", "Local", "Equipe", "Início" e "Término". Sem período, a linha nasce na segunda-feira da semana, com término igual ao início.
 - A linha nova entra embaixo e fica embaixo; após o Enter, o foco volta à atividade para a próxima.
 - Equipe só depois da empresa.
 
 ## Inserir uma linha no meio
 
-O botão "Inserir linha acima" (ícone de linhas com seta, ao lado do ✕, no fim de cada linha) abre uma linha em branco logo acima daquela, já no campo da atividade. Escreva e tecle Enter: a linha entra ali, e a linha em branco continua aberta para a próxima, que entra logo abaixo da criada. Esc ou "Cancelar" fecham sem criar; sair da linha depois de criar também fecha. No celular, o mesmo botão fica no topo do cartão e abre o cartão "Nova linha acima de …", com "Inserir" e "Cancelar". Só na semana analisada e para quem pode editar a semana (encerrada: só administradores).
+O botão "Inserir linha acima" (ícone de linhas com seta, ao lado do ✕, no fim de cada linha) abre uma linha em branco logo acima daquela, já no campo da atividade. Ela começa vazia, como a linha em branco do fim: empresa, local e equipe não são copiados da linha de baixo. Escreva e tecle Enter: a linha entra ali, e a linha em branco continua aberta para a próxima, que entra logo abaixo da criada. Esc ou "Cancelar" fecham sem criar; sair da linha depois de criar também fecha. No celular, o mesmo botão fica no topo do cartão e abre o cartão "Nova linha acima de …", com "Inserir" e "Cancelar". Só na semana analisada e para quem pode editar a semana (encerrada: só administradores).
 
 ## As listas suspensas
 
 - **"Empresa"**: junta o cadastro de empreiteiros da obra e os nomes já digitados na planilha (acento e maiúsculas não criam duplicata). Pesquise e escolha, ou digite um nome novo e confirme em "Usar “nome”". Trocar a empresa tira da linha a equipe de outra empresa.
 - **"Equipe"**: mostra só as equipes da empresa da linha. Digitar um nome novo e confirmar em "Criar equipe “nome” em Empresa" cria a equipe no cadastro daquela empresa com capacidade inicial de 3 atividades por semana (ajustável em Configurações da obra). Sem empresa, a lista diz "Escolha a empresa primeiro.".
 - **"Semana"**: da semana 1 da obra até 4 semanas à frente da atual, mais qualquer semana que já tenha linha.
+
+## O local da linha
+
+"Local" (ao lado de "Atividade") diz onde a atividade acontece. É opcional e vem da mesma lista do longo prazo: os locais cadastrados na aba 1, em Linha de Balanço → "Locais da obra", de cima para baixo. A lista não aceita digitar um local novo; para incluir, renomear ou excluir um local, use a aba 1. Linha sem local mostra a célula vazia; para tirar o local de uma linha, escolha "(sem local)" na lista.
+
+- **Para que serve**: filtrar a planilha pelo funil da coluna "Local" e gerar o PDF só de alguns locais (veja a seção dos PDFs).
+- **Obra sem locais**: a lista fica travada e o cabeçalho da coluna explica: "Cadastre os locais na aba 1 (Linha de Balanço → Locais da obra)". No celular, o campo "Local" só aparece quando a obra tem locais.
+- **Copiar para as vizinhas**: o quadradinho no canto da célula "Local" é a alça do Sheets: arraste para baixo ou para cima e o local passa para as linhas por onde passou. Linhas que não podem ser editadas (semana encerrada para quem não é administrador, semana anterior nas vizinhas) ficam de fora, com aviso.
+- **O local acompanha a linha**: "Levar ›" cria a linha da semana seguinte com o mesmo local; trocar a "Semana" da linha mantém o local; o "Desfazer" devolve o local anterior (inclusive "sem local") e a exclusão desfeita recria a linha com o local.
+- **Local excluído na aba 1**: as linhas que o usavam ficam sem local. Renomear um local muda o nome em todas as linhas.
+- Segue a regra das outras células da linha: semana encerrada, só administradores; Consulta só lê.
 
 ## Início, Término e o calendário
 
@@ -138,7 +152,7 @@ O ✕ no fim da linha pergunta "Excluir a linha “…”?" e avisa que o aponta
 
 ## Filtrar e classificar (o funil)
 
-Cada cabeçalho tem o funil do Sheets, com "Classificar A→Z", "Classificar Z→A", "Remover classificação" e "Filtrar por valores": caixas por valor com contagem, "Selecionar tudo", "Limpar", pesquisa e "(vazias)" para células em branco. O filtro só vale ao clicar em "OK"; marcar todos os valores é não filtrar. Com filtro ativo aparece "Mostrando X de Y linhas" e "Limpar filtros e classificação". O filtro não altera o PPC do topo, que é sempre da semana inteira. Classificar é ação de uma vez: apontar ou editar depois não move a linha, e as novas continuam entrando embaixo.
+Cada cabeçalho tem o funil do Sheets (o de "Local" filtra pelo nome do local), com "Classificar A→Z", "Classificar Z→A", "Remover classificação" e "Filtrar por valores": caixas por valor com contagem, "Selecionar tudo", "Limpar", pesquisa e "(vazias)" para células em branco. O filtro só vale ao clicar em "OK"; marcar todos os valores é não filtrar. Com filtro ativo aparece "Mostrando X de Y linhas" e "Limpar filtros e classificação". O filtro não altera o PPC do topo, que é sempre da semana inteira. Classificar é ação de uma vez: apontar ou editar depois não move a linha, e as novas continuam entrando embaixo.
 
 ## Ordem e larguras
 
@@ -371,7 +385,8 @@ No fim das justificativas, **"Analisar com IA"** envia as linhas não cumpridas 
   {
     id: 'curto-prazo-pdf-impressao',
     title: 'Imprimir: PDF do planejamento e PDF do fechamento',
-    summary: 'Os dois PDFs da semana, a janela de empreiteiros e ordem, o painel do fechamento com o ranking das obras e a faixa do tempo.',
+    summary:
+      'Os dois PDFs da semana, a janela de empreiteiros, locais e ordem, o painel do fechamento com o ranking das obras e a faixa do tempo.',
     keywords: [
       'pdf',
       'imprimir',
@@ -383,6 +398,8 @@ No fim das justificativas, **"Analisar com IA"** envia as linhas não cumpridas 
       'ranking das obras',
       'ppc geral',
       'empreiteiros no pdf',
+      'pdf por local',
+      'filtrar por local',
       'ordem das linhas',
       'tempo',
       'clima',
@@ -401,24 +418,25 @@ Acima da planilha há dois botões, visíveis para todos os papéis:
 
 ## A janela antes do PDF
 
-Os dois botões abrem a mesma janela ("Escolha os empreiteiros e a ordem das linhas."):
+Os dois botões abrem a mesma janela ("Escolha os empreiteiros e a ordem das linhas.", ou "Escolha os empreiteiros, os locais e a ordem das linhas." quando há local na semana):
 
 - **"Ordem das linhas"**: "Por empreiteiro" (as linhas de cada empresa juntas, pela data de início, como na planilha da obra) ou "Por data de início" (data primeiro, depois empresa).
 - **"Empreiteiros"**: a lista dos empreiteiros da semana com o número de linhas de cada um, "Selecionar tudo", "Limpar", pesquisa e "(sem empreiteiro)" para linhas sem empresa. Se a coluna "Empresa" da planilha estiver filtrada, a janela já começa com essa seleção.
+- **"Local"**: aparece quando alguma linha da semana tem local. Mesmo estilo da lista de empreiteiros: os locais da semana de cima para baixo, com o número de linhas de cada um, "(sem local)" para as linhas sem local, "Selecionar tudo", "Limpar" e pesquisa. Começa com todos marcados; se a coluna "Local" da planilha estiver filtrada, começa com essa seleção.
 - **"Painel na primeira página"** (só no PDF do fechamento, já marcado): desmarcado, o PDF sai só com a planilha.
-- O rodapé diz "N linhas no PDF" ou "Marque ao menos um empreiteiro."; "Gerar PDF" abre o documento numa aba nova.
+- O rodapé diz "N linhas no PDF" (já contando empreiteiros e locais juntos), "Marque ao menos um empreiteiro." ou "Marque ao menos um local."; "Gerar PDF" abre o documento numa aba nova.
 
-Os outros filtros e a classificação da planilha não vão para o PDF: só a escolha de empreiteiros e a ordem.
+Os outros filtros e a classificação da planilha não vão para o PDF: só a escolha de empreiteiros e locais e a ordem. Para um PDF de cada local, gere uma vez para cada local.
 
 ## A aba do PDF
 
-A página abre fora do layout do sistema, em A4 paisagem, e chama sozinha o diálogo de impressão do navegador. Nele, escolha "Salvar como PDF" e o modo paisagem; o título da página vira o nome do arquivo. Se o diálogo não abrir, use o botão "Imprimir / Salvar PDF" no topo da aba. Uma linha ao lado diz quantas linhas saíram, a ordem e quem ficou "fora do PDF". É preciso estar logado; a página respeita o acesso às obras do usuário.
+A página abre fora do layout do sistema, em A4 paisagem, e chama sozinha o diálogo de impressão do navegador. Nele, escolha "Salvar como PDF" e o modo paisagem; o título da página vira o nome do arquivo. Se o diálogo não abrir, use o botão "Imprimir / Salvar PDF" no topo da aba. Uma linha ao lado diz quantas linhas saíram, a ordem, quem ficou "fora do PDF" e o recorte de local. É preciso estar logado; a página respeita o acesso às obras do usuário. Se a janela recortou por local e a lista de locais não carregar, a aba mostra "Não foi possível carregar os locais da obra…" em vez de imprimir: feche e gere de novo.
 
-O cabeçalho repete em cada folha: os logos da ATR e da Takt, "PLANEJAMENTO DE CURTO PRAZO <NOME DA OBRA>", "Semana analisada: N" e "Semana atual: N"; depois as datas de cada dia e as colunas "Empreiteiro", "Semana", "Início", "Término", "Atividade", "Equipe" e "Seg." a "Sáb" com os "x" do calendário. Semana sem linha imprime "Semana sem linhas no planejamento."
+O cabeçalho repete em cada folha: os logos da ATR e da Takt, "PLANEJAMENTO DE CURTO PRAZO <NOME DA OBRA>", "Semana analisada: N" e "Semana atual: N"; depois as datas de cada dia e as colunas "Empreiteiro", "Semana", "Início", "Término", "Atividade", "Local" (só quando alguma linha impressa tem local), "Equipe" e "Seg." a "Sáb" com os "x" do calendário. Com locais desmarcados, o título traz embaixo o recorte, por exemplo "Local: Torre A, Torre B" (e "sem local" quando também saem linhas sem local). Semana sem linha imprime "Semana sem linhas no planejamento."
 
 ## O painel na primeira página do fechamento
 
-Uma folha com o mesmo cabeçalho e "RESULTADOS DA SEMANA N". Tudo conta só até a semana analisada (o PDF de uma semana antiga sai igual depois) e sempre a obra inteira: os empreiteiros desmarcados na janela saem só da planilha, e o rodapé avisa.
+Uma folha com o mesmo cabeçalho e "RESULTADOS DA SEMANA N". Tudo conta só até a semana analisada (o PDF de uma semana antiga sai igual depois) e sempre a obra inteira: os empreiteiros e os locais desmarcados na janela saem só da planilha, e o rodapé avisa.
 
 - **Frase de resumo**: o PPC da semana, a diferença para a semana anterior e para a média, a posição no ranking e a principal causa.
 - **Quatro números**: "PPC da semana N" (com "em aberto" se houver linha sem Status), "Em relação à semana N" (em pontos percentuais), "Média das últimas 12 semanas" e "PPC geral da obra", com a posição ("2º de 6") e a média das obras.

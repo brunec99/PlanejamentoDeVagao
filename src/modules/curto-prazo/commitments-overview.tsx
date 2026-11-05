@@ -33,13 +33,23 @@ import { FillHandle, type FillColumn } from '@/modules/curto-prazo/fill-handle';
 import { BulkBar, bulkFulfillmentItems, type BulkChoice } from '@/modules/curto-prazo/bulk-bar';
 import { handleRowKey } from '@/modules/curto-prazo/row-navigation';
 import { fulfillmentLabel, quote, recreateCommand, undoFulfillmentCommand, undoUpdateCommand } from '@/modules/curto-prazo/undo';
-import { BetweenHorizontalStart, ChevronDown, ChevronUp, GripVertical, Undo2 } from 'lucide-react';
+import { BetweenHorizontalStart, ChevronDown, ChevronUp, GripVertical, Info, Undo2 } from 'lucide-react';
+import { useWorkLocals } from '@/modules/curto-prazo/use-work-locals';
+import {
+  LOCALS_HINT,
+  carryCommand,
+  localChoices,
+  localCommand,
+  localFill,
+  localKeyOf,
+  localSelectionFromFilter,
+} from '@/modules/curto-prazo/commitment-local';
 import { byCompany as companyOrder, placeBefore, sheetOrder } from '@/domain/commitment-order';
 import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { ColumnResizeHandle, useColumnWidths, useWideScreen } from '@/modules/curto-prazo/column-widths';
 import { SectionNav } from '@/modules/curto-prazo/section-nav';
 import { PrintDialog } from '@/modules/curto-prazo/print-dialog';
-import type { PrintKind } from '@/modules/curto-prazo/print-sheet';
+import type { PrintKind } from '@/modules/curto-prazo/print-options';
 import { weekNumberFrom } from '@/domain/week-numbering';
 import { canEditWeek, isWeekLocked, weekLockLastDay } from '@/domain/week-lock';
 import {
@@ -58,9 +68,9 @@ import {
 const WEEKDAYS = [1, 2, 3, 4, 5, 6] as const;
 const NAMES = { 1: 'SEG', 2: 'TER', 3: 'QUA', 4: 'QUI', 5: 'SEX', 6: 'SÁB' } as const;
 const dayMonth = (date: string) => formatDate(date).slice(0, 5);
-/** Campos que a linha em branco acumula antes de existir: só a atividade é obrigatória. */
-type Draft = { supplier: string; startDate: string; endDate: string; name: string; teamName: string };
-const EMPTY_DRAFT: Draft = { supplier: '', startDate: '', endDate: '', name: '', teamName: '' };
+/** Campos que a linha em branco acumula antes de existir: só a atividade é obrigatória. `localId` '' = sem local. */
+type Draft = { supplier: string; startDate: string; endDate: string; name: string; teamName: string; localId: string };
+const EMPTY_DRAFT: Draft = { supplier: '', startDate: '', endDate: '', name: '', teamName: '', localId: '' };
 /** Capacidade de uma equipe criada na própria planilha. É um ponto de partida, não uma medição:
  * o planejador ajusta nas configurações da obra, e a análise de carga do médio prazo usa o valor. */
 const NEW_TEAM_CAPACITY = 3;
@@ -77,6 +87,9 @@ const COLUMN_DEFAULTS: Record<string, number> = {
   inicio: 128,
   termino: 128,
   atividade: 320,
+  // Local da linha (05/11/2026, opcional), ao lado da atividade: é onde ela acontece. Lista dos "Locais da
+  // obra" da Linha de Balanço, a mesma do longo prazo.
+  local: 128,
   equipe: 160,
   d1: 68,
   d2: 68,
@@ -104,6 +117,7 @@ const COLUMN_MIN: Record<string, number> = {
   inicio: 108,
   termino: 108,
   atividade: 200,
+  local: 84,
   equipe: 100,
   d1: 40,
   d2: 40,
@@ -141,6 +155,8 @@ type RowActions = {
   saveEnd: (row: WeeklyCommitment, endDate: string) => unknown;
   saveName: (row: WeeklyCommitment, name: string) => unknown;
   assignTeam: (row: WeeklyCommitment, name: string) => unknown;
+  /** Local da linha: o id escolhido na lista, ou '' para tirar. */
+  saveLocal: (row: WeeklyCommitment, localId: string) => unknown;
   setStatus: (row: WeeklyCommitment, value: string) => unknown;
   setCause: (row: WeeklyCommitment, cause: string) => unknown;
   saveJustification: (row: WeeklyCommitment, justification: string) => unknown;
@@ -278,6 +294,21 @@ function Sheet({
   const wagonIds = new Set(wagons.map(w => w.id));
   const activities = data.activities.filter(a => wagonIds.has(a.wagonId));
   const pendencyRow = commitments.find(r => r.id === pendencyFor);
+  // Locais da obra (05/11/2026): a lista da Linha de Balanço, de cima para baixo. A célula mostra o nome; id que
+  // saiu da lista aparece vazio.
+  const workLocals = useWorkLocals(workId);
+  const localOptions = workLocals.locals.map(local => ({ id: local.id, name: local.name }));
+  const knownLocals = new Set(localOptions.map(local => local.id));
+  const localOf = (row: WeeklyCommitment) => localKeyOf(row.localId, knownLocals);
+  /** Por que a lista está vazia: carregando, erro ou obra sem locais. Com locais, nada. */
+  const localHint =
+    workLocals.status === 'loading'
+      ? 'Carregando os locais da obra…'
+      : workLocals.status === 'error'
+        ? workLocals.message
+        : localOptions.length
+          ? ''
+          : LOCALS_HINT;
 
   /** O erro de gravação aparece em dois lugares de propósito: no aviso flutuante, que se vê de
    * qualquer ponto de uma planilha longa, e no Callout acima dela, que fica até a próxima ação. */
@@ -385,28 +416,29 @@ function Sheet({
    * linha só devolveria erro. */
   const saveStart = (row: WeeklyCommitment, startDate: string) =>
     save(row, { startDate, endDate: row.endDate < startDate ? startDate : row.endDate });
+  /** Local da linha (05/11/2026): vai explícito no comando, id ou `null`; as outras edições não o mandam, e o
+   * servidor mantém o que a linha tem. O Desfazer devolve o local anterior, inclusive "sem local". */
+  const saveLocal = (row: WeeklyCommitment, localId: string) => {
+    if (localId === localOf(row)) return;
+    return run(localCommand(row, localId || null), row.id).then(ok => {
+      if (ok) pushUndo(`local de ${quote(row.name)}`, () => run(undoUpdateCommand(row), row.id));
+      return ok;
+    });
+  };
+  /** Linha cuja semana se edita aqui: a analisada e a próxima das vizinhas, com a trava de cada uma; a anterior
+   * só aceita apontamento. É a regra das células de linha (empresa, semana, período, atividade, equipe, local). */
+  const editableRow = (row: WeeklyCommitment) =>
+    row.weekStart === week ? !readOnly : !!around && row.weekStart === around.next && !nextReadOnly;
 
   /** Arrastar o não cumprido cria uma linha nova na semana seguinte, sem apontamento. A linha
    * original não se move nem perde o Não: ela é o registro do que aconteceu, e é dela que saem o
    * PPC daquela semana e a causa no Pareto. Reaproveitar a linha apagaria a série. Nas semanas
    * vizinhas, a linha com Sim ou sem Status também pode continuar na semana seguinte: vira um
-   * compromisso novo daquela semana, sem marca de continuação, e a de origem não muda. */
+   * compromisso novo daquela semana, sem marca de continuação, e a de origem não muda. O local vai junto
+   * (05/11/2026). */
   const carry = async (row: WeeklyCommitment) => {
     const target = weekNumber(addDays(row.weekStart, 7));
-    const created = await run(
-      {
-        type: 'create_commitment',
-        workId,
-        name: row.name,
-        weekStart: addDays(row.weekStart, 7),
-        responsibleId: actor.id,
-        supplier: row.supplier,
-        teamId: row.teamId ?? null,
-        startDate: addDays(row.startDate, 7),
-        endDate: addDays(row.endDate, 7),
-      },
-      row.id,
-    );
+    const created = await run(carryCommand(row, actor.id), row.id);
     if (created) {
       const entry = pushUndo(`linha ${quote(row.name)} levada para a semana ${target}`, () =>
         run({ type: 'delete_commitment', commitmentId: created }, created),
@@ -479,6 +511,8 @@ function Sheet({
     inicio: r => dayMonth(r.startDate),
     termino: r => dayMonth(r.endDate),
     atividade: r => r.name,
+    // O filtro e a classificação do Local são pelo nome; sem local (ou local que saiu da lista) é "(vazias)".
+    local: r => workLocals.nameOf(r.localId),
     equipe: r => teamOf(r)?.name ?? '',
     ...Object.fromEntries(WEEKDAYS.map(day => [`d${day}`, (r: WeeklyCommitment) => (marked(r, day) ? 'x' : '')])),
     status: statusOf,
@@ -566,6 +600,20 @@ function Sheet({
       />
     </th>
   );
+  /** Sem locais na obra (ou enquanto carregam), o funil não teria o que filtrar: o cabeçalho diz por quê. */
+  const localHeader = () =>
+    localOptions.length ? (
+      header('local', 'Local', 'px-2 py-1.5')
+    ) : (
+      <th key="local" scope="col" className="relative overflow-hidden px-2 py-1.5" title={localHint}>
+        {resizeHandle('local', 'Local')}
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate">Local</span>
+          <Info aria-hidden size={12} className="shrink-0 text-slate-400" />
+          <span className="sr-only">{localHint}</span>
+        </span>
+      </th>
+    );
 
   const teamCreated = (name: string, company: string) =>
     toast({
@@ -702,6 +750,7 @@ function Sheet({
     const source = byId.get(sourceId);
     if (!source) return;
     const targets = targetIds.flatMap(id => byId.get(id) ?? []);
+    if (column === 'local') return void fillLocal(source, targets);
     const items: FulfillmentItem[] = [];
     const pendingNo: string[] = [];
     const draftFor: Record<string, string> = {};
@@ -737,6 +786,35 @@ function Sheet({
     // Só marcas locais (Não aguardando causa, rascunhos): nada a gravar ainda.
     if (!items.length && (pendingNo.length || Object.keys(draftFor).length)) return;
     void recordMany(items, { count: skipped, why });
+  };
+  /** A alça na célula Local (05/11/2026) copia o local da origem nas linhas por onde passou. Não há comando de
+   * lote para células de linha: vai um `update_commitment` por linha, na fila, e a tela já mostra o local de
+   * cada uma antes do servidor. Um Desfazer só devolve o local anterior de todas. */
+  const fillLocal = async (source: WeeklyCommitment, targets: WeeklyCommitment[]) => {
+    const { localId, changes, skipped } = localFill(source, targets, knownLocals, editableRow);
+    const out = skipped ? `${skipped} ${skipped === 1 ? 'ficou' : 'ficaram'} de fora: semana só para apontamento.` : undefined;
+    if (!changes.length) {
+      toast({
+        title: skipped ? 'Nenhuma linha recebeu o local.' : 'Nada a aplicar: as linhas já estão com este local.',
+        description: out,
+        tone: 'info',
+      });
+      return;
+    }
+    const results = await Promise.all(changes.map(row => run(localCommand(row, localId), row.id)));
+    const done = changes.filter((_, i) => results[i]);
+    if (!done.length) return;
+    const name = workLocals.nameOf(localId ?? undefined);
+    const label = done.length === 1 ? `local de ${quote(done[0].name)}` : `local de ${done.length} linhas`;
+    const entry = pushUndo(label, async () => (await Promise.all(done.map(row => run(undoUpdateCommand(row), row.id)))).every(Boolean));
+    toast({
+      title: localId
+        ? `${done.length} ${done.length === 1 ? 'linha passou' : 'linhas passaram'} para o local ${quote(name)}.`
+        : `${done.length} ${done.length === 1 ? 'linha ficou' : 'linhas ficaram'} sem local.`,
+      description: out,
+      tone: 'success',
+      action: undoAction(entry),
+    });
   };
   /** Sim marcado por engano não tinha volta: o Status só trocava para Não (pedido da obra, 11/10/2026).
    * O Não ainda pendente só sai da marca local; o apontamento gravado pergunta e vai ao servidor. */
@@ -829,6 +907,7 @@ function Sheet({
     saveEnd: (row, endDate) => save(row, { endDate }),
     saveName: (row, name) => save(row, { name }),
     assignTeam,
+    saveLocal,
     setStatus,
     setCause,
     saveJustification,
@@ -880,6 +959,7 @@ function Sheet({
         teamId: teamId ?? null,
         startDate: draft.startDate || undefined,
         endDate: draft.endDate || undefined,
+        ...(draft.localId && { localId: draft.localId }),
         ...(beforeId && { beforeId, order: orderIds }),
       });
       pushUndo(`${beforeId ? 'linha inserida' : 'nova linha'} ${quote(draft.name.trim())}`, () =>
@@ -913,6 +993,9 @@ function Sheet({
       company,
       teamName: teamOf(row)?.name ?? '',
       teamOptions: teamsOfCompany(company).map(t => t.name),
+      local: localOf(row),
+      locals: localOptions,
+      localHint,
       companies,
       weekOptions: weekChoices,
       nextWeek: weekNumber(addDays(row.weekStart, 7)),
@@ -985,8 +1068,12 @@ function Sheet({
         help={
           <>
             <p>
-              A planilha é a mesma que a equipe já preenche: empresa, semana, início, término, atividade e equipe, todos editáveis na
-              célula. Escreva a atividade na última linha e a linha existe; a equipe é opcional.
+              A planilha é a mesma que a equipe já preenche: empresa, semana, início, término, atividade, local e equipe, todos editáveis na
+              célula. Escreva a atividade na última linha e a linha existe; local e equipe são opcionais.
+            </p>
+            <p>
+              O local vem da lista de locais da obra do longo prazo (Linha de Balanço → Locais da obra) e serve para separar as linhas por
+              local no PDF. &quot;Levar&quot; leva o local junto, e o Desfazer devolve o local anterior.
             </p>
             <p>
               Para pôr uma linha no meio, use &quot;Inserir linha acima&quot; no fim da linha de baixo. Para mudar a ordem, arraste a linha
@@ -1027,6 +1114,9 @@ function Sheet({
           kind={printing}
           companies={distinctValues(weekRows, companyOf)}
           initialSelected={filters.empresa}
+          rows={weekRows.map(row => ({ company: companyOf(row), local: localOf(row) }))}
+          locals={localOptions}
+          initialLocals={localSelectionFromFilter(filters.local, localOptions)}
           onClose={() => setPrinting(undefined)}
         />
       )}
@@ -1095,6 +1185,12 @@ function Sheet({
               <p>
                 Empresa e Equipe: escolha na lista ou digite um nome novo. Equipe nova entra no cadastro da empresa da linha, com capacidade
                 de {NEW_TEAM_CAPACITY} atividades por semana, ajustável nas configurações.
+              </p>
+              <p>
+                Local (opcional): escolha um dos locais da obra; a alça no canto da célula copia o local para as linhas vizinhas.{' '}
+                {localHint === LOCALS_HINT
+                  ? `A obra ainda não tem locais: ${LOCALS_HINT.charAt(0).toLowerCase()}${LOCALS_HINT.slice(1)}.`
+                  : ''}
               </p>
               <p>
                 Os dias de SEG a SÁB se marcam a partir de Início e Término. No celular, os filtros de coluna ficam só na tabela de telas
@@ -1246,7 +1342,7 @@ function Sheet({
               </colgroup>
               <thead className="sticky top-0 z-20 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 shadow-[0_1px_0_rgb(226_232_240)]">
                 <tr className="text-xs font-semibold normal-case tracking-normal text-slate-400">
-                  <th colSpan={viewer ? 6 : 7} className="px-2 pt-1.5" />
+                  <th colSpan={viewer ? 7 : 8} className="px-2 pt-1.5" />
                   {columns.map(({ day, date }) => (
                     <th key={day} scope="col" className="border-l border-slate-200 px-1 pt-1.5 text-center tabular-nums">
                       {/* Com as vizinhas, cada faixa traz o próprio período: a data do dia valeria só para a do meio. */}
@@ -1273,6 +1369,7 @@ function Sheet({
                   {header('inicio', 'Início', 'px-2 py-1.5')}
                   {header('termino', 'Término', 'px-2 py-1.5')}
                   {header('atividade', 'Atividade', 'px-2 py-1.5')}
+                  {localHeader()}
                   {header('equipe', 'Equipe', 'px-2 py-1.5')}
                   {columns.map(({ day }) => header(`d${day}`, NAMES[day], 'border-l border-slate-200 px-1 py-1.5', 'center'))}
                   {header('status', 'Status', 'px-2 py-1.5')}
@@ -1323,6 +1420,8 @@ function Sheet({
                         weekNumber={weekNumber(week)}
                         companies={companies}
                         teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                        locals={localOptions}
+                        localHint={localHint}
                         onCreate={draft => createRow(draft, row.id)}
                         insert={insertFor(row)}
                         trailingSpan={showFollowUp ? 11 : 10}
@@ -1338,6 +1437,8 @@ function Sheet({
                     weekNumber={weekNumber(week)}
                     companies={companies}
                     teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                    locals={localOptions}
+                    localHint={localHint}
                     onCreate={createRow}
                     tourId="curto-linha-nova"
                     trailingSpan={showFollowUp ? 11 : 10}
@@ -1388,6 +1489,8 @@ function Sheet({
                     weekNumber={weekNumber(week)}
                     companies={companies}
                     teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                    locals={localOptions}
+                    localHint={localHint}
                     onCreate={draft => createRow(draft, row.id)}
                     insert={insertFor(row)}
                   />
@@ -1402,6 +1505,8 @@ function Sheet({
                 weekNumber={weekNumber(week)}
                 companies={companies}
                 teamNames={company => teamsOfCompany(company).map(t => t.name)}
+                locals={localOptions}
+                localHint={localHint}
                 onCreate={createRow}
                 tourId="curto-linha-nova"
               />
@@ -1458,6 +1563,12 @@ type RowProps = {
   company: string;
   teamName: string;
   teamOptions: string[];
+  /** Id do local da linha, se ainda está na lista da obra; '' sem local. */
+  local: string;
+  /** Os locais da obra, de cima para baixo; vazio enquanto carregam ou quando a obra não tem nenhum. */
+  locals: { id: string; name: string }[];
+  /** Por que não há locais para escolher ('' quando há). */
+  localHint: string;
   companies: string[];
   weekOptions: { value: string; label: string }[];
   nextWeek: number;
@@ -1548,6 +1659,9 @@ function rowControls({
   company,
   teamName,
   teamOptions,
+  local,
+  locals,
+  localHint,
   companies,
   weekOptions,
   nextWeek,
@@ -1579,8 +1693,12 @@ function rowControls({
         onChange={() => actions.toggleSelect(row)}
       />
     ),
-    /** A alça de arrastar do Sheets, nas células de apontamento; a célula precisa ser `relative group`. */
-    fillHandle: (column: FillColumn) => (viewer ? null : <FillHandle rowId={row.id} column={column} onFill={actions.fill} />),
+    /** A alça de arrastar do Sheets, nas células de apontamento e na do Local; a célula precisa ser `relative
+     * group`. O apontamento é livre mesmo na semana encerrada; o local é célula de linha e segue a trava dela. */
+    fillHandle: (column: FillColumn) =>
+      viewer || (column === 'local' && (readOnly || !locals.length)) ? null : (
+        <FillHandle rowId={row.id} column={column} onFill={actions.fill} />
+      ),
     company: (
       <PillCombo
         value={company}
@@ -1669,6 +1787,20 @@ function rowControls({
         ariaLabel={`Equipe da linha ${line}`}
         placeholder="Equipe"
         onCommit={value => actions.assignTeam(row, value)}
+      />
+    ),
+    /** Lista dos locais da obra; sem local, a célula fica vazia, e "(sem local)" só aparece para tirar um local.
+     * Sem locais na obra, a lista fica travada e o `title` diz onde cadastrá-los. */
+    local: (
+      <PillSelect
+        value={local}
+        disabled={readOnly || !locals.length}
+        ariaLabel={`Local da linha ${line}`}
+        title={localHint || undefined}
+        options={localChoices(locals, local)}
+        dataCol="local"
+        onKeyDown={keys(false)}
+        onChange={value => actions.saveLocal(row, value)}
       />
     ),
     statusPill: (
@@ -1881,6 +2013,10 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
       <Cell tour={tour.cells} tourId="curto-linha-atividade">
         {c.name()}
       </Cell>
+      <Cell tour={tour.cells} tourId="curto-linha-local" className="group relative px-1 py-1">
+        {c.local}
+        {c.fillHandle('local')}
+      </Cell>
       <Cell tour={tour.cells} tourId="curto-linha-equipe">
         {c.team}
       </Cell>
@@ -1919,7 +2055,7 @@ const SheetRow = memo(function SheetRow(props: RowProps & { showFollowUp: boolea
 
 /** A mesma linha como cartão do celular, memorizada do mesmo jeito. */
 const SheetCard = memo(function SheetCard(props: RowProps) {
-  const { row, line, muted, tour } = props;
+  const { row, line, muted, tour, locals } = props;
   const c = rowControls(props);
   return (
     <article
@@ -1945,6 +2081,13 @@ const SheetCard = memo(function SheetCard(props: RowProps) {
           {c.team}
         </CardField>
       </div>
+      {/* Local (05/11/2026): só na obra que tem locais. Sem eles, a dica repetida em cada cartão seria ruído; ela
+        fica no "Como preencher", que o celular também tem. */}
+      {locals.length > 0 && (
+        <CardField label="Local" className="mt-2" tour={tour.cells} tourId="curto-linha-local">
+          {c.local}
+        </CardField>
+      )}
       <div className="mt-2 grid grid-cols-3 gap-2">
         <CardField label="Semana" tour={tour.cells} tourId="curto-linha-semana">
           {c.week}
@@ -2300,6 +2443,9 @@ type BlankProps = {
   weekNumber: number;
   companies: string[];
   teamNames: (company: string) => string[];
+  /** Os locais da obra e, sem eles, o porquê (como na célula Local das linhas). */
+  locals: { id: string; name: string }[];
+  localHint: string;
   /** Resolve com o id da linha criada; `false` é erro já avisado, e o rascunho fica. */
   onCreate: (draft: Draft) => Promise<string | false>;
   /** Linha em branco aberta no meio da semana ("Inserir linha acima"): a atividade de baixo e o fechar.
@@ -2355,6 +2501,8 @@ function BlankRow({
   weekNumber,
   companies,
   teamNames,
+  locals,
+  localHint,
   onCreate,
   insert,
   tourId,
@@ -2373,7 +2521,7 @@ function BlankRow({
     const next = event.relatedTarget as HTMLElement | null;
     if (event.currentTarget.closest('tr')?.contains(next) || next?.closest('[data-sheet-popover]')) return;
     if (draft.name.trim()) create(draft);
-    else if (insert && !draft.supplier && !draft.teamName && !draft.startDate && !draft.endDate) insert.onClose();
+    else if (insert && !draft.supplier && !draft.teamName && !draft.startDate && !draft.endDate && !draft.localId) insert.onClose();
   };
   return (
     <tr
@@ -2444,6 +2592,16 @@ function BlankRow({
         />
       </td>
       <td className="px-1 py-1">
+        <PillSelect
+          value={draft.localId}
+          disabled={creating || !locals.length}
+          ariaLabel={`Local ${of}`}
+          title={localHint || undefined}
+          options={localChoices(locals, draft.localId)}
+          onChange={value => change({ localId: value })}
+        />
+      </td>
+      <td className="px-1 py-1">
         <PillCombo
           value={draft.teamName}
           options={teamNames(draft.supplier)}
@@ -2478,7 +2636,7 @@ function BlankRow({
 
 /** A linha em branco no celular: sem a tabela, é um cartão com botão explícito — no toque, sair
  * do campo não é gesto claro o bastante para criar a linha. */
-function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate, insert, tourId }: BlankProps) {
+function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, locals, onCreate, insert, tourId }: BlankProps) {
   // No celular a inserida fecha depois de criar: para outra, toca-se de novo em "Inserir linha acima".
   const { draft, creating, nameInput, change, setCompany, create } = useDraft(onCreate, teamNames, () => insert?.onClose());
   const of = insert ? 'da linha inserida' : 'da nova linha';
@@ -2531,6 +2689,17 @@ function BlankCard({ week, weekEnd, weekNumber, companies, teamNames, onCreate, 
           />
         </CardField>
       </div>
+      {locals.length > 0 && (
+        <CardField label="Local" className="mt-2">
+          <PillSelect
+            value={draft.localId}
+            disabled={creating}
+            ariaLabel={`Local ${of}`}
+            options={localChoices(locals, draft.localId)}
+            onChange={value => change({ localId: value })}
+          />
+        </CardField>
+      )}
       <div className="mt-2 grid grid-cols-2 gap-2">
         <CardField label="Início">
           <input

@@ -10,15 +10,16 @@ import { useWorkSettings } from '@/modules/configuracoes/work-settings';
 import { compareText } from '@/modules/curto-prazo/sheet-view';
 import { WeatherStrip } from '@/modules/curto-prazo/weather-strip';
 import { PrintDashboard } from '@/modules/curto-prazo/print-dashboard';
+import { useWorkLocals } from '@/modules/curto-prazo/use-work-locals';
+import { NO_LOCAL, localKeyOf } from '@/modules/curto-prazo/commitment-local';
+import { localCutLabel, printableRows, type PrintKind, type PrintOrder } from '@/modules/curto-prazo/print-options';
 import { formatDate } from '@/shared/format';
 
 /** Os dois PDFs da semana no formato da planilha "Planejamento de curto prazo" da obra (exemplos do
  * usuário, 08/10/2026: "PCP-BLT - Semana 115" e "PCP-BLT - Resultados Semana 114"). A página abre numa
  * aba própria, fora do layout do sistema, e chama a impressão do navegador ("Salvar como PDF"); o
  * título da página vira o nome do arquivo. O cabeçalho fica no <thead> para repetir em cada folha. */
-export type PrintKind = 'planejamento' | 'fechamento';
-/** Por empreiteiro: como a planilha da obra (empresa, depois início). Por início: data, depois empresa. */
-export type PrintOrder = 'empreiteiro' | 'inicio';
+export type { PrintKind, PrintOrder };
 
 const DAYS = [
   { day: 1, label: 'Seg.' },
@@ -48,6 +49,7 @@ export function PrintSheet({
   kind,
   order = 'empreiteiro',
   excluded = [],
+  excludedLocals = [],
   dashboard = false,
 }: {
   workId: string;
@@ -56,13 +58,17 @@ export function PrintSheet({
   order?: PrintOrder;
   /** Empreiteiros desmarcados na janela do PDF ('' = linhas sem empreiteiro). */
   excluded?: string[];
+  /** Locais desmarcados na janela do PDF (05/11/2026): ids, e '' para as linhas sem local. */
+  excludedLocals?: string[];
   /** Fechamento com o painel na primeira página (`print-dashboard.tsx`). */
   dashboard?: boolean;
 }) {
   const context = usePlanning();
   const { state: settings, weekOneStart } = useWorkSettings(workId);
   const printed = useRef(false);
-  const ready = context.state === 'ready' && settings.status !== 'loading';
+  // Os locais da obra (05/11/2026): os nomes da coluna Local e o recorte por local. A impressão espera por eles.
+  const workLocals = useWorkLocals(workId);
+  const ready = context.state === 'ready' && settings.status !== 'loading' && workLocals.status !== 'loading';
   const work = context.state === 'ready' ? context.planning.data.works.find(w => w.id === workId) : undefined;
 
   const today = context.state === 'ready' ? context.planning.today : '';
@@ -80,6 +86,11 @@ export function PrintSheet({
     const date = addDays(row.weekStart, day - 1);
     return row.startDate <= date && date <= row.endDate;
   };
+  const locals = workLocals.locals.map(local => ({ id: local.id, name: local.name }));
+  const knownLocals = new Set(locals.map(local => local.id));
+  const localOf = (row: WeeklyCommitment) => localKeyOf(row.localId, knownLocals);
+  // Sem a lista de locais, o recorte por local não tem como ser aplicado: a página avisa em vez de imprimir.
+  const localsFailed = workLocals.status === 'error' && excludedLocals.length > 0;
   // Ordem da planilha de origem: as linhas de cada empresa juntas, e dentro dela pela data de início.
   const left = new Set(excluded);
   const byCompany = (a: WeeklyCommitment, b: WeeklyCommitment) => {
@@ -87,18 +98,26 @@ export function PrintSheet({
     if ((x === '') !== (y === '')) return x === '' ? 1 : -1;
     return compareText(x, y);
   };
-  const rows = commitments
-    .filter(c => c.weekStart === week && !left.has(companyOf(c)))
-    .sort((a, b) =>
-      order === 'inicio'
-        ? a.startDate.localeCompare(b.startDate) ||
-          byCompany(a, b) ||
-          a.endDate.localeCompare(b.endDate) ||
-          a.createdAt.localeCompare(b.createdAt)
-        : byCompany(a, b) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt),
-    );
+  const rows = printableRows(
+    commitments.filter(c => c.weekStart === week),
+    companyOf,
+    localOf,
+    excluded,
+    excludedLocals,
+  ).sort((a, b) =>
+    order === 'inicio'
+      ? a.startDate.localeCompare(b.startDate) ||
+        byCompany(a, b) ||
+        a.endDate.localeCompare(b.endDate) ||
+        a.createdAt.localeCompare(b.createdAt)
+      : byCompany(a, b) || a.startDate.localeCompare(b.startDate) || a.createdAt.localeCompare(b.createdAt),
+  );
   const closing = kind === 'fechamento';
   const withPanel = closing && dashboard;
+  // A coluna Local só entra quando alguma linha impressa tem local; o recorte vai no cabeçalho de cada folha.
+  const printedLocals = rows.map(localOf);
+  const showLocal = printedLocals.some(key => key !== NO_LOCAL);
+  const localCut = localCutLabel(printedLocals, locals, excludedLocals);
   const title = work
     ? `PCP-${work.code || work.name} - ${closing ? 'Resultados ' : ''}Semana ${number(week)}`
     : 'Planejamento de curto prazo';
@@ -151,19 +170,28 @@ export function PrintSheet({
   }, [withPanel, ready, hasWork, workId, week]);
 
   useEffect(() => {
-    if (!ready || !work || weather === 'pending' || (withPanel && ranking === 'pending') || printed.current) return;
+    if (!ready || !work || localsFailed || weather === 'pending' || (withPanel && ranking === 'pending') || printed.current) return;
     printed.current = true;
     document.title = title;
     // Um respiro para as fontes e o layout assentarem antes do diálogo de impressão.
     const timer = setTimeout(() => window.print(), 400);
     return () => clearTimeout(timer);
-  }, [ready, work, title, weather, withPanel, ranking]);
+  }, [ready, work, localsFailed, title, weather, withPanel, ranking]);
 
   if (context.state === 'error') return <p className="p-6 text-sm text-danger">{context.message}</p>;
   if (!ready) return <p className="p-6 text-sm text-slate-500">Preparando o PDF…</p>;
   if (!work) return <p className="p-6 text-sm text-slate-500">Obra não encontrada ou sem acesso.</p>;
+  if (localsFailed)
+    return (
+      <p className="p-6 text-sm text-danger">
+        Não foi possível carregar os locais da obra, e sem eles o recorte por local não pode ser aplicado. Feche esta aba e gere o PDF de
+        novo.
+      </p>
+    );
 
-  const columns = closing ? 15 : 12;
+  const columns = (closing ? 15 : 12) + (showLocal ? 1 : 0);
+  // A coluna Local tira a largura da Atividade, que é a mais larga.
+  const activityWidth = closing ? (showLocal ? 16 : 22) : showLocal ? 30 : 38;
   return (
     <div className="pcp-print">
       <style>{`
@@ -207,6 +235,7 @@ export function PrintSheet({
           No diálogo, escolha &quot;Salvar como PDF&quot; e o modo paisagem. {rows.length} linha{rows.length === 1 ? '' : 's'},{' '}
           {order === 'inicio' ? 'por data de início' : 'por empreiteiro'}
           {left.size ? ` · fora do PDF: ${[...left].map(c => c || '(sem empreiteiro)').join(', ')}` : ''}
+          {localCut ? ` · ${localCut}` : ''}
           {withPanel ? ' · com o painel na primeira página' : ''}.
         </span>
       </div>
@@ -219,6 +248,7 @@ export function PrintSheet({
           commitments={commitments}
           ranking={ranking === 'pending' ? undefined : ranking}
           excluded={[...left]}
+          localCut={localCut}
         />
       )}
       <table>
@@ -227,7 +257,8 @@ export function PrintSheet({
           <col style={{ width: '4.5%' }} />
           <col style={{ width: '4.5%' }} />
           <col style={{ width: '4.5%' }} />
-          <col style={{ width: closing ? '22%' : '38%' }} />
+          <col style={{ width: `${activityWidth}%` }} />
+          {showLocal && <col style={{ width: closing ? '6%' : '8%' }} />}
           <col style={{ width: closing ? '6.5%' : '9%' }} />
           {DAYS.map(d => (
             <col key={d.day} style={{ width: closing ? '2.5%' : '4%' }} />
@@ -255,6 +286,8 @@ export function PrintSheet({
             </th>
             <th colSpan={columns - 7} style={{ textAlign: 'center', fontSize: closing ? 12 : 15, padding: '6px 8px' }}>
               PLANEJAMENTO DE CURTO PRAZO {work.name.toUpperCase()}
+              {/* O recorte por local (05/11/2026) repete em cada folha, com o cabeçalho. */}
+              {localCut && <div style={{ fontSize: closing ? 8 : 10, fontWeight: 400, marginTop: 2 }}>{localCut}</div>}
             </th>
             <th colSpan={3} style={{ textAlign: 'right', fontSize: closing ? 8 : 10, padding: '4px 8px', lineHeight: 1.5 }}>
               Semana analisada:{' '}
@@ -266,7 +299,7 @@ export function PrintSheet({
             </th>
           </tr>
           <tr className="pcp-sub">
-            <th colSpan={6} />
+            <th colSpan={showLocal ? 7 : 6} />
             {DAYS.map(d => (
               <th key={d.day} style={{ textAlign: 'center' }}>
                 {dayMonth(addDays(week, d.day - 1))}
@@ -280,6 +313,7 @@ export function PrintSheet({
             <th>Início</th>
             <th>Término</th>
             <th style={{ textAlign: 'left' }}>Atividade</th>
+            {showLocal && <th>Local</th>}
             <th>Equipe</th>
             {DAYS.map(d => (
               <th key={d.day}>{d.label}</th>
@@ -305,6 +339,7 @@ export function PrintSheet({
               <td style={{ textAlign: 'center' }}>{dayMonth(row.startDate)}</td>
               <td style={{ textAlign: 'center' }}>{dayMonth(row.endDate)}</td>
               <td>{row.name}</td>
+              {showLocal && <td style={{ textAlign: 'center' }}>{workLocals.nameOf(row.localId)}</td>}
               <td style={{ textAlign: 'center' }}>{teamOf(row)?.name ?? ''}</td>
               {DAYS.map(d => (
                 <td key={d.day} className={marked(row, d.day) ? 'pcp-x' : undefined}>

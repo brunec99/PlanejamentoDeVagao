@@ -5,13 +5,13 @@ import { ppcSeries } from '@/domain/rules';
 import { startOfWeek } from '@/domain/validation';
 import { hasSectionAccess } from '@/application/module-access';
 import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
-import { DASHBOARD_MODULES, referenceOf, type DashboardFilters, type DashboardModule, type DashboardReference } from '../model';
+import { companyKey, DASHBOARD_MODULES, referenceOf, type DashboardFilters, type DashboardModule, type DashboardReference } from '../model';
 import { resolvePeriod, type PeriodContext, type PeriodSelection } from '../period';
 import { buildLongTermPanel, type LongTermPanelData } from '../long-term-panel';
 import { buildWagonsPanel, type WagonsPanelData } from '../wagons-panel';
 import { buildMediumTermPanel, type MediumTermPanelData } from '../medium-term-panel';
-import { buildShortTermPanel, type ShortTermPanelData } from '../short-term-panel';
-import { buildTerminalityPanel, type TerminalityPanelData } from '../terminality-panel';
+import { buildShortTermPanel, shortTermCompanies, type ShortTermPanelData } from '../short-term-panel';
+import { buildTerminalityPanel, terminalityCompanies, type TerminalityPanelData } from '../terminality-panel';
 import { aggregatePortfolio } from './aggregate';
 import { extractRow, type PortfolioSource } from './extract';
 import type { PortfolioInput, PortfolioRow, PortfolioSourcesResponse, PortfolioState, PortfolioWork } from './types';
@@ -113,6 +113,7 @@ function longTermSource(
   if (!response.longTermAccess) return { status: 'hidden' };
   if (entry?.longTermError) return { status: 'error', message: entry.longTermError };
   if (!entry?.longTerm) return { status: 'absent' };
+  // Empreiteiro não se aplica ao longo prazo (a medição é por serviço), como na aba 0.
   const data = buildLongTermPanel(entry.longTerm, ref, { week: ref.week });
   if (data) return { status: 'ready', data };
   reasons['longo-prazo'] = NO_LONG_TERM_SERVICE;
@@ -125,6 +126,7 @@ function terminalitySource(
   entry: SourceEntry | undefined,
   ref: DashboardReference,
   reasons: Reasons,
+  companies: ReadonlySet<string> | undefined,
 ): PortfolioSource<TerminalityPanelData> {
   if (!response.terminalityAvailable) {
     reasons.terminalidade = NO_TERMINALITY;
@@ -135,9 +137,26 @@ function terminalitySource(
     reasons.terminalidade = NO_TERMINALITY_ITEM;
     return { status: 'absent' };
   }
-  const data = buildTerminalityPanel(entry.terminality, ref, { week: ref.week });
+  const data = buildTerminalityPanel(entry.terminality, ref, { week: ref.week, ...(companies ? { companies } : {}) });
   return data ? { status: 'ready', data } : { status: 'absent' };
 }
+
+/** Junta opções de seletor vindas de mais de uma fonte e de mais de uma obra, somando as contagens das grafias
+ * equivalentes (a grafia que fica é a primeira, que vem da fonte com mais linhas). */
+function mergeCompanyOptions(lists: { value: string; count: number }[][]): { value: string; count: number }[] {
+  const merged = new Map<string, { value: string; count: number }>();
+  for (const list of lists)
+    for (const option of list) {
+      const key = companyKey(option.value);
+      if (!key) continue;
+      const current = merged.get(key);
+      if (current) current.count += option.count;
+      else merged.set(key, { value: option.value, count: option.count });
+    }
+  return [...merged.values()].sort((a, b) => a.value.localeCompare(b.value, 'pt-BR', { numeric: true, sensitivity: 'base' }));
+}
+const teamCompanies = (teams: readonly Team[]) =>
+  [...new Set(teams.map(t => t.company.trim()).filter(Boolean))].map(value => ({ value, count: 0 }));
 
 /** O resultado de um construtor como estado de quadro: `undefined` vira "ausente". */
 const fromBuilder = <T>(build: () => T | undefined): PortfolioSource<T> => {
@@ -191,6 +210,10 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
     return new Set(picked.length ? picked : DASHBOARD_MODULES.filter(m => access[m.id]).map(m => m.id));
   }, [access, moduleKey]);
 
+  // Recorte de empreiteiro (05/11/2026): os nomes vão aos construtores, que comparam por `companyKey`.
+  const companyNames = input.companies ? [...input.companies].sort().join('\n') : '';
+  const companies = useMemo(() => (companyNames ? new Set(companyNames.split('\n')) : undefined), [companyNames]);
+
   const lines = useMemo(() => {
     const map = new Map<string, WorkLines>();
     if (!data || !currentWeek) return map;
@@ -222,34 +245,59 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
     [periodContext, selectionKey],
   );
 
+  const remoteShown = REMOTE_MODULES.some(module => shown.has(module));
+  const sources = useFetched(SOURCES_URL, ready && remoteShown, parseSources);
+
+  // Empreiteiros do seletor, somando as obras escolhidas: as linhas do curto prazo (coluna Empresa), as equipes e,
+  // quando a rota responde, os responsáveis terceiros da terminalidade. Com recorte, a obra onde nenhum dos
+  // escolhidos aparece sai das linhas (`withoutCompany`).
+  const companyLists = useMemo(() => {
+    const entries = new Map((sources.status === 'ready' ? sources.data.works : []).map(entry => [entry.workId, entry]));
+    return new Map(
+      chosen.map(work => {
+        const own = lines.get(work.id) ?? { commitments: [], teams: [] };
+        const terminality = entries.get(work.id)?.terminality;
+        return [
+          work.id,
+          [shortTermCompanies(own.commitments, own.teams), terminality ? terminalityCompanies(terminality) : [], teamCompanies(own.teams)],
+        ] as const;
+      }),
+    );
+  }, [chosen, lines, sources]);
+  const companyOptions = useMemo(() => mergeCompanyOptions([...companyLists.values()].flat()), [companyLists]);
+  const { included, withoutCompany } = useMemo(() => {
+    if (!companies) return { included: chosen, withoutCompany: [] as PortfolioWork[] };
+    const keys = new Set([...companies].map(companyKey));
+    const present = (work: PortfolioWork) =>
+      (companyLists.get(work.id) ?? []).some(list => list.some(option => keys.has(companyKey(option.value))));
+    return { included: chosen.filter(present), withoutCompany: chosen.filter(work => !present(work)) };
+  }, [chosen, companies, companyLists]);
+
   // A data de referência de cada obra: o sábado final do período; a semana 1 é a primeira semana com linha. A obra
   // que só começa depois do período fica sem referência: `aggregate` a tira das linhas (regra 10), então nenhum
   // quadro dela é construído.
   const refs = useMemo(() => {
     const map = new Map<string, DashboardReference>();
     if (!period || !today) return map;
-    for (const work of chosen) {
+    for (const work of included) {
       const firstWeek = lines.get(work.id)?.firstWeek;
       if (firstWeek && firstWeek > period.lastWeek) continue;
       map.set(work.id, referenceOf(period.lastWeek, today, firstWeek ?? period.lastWeek, period));
     }
     return map;
-  }, [period, today, chosen, lines]);
-
-  const remoteShown = REMOTE_MODULES.some(module => shown.has(module));
-  const sources = useFetched(SOURCES_URL, ready && remoteShown, parseSources);
+  }, [period, today, included, lines]);
 
   // Curto prazo, vagões e médio prazo: do planejamento já carregado, sem esperar a rota.
   const local = useMemo(() => {
     const map = new Map<string, LocalSources>();
     if (!planning || !data) return map;
-    for (const work of chosen) {
+    for (const work of included) {
       const ref = refs.get(work.id);
       if (!ref) {
         map.set(work.id, { short: { status: 'absent' }, wagons: { status: 'absent' }, medium: { status: 'absent' } });
         continue;
       }
-      const filters: DashboardFilters = { week: ref.week };
+      const filters: DashboardFilters = { week: ref.week, ...(companies ? { companies } : {}) };
       const own = lines.get(work.id)!;
       map.set(work.id, {
         short: shown.has('curto-prazo')
@@ -260,13 +308,13 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
       });
     }
     return map;
-  }, [planning, data, chosen, refs, lines, shown]);
+  }, [planning, data, included, refs, lines, shown, companies]);
 
   // Longo prazo e terminalidade: da rota, uma leitura para todas as obras.
   const remote = useMemo(() => {
     const map = new Map<string, RemoteSources>();
     const entries = new Map((sources.status === 'ready' ? sources.data.works : []).map(entry => [entry.workId, entry]));
-    for (const work of chosen) {
+    for (const work of included) {
       const ref = refs.get(work.id);
       const entry = entries.get(work.id);
       const reasons: Partial<Record<DashboardModule, string>> = {};
@@ -283,16 +331,16 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
       };
       map.set(work.id, {
         longTerm: pick('longo-prazo', (response, ref) => longTermSource(response, entry, ref, reasons)),
-        terminality: pick('terminalidade', (response, ref) => terminalitySource(response, entry, ref, reasons)),
+        terminality: pick('terminalidade', (response, ref) => terminalitySource(response, entry, ref, reasons, companies)),
         reasons,
       });
     }
     return map;
-  }, [sources, chosen, refs, shown]);
+  }, [sources, included, refs, shown, companies]);
 
   const rows = useMemo<PortfolioRow[] | undefined>(() => {
     if (!period) return undefined;
-    return chosen.map(work => {
+    return included.map(work => {
       const own = lines.get(work.id) ?? { commitments: [], teams: [] };
       const fromLocal = local.get(work.id) ?? { short: { status: 'absent' }, wagons: { status: 'absent' }, medium: { status: 'absent' } };
       const fromRemote = remote.get(work.id) ?? { longTerm: { status: 'absent' }, terminality: { status: 'absent' }, reasons: {} };
@@ -312,9 +360,19 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
         period,
       );
     });
-  }, [period, chosen, lines, local, remote]);
+  }, [period, included, lines, local, remote]);
 
-  const portfolio = useMemo(() => (period && rows ? aggregatePortfolio({ period, rows, shown }) : undefined), [period, rows, shown]);
+  const portfolio = useMemo(() => {
+    if (!period || !rows) return undefined;
+    const aggregated = aggregatePortfolio({ period, rows, shown });
+    if (!companies) return aggregated;
+    // Com recorte, "Empreiteiros em mais de uma obra" mostra só os escolhidos.
+    const keys = new Set([...companies].map(companyKey));
+    return {
+      ...aggregated,
+      companies: { ...aggregated.companies, rows: aggregated.companies.rows.filter(row => keys.has(companyKey(row.name))) },
+    };
+  }, [period, rows, shown, companies]);
 
   if (context.state === 'error') return { status: 'error', message: context.message, retry: context.retry };
   if (!ready || !periodContext || !portfolio) return { status: 'loading' };
@@ -336,6 +394,8 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
     periodContext,
     works,
     access,
+    companyOptions,
+    withoutCompany,
     loading,
     unavailable,
   };

@@ -187,6 +187,9 @@ export interface PortfolioInput {
   workIds?: ReadonlySet<string>;
   /** Quadros escolhidos; ausente = todos os que a pessoa pode abrir. */
   modules?: ReadonlySet<DashboardModule>;
+  /** Empreiteiros escolhidos (05/11/2026, pedido do usuário depois do modelo): nomes comparados sem acento nem
+   * caixa (`companyKey`), como na aba 0. Ausente = sem recorte. */
+  companies?: ReadonlySet<string>;
 }
 export interface PortfolioReady {
   data: PortfolioData;
@@ -198,6 +201,11 @@ export interface PortfolioReady {
   works: PortfolioWork[];
   /** Quais módulos a pessoa pode abrir. */
   access: Record<DashboardModule, boolean>;
+  /** Empreiteiros do seletor, somando as obras escolhidas (curto prazo, terminalidade e equipes), grafias
+   * equivalentes numa opção só. */
+  companyOptions: { value: string; count: number }[];
+  /** Com recorte de empreiteiro: as obras escolhidas onde nenhum dos empreiteiros aparece (saem das linhas). */
+  withoutCompany: PortfolioWork[];
   /** Módulos cuja leitura (rota do Dashboard geral) ainda não chegou ou falhou. */
   loading: DashboardModule[];
   unavailable: { module: DashboardModule; message: string }[];

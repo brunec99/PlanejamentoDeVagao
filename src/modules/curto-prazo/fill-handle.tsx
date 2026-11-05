@@ -3,8 +3,9 @@ import { useEffect, useRef, type JSX, type PointerEvent as ReactPointerEvent } f
 
 /** Alça de preenchimento da planilha semanal, como no Google Sheets: o quadradinho no canto inferior
  * direito da célula; arrastar para baixo (ou para cima) copia o valor da célula de origem nas linhas
- * por onde o ponteiro passou. Só mouse/toque; o teclado fica com a barra de seleção da planilha. */
-export type FillColumn = 'status' | 'causas' | 'justificativa';
+ * por onde o ponteiro passou. Só mouse/toque; o teclado fica com a barra de seleção da planilha. Vale nas
+ * células de apontamento e, desde 05/11/2026, na do Local. */
+export type FillColumn = 'status' | 'causas' | 'justificativa' | 'local';
 
 /** Classe do tema (globals.css) usada para realçar as linhas alvo durante o arrasto. */
 const HIGHLIGHT_CLASS = 'fill-target';

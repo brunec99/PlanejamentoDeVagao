@@ -886,3 +886,29 @@ Artigos do suporte (suporteprevision.freshdesk.com): "Criando um Macrofluxo", "C
 - Etapa 3, a combinar (regra 27): "Gerar vagões" a partir da Linha de Balanço (e então tirar o Planejador), datas marco, edição em lote, medição sem sinal (fila no aparelho, como a Terminalidade), importar o cronograma do Prevision direto para a Linha de Balanço, "Importar .xml do Project" na tela de fluxos e o PDF da medição.
 - O dashboard da aba 0 (outra sessão, também só no disco) lê o longo prazo do Planejador (`/api/long-term-plan`), não da Linha de Balanço: quando a Linha de Balanço virar a fonte, o quadro de longo prazo do dashboard deve passar a ler `/api/lob` (blocos, medições e avanço físico).
 - Lacunas conhecidas: corrigir para cima um valor da última medição já salva não exige foto no servidor (a tela marca em âmbar); o motivo do atraso é pedido pela tela, mas o servidor não o exige; não há limpeza periódica de fotos órfãs no bucket (mesma pendência da Terminalidade); o takt padrão do diálogo de lançamento é 10 dias úteis, sem ler a sequência de vagões.
+
+## Curto prazo: local da linha e filtro de local no PDF (05/11/2026)
+
+Pedido do usuário: "no curto prazo, adicione um campo de local (opcional) para que as tarefas possam ser filtradas por local ao gerar o PDF. O local deve ser o mesmo do longo prazo (lista suspensa que vem de configuração de obra)". Implementado sem modelo de UX (é uma coluna nova e uma seção na janela do PDF, no padrão das que já existem).
+
+### De onde vem a lista
+
+Dos **"Locais da obra" da Linha de Balanço** (aba 1, gaveta "Locais da obra", tabela `lob_locals` da 0038), de cima para baixo como na gaveta. É a lista do longo prazo atual; a gaveta também traz os locais do planejamento dos vagões ("Usar os locais da obra"). A linha guarda o **id** do local (`weekly_commitments.local_id`, migração **0039, criada e não aplicada**): renomear o local muda o nome em todas as linhas, e apagar o local deixa a linha sem local (`on delete set null`). Como `/api/lob` é restrita ao módulo do longo prazo e o curto prazo é aberto a todos, a lista sai de uma rota própria, `GET /api/curto-prazo/locais?workId=` (só id, nome e ordem, para quem tem a obra), lida pelo hook `src/modules/curto-prazo/use-work-locals.ts`. Obra sem local cadastrado: a célula fica travada com a dica "Cadastre os locais na aba 1 (Linha de Balanço → Locais da obra)".
+
+### O que mudou
+
+- **Planilha:** coluna **Local** (opcional) entre Atividade e Equipe, lista suspensa com os locais da obra e "(sem local)" para tirar; funil de filtro pelo nome do local, com "(vazias)"; trava igual às outras células da linha (semana encerrada só admin, Consulta só lê). No celular, o cartão ganha o campo, só nas obras com locais.
+- **O local acompanha a linha:** "Levar ›" leva o local para a semana seguinte; a alça de preencher copia o local (um `update_commitment` por linha, desfeito de uma vez); o Desfazer devolve o local anterior, inclusive "sem local"; a exclusão desfeita recria a linha com o local. "Inserir linha acima" não herda o local, como as outras colunas.
+- **Comandos:** `create_commitment` e `update_commitment` aceitam `localId`; em `update_commitment`, **ausente mantém** o local (telas e chamadas de antes do campo não o apagam) e `null` tira. O servidor só confere o formato (os locais não vêm no planejamento carregado); a chave estrangeira recusa local inexistente. A projeção otimista (`local-apply.ts`) segue a mesma regra.
+- **PDF:** a janela antes do PDF ganha a seção **Local** no estilo da lista de empreiteiros (contagem, pesquisa, "(sem local)"), só quando alguma linha da semana tem local; o filtro de coluna Local da planilha vira a seleção inicial. Os desmarcados vão na URL como `excluir-local=<id>` (vazio = "sem local"). A página de impressão filtra por empreiteiro e por local, põe a coluna Local depois de Atividade quando alguma linha impressa tem local e escreve "Local: Torre A, Torre B" sob o título de cada folha. Ela espera os locais carregarem e, com recorte de local e a lista em erro, mostra o erro em vez de imprimir. O painel da primeira página do fechamento continua na obra inteira (o rodapé cita o recorte). Vale para os dois PDFs da janela.
+- **Arquivos:** `src/modules/curto-prazo/commitment-local.ts` e `print-options.ts` (puros, novos), `commitments-overview.tsx`, `print-dialog.tsx`, `print-sheet.tsx`, `print-dashboard.tsx`, `undo.ts`, `fill-handle.tsx`, a página de impressão, `local-apply.ts`, `commands.ts`, mappers, `entities.ts`, `migrations.ts` (verificação da 0039), manual da Claudia e tour do curto prazo (passo "Local (opcional)").
+
+### Validação (05/11/2026)
+
+Testes novos: `tests/commitment-local.test.ts` (11), `tests/commitment-local-command.test.ts` (4) e um caso em `tests/local-apply.test.ts`; `npm run validate:migrations` passa com a 0039 (grava o local, recusa local inexistente, apagar o local deixa a linha sem local). Nada foi aberto no navegador logado, o PDF não foi impresso com a coluna, e a gravação real depende de aplicar a 0039.
+
+### Pendências
+
+- **Aplicar a 0039 no takt-hub antes de publicar o código.** Sem ela o código funciona, mas a coluna Local não grava.
+- Comando em lote para o local (a alça manda uma gravação por linha); a assistente ainda não lê o local; quem tinha larguras de coluna salvas vê a planilha 128 px mais larga até "Ajustar à tela"; o nome do arquivo do PDF não cita o recorte por local.
+

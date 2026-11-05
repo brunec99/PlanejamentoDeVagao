@@ -209,6 +209,8 @@ interface CommitmentRow {
   recorded_by: string | null;
   /** Migração 0036; sem ela no banco, a coluna não vem e a linha segue a ordem de inclusão. */
   order_index?: number | null;
+  /** Migração 0039; sem ela no banco, a coluna não vem e a linha fica sem local. */
+  local_id?: string | null;
 }
 interface DependencyRow {
   id: string;
@@ -505,6 +507,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       recordedAt: r.recorded_at ?? undefined,
       recordedBy: r.recorded_by ?? undefined,
       order: r.order_index ?? undefined,
+      localId: r.local_id ?? undefined,
     })),
     baselines: rows.baselines.map((r): Baseline => ({
       id: r.id,
@@ -782,6 +785,7 @@ export function planningDataToPayload(data: PlanningData) {
       recorded_at: c.recordedAt ?? null,
       recorded_by: c.recordedBy ?? null,
       order_index: c.order ?? null,
+      local_id: c.localId ?? null,
     })),
     baselines: data.baselines.map(b => ({
       id: b.id,

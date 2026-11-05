@@ -696,3 +696,15 @@ test('extract: estado de cada módulo e o motivo do "—"', () => {
   const withLines = extractRow(input({ commitments: [line('2026-11-02', 'X')] }), october);
   assert.deepEqual(withLines.status['curto-prazo'], { kind: 'absent', reason: 'Sem linha no curto prazo até o fim do período.' });
 });
+
+test('URL do geral: empreiteiro se repete, como na aba 0 (05/11/2026)', async () => {
+  const { parsePortfolioParams, portfolioSearchParams } = await import('../src/modules/dashboard/portfolio/params');
+  const params = portfolioSearchParams({
+    selection: { scale: 'mes', key: '2026-10' },
+    companies: new Set(['Hidro Norte', 'Elétrica Silva']),
+  });
+  assert.equal(params.toString(), 'escala=mes&periodo=2026-10&empreiteiro=Hidro+Norte&empreiteiro=El%C3%A9trica+Silva');
+  const parsed = parsePortfolioParams({ escala: 'mes', periodo: '2026-10', empreiteiro: ['Hidro Norte', ' ', 'Elétrica Silva'] });
+  assert.deepEqual([...(parsed.companies ?? [])], ['Hidro Norte', 'Elétrica Silva']);
+  assert.equal(parsePortfolioParams({}).companies, undefined);
+});

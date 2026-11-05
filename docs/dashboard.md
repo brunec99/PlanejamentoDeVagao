@@ -189,7 +189,7 @@ Seguindo o combinado de 30/10/2026 (modelo de UX antes do código), o modelo "Da
 
 1. **Item "Dashboard geral" no menu, fora das obras.** Novo item em Empreendimentos, logo abaixo de Obras (dica "Todas as obras · Comparativos"), com rota própria `/dashboard`, mais um botão **"Comparar obras"** no topo da lista de obras. A lista de obras continua sendo a página inicial. (Alternativas recusadas: só o botão; abrir o sistema direto no Dashboard geral.)
 2. **Só as obras liberadas para a pessoa.** Cada pessoa vê as mesmas obras da lista de obras. O item aparece para quem tem **duas ou mais obras** (com uma só não há o que comparar) e **sempre para admin e desenvolvedor**. Quadros e colunas seguem os módulos liberados, como na aba 0: curto prazo e terminalidade para todos, os demais para quem o admin liberou. Consulta também vê. Nada se edita. (Recusada: o PPC de todas as obras para todos, como o ranking do PDF do fechamento.)
-3. **Filtros: escala, período, obras e quadros.** "Obras" é um seletor múltiplo (padrão: todas). Empreiteiro e pavimento ficam só na aba 0, porque os nomes mudam de obra para obra; a comparação por empresa fica no quadro "Empreiteiros em mais de uma obra". (Recusada: filtro de empreiteiro também no geral, pareando pelo nome sem acento.)
+3. **Filtros: escala, período, obras e quadros.** "Obras" é um seletor múltiplo (padrão: todas). Empreiteiro e pavimento ficam só na aba 0, porque os nomes mudam de obra para obra; a comparação por empresa fica no quadro "Empreiteiros em mais de uma obra". (Recusada no modelo: filtro de empreiteiro também no geral, pareando pelo nome sem acento.) *Atualizado em 05/11/2026 a pedido do usuário:* o geral ganhou o filtro de empreiteiro; ver "Filtro de empreiteiro no Dashboard geral (05/11/2026)", abaixo.
 
 ### Escalas de tempo (valem nas duas telas)
 
@@ -358,6 +358,17 @@ Tudo em `src/modules/dashboard/`, reaproveitando os quadros da aba 0. O cálculo
 - **Manual** (`src/modules/agente/manual/dashboard-geral.ts`, export `sections`, `screen: 'dashboard-geral'`, rótulo "Dashboard geral (todas as obras)"), 7 seções: `dashboard-geral-visao-geral` (o que é, onde fica, quem vê, a página de cima para baixo, a assistente só dentro da obra), `dashboard-geral-escalas-e-periodo` (vale também para a aba 0), `dashboard-geral-comparativo-das-obras` (frase, cartões, tabela, estado, "—"), `dashboard-geral-curto-prazo-comparado` (barras, em início, faixas, mapa de calor, causas, empreiteiros), `dashboard-geral-outros-quadros` (fluxo × retrato por módulo), `dashboard-geral-pdf` e `dashboard-geral-duvidas-comuns` (número diferente da aba 0, obra que não aparece, item do menu, "—", parcial, soma e não média, filtro de empreiteiro, o que fica para depois). Como a assistente só abre dentro de uma obra, estas seções respondem a quem pergunta de lá.
 - **Manual da aba 0** (`dashboard.ts`): a seção `dashboard-filtros-semana-analisada` (mesmo id) passou a explicar escala e período e o "somado no período × retrato no sábado final"; as demais trocaram "semana analisada" por "período" onde mudou; as dúvidas comuns ganharam "Onde foi parar a Semana analisada?", "Por que o PPC do mês não é a média das semanas?" e "O número é diferente do Dashboard geral".
 
+## Filtro de empreiteiro no Dashboard geral (05/11/2026)
+
+Pedido do usuário logo depois da publicação: "além de filtrar por obra, permita que a gente filtre por empreiteiro". Era a alternativa recusada da regra 3; foi implementada sem novo modelo, com o comportamento do mesmo filtro na aba 0.
+
+- **Seletor "Empreiteiro"** ao lado de "Obras" (`data-tour="geral-empreiteiro"`), com as empresas de todas as obras escolhidas: coluna Empresa do curto prazo (`shortTermCompanies`), responsável terceiro da terminalidade (`terminalityCompanies`, quando a rota responde) e empresa das equipes. Grafias equivalentes (sem acento nem caixa, `companyKey`) viram uma opção só, somando as contagens.
+- **Recorte:** os nomes vão a `filters.companies` de cada construtor, como na aba 0: curto prazo pela coluna Empresa, vagões e médio prazo pela empresa da equipe, terminalidade pelo responsável terceiro. Longo prazo não se aplica (medição por serviço). PPC geral e "em início" continuam da obra inteira (`whole.overall`), como o ranking da aba 0.
+- **Obras sem o empreiteiro:** com recorte, a obra escolhida onde nenhuma das empresas aparece (em nenhuma das três fontes) sai das linhas (`PortfolioReady.withoutCompany`); a linha de escopo e o rodapé do PDF dizem quais. Enquanto a rota não responde, a presença é decidida só pelo curto prazo e pelas equipes.
+- **"Empreiteiros em mais de uma obra"** mostra só as empresas escolhidas (continua exigindo duas obras ou mais).
+- **URL:** `empreiteiro=` repetido, o mesmo nome do parâmetro da aba 0. Clicar numa obra abre a aba 0 no mesmo período e com o mesmo recorte (a página da aba 0 passou a ler `empreiteiro=` como recorte inicial, e o seletor acende a opção de grafia equivalente). O PDF sai com o recorte.
+- **Arquivos:** `portfolio/types.ts` (`PortfolioInput.companies`, `PortfolioReady.companyOptions` e `withoutCompany`), `portfolio/params.ts`, `portfolio/use-portfolio-data.ts`, `portfolio/portfolio-overview.tsx`, `portfolio/portfolio-print.tsx`, `dashboard-overview.tsx` e a página da aba 0; tour (passo "Empreiteiro") e manual (dúvida "Dá para filtrar por empreiteiro aqui?").
+
 ## Validação
 
 Rodada de 04/11/2026, ao fim da implementação (seis agentes em paralelo, por posse de arquivo, e o coordenador nos arquivos compartilhados):
@@ -371,7 +382,7 @@ Rodada de 04/11/2026, ao fim da implementação (seis agentes em paralelo, por p
 
 ## Pendências
 
-- **Sem commit e não publicado:** o trabalho está no disco, com a bateria do CI verde; publicar depende do pedido do usuário.
+- **Publicado em 04/11/2026** (commit `de1b449`, deploy conferido pela troca dos arquivos da página de login; CI do GitHub verde). O filtro de empreiteiro do geral (05/11/2026) entra no commit seguinte.
 - **Validação logada em produção:** abrir o Dashboard geral com as obras reais e conferir, num mesmo período, que a linha de cada obra bate com a aba 0 dela (o clique na obra leva ao mesmo período); conferir o padrão "Mensal, mês mais recente com semana apurada" e o item do menu para quem tem uma obra só.
 - **PDF no navegador real:** gerar o do geral (até 4 folhas) e o da aba 0 em escala mensal e personalizada, em Chromium e Safari; a descrição do quadro do curto prazo no papel pode ocupar 2 ou 3 linhas na folha de 732 px.
 - **Tempo da rota do geral:** medir pelo `Server-Timing` (fases `auth`, `longTerm`, `terminality`); o cálculo de todas as obras roda no navegador a cada troca de período.

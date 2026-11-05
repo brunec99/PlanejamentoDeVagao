@@ -63,12 +63,12 @@ export const steps: TourStep[] = [
   {
     target: 'curto-pdf-planejamento',
     title: 'PDF do planejamento',
-    body: 'Abre uma janela para escolher os empreiteiros (começa pelo filtro da coluna Empresa, se houver) e a ordem das linhas. Gera numa aba nova a semana analisada no formato da planilha da obra, com o tempo da semana; na impressão, escolha "Salvar como PDF".',
+    body: 'Abre uma janela para escolher os empreiteiros (começa pelo filtro da coluna Empresa, se houver), os locais (quando alguma linha da semana tem local; começa pelo filtro da coluna Local) e a ordem das linhas. Gera numa aba nova a semana analisada no formato da planilha da obra, com o tempo da semana; na impressão, escolha "Salvar como PDF".',
   },
   {
     target: 'curto-pdf-fechamento',
     title: 'PDF do fechamento',
-    body: 'A mesma janela, mas o PDF ("Resultados Semana N") traz também Realizado, causa e justificativa de cada linha. Gere depois de apontar o Sim ou o Não da semana.',
+    body: 'A mesma janela, mas o PDF ("Resultados Semana N") traz também Realizado, causa e justificativa de cada linha. Gere depois de apontar o Sim ou o Não da semana. O painel da primeira página considera sempre a obra inteira, mesmo com empreiteiros ou locais desmarcados.',
   },
   {
     target: 'curto-ajustar',
@@ -141,6 +141,11 @@ export const steps: TourStep[] = [
     body: 'O que será feito, escrito à mão. Grava com Enter ou ao sair do campo; apagar o texto todo devolve o nome anterior, porque linha sem atividade não existe.',
   },
   {
+    target: 'curto-linha-local',
+    title: 'Local (opcional)',
+    body: 'Onde a atividade acontece, escolhido na lista de locais da obra do longo prazo (Linha de Balanço → Locais da obra). Serve para filtrar a planilha pelo funil e para gerar o PDF só de alguns locais. "Levar ›" leva o local junto, a alça do canto copia o local nas linhas vizinhas e o Desfazer devolve o anterior. Sem locais cadastrados, a lista fica travada.',
+  },
+  {
     target: 'curto-linha-equipe',
     title: 'Equipe (opcional)',
     body: 'Lista as equipes da empresa da linha. Digitar um nome novo cria a equipe nessa empresa, com capacidade inicial de 3 atividades por semana. Sem empresa na linha, não dá para criar equipe.',
@@ -193,7 +198,7 @@ export const steps: TourStep[] = [
   {
     target: 'curto-linha-nova',
     title: 'Nova linha',
-    body: 'Escreva a atividade e tecle Enter, ou saia da linha, para criá-la; no celular, use Adicionar. Empresa, equipe e datas podem ficar em branco: sem período, a linha nasce no primeiro dia da semana.',
+    body: 'Escreva a atividade e tecle Enter, ou saia da linha, para criá-la; no celular, use Adicionar. Empresa, local, equipe e datas podem ficar em branco: sem período, a linha nasce no primeiro dia da semana.',
   },
 
   // Fechamento

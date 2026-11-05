@@ -132,6 +132,8 @@ export type Command =
        * ordem salva. Sem os dois, a linha entra embaixo, como sempre. */
       beforeId?: string;
       order?: string[];
+      /** Local da linha (05/11/2026): id de um dos "Locais da obra" da Linha de Balanço; ausente ou nulo = sem local. */
+      localId?: string | null;
     }
   /** Arrastar linhas (30/10/2026): grava a ordem da semana, `ids` como a tela mostra depois de soltar. */
   | { type: 'reorder_commitments'; workId: string; weekStart: string; ids: string[] }
@@ -144,6 +146,8 @@ export type Command =
       weekStart: string;
       startDate: string;
       endDate: string;
+      /** Local da linha (05/11/2026): ausente = mantém o que a linha tem; nulo = tira o local. */
+      localId?: string | null;
     }
   | { type: 'delete_commitment'; commitmentId: string }
   | { type: 'record_fulfillment'; commitmentId: string; fulfilled: boolean; cause?: string; justification?: string }
@@ -437,6 +441,14 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
     const team = data.teams.find(t => t.id === teamId && t.workId === workId);
     if (!team) throw new Error('Equipe deve pertencer à obra.');
     return team.id;
+  };
+  /** O local da linha (05/11/2026) é opcional. Os locais são os da Linha de Balanço, que não vêm no planejamento
+   * carregado: aqui só se confere o formato; a chave estrangeira do banco recusa um local que não existe, e a
+   * tela só oferece os locais da própria obra. */
+  const localIdOf = (localId: string | null | undefined) => {
+    if (localId === null || localId === undefined || localId === '') return undefined;
+    if (typeof localId !== 'string' || localId.length > 100) throw new Error('Local inválido.');
+    return localId;
   };
   const weekIds = (ids: unknown) => {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Ordem das linhas inválida.');
@@ -979,6 +991,7 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         activityId: command.activityId ?? undefined,
         teamId: teamOf(command.teamId, workId),
         ...period(startDate, endDate, weekStart, weekEnd),
+        localId: localIdOf(command.localId),
       };
       data.commitments.push(commitment);
       // Inserir no meio: a ordem de base é a da tela (`order`) ou, sem ela, a salva (`insertionOrder`).
@@ -1021,6 +1034,8 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         ...period(command.startDate, command.endDate, weekStart, weekEnd),
         // A posição é da semana de origem: na semana nova a linha entra embaixo, como a linha nova.
         order: weekStart === commitment.weekStart ? commitment.order : undefined,
+        // Quem não manda o local (telas e chamadas de antes do campo) não o apaga.
+        localId: command.localId === undefined ? commitment.localId : localIdOf(command.localId),
       });
       touch(commitment);
       entityId = commitment.id;

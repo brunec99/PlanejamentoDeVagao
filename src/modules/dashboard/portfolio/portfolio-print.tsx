@@ -119,7 +119,12 @@ function Sheet({ info, children }: { info: SheetInfo; children: ReactNode }) {
 }
 
 export function PortfolioPrint({ params }: { params: PortfolioParams }) {
-  const state = usePortfolio({ selection: params.selection, workIds: params.workIds, modules: params.modules });
+  const state = usePortfolio({
+    selection: params.selection,
+    workIds: params.workIds,
+    modules: params.modules,
+    companies: params.companies,
+  });
   const printed = useRef(false);
   const [expired, setExpired] = useState(false);
   useEffect(() => {
@@ -182,7 +187,13 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
   );
   const footer = `Escala ${scaleLabel(period.scale).toLowerCase()} · ${period.label}${period.partial ? ' (parcial)' : ''}${
     period.scale === 'personalizado' ? ` · agrupado por ${GROUPING_NOUN[period.grouping].one}` : ''
-  } · Obras: ${worksText} · Quadros: ${modulesText}.${
+  } · Obras: ${worksText} · Quadros: ${modulesText}${
+    params.companies
+      ? ` · Empreiteiros: ${[...params.companies].join(', ')}${
+          ready.withoutCompany.length ? ` (não aparecem em ${ready.withoutCompany.map(work => work.name).join(', ')})` : ''
+        }; longo prazo e PPC geral consideram a obra inteira`
+      : ''
+  }.${
     data.notStarted.length
       ? ` ${data.notStarted.map(work => work.name).join(', ')} só começa${data.notStarted.length > 1 ? 'm' : ''} depois do período.`
       : ''

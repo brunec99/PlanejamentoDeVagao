@@ -169,8 +169,22 @@ try {
   assert.equal(idle.version, 8);
   sameExcept(after, idle);
   assert.equal(await historyCount(), eventsBefore + 1);
+  // Local da linha (0039): a função grava o id do local da Linha de Balanço, o snapshot devolve, e apagar o
+  // local deixa a linha sem local em vez de recusar.
+  await db.exec("insert into lob_locals (id, work_id, name, order_index) values ('loc1', 'w', 'Torre A', 1)");
+  const withLocal = Object.fromEntries(Object.keys(payload).map(key => [key, []]));
+  withLocal.weekly_commitments = [{ ...c2, updated_at: '2026-10-10T18:00:00Z', local_id: 'loc1' }];
+  await commit(8, withLocal);
+  const located = await snapshot();
+  assert.equal(located.weekly_commitments.find(c => c.id === 'c2').local_id, 'loc1');
+  assert.equal(located.weekly_commitments.find(c => c.id === 'c1').local_id, null);
+  const missingLocal = Object.fromEntries(Object.keys(payload).map(key => [key, []]));
+  missingLocal.weekly_commitments = [{ ...c2, updated_at: '2026-10-10T19:00:00Z', local_id: 'nao-existe' }];
+  await assert.rejects(commit(9, missingLocal));
+  await db.exec("delete from lob_locals where id = 'loc1'");
+  assert.equal((await snapshot()).weekly_commitments.find(c => c.id === 'c2').local_id, null);
   console.log(
-    'PostgreSQL isolado: migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027), gravação parcial (só o que mudou), ordem da planilha (0036) e RPCs sem acesso público: OK',
+    'PostgreSQL isolado: migrações, metadados, conflito de versão, rollback, base imutável, histórico append-only, exclusão autorizada, snapshot por obra (0027), gravação parcial (só o que mudou), ordem da planilha (0036), local da linha (0039) e RPCs sem acesso público: OK',
   );
 } finally {
   await db.close();

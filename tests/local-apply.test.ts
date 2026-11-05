@@ -288,3 +288,28 @@ test('acessos: o próprio acesso e o usuário desconhecido esperam a recarga', (
   assert.equal(apply(before, { type: 'set_module_access', userId: ACTOR, section: 'vagoes', enabled: true }), null);
   assert.equal(apply(before, { type: 'grant_access', userId: 'ninguem', workId: 'obra-1' }), null);
 });
+
+test('local da linha (05/11/2026): a tela já mostra o local escolhido, mantém sem o campo e tira com nulo', () => {
+  const before = planning();
+  const created = apply(
+    before,
+    { type: 'create_commitment', workId: 'obra-1', name: 'Reboco', weekStart: '2026-10-05', responsibleId: 'user-1', localId: 'loc-a' },
+    'c2',
+  )!;
+  assert.equal(created.data.commitments.find(c => c.id === 'c2')!.localId, 'loc-a');
+  const edit = (localId?: string | null) =>
+    ({
+      type: 'update_commitment',
+      commitmentId: 'c1',
+      name: row.name,
+      supplier: row.supplier,
+      weekStart: row.weekStart,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      ...(localId === undefined ? {} : { localId }),
+    }) as Command;
+  const located = apply(before, edit('loc-b'))!;
+  assert.equal(located.data.commitments[0].localId, 'loc-b');
+  assert.equal(apply(located, edit())!.data.commitments[0].localId, 'loc-b');
+  assert.equal(apply(located, edit(null))!.data.commitments[0].localId, undefined);
+});

@@ -39,7 +39,12 @@ export const steps: TourStep[] = [
   {
     target: 'geral-obras',
     title: 'Obras',
-    body: 'Seletor múltiplo com as obras liberadas para você (as mesmas da lista de obras). Abre com todas marcadas; desmarque as que não interessam à comparação. Empreiteiro e pavimento ficam só na aba 0 de cada obra, porque os nomes mudam de uma obra para outra.',
+    body: 'Seletor múltiplo com as obras liberadas para você (as mesmas da lista de obras). Abre com todas marcadas; desmarque as que não interessam à comparação. Pavimento fica só na aba 0 de cada obra.',
+  },
+  {
+    target: 'geral-empreiteiro',
+    title: 'Empreiteiro',
+    body: 'As empresas de todas as obras escolhidas, com o nome comparado sem acento nem maiúscula. Com um recorte, saem as obras onde nenhuma delas aparece, e os quadros passam a contar só as linhas, tarefas e pendências dessas empresas. Longo prazo e PPC geral continuam considerando a obra inteira.',
   },
   {
     target: 'geral-quadros',

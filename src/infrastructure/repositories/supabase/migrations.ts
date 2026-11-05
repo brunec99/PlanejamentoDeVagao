@@ -244,6 +244,14 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'As visões Linha de Balanço, Fluxos de serviços e Medições da aba 1 respondem "indisponível"; o Planejador e os vagões seguem.',
     critical: false,
   },
+  {
+    migration: '0039_commitment_local',
+    label: 'Local da linha da planilha do curto prazo',
+    probe: { kind: 'column', table: 'weekly_commitments', column: 'local_id' },
+    effect:
+      'O campo Local da planilha da semana só vale até recarregar: o local não fica gravado, e o filtro de local do PDF não acha linhas.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

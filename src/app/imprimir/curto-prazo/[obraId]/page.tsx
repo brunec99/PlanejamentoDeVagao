@@ -1,5 +1,6 @@
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { PrintSheet } from '@/modules/curto-prazo/print-sheet';
+import { listParam } from '@/modules/curto-prazo/print-options';
 
 export const metadata = { title: 'Planejamento de curto prazo' };
 
@@ -10,9 +11,17 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ obraId: string }>;
-  searchParams: Promise<{ semana?: string; tipo?: string; ordem?: string; excluir?: string | string[]; painel?: string }>;
+  searchParams: Promise<{
+    semana?: string;
+    tipo?: string;
+    ordem?: string;
+    excluir?: string | string[];
+    /** Locais desmarcados na janela do PDF (05/11/2026): o id de cada um, e vazio para as linhas sem local. */
+    'excluir-local'?: string | string[];
+    painel?: string;
+  }>;
 }) {
-  const [{ obraId }, { semana, tipo, ordem, excluir, painel }] = await Promise.all([params, searchParams]);
+  const [{ obraId }, { semana, tipo, ordem, excluir, 'excluir-local': excluirLocal, painel }] = await Promise.all([params, searchParams]);
   const week = semana && /^\d{4}-\d{2}-\d{2}$/.test(semana) ? semana : undefined;
   return (
     <PlanningProvider>
@@ -21,7 +30,8 @@ export default async function Page({
         week={week}
         kind={tipo === 'fechamento' ? 'fechamento' : 'planejamento'}
         order={ordem === 'inicio' ? 'inicio' : 'empreiteiro'}
-        excluded={excluir === undefined ? [] : Array.isArray(excluir) ? excluir : [excluir]}
+        excluded={listParam(excluir)}
+        excludedLocals={listParam(excluirLocal)}
         // O painel sai por padrão: só `painel=0` (caixa desmarcada) tira. Exigir `painel=1` deixava sem painel
         // quem gerava o PDF de uma aba aberta antes do deploy de 30/10/2026, cuja janela não manda o parâmetro.
         dashboard={painel !== '0'}

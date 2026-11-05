@@ -242,7 +242,7 @@ O Pareto das linhas com Não de todas as obras no período, da causa mais freque
 
 As empresas que aparecem na coluna **Empresa** da planilha da semana de **duas obras ou mais** no período, da que tem mais linhas para a que tem menos. Para cada uma, o PPC dela em cada obra e no total. O nome é comparado sem acento nem maiúscula ("Elétrica São José" e "eletrica sao jose" são a mesma empresa), e aparece na grafia que tem mais linhas; grafias diferentes ("Elétrica S. José") contam como empresas diferentes. Corrija o nome na planilha da semana (aba 4) para elas se juntarem.
 
-Este quadro é o lugar para comparar uma empresa entre obras: o Dashboard geral não tem filtro de empreiteiro, porque os nomes mudam de uma obra para outra. Para recortar uma obra por empreiteiro, use o filtro "Empreiteiro" da aba 0 dela.`,
+Com o filtro "Empreiteiro" do topo marcado, o quadro mostra só as empresas escolhidas.`,
   },
   {
     id: 'dashboard-geral-outros-quadros',
@@ -332,7 +332,7 @@ Só saem as folhas dos quadros presentes: sem longo prazo nem vagões (por falta
 
 ## PDF da aba 0
 
-O PDF da aba 0 de cada obra também passou a mostrar a escala e o período no cabeçalho. Para o PDF de uma obra só com recorte de empreiteiro ou pavimento, gere pela aba 0 dela.`,
+O PDF da aba 0 de cada obra também passou a mostrar a escala e o período no cabeçalho. O PDF do Dashboard geral sai com o recorte de empreiteiro que estiver na tela, e o rodapé diz quais empresas entraram; para recortar por pavimento, gere pela aba 0 da obra.`,
   },
   {
     id: 'dashboard-geral-duvidas-comuns',
@@ -388,7 +388,15 @@ O consolidado das obras segue a mesma regra: soma as linhas de todas as obras, e
 
 ## "Dá para filtrar por empreiteiro aqui?"
 
-Não, de propósito: os nomes mudam de uma obra para outra. Use o quadro "Empreiteiros em mais de uma obra" para comparar uma empresa entre obras, ou o filtro "Empreiteiro" da aba 0 de cada obra.
+Sim, desde 05/11/2026: o filtro "Empreiteiro", ao lado de "Obras", lista as empresas de todas as obras escolhidas (coluna Empresa da planilha da semana, responsável terceiro da terminalidade e empresa das equipes), com o nome comparado sem acento nem maiúscula. Com o recorte:
+
+- saem do comparativo as obras onde nenhuma das empresas escolhidas aparece, e a linha de cima diz quais;
+- o PPC do período, as causas, o mapa de calor, os vagões, o médio prazo e a terminalidade passam a contar só as linhas, tarefas e pendências dessas empresas, como o mesmo filtro faz na aba 0;
+- o longo prazo e o PPC geral (com a regra de "em início") continuam considerando a obra inteira: a medição é por serviço, e o PPC geral é o da obra;
+- "Empreiteiros em mais de uma obra" mostra só as empresas escolhidas;
+- clicar numa obra abre a aba 0 dela no mesmo período e com o mesmo recorte, e o PDF sai com ele.
+
+Grafias diferentes de um mesmo nome ("Elétrica S. José" e "Elétrica São José") contam como empresas diferentes: corrija o nome na planilha da semana para elas se juntarem.
 
 ## O que ainda não existe
 

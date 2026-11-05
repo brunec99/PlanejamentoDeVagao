@@ -21,7 +21,9 @@ export function undoFulfillmentCommand(before: readonly WeeklyCommitment[]): Com
   };
 }
 
-/** Devolve as células da linha (empresa, equipe, semana, período, atividade) ao que eram. */
+/** Devolve as células da linha (empresa, equipe, semana, período, atividade, local) ao que eram. O local vai
+ * sempre explícito, inclusive `null` (05/11/2026): sem ele, `update_commitment` manteria o local de agora, e
+ * desfazer a escolha de um local não o tiraria. */
 export function undoUpdateCommand(before: WeeklyCommitment): Command {
   return {
     type: 'update_commitment',
@@ -32,12 +34,13 @@ export function undoUpdateCommand(before: WeeklyCommitment): Command {
     weekStart: before.weekStart,
     startDate: before.startDate,
     endDate: before.endDate,
+    localId: before.localId ?? null,
   };
 }
 
-/** Recria uma linha excluída com as mesmas células. Nasce com id novo e sem apontamento: quem desfaz a
- * exclusão regrava o Sim/Não em seguida, com `record_fulfillment` no id novo. Com `beforeId` (a linha que
- * vinha logo abaixo na ordem salva), volta para o mesmo lugar em vez de entrar embaixo. */
+/** Recria uma linha excluída com as mesmas células, inclusive o local. Nasce com id novo e sem apontamento:
+ * quem desfaz a exclusão regrava o Sim/Não em seguida, com `record_fulfillment` no id novo. Com `beforeId` (a
+ * linha que vinha logo abaixo na ordem salva), volta para o mesmo lugar em vez de entrar embaixo. */
 export function recreateCommand(before: WeeklyCommitment, responsibleId: string, beforeId?: string): Command {
   return {
     type: 'create_commitment',
@@ -50,6 +53,7 @@ export function recreateCommand(before: WeeklyCommitment, responsibleId: string,
     activityId: before.activityId ?? null,
     startDate: before.startDate,
     endDate: before.endDate,
+    ...(before.localId && { localId: before.localId }),
     ...(beforeId && { beforeId }),
   };
 }
