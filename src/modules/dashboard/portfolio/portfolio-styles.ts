@@ -8,8 +8,17 @@
  *   `.here` o período analisado; `.pf-ramp` a legenda da rampa;
  * - `.pf-rows` linhas por obra (longo prazo, vagões, médio prazo, terminalidade): `.pf-rowx` com nome, gráfico
  *   e números; `.pf-bullet` medido × planejado, `.pf-stackb` barra empilhada, `.pf-pair` abertas × resolvidas;
- * - `.pf-g3` grade de três colunas sobre `.dsh-grid` (causas e responsáveis);
- * - `.pf-mods-2` os quatro quadros dos demais módulos, dois a dois (um só no celular, regra 16). */
+ * - `.pf-g3` grade de três colunas sobre `.dsh-grid` (causas, responsáveis e tipos de apontamento); `.pf-wrap`
+ *   deixa o texto quebrar em vez de cortar;
+ * - `.pf-mods-2` os quatro quadros dos demais módulos, dois a dois (um só no celular, regra 16);
+ * - `.pf-kpis` contêiner dos cartões do topo; `.dsh-kpis.k7` os sete cartões (regra 8 da segurança, 06/11/2026):
+ *   uma linha quando a área do conteúdo tem 1000 px ou mais, quatro por linha abaixo e dois no celular; no
+ *   papel, sete colunas;
+ * - Segurança do trabalho (aba 6): `.pf-sst-box` contêiner do quadro, `.pf-sst-cols` os três blocos (três
+ *   colunas a partir de 1100 px de quadro, duas a partir de 820 px com os tipos embaixo, uma abaixo disso),
+ *   `.pf-sst` linhas por obra com a coluna do nome mais estreita, `.pf-rowx.total` a linha "Todas" e
+ *   `.pf-sst-kpis` os seis números da folha do PDF. Consulta de contêiner, e não de tela, porque a largura do
+ *   conteúdo depende da lateral aberta ou recolhida. */
 export const PORTFOLIO_STYLE = `
 .pf-mods-2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
 .pf-xscroll { overflow-x: auto; max-width: 100%; }
@@ -80,6 +89,39 @@ table.pf-heat { border-collapse: separate; border-spacing: 2px; font-size: 11.5p
 .pf-g3 .bar { display: block; height: 6px; margin-top: 3px; border-radius: 2px; }
 .pf-g3 .cause { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.pf-rowx.total { border-top: 1px solid #c4d3df; padding-top: 7px; }
+.pf-rowx.total .nm { color: #0a364d; }
+.dsh-grid.pf-wrap .txt { white-space: normal; overflow-wrap: anywhere; }
+.dsh-grid.pf-wrap .muted.txt { font-size: 11px; line-height: 1.35; }
+
+/* Sete cartões no topo */
+.pf-kpis { container-type: inline-size; }
+.dsh .dsh-kpis.k7 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container (min-width: 520px) { .dsh .dsh-kpis.k7 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 1000px) {
+  .dsh .dsh-kpis.k7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .dsh .dsh-kpis.k7 .dsh-stat { padding: 11px 12px 12px; }
+  .dsh .dsh-kpis.k7 .dsh-stat::before { left: 12px; right: 12px; }
+  .dsh .dsh-kpis.k7 .dsh-stat .v { font-size: 22px; gap: 6px; }
+}
+
+/* Segurança do trabalho */
+.pf-sst-box { container-type: inline-size; }
+.pf-sst-cols { grid-template-columns: minmax(0, 1fr); }
+.pf-sst > .pf-rowx { grid-template-columns: 92px minmax(0, 1fr) auto; }
+@container (min-width: 820px) {
+  .pf-sst-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pf-sst-cols > .dsh-blk:nth-child(3) { grid-column: 1 / -1; }
+}
+@container (min-width: 1100px) {
+  .pf-sst-cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr); }
+  .pf-sst-cols > .dsh-blk:nth-child(3) { grid-column: auto; }
+}
+@container (max-width: 520px) {
+  .pf-sst > .pf-rowx { grid-template-columns: 84px minmax(0, 1fr); }
+  .pf-sst > .pf-rowx .meta { grid-column: 2; text-align: left; white-space: normal; }
+}
+
 @media (max-width: 1080px) { .pf-mods-2 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) {
   .pf-rowx { grid-template-columns: 96px minmax(0, 1fr); }
@@ -105,4 +147,14 @@ table.pf-heat { border-collapse: separate; border-spacing: 2px; font-size: 11.5p
 .dsh-paper .pf-rowx .meta { font-size: 10px; }
 .dsh-paper .pf-rowx .nm small, .dsh-paper .pf-rowx .sub2 { font-size: 9px; }
 .dsh-paper .pf-nodata { font-size: 9.5px; }
+.dsh-paper .pf-sst > .pf-rowx { grid-template-columns: 74px minmax(0, 1fr) auto; }
+.dsh-paper .pf-rowx.total { padding-top: 5px; }
+.dsh-paper .dsh-grid.pf-wrap .muted.txt { font-size: 9.5px; }
+.dsh-paper .dsh-kpis.k7 { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
+.dsh-paper .dsh-kpis.k7 .dsh-kpi { padding: 6px 8px 7px; }
+.dsh-paper .dsh-kpis.k7 .dsh-kpi .v { font-size: 20px; }
+.dsh-paper .dsh-kpis.k7 .dsh-kpi .l em { white-space: nowrap; }
+.dsh-paper .pf-sst-kpis .dsh-kpi .v.t-bad { color: #be123c; }
+.dsh-paper .pf-sst-kpis .dsh-kpi .v.t-good { color: #047857; }
+.dsh-paper .pf-sst-kpis .dsh-kpi .v .dl { font-size: 11px; font-weight: 700; }
 `;

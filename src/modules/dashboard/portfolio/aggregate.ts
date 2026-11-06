@@ -1,5 +1,6 @@
 import { textKey } from '@/modules/curto-prazo/sheet-view';
-import { DASHBOARD_MODULES, dayMonth, pct, signedPoints, type DashboardModule, type KpiCard, type Segment } from '../model';
+import { SAFETY_CONSEQUENCES } from '@/domain/safety';
+import { dayMonth, pct, PORTFOLIO_MODULES, signedPoints, type KpiCard, type PortfolioModule, type Segment } from '../model';
 import type { DashboardPeriod } from '../period';
 import type { BucketPpc } from '../period-views';
 import type {
@@ -9,6 +10,7 @@ import type {
   PortfolioPareto,
   PortfolioResponsibles,
   PortfolioRow,
+  PortfolioSafetyTypes,
   PortfolioTotals,
   PortfolioWork,
 } from './types';
@@ -28,6 +30,8 @@ import type {
  * - Regra 12: os responsáveis terceiros com mais pendências em aberto, somando as obras.
  * - Regra 13: a frase e até seis cartões, só dos módulos que a pessoa pode abrir e não escondeu, com os números
  *   da frase iguais aos dos cartões já arredondados.
+ * - Segurança do trabalho (modelo aprovado em 06/11/2026): os totais somando as obras, o 7º cartão
+ *   (regra 8), o trecho da frase e os tipos com mais apontamentos no período (regra 7).
  *
  * Tudo puro e determinístico. */
 
@@ -36,13 +40,17 @@ export interface PortfolioAggregateInput {
   /** Uma linha por obra escolhida, em qualquer ordem (inclusive as que só começam depois do período). */
   rows: readonly PortfolioRow[];
   /** Módulos que a pessoa pode abrir e não escondeu em "Quadros": os únicos com cartão e trecho na frase. */
-  shown: ReadonlySet<DashboardModule>;
+  shown: ReadonlySet<PortfolioModule>;
 }
 
 /** Abaixo disto a obra entra em "Obras abaixo de 70%" e ganha o aviso (regra 11, a mesma faixa da aba 0). */
 export const PPC_ALERT = 70;
 /** Quantos responsáveis terceiros o quadro mostra. */
 export const RESPONSIBLES_SHOWN = 6;
+/** Quantos tipos de apontamento de segurança o quadro mostra (regra 7 da segurança). */
+export const SAFETY_TYPES_SHOWN = 6;
+/** Até quantos cartões o topo mostra: seis do modelo original e o da segurança (regra 8 da segurança). */
+export const KPIS_SHOWN = 7;
 /** O Pareto marca as causas até somar este percentual (a convenção de `vitalCauses`). */
 const VITAL_SHARE = 80;
 
@@ -113,6 +121,10 @@ function totalsOf(rows: readonly PortfolioRow[]): PortfolioTotals {
   // Tempo médio das resolvidas no período somando as obras: cada obra pesa pelo número de resolvidas.
   const timed = terminality.filter(item => item.averageDaysToResolve !== undefined && item.resolved > 0);
   const resolvedTimed = sum(timed, item => item.resolved);
+  const safety = rows.flatMap(row => (row.safety ? [row.safety] : []));
+  // Média de dias para resolver da segurança somando as obras: cada obra pesa pelos finalizados no período.
+  const safetyTimed = safety.filter(item => item.averageDaysToResolve !== undefined && item.resolved > 0);
+  const safetyResolvedTimed = sum(safetyTimed, item => item.resolved);
 
   return {
     works: rows.length,
@@ -151,6 +163,19 @@ function totalsOf(rows: readonly PortfolioRow[]): PortfolioTotals {
       opened: sum(terminality, item => item.opened),
       resolved: sum(terminality, item => item.resolved),
       ...(resolvedTimed ? { averageDaysToResolve: sum(timed, item => item.averageDaysToResolve! * item.resolved) / resolvedTimed } : {}),
+    },
+    safety: {
+      works: safety.length,
+      open: sum(safety, item => item.open),
+      openAtStart: sum(safety, item => item.openAtStart),
+      openOver7: sum(safety, item => item.openOver7),
+      worksOver7: safety.filter(item => item.openOver7 > 0).length,
+      opened: sum(safety, item => item.opened),
+      resolved: sum(safety, item => item.resolved),
+      ...(safetyResolvedTimed
+        ? { averageDaysToResolve: sum(safetyTimed, item => item.averageDaysToResolve! * item.resolved) / safetyResolvedTimed }
+        : {}),
+      byConsequence: SAFETY_CONSEQUENCES.map((_, at) => sum(safety, item => item.byConsequence[at] ?? 0)),
     },
   };
 }
@@ -306,10 +331,35 @@ function responsiblesOf(rows: readonly PortfolioRow[]): PortfolioResponsibles {
   return { rows: list };
 }
 
-function noDataOf(rows: readonly PortfolioRow[]): Record<DashboardModule, PortfolioWork[]> {
+/** Os tipos com mais apontamentos feitos no período, somando as obras (regra 7 da segurança). A lista de tipos
+ * é a mesma em todas as obras, então o tipo se pareia pelo id; "Sem tipo" soma num item só. Até
+ * `SAFETY_TYPES_SHOWN`, do mais frequente ao menos (empate pelo nome). */
+function safetyTypesOf(rows: readonly PortfolioRow[]): PortfolioSafetyTypes {
+  const entries = new Map<string, { key: string; label: string; byWork: { work: PortfolioWork; count: number }[] }>();
+  for (const row of rows) {
+    for (const item of row.safety?.byType ?? []) {
+      if (item.count <= 0) continue;
+      const entry = entries.get(item.key) ?? { key: item.key, label: item.label, byWork: [] };
+      entry.byWork.push({ work: row.work, count: item.count });
+      entries.set(item.key, entry);
+    }
+  }
+  const list = [...entries.values()]
+    .map(entry => ({
+      key: entry.key,
+      label: entry.label,
+      total: sum(entry.byWork, cell => cell.count),
+      byWork: [...entry.byWork].sort((a, b) => b.count - a.count || byName(a.work, b.work)),
+    }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'pt-BR'))
+    .slice(0, SAFETY_TYPES_SHOWN);
+  return { rows: list };
+}
+
+function noDataOf(rows: readonly PortfolioRow[]): Record<PortfolioModule, PortfolioWork[]> {
   return Object.fromEntries(
-    DASHBOARD_MODULES.map(module => [module.id, rows.filter(row => row.status[module.id].kind === 'absent').map(row => row.work)]),
-  ) as Record<DashboardModule, PortfolioWork[]>;
+    PORTFOLIO_MODULES.map(module => [module.id, rows.filter(row => row.status[module.id].kind === 'absent').map(row => row.work)]),
+  ) as Record<PortfolioModule, PortfolioWork[]>;
 }
 
 // ─── Cartões (regra 13) ─────────────────────────────────────────────────────────────────────────────────
@@ -321,15 +371,16 @@ const deltaTag = (delta: number): NonNullable<KpiCard['tag']> => ({
 /** "na obra" / "nas 3 obras". */
 const inWorks = (count: number) => (count === 1 ? 'na obra' : `nas ${int(count)} obras`);
 
-/** Até seis cartões, na ordem do modelo: PPC das obras (o principal), obras abaixo de 70%, atrás no físico,
- * takt vencido, restrições vencidas e pendências em aberto. Só módulos acessíveis e não escondidos; o do
+/** Até sete cartões (`KPIS_SHOWN`), na ordem do modelo: PPC das obras (o principal), obras abaixo de 70%, atrás no
+ * físico, takt vencido, restrições vencidas, pendências em aberto e, desde 06/11/2026, apontamentos de segurança
+ * em aberto. Só módulos acessíveis e não escondidos; o do
  * curto prazo sai sempre que o módulo aparece (com "—" sem semana apurada), os demais só com alguma obra com
  * dado. Cada cartão diz quantas obras entram na conta; os retratos dizem o sábado final. */
 function kpisOf(
   totals: PortfolioTotals,
   rows: readonly PortfolioRow[],
   period: DashboardPeriod,
-  shown: ReadonlySet<DashboardModule>,
+  shown: ReadonlySet<PortfolioModule>,
 ): KpiCard[] {
   const end = dayMonth(period.end);
   const out: KpiCard[] = [];
@@ -406,7 +457,22 @@ function kpisOf(
       ...(t.open === 0 ? { tone: 'good' as const } : {}),
     });
   }
-  const kpis = out.slice(0, 6);
+  // Regra 8 da segurança: o 7º cartão, retrato no sábado final com a seta da variação no período.
+  if (shown.has('seguranca') && totals.safety.works) {
+    const t = totals.safety;
+    const change = t.open - t.openAtStart;
+    out.push({
+      module: 'seguranca',
+      label: 'Apontamentos de segurança em aberto',
+      value: int(t.open),
+      ...(change
+        ? { tag: { text: `${change > 0 ? '▲' : '▼'} ${int(Math.abs(change))}`, tone: change > 0 ? ('bad' as const) : ('good' as const) } }
+        : {}),
+      hint: `${int(t.opened)} ${t.opened === 1 ? 'feito' : 'feitos'} e ${int(t.resolved)} ${t.resolved === 1 ? 'finalizado' : 'finalizados'} no período · ${plural(t.works, 'obra', 'obras')}`,
+      ...(t.open === 0 ? { tone: 'good' as const } : t.openOver7 > 0 ? { tone: 'bad' as const } : {}),
+    });
+  }
+  const kpis = out.slice(0, KPIS_SHOWN);
   // Sem o curto prazo, o primeiro cartão que houver é o destaque (como no resumo da aba 0).
   if (kpis.length && !kpis.some(kpi => kpi.main)) kpis[0] = { ...kpis[0], main: true };
   return kpis;
@@ -472,7 +538,7 @@ function sentenceOf(
   rows: readonly PortfolioRow[],
   notStarted: readonly PortfolioWork[],
   period: DashboardPeriod,
-  shown: ReadonlySet<DashboardModule>,
+  shown: ReadonlySet<PortfolioModule>,
 ): Segment[] {
   const head = `${periodPhrase(period)}${partialNote(period)}`;
   if (!rows.length)
@@ -557,6 +623,18 @@ function sentenceOf(
       say(change ? ` (${int(Math.abs(change))} a ${change < 0 ? 'menos' : 'mais'} que no início).` : '.'),
     );
   }
+
+  if (shown.has('seguranca') && totals.safety.works) {
+    const { open, openAtStart, openOver7 } = totals.safety;
+    const change = open - openAtStart;
+    out.push(
+      say(' A segurança do trabalho fecha o período com '),
+      strong(plural(open, 'apontamento em aberto', 'apontamentos em aberto')),
+      say(change ? ` (${int(Math.abs(change))} a ${change < 0 ? 'menos' : 'mais'} que no início)` : ''),
+    );
+    if (openOver7) out.push(say(', '), strong(`${int(openOver7)} há mais de 7 dias`));
+    out.push(say('.'));
+  }
   return out;
 }
 
@@ -581,6 +659,7 @@ export function aggregatePortfolio({ period, rows, shown }: PortfolioAggregateIn
     pareto: paretoOf(started),
     companies: companiesOf(started),
     responsibles: responsiblesOf(started),
+    safetyTypes: safetyTypesOf(started),
     noData: noDataOf(started),
   };
 }

@@ -8,7 +8,7 @@ import { FilterPicker } from '@/modules/curto-prazo/closing-filter';
 import { formatDate, workPath } from '@/shared/format';
 import { DASHBOARD_STYLE } from '../styles';
 import { KpiCards, Text } from '../dashboard-overview';
-import { companyKey, DASHBOARD_MODULES, dayMonth, moduleInfo, pct, plural, type DashboardModule } from '../model';
+import { companyKey, dayMonth, moduleInfo, pct, plural, PORTFOLIO_MODULES, type PortfolioModule } from '../model';
 import { GROUPING_NOUN, periodSearchEntries, selectionOf, type PeriodSelection } from '../period';
 import { PeriodControl, ScaleButtons } from '../period-picker';
 import { portfolioPath, printPortfolioPath, type PortfolioParams } from './params';
@@ -28,6 +28,9 @@ import {
   PpcByWorkBars,
   PpcHeat,
   ResponsiblesList,
+  SafetyRiskRows,
+  SafetyRows,
+  SafetyTypesList,
   TerminalityRows,
   WagonRows,
   comparisonModules,
@@ -42,7 +45,10 @@ import {
  * escolhido. Filtros de escala, período, obras e quadros (regra 3), todos na URL para o link e o PDF
  * reproduzirem a visão (regra 4); a linha de escopo, a frase e os cartões (regra 13); o comparativo das obras
  * (regra 10) e um quadro por módulo (regras 11 e 12). Clicar numa obra abre a aba 0 dela no mesmo período.
- * Nada aqui se edita. No celular, uma coluna e a tabela rolando de lado com a obra fixa (regra 16). */
+ * Nada aqui se edita. No celular, uma coluna e a tabela rolando de lado com a obra fixa (regra 16).
+ * Segurança do trabalho (aba 6, modelo aprovado em 06/11/2026): a chave no seletor "Quadros", o sétimo cartão
+ * (regra 8, os sete numa linha no computador) e o quadro em largura total depois dos demais módulos (regra 7),
+ * que avisa no subtítulo quando há empreiteiro escolhido (regra 10: a vistoria não registra empresa). */
 
 const HELP = (
   <>
@@ -56,9 +62,14 @@ const HELP = (
       linhas de todas as obras: a obra com mais compromissos pesa mais. A seta compara com o período anterior da mesma escala.
     </p>
     <p>
-      <strong>Fluxo e retrato.</strong> Compromissos, causas, pendências abertas e resolvidas e o avanço do período somam o que aconteceu
-      dentro dele. Status dos vagões, takt e restrições vencidas, atrasadas do médio prazo, pendências em aberto e o avanço acumulado são o
-      retrato no sábado final.
+      <strong>Fluxo e retrato.</strong> Compromissos, causas, pendências abertas e resolvidas, apontamentos de segurança feitos e
+      finalizados e o avanço do período somam o que aconteceu dentro dele. Status dos vagões, takt e restrições vencidas, atrasadas do médio
+      prazo, pendências e apontamentos de segurança em aberto e o avanço acumulado são o retrato no sábado final.
+    </p>
+    <p>
+      <strong>Segurança do trabalho (aba 6).</strong> Feitos contam pela data do apontamento e finalizados pela data de correção; o
+      histórico importado da planilha conta igual. Em aberto e abertos há mais de 7 dias são o retrato no sábado final (no período em
+      andamento, os dias contam até hoje). A vistoria não registra a empresa, então o quadro não tem recorte de empreiteiro.
     </p>
     <p>
       <strong>Só as obras liberadas para você</strong>, as mesmas da lista de obras, e só os módulos que você pode abrir. Obra que só começa
@@ -118,7 +129,7 @@ function Board({
   board,
   children,
 }: {
-  module: DashboardModule;
+  module: PortfolioModule;
   title?: string;
   subtitle?: string;
   board: ModuleBoard;
@@ -168,11 +179,11 @@ function Ready({
   const { data, works, access, periodContext } = state;
   const period = data.period;
   const end = dayMonth(period.end);
-  const available = DASHBOARD_MODULES.filter(m => access[m.id]);
+  const available = PORTFOLIO_MODULES.filter(m => access[m.id]);
   // Quadros vindos da URL sem nenhum acessível valem como "todos".
   const chosen = params.modules && available.some(m => params.modules!.has(m.id)) ? params.modules : undefined;
-  const boards = Object.fromEntries(DASHBOARD_MODULES.map(m => [m.id, moduleBoard(state, chosen, m.id)])) as Record<
-    DashboardModule,
+  const boards = Object.fromEntries(PORTFOLIO_MODULES.map(m => [m.id, moduleBoard(state, chosen, m.id)])) as Record<
+    PortfolioModule,
     ModuleBoard
   >;
   const columns = comparisonModules(boards);
@@ -199,7 +210,7 @@ function Ready({
   const chooseCompanies = (next: Set<string> | undefined) =>
     update({ ...params, selection: pinned, companies: next && next.size < state.companyOptions.length ? next : undefined });
 
-  const toggleModule = (id: DashboardModule) => {
+  const toggleModule = (id: PortfolioModule) => {
     const current = new Set(chosen ?? available.map(m => m.id));
     if (current.has(id)) current.delete(id);
     else current.add(id);
@@ -226,13 +237,14 @@ function Ready({
 
   // Linha de escopo.
   const hiddenByChoice = chosen ? available.filter(m => !chosen.has(m.id)).map(m => m.label.toLowerCase()) : [];
-  const loading = DASHBOARD_MODULES.filter(m => boards[m.id].kind === 'loading').map(m => m.label.toLowerCase());
-  const unavailable = DASHBOARD_MODULES.filter(m => boards[m.id].kind === 'unavailable').map(m => m.label.toLowerCase());
+  const loading = PORTFOLIO_MODULES.filter(m => boards[m.id].kind === 'loading').map(m => m.label.toLowerCase());
+  const unavailable = PORTFOLIO_MODULES.filter(m => boards[m.id].kind === 'unavailable').map(m => m.label.toLowerCase());
   const lastWeek = period.weeks.at(-1);
 
   const totals = data.totals;
   const lowerBoards = (['longo-prazo', 'vagoes', 'medio-prazo', 'terminalidade'] as const).filter(m => boards[m].kind !== 'hidden');
   const earlyWorks = data.rows.some(row => row.short?.early && row.short.current.percent !== undefined);
+  const safetyShown = boards.seguranca.kind !== 'hidden';
 
   return (
     <div className="dsh">
@@ -344,7 +356,7 @@ function Ready({
                 · Recorte: {plural(params.companies.size, 'empreiteiro', 'empreiteiros')} ({[...params.companies].join(', ')})
                 {state.withoutCompany.length > 0 &&
                   `; não ${state.withoutCompany.length === 1 ? 'aparece' : 'aparecem'} em ${state.withoutCompany.map(work => work.name).join(', ')}`}
-                ; longo prazo e PPC geral consideram a obra inteira
+                ; longo prazo, PPC geral{safetyShown ? ' e segurança do trabalho' : ''} consideram a obra inteira
               </>
             )}
             {data.notStarted.length > 0 &&
@@ -362,8 +374,12 @@ function Ready({
         </p>
       )}
       {data.kpis.length > 0 && (
-        <div data-tour="geral-cartoes" className="dsh-kpis">
-          <KpiCards kpis={data.kpis} />
+        // Até sete cartões (regra 8): com sete, `k7` os põe numa linha quando a área do conteúdo é larga (consulta
+        // de contêiner em `.pf-kpis`), quatro por linha abaixo disso e dois no celular.
+        <div className="pf-kpis">
+          <div data-tour="geral-cartoes" className={`dsh-kpis${data.kpis.length >= 7 ? ' k7' : ''}`}>
+            <KpiCards kpis={data.kpis} />
+          </div>
         </div>
       )}
 
@@ -521,6 +537,48 @@ function Ready({
                 </div>
               </Board>
             )}
+          </div>
+        )}
+
+        {safetyShown && (
+          <div data-tour="geral-seguranca">
+            <Board
+              module="seguranca"
+              title="Segurança do trabalho"
+              subtitle={`${period.label} · ${totals.safety.open} em aberto em ${end}${params.companies ? ' · sem recorte de empreiteiro' : ''}`}
+              board={boards.seguranca}
+            >
+              <div className="pf-sst-box">
+                <div className="dsh-mod-b pf-sst-cols">
+                  <div className="dsh-blk">
+                    <h5>Apontamentos feitos × finalizados no período</h5>
+                    <p className="dsh-d">
+                      Feitos pela data do apontamento; finalizados pela data de correção. À direita, em aberto em {end} (e a variação no
+                      período), abertos há mais de 7 dias e a média de dias para resolver.
+                    </p>
+                    <SafetyRows rows={data.rows} />
+                  </div>
+                  <div className="dsh-blk">
+                    <h5>Risco dos apontamentos feitos no período</h5>
+                    <p className="dsh-d">
+                      Pela “Risco: consequência”, da mais grave para a mais leve. À direita, os graves (Morte + Severa) e a parte deles no
+                      total da obra.
+                    </p>
+                    <SafetyRiskRows rows={data.rows} total={totals.safety} />
+                  </div>
+                  <div className="dsh-blk">
+                    <h5>Tipos com mais apontamentos no período, somando as obras</h5>
+                    <p className="dsh-d">A lista de tipos é a mesma em todas as obras. Até 6 tipos, com a contagem em cada obra.</p>
+                    <SafetyTypesList types={data.safetyTypes} />
+                  </div>
+                </div>
+                {hasNoDataNote('seguranca', data) && (
+                  <div className="dsh-mod-b">
+                    <NoDataNote module="seguranca" data={data} />
+                  </div>
+                )}
+              </div>
+            </Board>
           </div>
         )}
       </div>

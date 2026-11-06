@@ -1,9 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useId, type ReactNode } from 'react';
+import { SAFETY_CONSEQUENCES } from '@/domain/safety';
+import { addDays } from '@/domain/validation';
+import { NONE } from '@/modules/seguranca/safety-view';
 import { formatDate } from '@/shared/format';
 import { Legend } from '../charts';
-import { DASHBOARD_MODULES, monthShort, pct, plural, signedDays, signedPoints, type DashboardModule, type Tone } from '../model';
+import { PORTFOLIO_MODULES, monthShort, pct, plural, signedDays, signedPoints, type PortfolioModule, type Tone } from '../model';
 import type { BucketPpc } from '../period-views';
 import type {
   PortfolioCellStatus,
@@ -14,6 +17,8 @@ import type {
   PortfolioReady,
   PortfolioResponsibles,
   PortfolioRow,
+  PortfolioSafetyTypes,
+  PortfolioTotals,
   PortfolioWork,
 } from './types';
 
@@ -27,6 +32,9 @@ import type {
  *   70% em âmbar, abaixo de 60% em vermelho;
  * - Regra 12: medido × planejado, vagões por status, tarefas por situação, abertas × resolvidas e responsáveis
  *   terceiros (faixas do físico: atrás do planejado em âmbar, mais de 10 p.p. em vermelho).
+ * Segurança do trabalho (aba 6, modelo aprovado em 06/11/2026): três colunas no comparativo (regra 6) e os três
+ * blocos do quadro (regra 7): feitos × finalizados por obra, risco dos feitos pela consequência e os tipos com
+ * mais apontamentos somando as obras. A cor da consequência sempre vem com o nome (legenda, dica e leitor de tela).
  * Tudo só lê `PortfolioData`; nenhum cálculo de indicador acontece aqui além de ordenar e escalar barras. */
 
 export type ChartVariant = 'screen' | 'paper';
@@ -48,6 +56,8 @@ const toneText = (tone: Tone) => (tone === 'good' ? 't-good' : tone === 'warn' ?
 const int = (value: number) => Math.round(value).toLocaleString('pt-BR');
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 const dm = (date: string) => formatDate(date).slice(0, 5);
+/** "5,2": uma casa decimal, como a aba 6 mostra a média de dias. */
+export const oneDecimal = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** "—" com o motivo ao passar o mouse e, para leitor de tela, no próprio texto. */
 function Dash({ reason }: { reason: string }) {
@@ -78,20 +88,22 @@ function Arrow({ delta, title }: { delta: number; title?: string }) {
 // ─── Estado de cada quadro ─────────────────────────────────────────────────────────────────────────────
 
 /** O dado de cada módulo numa linha do comparativo. */
-export const MODULE_FIELD: Record<DashboardModule, (row: PortfolioRow) => unknown> = {
+export const MODULE_FIELD: Record<PortfolioModule, (row: PortfolioRow) => unknown> = {
   'longo-prazo': row => row.longTerm,
   vagoes: row => row.wagons,
   'medio-prazo': row => row.medium,
   'curto-prazo': row => row.short,
   terminalidade: row => row.terminality,
+  seguranca: row => row.safety,
 };
 /** "Sem <dado>: obras…", embaixo de cada quadro. */
-export const NO_DATA_LABEL: Record<DashboardModule, string> = {
+export const NO_DATA_LABEL: Record<PortfolioModule, string> = {
   'longo-prazo': 'plano de longo prazo',
   vagoes: 'vagões',
   'medio-prazo': 'plano de médio prazo',
   'curto-prazo': 'linhas no curto prazo',
   terminalidade: 'pendências de terminalidade',
+  seguranca: 'apontamentos de segurança',
 };
 
 export type ModuleBoard = { kind: 'hidden' } | { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready' };
@@ -99,7 +111,7 @@ export type ModuleBoard = { kind: 'hidden' } | { kind: 'loading' } | { kind: 'un
 /** O quadro de um módulo aparece? Some se a pessoa não pode abrir o módulo, se o desmarcou ou se nenhuma obra
  * tem dado dele; mostra "Carregando…" enquanto a leitura não chega e "Quadro indisponível" quando ela falha em
  * todas as obras (rota fora do ar). */
-export function moduleBoard(state: PortfolioReady, chosen: ReadonlySet<DashboardModule> | undefined, module: DashboardModule): ModuleBoard {
+export function moduleBoard(state: PortfolioReady, chosen: ReadonlySet<PortfolioModule> | undefined, module: PortfolioModule): ModuleBoard {
   if (!state.access[module] || (chosen && !chosen.has(module))) return { kind: 'hidden' };
   if (state.loading.includes(module)) return { kind: 'loading' };
   const rows = state.data.rows;
@@ -114,11 +126,11 @@ export function moduleBoard(state: PortfolioReady, chosen: ReadonlySet<Dashboard
 }
 
 /** Há o que dizer embaixo do quadro: obra sem dado do módulo ou com a leitura falhada. */
-export const hasNoDataNote = (module: DashboardModule, data: PortfolioData) =>
+export const hasNoDataNote = (module: PortfolioModule, data: PortfolioData) =>
   (data.noData[module]?.length ?? 0) > 0 || data.rows.some(row => row.status[module]?.kind === 'error');
 
 /** As obras sem dado do módulo (o motivo vem do cálculo) e as obras em que a leitura falhou. */
-export function NoDataNote({ module, data }: { module: DashboardModule; data: PortfolioData }) {
+export function NoDataNote({ module, data }: { module: PortfolioModule; data: PortfolioData }) {
   const errors = data.rows.flatMap(row => {
     const status = row.status[module];
     return status?.kind === 'error' ? [{ work: row.work, message: status.message }] : [];
@@ -141,7 +153,23 @@ export function NoDataNote({ module, data }: { module: DashboardModule; data: Po
 
 // ─── Comparativo das obras (regra 10) ──────────────────────────────────────────────────────────────────
 
-export type ColumnKey = 'obra' | 'state' | 'ppc' | 'delta' | 'overall' | 'lp' | 'dev' | 'takt' | 'rv' | 'late' | 'stock' | 'flow' | 'days';
+export type ColumnKey =
+  | 'obra'
+  | 'state'
+  | 'ppc'
+  | 'delta'
+  | 'overall'
+  | 'lp'
+  | 'dev'
+  | 'takt'
+  | 'rv'
+  | 'late'
+  | 'stock'
+  | 'flow'
+  | 'days'
+  | 'sstOpen'
+  | 'sstFlow'
+  | 'sstOver7';
 export interface ComparisonSort {
   column: ColumnKey;
   dir: 1 | -1;
@@ -152,12 +180,14 @@ export const DEFAULT_SORT: ComparisonSort = { column: 'ppc', dir: -1 };
 interface CellContext {
   /** "31/10": o sábado final, data dos retratos. */
   end: string;
+  /** "04/10": a véspera do período (o domingo antes da segunda-feira inicial), data do "no início". */
+  eve: string;
 }
 interface Column {
   key: ColumnKey;
   group: string;
   label: string;
-  module?: DashboardModule;
+  module?: PortfolioModule;
   /** Valor para ordenar; ausente = sem dado, vai para o fim nos dois sentidos. */
   sortValue: (row: PortfolioRow) => number | string | undefined;
   /** Faixa antes do valor, nos dois sentidos: no PPC, a obra "em início" vem depois das que têm posição. */
@@ -166,6 +196,7 @@ interface Column {
   total: (data: PortfolioData, ctx: CellContext) => ReactNode;
 }
 
+const SAFETY_ABSENT = 'Sem apontamentos de segurança nesta obra.';
 const STATE_RANK: Record<Tone, number> = { neutral: 0, here: 0, good: 1, warn: 2, bad: 3 };
 const STATE_ICON: Record<Tone, string> = { good: '✓', warn: '▲', bad: '!', neutral: '●', here: '●' };
 
@@ -451,6 +482,90 @@ const COLUMNS: Column[] = [
         ? '—'
         : plural(Math.round(data.totals.terminality.averageDaysToResolve), 'dia', 'dias'),
   },
+  // Segurança do trabalho (regra 6): em aberto no sábado final com a variação no período, feitos / finalizados
+  // no período e abertos há mais de 7 dias no sábado final.
+  {
+    key: 'sstOpen',
+    group: 'Segurança',
+    label: 'Em aberto',
+    module: 'seguranca',
+    sortValue: row => row.safety?.open,
+    cell: (row, ctx) => {
+      const s = row.safety;
+      if (!s) return <Dash reason={statusReason(row.status.seguranca, SAFETY_ABSENT)} />;
+      const diff = s.open - s.openAtStart;
+      return (
+        <>
+          <span className="v" title={`Em aberto em ${ctx.end}: ${int(s.open)}\nNa véspera do período (${ctx.eve}): ${int(s.openAtStart)}`}>
+            {int(s.open)}
+          </span>
+          <span className={`s ${diff > 0 ? 't-bad' : 't-good'}`}>{signedDays(diff)} no período</span>
+        </>
+      );
+    },
+    total: data => {
+      const s = data.totals.safety;
+      if (!s.works) return '—';
+      const diff = s.open - s.openAtStart;
+      return (
+        <>
+          {int(s.open)}
+          <span className={`s ${diff > 0 ? 't-bad' : 't-good'}`}>{signedDays(diff)} no período</span>
+        </>
+      );
+    },
+  },
+  {
+    key: 'sstFlow',
+    group: 'Segurança',
+    label: 'Feitos / finaliz.',
+    module: 'seguranca',
+    sortValue: row => (row.safety ? row.safety.resolved - row.safety.opened : undefined),
+    cell: row => {
+      const s = row.safety;
+      if (!s) return <Dash reason={statusReason(row.status.seguranca, SAFETY_ABSENT)} />;
+      return (
+        <span
+          title={`${plural(s.opened, 'apontamento feito', 'apontamentos feitos')} no período (pela data do apontamento)\n${plural(
+            s.resolved,
+            'finalizado',
+            'finalizados',
+          )} no período (pela data de correção)`}
+        >
+          {s.opened} / {s.resolved}
+        </span>
+      );
+    },
+    total: data => (data.totals.safety.works ? `${data.totals.safety.opened} / ${data.totals.safety.resolved}` : '—'),
+  },
+  {
+    key: 'sstOver7',
+    group: 'Segurança',
+    label: '> 7 dias',
+    module: 'seguranca',
+    sortValue: row => row.safety?.openOver7,
+    cell: (row, ctx) => {
+      const s = row.safety;
+      if (!s) return <Dash reason={statusReason(row.status.seguranca, SAFETY_ABSENT)} />;
+      return (
+        <span className={`v ${s.openOver7 ? 't-bad' : 't-good'}`} title={`Em aberto em ${ctx.end} há mais de 7 dias`}>
+          {s.openOver7}
+        </span>
+      );
+    },
+    total: data => {
+      const s = data.totals.safety;
+      if (!s.works) return '—';
+      return (
+        <span
+          className={s.openOver7 ? 't-bad' : 't-good'}
+          title={`${plural(s.worksOver7, 'obra', 'obras')} com algum aberto há mais de 7 dias`}
+        >
+          {s.openOver7}
+        </span>
+      );
+    },
+  },
 ];
 
 /** Ordena as linhas pela coluna escolhida; sem dado vai para o fim nos dois sentidos, empate pelo nome. No PPC do
@@ -480,7 +595,7 @@ export function ComparisonTable({
 }: {
   data: PortfolioData;
   /** Os módulos com coluna: acessíveis, marcados e com dado em alguma obra. */
-  modules: ReadonlySet<DashboardModule>;
+  modules: ReadonlySet<PortfolioModule>;
   variant: ChartVariant;
   sort?: ComparisonSort;
   onSort?: (sort: ComparisonSort) => void;
@@ -490,7 +605,7 @@ export function ComparisonTable({
 }) {
   const screen = variant === 'screen';
   const columns = COLUMNS.filter(column => !column.module || modules.has(column.module));
-  const ctx: CellContext = { end: dm(data.period.end) };
+  const ctx: CellContext = { end: dm(data.period.end), eve: dm(addDays(data.period.start, -1)) };
   const rows = sortRows(data.rows, sort);
   const choose = (key: ColumnKey) =>
     onSort?.(sort.column === key ? { column: key, dir: sort.dir === 1 ? -1 : 1 } : { column: key, dir: key === 'obra' ? 1 : -1 });
@@ -571,8 +686,8 @@ export function ComparisonTable({
 }
 
 /** Os módulos que ganham coluna no comparativo, na ordem das abas. */
-export const comparisonModules = (boards: Record<DashboardModule, ModuleBoard>) =>
-  new Set(DASHBOARD_MODULES.filter(m => boards[m.id].kind === 'ready').map(m => m.id));
+export const comparisonModules = (boards: Record<PortfolioModule, ModuleBoard>) =>
+  new Set(PORTFOLIO_MODULES.filter(m => boards[m.id].kind === 'ready').map(m => m.id));
 
 // ─── PPC do período por obra (regra 11) ────────────────────────────────────────────────────────────────
 
@@ -1190,6 +1305,159 @@ export function ResponsiblesList({ responsibles }: { responsibles: PortfolioResp
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Segurança do trabalho (aba 6, modelo aprovado em 06/11/2026, regra 7) ─────────────────────────────
+
+/** Cor de cada consequência, na ordem de `SAFETY_CONSEQUENCES` (Morte → Autuação/Multa). Nunca sozinha: o nome
+ * vai na legenda, na dica e no leitor de tela. */
+export const SAFETY_CONSEQUENCE_COLORS = ['#be123c', '#ea580c', '#f5a524', '#10b981', '#cbd5e1', '#7c3aed'] as const;
+/** Morte + Severa: os índices 0 e 1 de `SAFETY_CONSEQUENCES`. */
+export const safetyGrave = (byConsequence: readonly number[]) => (byConsequence[0] ?? 0) + (byConsequence[1] ?? 0);
+const sumOf = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
+const consequenceText = (byConsequence: readonly number[]) =>
+  SAFETY_CONSEQUENCES.map((name, index) => `${name}: ${byConsequence[index] ?? 0}`).join(' · ');
+
+/** Feitos × finalizados no período por obra; à direita, em aberto no sábado final (e a variação no período),
+ * abertos há mais de 7 dias e a média de dias para resolver dos finalizados, com uma casa decimal. */
+export function SafetyRows({ rows }: { rows: readonly PortfolioRow[] }) {
+  const list = rows.filter(row => row.safety);
+  if (!list.length) return <p className="dsh-empty">Nenhuma obra com apontamentos de segurança.</p>;
+  const peak = Math.max(1, ...list.map(row => Math.max(row.safety!.opened, row.safety!.resolved)));
+  return (
+    <>
+      <div className="pf-rows pf-sst">
+        {list.map(row => {
+          const s = row.safety!;
+          const diff = s.open - s.openAtStart;
+          return (
+            <div
+              key={row.work.id}
+              className="pf-rowx"
+              title={`${row.work.name}\n${s.opened} feitos e ${s.resolved} finalizados no período\nEm aberto: ${s.openAtStart} no início, ${s.open} no fim\n${plural(
+                s.openOver7,
+                'aberto',
+                'abertos',
+              )} há mais de 7 dias`}
+            >
+              <Name work={row.work} />
+              <div className="pf-pair" role="img" aria-label={`${s.opened} feitos e ${s.resolved} finalizados no período`}>
+                <div>
+                  <span className="tr">
+                    <b style={{ width: `${(s.opened / peak) * 100}%`, background: OPENED }} />
+                  </span>
+                  <span className="n">{s.opened}</span>
+                </div>
+                <div>
+                  <span className="tr">
+                    <b style={{ width: `${(s.resolved / peak) * 100}%`, background: RESOLVED }} />
+                  </span>
+                  <span className="n">{s.resolved}</span>
+                </div>
+              </div>
+              <span className="meta">
+                <b>{int(s.open)}</b> em aberto <span className={diff > 0 ? 't-bad' : 't-good'}>({signedDays(diff)})</span> ·{' '}
+                <span className={s.openOver7 ? 't-bad' : undefined}>{s.openOver7} &gt; 7 d</span> ·{' '}
+                {s.averageDaysToResolve === undefined ? '—' : `${oneDecimal(s.averageDaysToResolve)} d`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <Legend
+        items={[
+          { color: OPENED, text: 'feitos no período' },
+          { color: RESOLVED, text: 'finalizados no período' },
+        ]}
+      />
+    </>
+  );
+}
+
+function RiskBar({ byConsequence }: { byConsequence: readonly number[] }) {
+  return (
+    <span className="pf-stackb" role="img" aria-label={`Risco: ${consequenceText(byConsequence)}`}>
+      {byConsequence.map((value, index) =>
+        value ? (
+          <b key={SAFETY_CONSEQUENCES[index] ?? index} style={{ flex: value, background: SAFETY_CONSEQUENCE_COLORS[index] }} />
+        ) : null,
+      )}
+    </span>
+  );
+}
+
+function GraveMeta({ byConsequence }: { byConsequence: readonly number[] }) {
+  const made = sumOf(byConsequence);
+  const grave = safetyGrave(byConsequence);
+  return (
+    <span className="meta">
+      <b>{grave}</b> {grave === 1 ? 'grave' : 'graves'} · {pct((grave / made) * 100)}
+    </span>
+  );
+}
+
+/** Risco dos apontamentos feitos no período por obra, numa barra empilhada pela consequência (da mais grave para
+ * a mais leve); à direita, os graves (Morte + Severa) e a parte deles nos feitos da obra. Última linha: todas. */
+export function SafetyRiskRows({ rows, total }: { rows: readonly PortfolioRow[]; total: PortfolioTotals['safety'] }) {
+  const list = rows.filter(row => row.safety);
+  if (!list.length) return <p className="dsh-empty">Nenhuma obra com apontamentos de segurança.</p>;
+  const all = total.byConsequence;
+  const allMade = sumOf(all);
+  return (
+    <>
+      <div className="pf-rows pf-sst">
+        {list.map(row => {
+          const counts = row.safety!.byConsequence;
+          const made = sumOf(counts);
+          return (
+            <div
+              key={row.work.id}
+              className="pf-rowx"
+              title={`${row.work.name}: ${plural(made, 'feito', 'feitos')} no período\n${consequenceText(counts)}`}
+            >
+              <Name work={row.work} sub={plural(made, 'feito', 'feitos')} />
+              {made ? <RiskBar byConsequence={counts} /> : <span className="muted">nenhum feito no período</span>}
+              {made ? <GraveMeta byConsequence={counts} /> : <span />}
+            </div>
+          );
+        })}
+        <div className="pf-rowx total" title={`Todas as obras: ${plural(allMade, 'feito', 'feitos')} no período\n${consequenceText(all)}`}>
+          <span className="nm">
+            Todas
+            <small>{plural(allMade, 'feito', 'feitos')}</small>
+          </span>
+          {allMade ? <RiskBar byConsequence={all} /> : <span className="muted">nenhum feito no período</span>}
+          {allMade ? <GraveMeta byConsequence={all} /> : <span />}
+        </div>
+      </div>
+      <Legend items={SAFETY_CONSEQUENCES.map((name, index) => ({ color: SAFETY_CONSEQUENCE_COLORS[index], text: name }))} />
+    </>
+  );
+}
+
+/** Os tipos com mais apontamentos feitos no período, somando as obras (até 6), com a contagem em cada obra. */
+export function SafetyTypesList({ types }: { types: PortfolioSafetyTypes }) {
+  if (!types.rows.length) return <p className="dsh-empty">Nenhum apontamento feito no período.</p>;
+  return (
+    <div className="dsh-grid pf-g3 pf-wrap">
+      <div className="thd">
+        <span>Tipo de apontamento</span>
+        <span className="num">Apont.</span>
+        <span>Por obra</span>
+      </div>
+      {types.rows.map(row => (
+        <div key={row.key}>
+          <span className={`txt${row.key === NONE ? ' muted' : ''}`} title={row.label}>
+            {row.label}
+          </span>
+          <span className="num">{row.total}</span>
+          <span className="muted txt" title={row.byWork.map(item => `${item.work.name}: ${item.count}`).join('\n')}>
+            {row.byWork.map(item => `${item.work.code || item.work.name} ${item.count}`).join(' · ')}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

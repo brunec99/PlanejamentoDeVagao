@@ -224,6 +224,55 @@ export async function loadSafety(workId: string): Promise<SafetyData> {
   };
 }
 
+/** Um apontamento só com as colunas que o Dashboard geral usa (06/11/2026). */
+export interface SafetyOverviewItem {
+  workId: string;
+  typeId?: string;
+  consequence: SafetyItem['consequence'];
+  observedOn: string;
+  status: SafetyItem['status'];
+  correctedOn?: string;
+}
+type OverviewRow = {
+  work_id: string;
+  type_id: string | null;
+  consequence: SafetyItem['consequence'];
+  observed_on: string;
+  status: SafetyItem['status'];
+  corrected_on: string | null;
+};
+
+/** Dashboard geral: a lista única de tipos e os apontamentos de várias obras numa leitura paginada, só com as
+ * colunas do cálculo (sem descrição, local nem fotos), para a resposta de todas as obras ficar leve. Lança
+ * `SafetyUnavailableError` sem a migração 0040. */
+export async function loadSafetyOverview(workIds: readonly string[]): Promise<{ types: SafetyType[]; items: SafetyOverviewItem[] }> {
+  const items: SafetyOverviewItem[] = [];
+  const readItems = async () => {
+    if (!workIds.length) return;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await getServiceClient()
+        .from(TABLE_NAMES.items)
+        .select('work_id, type_id, consequence, observed_on, status, corrected_on')
+        .in('work_id', [...workIds])
+        .order('id')
+        .range(from, from + PAGE - 1);
+      check(error, `ler ${TABLE_NAMES.items}`);
+      for (const r of (data ?? []) as OverviewRow[])
+        items.push({
+          workId: r.work_id,
+          ...optional('typeId', r.type_id),
+          consequence: r.consequence,
+          observedOn: r.observed_on,
+          status: r.status,
+          ...optional('correctedOn', r.corrected_on),
+        });
+      if (!data || data.length < PAGE) return;
+    }
+  };
+  const [types] = await Promise.all([fetchRows('types'), readItems()]);
+  return { types: (types as TypeRow[]).map(safetyFromRow.types), items };
+}
+
 /** Obra de um apontamento ou foto, para a rota conferir o acesso antes de carregar tudo. `null` = não existe. */
 export async function findWorkIdForEntity(table: 'items' | 'photos', id: string): Promise<string | null> {
   const { data, error } = await getServiceClient().from(TABLE_NAMES[table]).select('work_id').eq('id', id).maybeSingle();

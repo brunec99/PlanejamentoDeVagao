@@ -1,19 +1,30 @@
 import { NextResponse } from 'next/server';
 import { hasSectionAccess } from '@/application/module-access';
 import type { LongTermPlanDocument } from '@/domain/long-term-plan';
+import type { SafetyType } from '@/domain/safety';
 import type { TerminalityData } from '@/domain/terminality';
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { logRouteError, logRouteTiming, serverTimingHeader, SLOW_ROUTE_MS } from '@/infrastructure/log';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { loadTerminality, TerminalityUnavailableError } from '@/infrastructure/repositories/supabase/terminality-repository';
-import type { PortfolioSourcesResponse } from '@/modules/dashboard/portfolio/types';
+import {
+  loadSafetyOverview,
+  SafetyUnavailableError,
+  type SafetyOverviewItem,
+} from '@/infrastructure/repositories/supabase/safety-repository';
+import type { PortfolioSafetyItem, PortfolioSourcesResponse } from '@/modules/dashboard/portfolio/types';
 
 /** Dashboard geral (04/11/2026, regra 15 do modelo "Dashboard geral e escalas de tempo"): o que o planejamento
  * já carregado não traz, para todas as obras liberadas para a pessoa numa leitura só. O longo prazo vem numa
  * consulta a `long_term_plans` com todas as obras, e só para quem pode abrir o módulo (a rota fica fora de
  * `RESTRICTED_API_PREFIXES`: o proxy só exige login, e o acesso ao longo prazo é decidido aqui, sem 403 para
  * quem não o tem). A terminalidade vem por obra, até `TERMINALITY_CONCURRENCY` ao mesmo tempo, sem fotos
- * (nenhuma URL assinada). Nenhuma tabela nova, nenhuma migração. */
+ * (nenhuma URL assinada). Nenhuma tabela nova, nenhuma migração.
+ *
+ * Segurança do trabalho (06/11/2026, regra 12 do modelo aprovado): a lista única de tipos e os apontamentos de
+ * todas as obras numa leitura paginada de `safety_items`, só com as colunas do cálculo (sem descrição nem
+ * fotos). A aba 6 é aberta a todos, então não há conferência de módulo. Sem a migração 0040, `safetyAvailable:
+ * false`; outra falha vira `safetyError` em cada obra, e só o quadro de segurança fica indisponível. */
 
 export const runtime = 'nodejs';
 const ROUTE = 'GET /api/dashboard/obras';
@@ -25,30 +36,39 @@ export type LongTermRead =
   { kind: 'denied' } | { kind: 'rows'; rows: { work_id: string; document: unknown }[] } | { kind: 'error'; code?: string };
 /** Leitura da terminalidade de uma obra: os dados, a migração 0028 ausente ou outra falha. */
 export type TerminalityRead = { kind: 'ready'; data: TerminalityData } | { kind: 'unavailable' } | { kind: 'error' };
+/** Leitura da segurança de todas as obras de uma vez: os tipos e os apontamentos, a migração 0040 ausente ou outra falha. */
+export type SafetyRead = { kind: 'ready'; types: SafetyType[]; items: SafetyOverviewItem[] } | { kind: 'unavailable' } | { kind: 'error' };
 
 const missingTable = (code?: string) => code === '42P01' || code === 'PGRST205';
 /** Mensagem curta que o Dashboard geral mostra no lugar do longo prazo de cada obra. */
 export const longTermErrorMessage = (code?: string) =>
   missingTable(code) ? 'Plano de longo prazo indisponível: migração 0024 não aplicada.' : 'Não foi possível ler o plano de longo prazo.';
 export const TERMINALITY_ERROR = 'Não foi possível carregar as pendências da obra.';
+export const SAFETY_ERROR = 'Não foi possível carregar os apontamentos de segurança.';
 
 /** Monta a resposta a partir das leituras, na ordem de `workIds`. Puro. Obra sem linha no longo prazo sai com
  * `longTerm: null` (sem plano salvo); falha da consulta vai para todas as obras. Terminalidade sem a migração
  * em qualquer obra vale para todas (`terminalityAvailable: false`, nenhuma obra com dado); as fotos saem
- * vazias. */
+ * vazias. A segurança, quando lida (`safety`), sai com `safetyAvailable`, os tipos uma vez e, por obra, os
+ * apontamentos dela sem o `workId`; sem `safety` (chamada antiga), a resposta não traz nada de segurança. */
 export function assemblePortfolioSources(
   workIds: readonly string[],
   longTerm: LongTermRead,
   terminality: ReadonlyMap<string, TerminalityRead>,
+  safety?: SafetyRead,
 ): PortfolioSourcesResponse {
   const terminalityAvailable = !workIds.some(workId => terminality.get(workId)?.kind === 'unavailable');
   const documents = new Map(
     longTerm.kind === 'rows' ? longTerm.rows.map(row => [row.work_id, row.document as LongTermPlanDocument | null]) : [],
   );
   const longTermError = longTerm.kind === 'error' ? longTermErrorMessage(longTerm.code) : undefined;
+  const safetyByWork = new Map<string, PortfolioSafetyItem[]>(workIds.map(workId => [workId, []]));
+  if (safety?.kind === 'ready') for (const { workId, ...item } of safety.items) safetyByWork.get(workId)?.push(item);
   return {
     longTermAccess: longTerm.kind !== 'denied',
     terminalityAvailable,
+    ...(safety ? { safetyAvailable: safety.kind !== 'unavailable' } : {}),
+    ...(safety?.kind === 'ready' ? { safetyTypes: safety.types } : {}),
     works: workIds.map(workId => {
       const read = terminalityAvailable ? terminality.get(workId) : undefined;
       return {
@@ -57,6 +77,8 @@ export function assemblePortfolioSources(
         ...(longTermError ? { longTermError } : {}),
         ...(read?.kind === 'ready' ? { terminality: { ...read.data, photos: [] } } : {}),
         ...(read?.kind === 'error' ? { terminalityError: TERMINALITY_ERROR } : {}),
+        ...(safety?.kind === 'ready' ? { safety: safetyByWork.get(workId) ?? [] } : {}),
+        ...(safety?.kind === 'error' ? { safetyError: SAFETY_ERROR } : {}),
       };
     }),
   };
@@ -115,8 +137,20 @@ async function readTerminality(workIds: readonly string[], actorId: string): Pro
   return new Map(workIds.map((workId, index) => [workId, reads[index]]));
 }
 
+/** Segurança de todas as obras numa leitura (regra 12 da segurança). */
+async function readSafety(workIds: readonly string[], actorId: string): Promise<SafetyRead> {
+  try {
+    const { types, items } = await loadSafetyOverview(workIds);
+    return { kind: 'ready', types, items };
+  } catch (cause) {
+    if (cause instanceof SafetyUnavailableError) return { kind: 'unavailable' };
+    logRouteError(ROUTE, cause, { actorId, part: 'seguranca' });
+    return { kind: 'error' };
+  }
+}
+
 export async function GET() {
-  // Tempo por fase em `Server-Timing` (`auth`, `longTerm`, `terminality`, `total`), como em `/api/planning`:
+  // Tempo por fase em `Server-Timing` (`auth`, `longTerm`, `terminality`, `safety`, `total`), como em `/api/planning`:
   // a terminalidade de muitas obras é a parte que pode pesar.
   const startedAt = performance.now();
   const durations: Record<string, number> = {};
@@ -139,11 +173,12 @@ export async function GET() {
     }
   };
   try {
-    const [longTerm, terminality] = await Promise.all([
+    const [longTerm, terminality, safety] = await Promise.all([
       timed('longTerm', readLongTerm(workIds, longTermAccess, profile.id)),
       timed('terminality', readTerminality(workIds, profile.id)),
+      timed('safety', readSafety(workIds, profile.id)),
     ]);
-    return respond(assemblePortfolioSources(workIds, longTerm, terminality), 200);
+    return respond(assemblePortfolioSources(workIds, longTerm, terminality, safety), 200);
   } catch (cause) {
     logRouteError(ROUTE, cause, { actorId: profile.id });
     return respond({ error: 'Não foi possível carregar os dados das obras. Tente de novo em instantes.' }, 502);

@@ -3,9 +3,9 @@ import type { TourStep } from '../tours';
 /** Tour do Dashboard geral (04/11/2026, modelo aprovado "Dashboard geral e escalas de tempo"), a página fora das
  * obras com as obras liberadas para a pessoa lado a lado. Os alvos ficam em
  * `dashboard/portfolio/portfolio-overview.tsx`; os quadros que se repetem por módulo marcam só o primeiro
- * (`geral-modulos`). A página só lê: nenhum passo descreve edição. Passo cujo alvo não está na tela (quadro
- * escondido, módulo sem acesso, celular) é pulado sozinho. A assistente de IA não abre aqui, então o passo
- * comum dela é pulado. */
+ * (`geral-modulos`), e o quadro da segurança do trabalho (06/11/2026) tem o próprio alvo (`geral-seguranca`).
+ * A página só lê: nenhum passo descreve edição. Passo cujo alvo não está na tela (quadro escondido, módulo sem
+ * acesso, celular) é pulado sozinho. A assistente de IA não abre aqui, então o passo comum dela é pulado. */
 export const steps: TourStep[] = [
   {
     title: 'Dashboard geral',
@@ -49,7 +49,7 @@ export const steps: TourStep[] = [
   {
     target: 'geral-quadros',
     title: 'Quadros',
-    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir; curto prazo e terminalidade são abertos a todos.',
+    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir; curto prazo, terminalidade e segurança do trabalho são abertos a todos.',
   },
   {
     target: 'geral-escopo',
@@ -59,12 +59,12 @@ export const steps: TourStep[] = [
   {
     target: 'geral-resumo',
     title: 'Resumo em uma frase',
-    body: 'O PPC das obras no período e a comparação com o período anterior, a melhor e a pior obra, as obras atrás no físico e as pendências em aberto, escritos com os números já arredondados dos cartões: a frase nunca contradiz um cartão.',
+    body: 'O PPC das obras no período e a comparação com o período anterior, a melhor e a pior obra, as obras atrás no físico, as pendências em aberto e os apontamentos de segurança em aberto, escritos com os números já arredondados dos cartões: a frase nunca contradiz um cartão.',
   },
   {
     target: 'geral-cartoes',
     title: 'Cartões',
-    body: 'Até seis números consolidados: PPC das obras, obras abaixo de 70%, obras atrás no físico, takt vencido, restrições vencidas e pendências em aberto. Cada cartão diz de que aba vem, quantas obras entram na conta e se é o que aconteceu no período ou o retrato do sábado final.',
+    body: 'Até sete números consolidados: PPC das obras, obras abaixo de 70%, obras atrás no físico, takt vencido, restrições vencidas, pendências em aberto e apontamentos de segurança em aberto. Cada cartão diz de que aba vem, quantas obras entram na conta e se é o que aconteceu no período ou o retrato do sábado final.',
   },
   {
     target: 'geral-comparativo',
@@ -92,9 +92,14 @@ export const steps: TourStep[] = [
     body: 'Um quadro por módulo comparando as obras: medido × planejado e o avanço no período; vagões por status, takt e restrições vencidas; tarefas do plano do mês e atrasadas; pendências abertas × resolvidas e os responsáveis terceiros. Cada quadro aparece quando o dado dele chega e lista embaixo as obras sem dado dele.',
   },
   {
+    target: 'geral-seguranca',
+    title: 'Segurança do trabalho',
+    body: 'A vistoria dos TSTs (aba 6) comparando as obras: apontamentos feitos × finalizados no período, o risco dos feitos pela consequência (graves = Morte + Severa) e os tipos com mais apontamentos, somando as obras. Feitos contam pela data do apontamento e finalizados pela data de correção; em aberto e abertos há mais de 7 dias são o retrato do sábado final. A vistoria não registra empresa, então o filtro de empreiteiro não recorta este quadro.',
+  },
+  {
     target: 'geral-pdf',
     title: 'Gerar PDF',
-    body: 'Abre a impressão numa aba nova, com escala, período, obras e quadros de agora, e chama o “Salvar como PDF” do navegador. A4 paisagem, até quatro folhas: resumo e comparativo; curto prazo; longo prazo e vagões; médio prazo e terminalidade. Só saem as folhas dos quadros presentes. O PDF sai pelo computador.',
+    body: 'Abre a impressão numa aba nova, com escala, período, obras e quadros de agora, e chama o “Salvar como PDF” do navegador. A4 paisagem, até cinco folhas: resumo e comparativo; curto prazo; longo prazo e vagões; médio prazo e terminalidade; segurança do trabalho. Só saem as folhas dos quadros presentes. O PDF sai pelo computador.',
   },
   {
     target: 'geral-rodape',

@@ -15,8 +15,11 @@ import { parsePeriodParams, periodSearchEntries, weekPeriod, type DashboardPerio
 export type { Segment };
 
 export type DashboardModule = 'longo-prazo' | 'vagoes' | 'medio-prazo' | 'curto-prazo' | 'terminalidade';
-export interface DashboardModuleInfo {
-  id: DashboardModule;
+/** Os quadros do Dashboard geral: os da aba 0 mais a segurança do trabalho (aba 6, modelo aprovado em
+ * 06/11/2026, regra 2: só no geral nesta etapa; a aba 0 continua com os cinco de `DASHBOARD_MODULES`). */
+export type PortfolioModule = DashboardModule | 'seguranca';
+export interface DashboardModuleInfo<M extends PortfolioModule = DashboardModule> {
+  id: M;
   /** O número da aba de origem, que o cartão e o quadro mostram ("aba 4"). */
   number: number;
   label: string;
@@ -28,9 +31,19 @@ export const DASHBOARD_MODULES: readonly DashboardModuleInfo[] = [
   { id: 'curto-prazo', number: 4, label: 'Curto prazo' },
   { id: 'terminalidade', number: 5, label: 'Terminalidade' },
 ];
+export const PORTFOLIO_MODULES: readonly DashboardModuleInfo<PortfolioModule>[] = [
+  ...DASHBOARD_MODULES,
+  { id: 'seguranca', number: 6, label: 'Segurança do trabalho' },
+];
 export const isDashboardModule = (value: unknown): value is DashboardModule =>
   typeof value === 'string' && DASHBOARD_MODULES.some(m => m.id === value);
-export const moduleInfo = (id: DashboardModule): DashboardModuleInfo => DASHBOARD_MODULES.find(m => m.id === id)!;
+export const isPortfolioModule = (value: unknown): value is PortfolioModule =>
+  typeof value === 'string' && PORTFOLIO_MODULES.some(m => m.id === value);
+export function moduleInfo(id: DashboardModule): DashboardModuleInfo;
+export function moduleInfo(id: PortfolioModule): DashboardModuleInfo<PortfolioModule>;
+export function moduleInfo(id: PortfolioModule): DashboardModuleInfo<PortfolioModule> {
+  return PORTFOLIO_MODULES.find(m => m.id === id)!;
+}
 
 /** Filtros da aba 0 (regra 4 do modelo). `week` é a segunda-feira da semana analisada. `companies` guarda
  * os nomes de empreiteiro como aparecem no seletor; a comparação é por `textKey` (sem acento nem caixa), porque
@@ -105,7 +118,8 @@ export const weekNumberOf = (ref: Pick<DashboardReference, 'firstWeek'>, weekSta
 export type Tone = 'good' | 'warn' | 'bad' | 'neutral' | 'here';
 /** Um cartão do resumo no topo: o indicador principal de um módulo, dizendo de que aba vem. */
 export interface KpiCard {
-  module: DashboardModule;
+  /** A aba de origem; `seguranca` só aparece no Dashboard geral. */
+  module: PortfolioModule;
   label: string;
   value: string;
   tag?: { text: string; tone: Tone };

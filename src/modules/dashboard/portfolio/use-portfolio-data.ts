@@ -5,7 +5,7 @@ import { ppcSeries } from '@/domain/rules';
 import { startOfWeek } from '@/domain/validation';
 import { hasSectionAccess } from '@/application/module-access';
 import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
-import { companyKey, DASHBOARD_MODULES, referenceOf, type DashboardFilters, type DashboardModule, type DashboardReference } from '../model';
+import { companyKey, PORTFOLIO_MODULES, referenceOf, type DashboardFilters, type DashboardReference, type PortfolioModule } from '../model';
 import { resolvePeriod, type PeriodContext, type PeriodSelection } from '../period';
 import { buildLongTermPanel, type LongTermPanelData } from '../long-term-panel';
 import { buildWagonsPanel, type WagonsPanelData } from '../wagons-panel';
@@ -14,12 +14,13 @@ import { buildShortTermPanel, shortTermCompanies, type ShortTermPanelData } from
 import { buildTerminalityPanel, terminalityCompanies, type TerminalityPanelData } from '../terminality-panel';
 import { aggregatePortfolio } from './aggregate';
 import { extractRow, type PortfolioSource } from './extract';
-import type { PortfolioInput, PortfolioRow, PortfolioSourcesResponse, PortfolioState, PortfolioWork } from './types';
+import { buildSafetyBlock } from './safety';
+import type { PortfolioInput, PortfolioRow, PortfolioSafety, PortfolioSourcesResponse, PortfolioState, PortfolioWork } from './types';
 
 /** Os dados do Dashboard geral (04/11/2026, modelo aprovado "Dashboard geral e escalas de tempo"), os mesmos na
  * tela e no PDF. Regra 15: curto prazo, vagões e médio prazo saem do planejamento já carregado (`usePlanning`,
- * que traz todas as obras da pessoa); longo prazo e terminalidade, de uma leitura só de `GET /api/dashboard/obras`
- * para todas as obras de uma vez. Para cada obra escolhida, os construtores da aba 0 rodam com a data de
+ * que traz todas as obras da pessoa); longo prazo, terminalidade e, desde 06/11/2026, segurança do trabalho, de uma
+ * leitura só de `GET /api/dashboard/obras` para todas as obras de uma vez. Para cada obra escolhida, os construtores da aba 0 rodam com a data de
  * referência do período (sem recorte de empreiteiro nem de pavimento, que ficam só na aba 0), e `extract.ts` e
  * `aggregate.ts` fazem o resto.
  *
@@ -73,8 +74,9 @@ const parseSources = (body: unknown): Fetched<PortfolioSourcesResponse> => {
 };
 
 /** Os módulos que vêm da rota do Dashboard geral (os demais vêm do planejamento já carregado). */
-const REMOTE_MODULES: DashboardModule[] = ['longo-prazo', 'terminalidade'];
+const REMOTE_MODULES: PortfolioModule[] = ['longo-prazo', 'terminalidade', 'seguranca'];
 const NO_TERMINALITY = 'A terminalidade não está disponível neste ambiente.';
+const NO_SAFETY = 'A segurança do trabalho não está disponível neste ambiente.';
 const NO_LONG_TERM_SERVICE = 'O plano de longo prazo não tem serviço.';
 const NO_TERMINALITY_ITEM = 'Sem pendências de terminalidade nesta obra.';
 
@@ -82,7 +84,7 @@ const byName = (a: PortfolioWork, b: PortfolioWork) => a.name.localeCompare(b.na
 const listText = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} e ${items.at(-1)}`);
 
 type SourceEntry = PortfolioSourcesResponse['works'][number];
-type Reasons = Partial<Record<DashboardModule, string>>;
+type Reasons = Partial<Record<PortfolioModule, string>>;
 
 interface WorkLines {
   commitments: WeeklyCommitment[];
@@ -100,6 +102,7 @@ interface LocalSources {
 interface RemoteSources {
   longTerm: PortfolioSource<LongTermPanelData>;
   terminality: PortfolioSource<TerminalityPanelData>;
+  safety: PortfolioSource<PortfolioSafety>;
   reasons: Reasons;
 }
 
@@ -141,6 +144,24 @@ function terminalitySource(
   return data ? { status: 'ready', data } : { status: 'absent' };
 }
 
+/** A segurança do trabalho de uma obra a partir da resposta da rota (apontamentos sem fotos e a lista única de
+ * tipos). Sem recorte de empreiteiro (regra 10 da segurança): a vistoria não registra empresa. */
+function safetySource(
+  response: PortfolioSourcesResponse,
+  entry: SourceEntry | undefined,
+  ref: DashboardReference,
+  reasons: Reasons,
+  today: string,
+): PortfolioSource<PortfolioSafety> {
+  if (!response.safetyAvailable) {
+    reasons.seguranca = NO_SAFETY;
+    return { status: 'absent' };
+  }
+  if (entry?.safetyError) return { status: 'error', message: entry.safetyError };
+  const data = buildSafetyBlock(entry?.safety ?? [], response.safetyTypes ?? [], { start: ref.period.start, end: ref.weekEnd }, today);
+  return data ? { status: 'ready', data } : { status: 'absent' };
+}
+
 /** Junta opções de seletor vindas de mais de uma fonte e de mais de uma obra, somando as contagens das grafias
  * equivalentes (a grafia que fica é a primeira, que vem da fonte com mais linhas). */
 function mergeCompanyOptions(lists: { value: string; count: number }[][]): { value: string; count: number }[] {
@@ -170,8 +191,8 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
   const modules = useModules();
   const access = useMemo(
     () =>
-      Object.fromEntries(DASHBOARD_MODULES.map(m => [m.id, hasSectionAccess(m.id, { developer, modules })])) as Record<
-        DashboardModule,
+      Object.fromEntries(PORTFOLIO_MODULES.map(m => [m.id, hasSectionAccess(m.id, { developer, modules })])) as Record<
+        PortfolioModule,
         boolean
       >,
     [developer, modules],
@@ -205,9 +226,9 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
   const moduleKey = input.modules ? [...input.modules].sort().join(',') : '*';
   const shown = useMemo(() => {
     const wanted = moduleKey === '*' ? undefined : new Set(moduleKey.split(','));
-    const picked = DASHBOARD_MODULES.filter(m => access[m.id] && (!wanted || wanted.has(m.id))).map(m => m.id);
+    const picked = PORTFOLIO_MODULES.filter(m => access[m.id] && (!wanted || wanted.has(m.id))).map(m => m.id);
     // Nenhum dos quadros pedidos é acessível (link antigo, módulo retirado): volta a todos, como nas obras.
-    return new Set(picked.length ? picked : DASHBOARD_MODULES.filter(m => access[m.id]).map(m => m.id));
+    return new Set(picked.length ? picked : PORTFOLIO_MODULES.filter(m => access[m.id]).map(m => m.id));
   }, [access, moduleKey]);
 
   // Recorte de empreiteiro (05/11/2026): os nomes vão aos construtores, que comparam por `companyKey`.
@@ -310,18 +331,18 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
     return map;
   }, [planning, data, included, refs, lines, shown, companies]);
 
-  // Longo prazo e terminalidade: da rota, uma leitura para todas as obras.
+  // Longo prazo, terminalidade e segurança: da rota, uma leitura para todas as obras.
   const remote = useMemo(() => {
     const map = new Map<string, RemoteSources>();
     const entries = new Map((sources.status === 'ready' ? sources.data.works : []).map(entry => [entry.workId, entry]));
     for (const work of included) {
       const ref = refs.get(work.id);
       const entry = entries.get(work.id);
-      const reasons: Partial<Record<DashboardModule, string>> = {};
+      const reasons: Partial<Record<PortfolioModule, string>> = {};
       // O que vale antes de olhar a obra: módulo escondido (ou a rota negou), obra fora do período, rota
       // carregando ou com erro.
       const pick = <T>(
-        module: DashboardModule,
+        module: PortfolioModule,
         build: (response: PortfolioSourcesResponse, ref: DashboardReference) => PortfolioSource<T>,
       ) => {
         if (!shown.has(module) || sources.status === 'absent') return { status: 'hidden' } as const;
@@ -332,18 +353,24 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
       map.set(work.id, {
         longTerm: pick('longo-prazo', (response, ref) => longTermSource(response, entry, ref, reasons)),
         terminality: pick('terminalidade', (response, ref) => terminalitySource(response, entry, ref, reasons, companies)),
+        safety: pick('seguranca', (response, ref) => safetySource(response, entry, ref, reasons, today)),
         reasons,
       });
     }
     return map;
-  }, [sources, included, refs, shown, companies]);
+  }, [sources, included, refs, shown, companies, today]);
 
   const rows = useMemo<PortfolioRow[] | undefined>(() => {
     if (!period) return undefined;
     return included.map(work => {
       const own = lines.get(work.id) ?? { commitments: [], teams: [] };
       const fromLocal = local.get(work.id) ?? { short: { status: 'absent' }, wagons: { status: 'absent' }, medium: { status: 'absent' } };
-      const fromRemote = remote.get(work.id) ?? { longTerm: { status: 'absent' }, terminality: { status: 'absent' }, reasons: {} };
+      const fromRemote = remote.get(work.id) ?? {
+        longTerm: { status: 'absent' },
+        terminality: { status: 'absent' },
+        safety: { status: 'absent' },
+        reasons: {},
+      };
       return extractRow(
         {
           work,
@@ -355,6 +382,7 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
           medium: fromLocal.medium,
           longTerm: fromRemote.longTerm,
           terminality: fromRemote.terminality,
+          safety: fromRemote.safety,
           reasons: fromRemote.reasons,
         },
         period,

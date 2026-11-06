@@ -2,7 +2,7 @@ import type { LocalDate, Team, WeeklyCommitment } from '@/domain/entities';
 import { MIN_RANKED_WEEKS } from '@/domain/closing-ranking';
 import { deviationTone, type LongTermPanelData } from '../long-term-panel';
 import type { MediumTermPanelData } from '../medium-term-panel';
-import type { DashboardModule, PanelState, Tone } from '../model';
+import type { PanelState, PortfolioModule, Tone } from '../model';
 import type { DashboardPeriod } from '../period';
 import { periodCompanies, periodDelta, type ShortTermPanelData } from '../short-term-panel';
 import type { TerminalityPanelData } from '../terminality-panel';
@@ -12,6 +12,7 @@ import type {
   PortfolioLongTerm,
   PortfolioMedium,
   PortfolioRow,
+  PortfolioSafety,
   PortfolioShort,
   PortfolioTerminality,
   PortfolioWagons,
@@ -40,17 +41,21 @@ export interface PortfolioWorkInput {
   wagons: PortfolioSource<WagonsPanelData>;
   medium: PortfolioSource<MediumTermPanelData>;
   terminality: PortfolioSource<TerminalityPanelData>;
+  /** Segurança do trabalho (06/11/2026): sem quadro na aba 0, o hook entrega o bloco pronto (`buildSafetyBlock`).
+   * Ausente = escondido (chamadas antigas, testes). */
+  safety?: PortfolioSource<PortfolioSafety>;
   /** O motivo do "—" de um módulo ausente, quando o hook sabe mais que o padrão (`ABSENT_REASON`). */
-  reasons?: Partial<Record<DashboardModule, string>>;
+  reasons?: Partial<Record<PortfolioModule, string>>;
 }
 
 /** O motivo padrão do "—" de cada módulo sem dado na obra, que a tela mostra ao passar o mouse. */
-export const ABSENT_REASON: Record<DashboardModule, string> = {
+export const ABSENT_REASON: Record<PortfolioModule, string> = {
   'longo-prazo': 'Sem plano de longo prazo nesta obra.',
   vagoes: 'A obra não usa vagões.',
   'medio-prazo': 'Sem plano de médio prazo nesta obra.',
   'curto-prazo': 'Sem linha no curto prazo até o fim do período.',
   terminalidade: 'Sem pendências de terminalidade até o fim do período.',
+  seguranca: 'Sem apontamentos de segurança até o fim do período.',
 };
 const NO_SHORT_LINE = 'Sem linha no curto prazo nesta obra.';
 
@@ -184,14 +189,16 @@ const readyData = <T>(source: PortfolioSource<T>): T | undefined => (source.stat
 /** A linha do comparativo de uma obra no período. `short.position` fica ausente: é `aggregate.ts` quem
  * numera, comparando as obras. */
 export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): PortfolioRow {
-  const reason = (module: DashboardModule) =>
+  const reason = (module: PortfolioModule) =>
     input.reasons?.[module] ?? (module === 'curto-prazo' && !input.commitments.length ? NO_SHORT_LINE : ABSENT_REASON[module]);
-  const status: Record<DashboardModule, PortfolioCellStatus> = {
+  const safetySource: PortfolioSource<PortfolioSafety> = input.safety ?? { status: 'hidden' };
+  const status: Record<PortfolioModule, PortfolioCellStatus> = {
     'longo-prazo': cellOf(input.longTerm, reason('longo-prazo')),
     vagoes: cellOf(input.wagons, reason('vagoes')),
     'medio-prazo': cellOf(input.medium, reason('medio-prazo')),
     'curto-prazo': cellOf(input.short, reason('curto-prazo')),
     terminalidade: cellOf(input.terminality, reason('terminalidade')),
+    seguranca: cellOf(safetySource, reason('seguranca')),
   };
   const shortData = readyData(input.short);
   const longData = readyData(input.longTerm);
@@ -203,6 +210,8 @@ export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): 
   const wagons = wagonsData ? wagonsOf(wagonsData) : undefined;
   const medium = mediumData ? mediumOf(mediumData) : undefined;
   const terminality = terminalityData ? terminalityOf(terminalityData) : undefined;
+  const safety = readyData(safetySource);
+  // Regra 9 da segurança: o estado da obra não muda (a segurança, como a terminalidade, não entra nele).
   const { state, label } = workState({ short, longTerm, wagons, medium });
   return {
     work: input.work,
@@ -215,5 +224,6 @@ export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): 
     ...(wagons ? { wagons } : {}),
     ...(medium ? { medium } : {}),
     ...(terminality ? { terminality } : {}),
+    ...(safety ? { safety } : {}),
   };
 }

@@ -17,6 +17,7 @@ import type {
   PortfolioLongTerm,
   PortfolioMedium,
   PortfolioRow,
+  PortfolioSafety,
   PortfolioShort,
   PortfolioTerminality,
   PortfolioWagons,
@@ -68,6 +69,7 @@ interface Blocks {
   wagons?: PortfolioWagons;
   medium?: PortfolioMedium;
   terminality?: PortfolioTerminality;
+  safety?: PortfolioSafety;
 }
 /** Uma linha do comparativo montada à mão: o módulo presente fica `ready`, o ausente `absent`. */
 function row(w: PortfolioWork, blocks: Blocks): PortfolioRow {
@@ -84,6 +86,7 @@ function row(w: PortfolioWork, blocks: Blocks): PortfolioRow {
       'medio-prazo': cell(blocks.medium),
       'curto-prazo': cell(blocks.short),
       terminalidade: cell(blocks.terminality),
+      seguranca: cell(blocks.safety),
     },
   };
 }
@@ -688,6 +691,8 @@ test('extract: estado de cada módulo e o motivo do "—"', () => {
     vagoes: { kind: 'hidden' },
     'medio-prazo': { kind: 'error', message: 'Falhou.' },
     terminalidade: { kind: 'absent', reason: 'A terminalidade não está disponível neste ambiente.' },
+    // Sem `safety` na entrada (chamada antiga), a segurança fica escondida.
+    seguranca: { kind: 'hidden' },
   });
   assert.equal(result.firstWeek, undefined);
   assert.equal(result.short, undefined);

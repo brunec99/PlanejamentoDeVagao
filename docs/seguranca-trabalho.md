@@ -19,6 +19,8 @@ A aba 6 é a vistoria de segurança do trabalho da obra, feita pelos técnicos d
 
 O processo é o da terminalidade (aba 5, ver [terminalidade.md](terminalidade.md)): o apontamento nasce com foto e só se finaliza com a data e a foto da correção. A aba fica logo abaixo da terminalidade na lateral (`WORK_TABS` em `src/modules/layout/work-nav.tsx`).
 
+Desde 06/11/2026 a vistoria aparece também no **Dashboard geral** (`/dashboard`), comparando as obras: quadro 6 "Segurança do trabalho", três colunas no comparativo, um cartão, uma frase no resumo e a folha 5 do PDF (ver "Na comparação entre obras", abaixo). A aba 0 de cada obra ainda não tem o quadro.
+
 ## Decisões do usuário (05/11/2026)
 
 - **Pedido:** "o mesmo processo da terminalidade, mas com os TSTs", acesso logo abaixo da terminalidade, e um **tipo de usuário TST, o único que pode colocar e finalizar informações**. Também pediu para importar os dados da planilha.
@@ -129,6 +131,18 @@ Todos passam por `POST /api/seguranca/commands?workId=<obra aberta>`. O `workId`
 - **Vaga para a correção:** enquanto o apontamento está aberto, o campo aceita no máximo 9 fotos do apontamento e reserva a 10ª para a foto da correção, como o computador. A primeira versão do campo não reservava, e um apontamento com 10 fotos não podia ser finalizado em lugar nenhum (achado pelo agente do manual, corrigido em 05/11/2026).
 - **Sem tour** no modo de campo.
 
+## Na comparação entre obras: Dashboard geral (06/11/2026)
+
+Pedido do usuário: "adicione no dashboard geral os dados de segurança do trabalho também". Modelo aprovado no mesmo dia, com 12 regras; a especificação, a arquitetura, as regras de cálculo, a validação e as pendências estão em [Dashboard](dashboard.md#segurança-do-trabalho-no-dashboard-geral-06112026). Em resumo:
+
+- **Onde:** quadro 6 "Segurança do trabalho" depois da terminalidade, chave "Segurança" em "Quadros" (`quadros=seguranca`), cartão "Apontamentos de segurança em aberto" (o 7º do topo), uma frase no resumo, colunas "Em aberto", "Feitos / finaliz." e "> 7 dias" no comparativo, e a folha 5 do PDF. Só no geral: a aba 0 continua sem o quadro.
+- **Quem vê:** todos com a obra liberada, como a aba 6.
+- **Datas:** período em semanas inteiras, como o resto do geral (da segunda-feira inicial ao sábado final). Feitos pela data do apontamento; finalizados pela data de correção; em aberto e abertos há mais de 7 dias como retrato no sábado final (os dias contam até ele, ou até hoje no período em andamento). Diferente do filtro de período da aba 6, que usa datas exatas.
+- **Histórico da planilha** conta igual ao lançado no sistema.
+- **Risco:** os feitos no período por consequência; graves = Morte + Severa. **Tipos:** até 6 somando as obras, pela lista única.
+- **Empreiteiro:** a vistoria não registra empresa; com empreiteiro escolhido no geral, o quadro diz "sem recorte de empreiteiro". O estado da obra não muda com a segurança.
+- **Dados:** a leitura única do geral (`GET /api/dashboard/obras`) traz a lista de tipos e os apontamentos de todas as obras, só com as colunas do cálculo (sem descrição, local nem fotos), por `loadSafetyOverview` no repositório da aba 6; nenhuma migração nova (usa a 0040). Falha deixa só o quadro de segurança indisponível.
+
 ## Importação da planilha
 
 1. **Exportar a aba SST em CSV:** `https://docs.google.com/spreadsheets/d/<id>/export?format=csv&gid=0` (o link aberto basta). O .xlsx **não sai**: o Google responde 400 à exportação da aba com cerca de 7 mil imagens nas células, inclusive com intervalo pequeno.
@@ -206,5 +220,5 @@ Divergências achadas ao escrever o manual, deixadas como estão de propósito:
 - **Resposta grande:** cada comando devolve a obra inteira com as URLs de todas as fotos. Com 1.200 apontamentos isso pesa no dado móvel do campo; uma resposta curta fica como melhoria.
 - **Achados no navegador, não corrigidos:** no modo de campo, com alterações na fila, a faixa amarela aumenta o cabeçalho e a barra de situação fica meio escondida embaixo dele ao rolar (o modo de campo da aba 5 tem o mesmo código); no diálogo, a mensagem "Escolha o tipo de apontamento." continua na tela depois de escolher o tipo, até salvar de novo (como na aba 5); na edição em lote, "Aplicar" desabilitado com "Trocar por…" e local vazio não diz por quê; campos só de leitura não têm aparência de desabilitados.
 - **Herdado da aba 5:** arquivo de envio abandonado vira órfão no bucket; sem trava de edição simultânea (vale a última gravação).
-- **Fora do escopo por ora:** quadro da aba 6 no Dashboard (aba 0) e no Dashboard geral.
+- **Dashboard:** o quadro da aba 6 no **Dashboard geral** foi implementado em 06/11/2026 (ver "Na comparação entre obras: Dashboard geral (06/11/2026)", acima, e [Dashboard](dashboard.md#segurança-do-trabalho-no-dashboard-geral-06112026)). A **aba 0** de cada obra continua **sem** o quadro de segurança: é a próxima etapa, se o usuário pedir (regra 2 do modelo de 06/11/2026).
 - **Período, não testado logado:** a barra do período foi conferida por testes, tipos e build, sem tela logada em produção. Atalhos de período ("este mês", "últimos 3 meses") e guardar o período escolhido ficaram de fora (não pedidos).

@@ -1,4 +1,4 @@
-import { isDashboardModule, type DashboardModule } from '../model';
+import { isPortfolioModule, type PortfolioModule } from '../model';
 import { parsePeriodParams, periodSearchEntries, type PeriodSelection } from '../period';
 
 /** A URL do Dashboard geral (regras 4 e 14): escala e período, obras, quadros e empreiteiros. A tela e a página de
@@ -8,7 +8,7 @@ import { parsePeriodParams, periodSearchEntries, type PeriodSelection } from '..
 export interface PortfolioParams {
   selection?: PeriodSelection;
   workIds?: ReadonlySet<string>;
-  modules?: ReadonlySet<DashboardModule>;
+  modules?: ReadonlySet<PortfolioModule>;
   companies?: ReadonlySet<string>;
 }
 
@@ -28,7 +28,7 @@ export function parsePortfolioParams(raw: Record<string, string | string[] | und
   const modules = list(raw.quadros)
     .flatMap(value => value.split(','))
     .map(value => value.trim())
-    .filter(isDashboardModule);
+    .filter(isPortfolioModule);
   const companies = list(raw.empreiteiro)
     .map(value => value.trim())
     .filter(Boolean);
