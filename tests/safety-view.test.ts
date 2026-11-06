@@ -13,7 +13,9 @@ import {
   groupItems,
   groupOf,
   hasActiveFilters,
+  hasPeriod,
   indexSafety,
+  isDay,
   isGrouping,
   isSortColumn,
   lastMonths,
@@ -22,9 +24,12 @@ import {
   locationOptions,
   locationSuggestions,
   monthLabel,
+  monthWindow,
   monthlyByType,
   nextSort,
   percentLabel,
+  periodInverted,
+  periodLabel,
   photosOf,
   photosOfKind,
   sortItems,
@@ -354,4 +359,65 @@ test('mês a mês por tipo (quadro "Página15"): contagem pelo mês do apontamen
   assert.equal(diffLabel({ diff: -1, diffPercent: -50 }), '−1 (−50%)');
   assert.equal(diffLabel({ diff: 1, diffPercent: null }), '+1 (novo)');
   assert.equal(diffLabel({ diff: 0, diffPercent: null }), '0');
+});
+
+test('período pela data do apontamento: início e término inclusive, um lado vazio não limita', () => {
+  // a 03/11, b 20/10, c 10/10, d 15/09, e 03/11, f 01/11.
+  assert.deepEqual(ids(filterItems(items, { ...all, from: '2026-10-10', to: '2026-10-20' }, index)), ['b', 'c']);
+  assert.deepEqual(ids(filterItems(items, { ...all, from: '2026-11-01' }, index)), ['a', 'e', 'f']);
+  assert.deepEqual(ids(filterItems(items, { ...all, to: '2026-09-30' }, index)), ['d']);
+  // Junta com os demais filtros e com a situação.
+  assert.deepEqual(ids(filterItems(items, { ...DEFAULT_FILTERS, from: '2026-10-01', to: '2026-10-31' }, index)), ['b']);
+  // Início depois do término: nada cabe.
+  assert.deepEqual(filterItems(items, { ...all, from: '2026-11-01', to: '2026-10-01' }, index), []);
+  // `ignore` desliga um lado.
+  assert.deepEqual(ids(filterItems(items, { ...all, from: '2026-11-01', to: '2026-11-02' }, index, ['to'])), ['a', 'e', 'f']);
+  assert.equal(hasActiveFilters({ ...DEFAULT_FILTERS, from: '2026-10-01' }), true);
+  assert.equal(hasActiveFilters({ ...DEFAULT_FILTERS, to: '2026-10-01' }), true);
+  assert.equal(hasPeriod(DEFAULT_FILTERS), false);
+  assert.equal(periodInverted({ from: '2026-11-01', to: '2026-10-01' }), true);
+  assert.equal(periodInverted({ from: '2026-10-01', to: '2026-10-01' }), false);
+  assert.equal(periodInverted({ from: '2026-11-01', to: '' }), false);
+});
+
+test('período por extenso e datas válidas', () => {
+  assert.equal(periodLabel({ from: '2026-10-01', to: '2026-10-31' }), 'de 01/10/2026 a 31/10/2026');
+  assert.equal(periodLabel({ from: '2026-10-01', to: '2026-10-01' }), 'em 01/10/2026');
+  assert.equal(periodLabel({ from: '2026-10-01', to: '' }), 'a partir de 01/10/2026');
+  assert.equal(periodLabel({ from: '', to: '2026-10-31' }), 'até 31/10/2026');
+  assert.equal(periodLabel({ from: '', to: '' }), '');
+  assert.equal(isDay('2026-02-28'), true);
+  assert.equal(isDay('2026-02-30'), false);
+  assert.equal(isDay('2026-2-1'), false);
+  assert.equal(isDay('202611-01-01'), false);
+  assert.equal(isDay(''), false);
+});
+
+test('meses do quadro com período: do início ao término, até hoje, no máximo 12', () => {
+  // Sem período: os 4 meses até hoje.
+  assert.deepEqual(monthWindow(TODAY, { from: '', to: '' }), { months: ['2026-08', '2026-09', '2026-10', '2026-11'], periodMonths: 4 });
+  // Do mês do início ao do término.
+  assert.deepEqual(monthWindow(TODAY, { from: '2026-06-15', to: '2026-09-10' }).months, ['2026-06', '2026-07', '2026-08', '2026-09']);
+  // Dentro de um mês: uma coluna.
+  assert.deepEqual(monthWindow(TODAY, { from: '2026-10-05', to: '2026-10-20' }), { months: ['2026-10'], periodMonths: 1 });
+  // Término no futuro para no mês de hoje; só o início vai até hoje.
+  assert.deepEqual(monthWindow(TODAY, { from: '2026-10-01', to: '2027-03-31' }).months, ['2026-10', '2026-11']);
+  assert.deepEqual(monthWindow(TODAY, { from: '2026-09-01', to: '' }).months, ['2026-09', '2026-10', '2026-11']);
+  // Só o término: os 4 meses até ele, atravessando o ano.
+  assert.deepEqual(monthWindow(TODAY, { from: '', to: '2026-02-10' }).months, ['2025-11', '2025-12', '2026-01', '2026-02']);
+  // Mais de 12 meses: os 12 últimos, com o tamanho do período para a tela avisar.
+  const long = monthWindow(TODAY, { from: '2025-01-01', to: '2026-11-05' });
+  assert.equal(long.periodMonths, 23);
+  assert.equal(long.months.length, 12);
+  assert.equal(long.months[0], '2025-12');
+  assert.equal(long.months[11], '2026-11');
+  // Início no futuro: o mês do início, sem quebrar.
+  assert.deepEqual(monthWindow(TODAY, { from: '2027-01-10', to: '' }).months, ['2027-01']);
+  // Início depois do término: uma coluna só (o quadro sai zerado, como a lista).
+  assert.deepEqual(monthWindow(TODAY, { from: '2026-10-01', to: '2026-08-01' }), { months: ['2026-10'], periodMonths: 1 });
+  // O quadro conta nos meses pedidos, só com os apontamentos que passaram pelo filtro.
+  const scoped = filterItems(items, { ...all, from: '2026-09-01', to: '2026-10-31' }, index);
+  const table = monthlyByType(scoped, index, TODAY, monthWindow(TODAY, { from: '2026-09-01', to: '2026-10-31' }).months);
+  assert.deepEqual(table.months, ['2026-09', '2026-10']);
+  assert.deepEqual(table.total.counts, [1, 2]);
 });

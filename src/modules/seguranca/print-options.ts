@@ -1,6 +1,7 @@
 import { isSafetyConsequence, isSafetyProbability } from '@/domain/safety';
 import {
   DEFAULT_FILTERS,
+  isDay,
   isGrouping,
   isSortColumn,
   type SafetyFilters,
@@ -54,6 +55,9 @@ export function printSearchParams(options: SafetyPrintOptions): URLSearchParams 
     for (const value of filters[key]) params.append(name, value);
   }
   if (filters.search) params.set('busca', filters.search);
+  // Período pela data do apontamento: "de" e "ate" em AAAA-MM-DD, só o lado que tem data.
+  if (filters.from) params.set('de', filters.from);
+  if (filters.to) params.set('ate', filters.to);
   if (options.sort) {
     params.set('ordem', options.sort.column);
     params.set('sentido', options.sort.dir);
@@ -82,6 +86,8 @@ export function parsePrintParams(raw: RawParams): SafetyPrintOptions {
     probabilities: unique(all(raw, LIST_PARAMS.probabilities).filter(isSafetyProbability)),
     locations: unique(all(raw, LIST_PARAMS.locations)),
     search: one(raw, 'busca'),
+    from: isDay(one(raw, 'de')) ? one(raw, 'de') : '',
+    to: isDay(one(raw, 'ate')) ? one(raw, 'ate') : '',
   };
   const column = one(raw, 'ordem');
   const grouping = one(raw, 'agrupar');

@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  CalendarRange,
   Camera,
   ChevronDown,
   FileDown,
@@ -57,13 +58,18 @@ import {
   donutSlices,
   filterItems,
   hasActiveFilters,
+  hasPeriod,
   indexSafety,
+  isDay,
   isSortColumn,
   locationKey,
   locationOptions,
+  monthWindow,
   monthlyByType,
   nextSort,
   percentLabel,
+  periodInverted,
+  periodLabel,
   photosOf,
   photosOfKind,
   sortItems,
@@ -71,6 +77,7 @@ import {
   typeName,
   type DonutField,
   type DonutSlice,
+  type MonthWindow,
   type MonthlyRow,
   type SafetyFilters,
   type SafetySituation,
@@ -298,7 +305,9 @@ export function SafetyOverview({ workId }: { workId: string }) {
     else patch({ probabilities: toggleValue(filters.probabilities, slice.key as SafetyProbability) });
   };
   // Quadro mês a mês: conta pelo mês da data do apontamento, abertos e finalizados, com os demais filtros.
-  const monthly = monthlyByType(filterItems(data.items, filters, index, ['situation']), index, today);
+  // Sem período, os últimos 4 meses; com período, os meses dele (até 12).
+  const monthRange = monthWindow(today, filters);
+  const monthly = monthlyByType(filterItems(data.items, filters, index, ['situation']), index, today, monthRange.months);
   // Contagem de cada opção dos filtros, ignorando o próprio filtro (como as roscas).
   const countBy = (ignore: keyof SafetyFilters, key: (item: SafetyItem) => string) => {
     const counts = new Map<string, number>();
@@ -432,6 +441,8 @@ export function SafetyOverview({ workId }: { workId: string }) {
         </div>
       )}
 
+      {data.items.length > 0 && <PeriodBar from={filters.from} to={filters.to} onChange={period => patch(period)} />}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="safety-cards">
         <StatCard label="Total" value={scope.total} hint={narrowed ? 'na seleção dos filtros' : 'apontamentos da obra'} />
         <StatCard label="Abertos" value={scope.open} tone={scope.open > 0 ? 'warning' : 'default'} />
@@ -475,11 +486,23 @@ export function SafetyOverview({ workId }: { workId: string }) {
           ))}
         </div>
       )}
+      {/* As roscas seguem a situação da lista: num período antigo, em "Abertos", elas sumiriam sem explicação. */}
+      {!donuts.some(donut => donut.total > 0) && filters.situation !== 'all' && scope.total > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          <span>
+            Os gráficos seguem a situação da lista: nenhum apontamento {filters.situation === 'open' ? 'aberto' : 'finalizado'}
+            {narrowed ? ' nesta seleção' : ''}.
+          </span>
+          <button type="button" className="button-ghost px-2.5 py-1 text-xs" onClick={() => patch({ situation: 'all' })}>
+            Ver todos os {scope.total}
+          </button>
+        </div>
+      )}
 
       {data.items.length > 0 && (
         <div className="mt-4">
           <Panel title="Apontamentos por tipo, mês a mês" tourId="safety-monthly">
-            <MonthlyTable monthly={monthly} narrowed={narrowed} />
+            <MonthlyTable monthly={monthly} range={monthRange} period={periodLabel(filters)} narrowed={narrowed} />
           </Panel>
         </div>
       )}
@@ -1334,18 +1357,37 @@ function DonutPanel({
 
 /** O quadro "Página15" da planilha: apontamentos por tipo nos últimos quatro meses (pelo mês da data do
  * apontamento), a diferença do mês atual sobre o anterior e a linha GERAL. */
-function MonthlyTable({ monthly, narrowed }: { monthly: ReturnType<typeof monthlyByType>; narrowed: boolean }) {
+function MonthlyTable({
+  monthly,
+  range,
+  period,
+  narrowed,
+}: {
+  monthly: ReturnType<typeof monthlyByType>;
+  range: MonthWindow;
+  /** O período por extenso ("de 01/10/2026 a 31/10/2026"); vazio sem período. */
+  period: string;
+  narrowed: boolean;
+}) {
   const last = monthly.monthLabels[monthly.monthLabels.length - 1];
   const previous = monthly.monthLabels[monthly.monthLabels.length - 2];
+  // Um mês só (período dentro de um mês): não há mês anterior para comparar, e a coluna sai.
+  const compare = monthly.months.length > 1;
   return (
     <>
       <p className="mb-3 text-xs text-slate-500">
-        Quantos apontamentos foram feitos em cada mês, pela data do apontamento (abertos e finalizados), com os filtros de agora. A última
-        coluna compara {last} com {previous}; o mês atual ainda está em andamento.
+        {period
+          ? `Quantos apontamentos foram feitos em cada mês do período (${period}), pela data do apontamento (abertos e finalizados), com os filtros de agora. O mês cortado pelo início ou pelo término conta só os dias de dentro do período.`
+          : 'Quantos apontamentos foram feitos em cada mês, pela data do apontamento (abertos e finalizados), com os filtros de agora.'}
+        {compare && ` A última coluna compara ${last} com ${previous}.`}
+        {!period && ' O mês atual ainda está em andamento.'}
+        {range.periodMonths > monthly.months.length &&
+          ` O período tem ${range.periodMonths} meses: o quadro mostra os ${monthly.months.length} últimos.`}
       </p>
       {monthly.rows.length === 0 ? (
         <Empty>
-          Nenhum apontamento nos últimos {monthly.months.length} meses{narrowed ? ' nesta seleção' : ''}.
+          {period ? 'Nenhum apontamento no período' : `Nenhum apontamento nos últimos ${monthly.months.length} meses`}
+          {narrowed && !period ? ' nesta seleção' : ''}.
         </Empty>
       ) : (
         <div className="overflow-x-auto custom-scrollbar">
@@ -1360,18 +1402,20 @@ function MonthlyTable({ monthly, narrowed }: { monthly: ReturnType<typeof monthl
                     {label}
                   </th>
                 ))}
-                <th scope="col" className="w-32 px-2 py-2 text-right" title={`Diferença de ${last} sobre ${previous}`}>
-                  Diferença
-                </th>
+                {compare && (
+                  <th scope="col" className="w-32 px-2 py-2 text-right" title={`Diferença de ${last} sobre ${previous}`}>
+                    Diferença
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {monthly.rows.map(row => (
-                <MonthlyLine key={row.key} row={row} />
+                <MonthlyLine key={row.key} row={row} compare={compare} />
               ))}
             </tbody>
             <tfoot>
-              <MonthlyLine row={monthly.total} total />
+              <MonthlyLine row={monthly.total} compare={compare} total />
             </tfoot>
           </table>
         </div>
@@ -1380,7 +1424,7 @@ function MonthlyTable({ monthly, narrowed }: { monthly: ReturnType<typeof monthl
   );
 }
 
-function MonthlyLine({ row, total = false }: { row: MonthlyRow; total?: boolean }) {
+function MonthlyLine({ row, compare, total = false }: { row: MonthlyRow; compare: boolean; total?: boolean }) {
   return (
     <tr className={total ? 'border-t-2 border-slate-200 font-bold text-slate-900' : 'border-t border-slate-100 text-slate-700'}>
       <th scope="row" className={`px-2 py-1.5 text-left ${total ? 'font-bold' : 'font-semibold'}`}>
@@ -1391,7 +1435,71 @@ function MonthlyLine({ row, total = false }: { row: MonthlyRow; total?: boolean 
           {count}
         </td>
       ))}
-      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{diffLabel(row)}</td>
+      {compare && <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{diffLabel(row)}</td>}
     </tr>
+  );
+}
+
+/** Filtro de período do painel (06/11/2026): início e término pela "Data do apontamento", os dois dias
+ * inclusive. Vale para os cartões, as roscas, o quadro mês a mês, a lista e o PDF. Um lado vazio não limita. */
+function PeriodBar({ from, to, onChange }: { from: string; to: string; onChange: (period: { from?: string; to?: string }) => void }) {
+  const inverted = periodInverted({ from, to });
+  // O campo de data devolve "" enquanto a data está incompleta; ano com mais de 4 dígitos não entra.
+  const pick = (side: 'from' | 'to', value: string) => {
+    if (value === '' || isDay(value)) onChange({ [side]: value });
+  };
+  return (
+    <div
+      role="group"
+      aria-labelledby="seguranca-periodo"
+      data-tour="safety-period"
+      className="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+    >
+      <div className="mr-1 basis-full self-center sm:basis-auto">
+        <p id="seguranca-periodo" className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+          <CalendarRange size={16} aria-hidden className="text-slate-500" />
+          Período
+        </p>
+        <p className="text-xs text-slate-500">pela data do apontamento</p>
+      </div>
+      <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600 sm:flex-none">
+        Início
+        <input
+          type="date"
+          className="field w-full py-1.5 sm:w-40"
+          value={from}
+          max={to || undefined}
+          aria-invalid={inverted || undefined}
+          onChange={e => pick('from', e.target.value)}
+        />
+      </label>
+      <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600 sm:flex-none">
+        Término
+        <input
+          type="date"
+          className="field w-full py-1.5 sm:w-40"
+          value={to}
+          min={from || undefined}
+          aria-invalid={inverted || undefined}
+          onChange={e => pick('to', e.target.value)}
+        />
+      </label>
+      {hasPeriod({ from, to }) ? (
+        <button
+          type="button"
+          className="text-link self-center text-left text-xs max-sm:basis-full"
+          onClick={() => onChange({ from: '', to: '' })}
+        >
+          Limpar período
+        </button>
+      ) : (
+        <span className="self-center text-xs text-slate-500 max-sm:basis-full">Sem período: todos os apontamentos da obra.</span>
+      )}
+      {inverted && (
+        <p role="alert" className="basis-full text-xs font-semibold text-danger">
+          O início está depois do término: nenhum apontamento cabe nesse período.
+        </p>
+      )}
+    </div>
   );
 }

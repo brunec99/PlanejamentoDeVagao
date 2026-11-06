@@ -169,9 +169,15 @@ O "✕" no fim da linha ("Excluir apontamento") e o botão "Excluir apontamento"
   },
   {
     id: 'seguranca-indicadores-filtros',
-    title: 'Indicadores, roscas, quadro mês a mês, filtros e classificação da vistoria',
-    summary: 'Cartões, roscas, quadro mês a mês por tipo, filtros de vários valores, busca e classificação.',
+    title: 'Período, indicadores, roscas, quadro mês a mês, filtros e classificação da vistoria',
+    summary:
+      'Período pela data do apontamento, cartões, roscas, quadro mês a mês por tipo, filtros de vários valores, busca e classificação.',
     keywords: [
+      'período',
+      'filtro de data',
+      'data de início',
+      'data de término',
+      'filtrar por data',
       'média de dias para resolver',
       'abertos há mais de 7 dias',
       'por consequência',
@@ -186,7 +192,19 @@ O "✕" no fim da linha ("Excluir apontamento") e o botão "Excluir apontamento"
       'mostrar mais',
     ],
     screen: 'seguranca',
-    body: `## Cartões do topo
+    body: `## Período (data de início e de término)
+
+A barra "Período", no topo do painel, logo acima dos cartões, filtra pela "Data do apontamento":
+
+- "Início" e "Término" são campos de data; os dois dias entram no período. Um lado vazio não limita aquele lado (só o início = "a partir de"; só o término = "até").
+- O período vale para tudo da tela: os cartões, as roscas, o quadro mês a mês, a lista e o PDF (que diz "apontados de 01/10/2026 a 31/10/2026" na linha de filtros).
+- A data é a do apontamento, não a da correção: um apontamento de setembro corrigido em outubro fica fora do período de outubro.
+- "Limpar período" volta a mostrar a obra inteira; "Limpar filtros", abaixo da lista, também limpa o período.
+- Início depois do término avisa "O início está depois do término: nenhum apontamento cabe nesse período." e a tela fica zerada.
+- As roscas seguem a situação da lista: num período sem apontamento aberto, com a lista em "Abertos", aparece "Os gráficos seguem a situação da lista: nenhum apontamento aberto nesta seleção." e o botão "Ver todos os N", que passa a lista para "Todos".
+- O período não fica salvo: ao sair da aba ou recarregar a página, a tela volta sem período.
+
+## Cartões do topo
 
 Contam os apontamentos da seleção dos filtros nas duas situações, qualquer que seja a escolhida na lista (abertos + finalizados = total):
 
@@ -210,6 +228,7 @@ Contam os apontamentos da seleção dos filtros nas duas situações, qualquer q
 - A linha "GERAL" soma todos os tipos.
 - O mês atual ainda está em andamento: no começo do mês a diferença tende a ser negativa.
 - Sem apontamento no período: "Nenhum apontamento nos últimos 4 meses."
+- Com um período escolhido, o quadro mostra os meses do período, do mês do início ao do término (término no futuro para no mês de hoje; só o término = os 4 meses até ele). Mês cortado pelo início ou pelo término conta só os dias de dentro do período. Passando de 12 meses, mostra os 12 últimos e avisa. Período dentro de um mês só mostra uma coluna, sem "Diferença".
 
 ## Situação, busca e filtros
 

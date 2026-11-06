@@ -20,6 +20,8 @@ test('opções do PDF da segurança vão e voltam pela URL', () => {
       probabilities: ['Provável'],
       locations: ['2º pavimento', '__vazio__'],
       search: 'guarda-corpo',
+      from: '2026-10-01',
+      to: '2026-10-31',
     },
     sort: { column: 'consequence', dir: 'desc' },
     grouping: 'local',
@@ -31,6 +33,8 @@ test('opções do PDF da segurança vão e voltam pela URL', () => {
   assert.deepEqual(params.getAll('tipo'), ['t-periferica', 't-linha-vida']);
   assert.deepEqual(params.getAll('consequencia'), ['Morte', 'Autuação/Multa']);
   assert.equal(params.get('busca'), 'guarda-corpo');
+  assert.equal(params.get('de'), '2026-10-01');
+  assert.equal(params.get('ate'), '2026-10-31');
   assert.equal(params.has('quebra'), false);
   assert.deepEqual(params.getAll('local'), ['2º pavimento', '__vazio__']);
   assert.deepEqual(params.getAll('grupo'), ['2º pavimento', '__vazio__']);
@@ -92,4 +96,11 @@ test('a janela abre agrupada pelo filtro da lista', () => {
   assert.equal(initialGrouping({ ...DEFAULT_FILTERS, locations: ['canteiro'], consequences: ['Morte'] }), 'local');
   assert.equal(initialGrouping({ ...DEFAULT_FILTERS, consequences: ['Morte'], probabilities: ['Rara'] }), 'consequencia');
   assert.equal(initialGrouping({ ...DEFAULT_FILTERS, probabilities: ['Rara'], search: 'andaime' }), 'tipo');
+});
+
+test('período inválido na URL é ignorado', () => {
+  const parsed = parsePrintParams({ de: '2026-13-01', ate: 'ontem' });
+  assert.equal(parsed.filters.from, '');
+  assert.equal(parsed.filters.to, '');
+  assert.equal(parsePrintParams({ ate: '2026-10-31' }).filters.to, '2026-10-31');
 });

@@ -12,7 +12,9 @@ import {
   filterItems,
   groupItems,
   hasActiveFilters,
+  hasPeriod,
   indexSafety,
+  periodLabel,
   type SafetyFilters,
   type SafetyGrouping,
   type SafetySort,
@@ -103,8 +105,9 @@ export function SafetyPrintDialog({
         </h2>
         <p className="mt-1 text-sm text-slate-600">
           Parte dos {items.length} {items.length === 1 ? 'apontamento' : 'apontamentos'} {SITUATION_LABEL[filters.situation]} que a lista
-          mostra{filtered ? ', com os filtros de agora' : ''}. A primeira folha traz os gráficos por tipo, consequência e probabilidade do
-          que for impresso.
+          mostra{filtered ? ', com os filtros de agora' : ''}
+          {hasPeriod(filters) ? ` (apontados ${periodLabel(filters)})` : ''}. A primeira folha traz os gráficos por tipo, consequência e
+          probabilidade do que for impresso.
         </p>
 
         <fieldset className="mt-4">

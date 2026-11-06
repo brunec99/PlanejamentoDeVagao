@@ -19,6 +19,7 @@ A interface de cada obra é organizada em **seis abas numeradas**: os quatro ní
 6. **Segurança do trabalho** (05/11/2026): a vistoria dos técnicos de segurança (TST), com o mesmo processo da terminalidade e as colunas da planilha "SST - Controle geral": tipo de apontamento, risco (consequência e probabilidade), descrição, local, data, foto do apontamento, data e foto da correção e dias para resolver.
    - **Só o TST e o admin lançam, editam, finalizam, reabrem e excluem.** TST é um tipo de usuário da lista "Papel" (Configurações → Usuários e "Cadastrar usuário"); no resto do sistema ele só consulta. Planejador, gestor e consulta só consultam a aba 6.
    - Tipos de apontamento numa lista única para todas as obras; quadro "mês a mês por tipo" (o comparativo da planilha), roscas por tipo, consequência e probabilidade, PDF agrupado por tipo, local ou consequência, e modo de campo sem sinal em `/campo/seguranca`.
+   - Filtro de período no topo do painel (06/11/2026): data de início e de término pela data do apontamento, valendo para cartões, roscas, quadro mês a mês, lista e PDF.
    - Fica fora do snapshot (migração 0040). O histórico da planilha entra por `scripts/import-seguranca.ts`: em 05/11/2026 entraram 3.261 apontamentos de Essenza, Mozine, Blentt, Atmos, Brizz e Tauá (sem as fotos, por ora; My Sunset e Amariles ficaram fora).
    - Veja [docs/seguranca-trabalho.md](docs/seguranca-trabalho.md).
 

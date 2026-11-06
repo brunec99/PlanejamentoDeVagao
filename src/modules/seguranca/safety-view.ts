@@ -10,6 +10,7 @@ import {
   type SafetyProbability,
   type SafetyType,
 } from '@/domain/safety';
+import { formatDate } from '@/shared/format';
 import { compareText, textKey } from '@/modules/curto-prazo/sheet-view';
 import type { DonutSlice } from '@/modules/terminalidade/terminality-view';
 
@@ -36,6 +37,10 @@ export interface SafetyFilters {
   /** Chaves de local (`locationKey`) ou `NONE` (sem local). */
   locations: string[];
   search: string;
+  /** Período pela "Data do apontamento" (06/11/2026): início e término (AAAA-MM-DD), os dois dias inclusive.
+   * Vazio = sem limite daquele lado. Vale para os cartões, as roscas, o quadro mês a mês, a lista e o PDF. */
+  from: string;
+  to: string;
 }
 /** Abertos é o padrão: a lista existe para ser zerada, e o finalizado é consulta. */
 export const DEFAULT_FILTERS: SafetyFilters = {
@@ -45,6 +50,8 @@ export const DEFAULT_FILTERS: SafetyFilters = {
   probabilities: [],
   locations: [],
   search: '',
+  from: '',
+  to: '',
 };
 
 export const hasActiveFilters = (filters: SafetyFilters) =>
@@ -53,7 +60,28 @@ export const hasActiveFilters = (filters: SafetyFilters) =>
   filters.consequences.length > 0 ||
   filters.probabilities.length > 0 ||
   filters.locations.length > 0 ||
-  filters.search.trim() !== '';
+  filters.search.trim() !== '' ||
+  hasPeriod(filters);
+
+/** Dia no formato do campo de data (AAAA-MM-DD) e existente no calendário. */
+export function isDay(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+export const hasPeriod = (filters: Pick<SafetyFilters, 'from' | 'to'>) => filters.from !== '' || filters.to !== '';
+/** Início depois do término: nenhum apontamento cabe no período, e a tela avisa. */
+export const periodInverted = (filters: Pick<SafetyFilters, 'from' | 'to'>) => !!filters.from && !!filters.to && filters.from > filters.to;
+
+/** O período por extenso, para a tela e o PDF: "de 01/10/2026 a 31/10/2026", "a partir de 01/10/2026",
+ * "até 31/10/2026"; vazio sem período. */
+export function periodLabel(filters: Pick<SafetyFilters, 'from' | 'to'>) {
+  if (filters.from && filters.to)
+    return filters.from === filters.to ? `em ${formatDate(filters.from)}` : `de ${formatDate(filters.from)} a ${formatDate(filters.to)}`;
+  if (filters.from) return `a partir de ${formatDate(filters.from)}`;
+  if (filters.to) return `até ${formatDate(filters.to)}`;
+  return '';
+}
 
 /** Busca por id dos tipos, as fotos de cada apontamento (do apontamento e depois da correção, cada grupo na
  * ordem em que foram tiradas) e o nome de exibição de cada local (a grafia mais usada na obra). */
@@ -148,8 +176,12 @@ export function filterItems(items: SafetyItem[], filters: SafetyFilters, index: 
   const probabilities = off.has('probabilities') ? [] : filters.probabilities;
   const locations = off.has('locations') ? [] : filters.locations;
   const needle = off.has('search') ? '' : textKey(filters.search);
+  const from = off.has('from') ? '' : filters.from;
+  const to = off.has('to') ? '' : filters.to;
   return items.filter(item => {
     if (situation !== 'all' && item.status !== situation) return false;
+    if (from && item.observedOn < from) return false;
+    if (to && item.observedOn > to) return false;
     if (typeIds.length) {
       const key = item.typeId && index.types.has(item.typeId) ? item.typeId : NONE;
       if (!typeIds.includes(key)) return false;
@@ -431,6 +463,36 @@ export function lastMonths(today: string, count: number): string[] {
   return result;
 }
 
+/** Sem período, o quadro mês a mês mostra os últimos 4 meses; com período, os meses dele, até 12. */
+export const MONTHLY_DEFAULT_MONTHS = 4;
+export const MONTHLY_MAX_MONTHS = 12;
+const monthIndex = (day: string) => {
+  const [year, month] = day.split('-').map(Number);
+  return year * 12 + (month - 1);
+};
+
+export interface MonthWindow {
+  /** Meses do quadro ('AAAA-MM'), do mais antigo ao mais recente. */
+  months: string[];
+  /** Quantos meses o período tem; maior que `months.length` quando passou de 12 e o quadro mostra só os últimos. */
+  periodMonths: number;
+}
+
+/** Meses do quadro mês a mês. Sem período, os 4 que terminam no mês de hoje. Com período, do mês do início
+ * ao mês do término; o término no futuro para no mês de hoje e, sem início, o quadro mostra os 4 meses que
+ * terminam no término. Passando de 12 meses, ficam os 12 últimos. Início depois do término mostra o mês do
+ * término (o quadro sai zerado, como a lista). */
+export function monthWindow(today: string, filters: Pick<SafetyFilters, 'from' | 'to'>): MonthWindow {
+  if (!hasPeriod(filters)) return { months: lastMonths(today, MONTHLY_DEFAULT_MONTHS), periodMonths: MONTHLY_DEFAULT_MONTHS };
+  const endDay = filters.to && filters.to < today ? filters.to : today;
+  const end = Math.max(monthIndex(endDay), filters.from ? monthIndex(filters.from) : 0);
+  const start = filters.from ? Math.min(monthIndex(filters.from), end) : end - (MONTHLY_DEFAULT_MONTHS - 1);
+  const periodMonths = periodInverted(filters) ? 1 : end - start + 1;
+  const count = Math.min(periodMonths, MONTHLY_MAX_MONTHS);
+  const last = `${Math.floor(end / 12)}-${String((end % 12) + 1).padStart(2, '0')}-01`;
+  return { months: lastMonths(last, count), periodMonths };
+}
+
 export interface MonthlyRow {
   /** Id do tipo, `NONE` (sem tipo) ou `'__geral__'` (linha GERAL). */
   key: string;
@@ -471,9 +533,15 @@ function monthlyRow(key: string, label: string, counts: number[]): MonthlyRow {
 }
 
 /** O quadro "Página15" da planilha: quantos apontamentos de cada tipo nos últimos meses (pelo mês da data
- * do apontamento, abertos e finalizados), com a variação do último mês sobre o anterior e a linha GERAL. */
-export function monthlyByType(items: SafetyItem[], index: SafetyIndex, today: string, months = 4): MonthlyByType {
-  const window = lastMonths(today, Math.max(1, months));
+ * do apontamento, abertos e finalizados), com a variação do último mês sobre o anterior e a linha GERAL.
+ * `months`: quantos meses até o mês de hoje, ou a lista exata de meses (`monthWindow`, com o período). */
+export function monthlyByType(
+  items: SafetyItem[],
+  index: SafetyIndex,
+  today: string,
+  months: number | string[] = MONTHLY_DEFAULT_MONTHS,
+): MonthlyByType {
+  const window = typeof months === 'number' ? lastMonths(today, Math.max(1, months)) : months;
   const column = new Map(window.map((month, at) => [month, at]));
   const byType = new Map<string, { key: string; label: string; counts: number[] }>();
   const totals = window.map(() => 0);

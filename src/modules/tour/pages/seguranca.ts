@@ -35,6 +35,11 @@ export const steps: TourStep[] = [
     body: 'Monta o relatório da vistoria com o que a lista mostra (mesmos filtros e ordem), agrupado por tipo, local ou consequência, com ou sem fotos.',
   },
   {
+    target: 'safety-period',
+    title: 'Período',
+    body: 'Escolha a data de início e a de término para ver só os apontamentos feitos nesse intervalo, pela data do apontamento (os dois dias entram). Os indicadores, as roscas, o quadro mês a mês, a lista e o PDF passam a contar só o período. Deixe um lado vazio para não limitar aquele lado; "Limpar período" volta a mostrar a obra inteira.',
+  },
+  {
     target: 'safety-cards',
     title: 'Indicadores',
     body: 'Total, abertos e finalizados da seleção dos filtros, a média de dias para resolver (só dos finalizados) e quantos estão abertos há mais de 7 dias.',
@@ -47,7 +52,7 @@ export const steps: TourStep[] = [
   {
     target: 'safety-monthly',
     title: 'Mês a mês por tipo',
-    body: 'O comparativo da planilha: apontamentos por tipo nos últimos 4 meses, pela data do apontamento, e a diferença do mês atual para o anterior. Segue os filtros, menos a situação.',
+    body: 'O comparativo da planilha: apontamentos por tipo nos últimos 4 meses, pela data do apontamento, e a diferença do último mês para o anterior. Com um período escolhido, mostra os meses do período (até 12). Segue os filtros, menos a situação.',
   },
   {
     target: 'safety-filters',

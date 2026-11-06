@@ -14,10 +14,12 @@ import {
   filterItems,
   groupItems,
   groupOf,
+  hasPeriod,
   indexSafety,
   locationKey,
   locationLabel,
   percentLabel,
+  periodLabel,
   photosOfKind,
   sortItems,
   summarize,
@@ -446,6 +448,7 @@ function describeScope(options: SafetyPrintOptions, index: SafetyIndex) {
   // Local vai pela chave; o nome é a grafia mais usada na obra (a chave, se nenhum apontamento a usa mais).
   const locations = filters.locations.map(key => (key === NONE ? '(sem local)' : (index.locationLabels.get(key) ?? key)));
   const parts = [
+    hasPeriod(filters) && `apontados ${periodLabel(filters)}`,
     types.length > 0 && `tipo ${types.join(', ')}`,
     filters.consequences.length > 0 && `consequência ${filters.consequences.join(', ')}`,
     filters.probabilities.length > 0 && `probabilidade ${filters.probabilities.join(', ')}`,
