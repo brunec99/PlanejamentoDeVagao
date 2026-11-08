@@ -286,6 +286,8 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
   - login no desenho do Takt Hub.
 
   Sem mudança de regra, rota ou banco. Veja a [revisão visual de 08/10/2026](docs/revisao-visual-2026-10-08.md).
+
+  **08/11/2026:** o ícone do navegador (e o da tela inicial do celular) passou a ser o "T" da logo da Takt, em branco sobre o azul da marca. Veja a [nota na revisão visual](docs/revisao-visual-2026-10-08.md#login-ícones-e-tela-de-erro).
 - **19/09/2026:** build de produção, TypeScript e 129 testes aprovados; migrações `0020` e `0021` confirmadas no Supabase. Veja o [registro de implantação](docs/implantacao-2026-09-19.md).
 - **02/10/2026:** revisão geral de operação e estética e cancelamento do BIM 4D, ainda **não publicada**. A migração `0027` foi aplicada pelo usuário no mesmo dia e confirmada pela sondagem (22 de 22). Veja a [revisão de 01 e 02/10/2026](docs/revisao-2026-10-01.md), que lista o que precisa do usuário antes de publicar.
 

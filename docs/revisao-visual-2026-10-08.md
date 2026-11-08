@@ -58,6 +58,7 @@ O usuário pediu: "com base no Takt Hub, reveja a UX do sistema. Use mais o azul
   - No celular aparecem só os logos e o formulário.
   - A lógica de `?code=`, `?error=` e `?redirect=` não mudou.
 - O **ícone**, o `apple-icon`, o `manifest`, o `themeColor` e a tela de erro global passaram para a marca: fundo `#0a364d`, com o âmbar do ícone preservado.
+- **08/11/2026, ícone do navegador:** o desenho do prédio com a órbita âmbar deu lugar ao **"T" da logo da Takt**, em branco sobre o azul da logo (`#0a364d`), no `src/app/icon.svg` (aba do navegador e `manifest`) e no `src/app/apple-icon.tsx` (tela inicial do iPhone). O T foi redesenhado em vetor a partir de medidas tiradas do `public/logo-takt.png` (as diagonais têm a mesma inclinação do original), ocupando 80% do quadrado do ícone e 67% no `apple-icon`, cujo fundo é cheio porque o iOS arredonda os cantos sozinho. Conferido renderizando em 16, 32 e 64 px e pelas rotas `/icon.svg` e `/apple-icon` do `next dev`. O Next põe um hash no endereço do ícone, então o navegador busca o novo depois da publicação. Em 16 px as duas linhas finas do topo ficam quase apagadas, mas o T continua legível.
 
 ## Defeito corrigido no caminho
 
