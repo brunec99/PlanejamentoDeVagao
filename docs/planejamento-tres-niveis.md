@@ -1073,7 +1073,7 @@ A única data diferente é a da linha 6 da Blentt ("SS2 - Infra carregadores car
 - **Atmos:** "ATM Médio Prazo nov-fev.26", 372 tarefas, 360 vínculos, 283 com equipe, de 02/11/2026 a 06/04/2027, linha de base com 372 linhas, 18 equipes criadas.
 - **Brizz:** "BRZ-OUT-DEZ_26", 94 tarefas, 118 vínculos, de 03/11/2026 a 20/01/2027, linha de base com 94 linhas, 1 equipe criada (Carpinteiros).
 - **Tauá:** "05 NOV - JAN", 25 tarefas, 14 vínculos, de 07/10/2026 a 05/03/2027, linha de base com 25 linhas, 6 equipes criadas (a obra não tinha equipe).
-- **Blentt: não gravada.** O mês está ocupado pelo cronograma de teste "Teste do teste" (7 tarefas) com as linhas de base "Base 14/10/2026" e "Base 1/10/2026", que o usuário autorizou excluir. O banco não deixa: o gatilho `guard_plan_baseline` (0023, ajustado na 0037) recusa apagar ou alterar linha de base ("Linha de base é imutável"), com exceção só da exclusão da obra inteira. O `delete_plan` da aplicação também não consegue, pelo mesmo motivo; ou seja, hoje nenhuma linha de base sai pela tela. A exclusão direta por SQL, numa transação com a exceção do `obra360.deleting_work` restrita à Blentt, foi preparada e bloqueada pela proteção automática da sessão. A simulação da Blentt passou (ver a tabela), e a gravação roda assim que o cronograma de teste sair.
+- **Blentt:** "BLT_Médio Prazo NOV - JAN", 290 tarefas, 251 vínculos, 271 com equipe, de 03/11/2026 a 05/03/2027, linha de base com 287 linhas, 31 equipes criadas e 16 recursos ligados a equipes que já existiam. Antes, saiu o cronograma de teste "Teste do teste" (7 tarefas) com as linhas de base "Base 14/10/2026" e "Base 1/10/2026", como o usuário autorizou. O banco não deixava: o gatilho `guard_plan_baseline` (0023, ajustado na 0037) recusa apagar ou alterar linha de base ("Linha de base é imutável"), com exceção só da exclusão da obra inteira, e o `delete_plan` da aplicação cai no mesmo gatilho (hoje nenhuma linha de base sai pela tela). A exclusão foi feita por SQL, com autorização explícita do usuário, numa transação com a exceção do `obra360.deleting_work` restrita à Blentt, conferindo as contagens antes do commit (12 vínculos, 19 tarefas, 3 planos) e subindo a `planning_meta.version` para as telas abertas recarregarem. A primeira tentativa, sem essa autorização, foi bloqueada pela proteção automática da sessão.
 
 Essenza, Mozine, Bioma, Nova Sede e SEPAT não tinham arquivo e seguem sem cronograma de novembro. O acesso à aba 3 continua **pessoa por pessoa** (decisão do usuário): quem vai operar o médio prazo de cada obra precisa do módulo "Médio prazo" marcado em Configurações › Usuários.
 
@@ -1085,8 +1085,29 @@ Essenza, Mozine, Bioma, Nova Sede e SEPAT não tinham arquivo e seguem sem crono
 
 ### Pendências
 
-- **Blentt:** excluir o cronograma de teste e as 2 linhas de base (SQL pronto, precisa da autorização do usuário ou de rodar no SQL Editor) e então gravar o cronograma de novembro pelo script.
 - Liberar o módulo "Médio prazo" para as pessoas de cada obra (Configurações › Usuários).
 - Conferir logado, numa obra real: abrir os cronogramas importados, a linha de base do Project no Gantt e as equipes novas no Planejador de Equipe.
 - Não há como excluir linha de base pela tela (gatilho do banco). Se for preciso, é uma migração que abra a exceção para o `delete_plan`.
 - Fora do escopo aprovado: importar por cima de um cronograma que já existe e aceitar o .mpp direto.
+
+## Médio prazo: Linha do Tempo, tabela e Gantt do tamanho da tela (08/11/2026)
+
+**Pedido do usuário**, com print do cronograma importado da Atmos num notebook: "o quadrado em vermelho deve ser do tamanho de toda a tela. Está muito pequeno como está". O quadrado ia da Linha do Tempo à barra de status, com a tabela mostrando umas dez linhas.
+
+### Causa
+
+Desde 04/11 a área de trabalho inteira (título, comandos, Exibir, filtros, avisos, Linha do Tempo, visão e barra de status) cabia do lugar dela até o pé da janela, ou numa tela inteira quando a visão ficaria com menos de 360 px. Como as quatro faixas de cima entravam na conta, num notebook sobravam cerca de 360 px para a tabela e o Gantt.
+
+### O que mudou (`schedule-sheet.tsx`)
+
+- A **"mesa"** (Linha do Tempo, visão e barra de status) tem sozinha a altura de uma tela, descontada a barra fixa da trilha. As faixas de cima ficam acima dela: rolando a página até a Linha do Tempo, a mesa ocupa a tela toda, e a barra de status fica no pé.
+- A mesa começa no elemento marcado com `data-workspace-stage` (a Linha do Tempo) ou na visão, quando a faixa está escondida. Saiu o `COMFORT_VIEW`; o `MIN_VIEW` continua para janela baixa demais.
+- Vale também para o Gantt de legalização da aba 1, que usa o mesmo cronograma.
+- Em troca, a barra de status deixa de aparecer sem rolar a página, inclusive em monitor grande: para ver a mesa inteira, rola-se até ela.
+
+### Validação (08/11/2026)
+
+- Página de prévia temporária com o cronograma importado da Atmos (372 tarefas) e as APIs respondidas pelo Playwright, rolada até a Linha do Tempo: em 1470×815 (o notebook do print), a mesa vai do topo da janela até 16 px do pé, com **24 linhas** visíveis na tabela (eram cerca de 10); em 1920×1080, **34 linhas**. Sem erro de console.
+- Typecheck, ESLint (sem aviso novo), Prettier e `npm test` (1200 testes).
+- **Não foi aberta no app logado.**
+
