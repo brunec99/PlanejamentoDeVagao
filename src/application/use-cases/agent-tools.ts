@@ -566,9 +566,15 @@ function consultManual(input: Record<string, unknown>): ToolOutcome {
 const proposalText = (p: AgentProposal) =>
   `Proposta ${p.id} criada: ${p.title}. Ela aparece na tela com o botão Aplicar; nada foi gravado ainda.\n${p.lines.map(l => `- ${l}`).join('\n')}${p.skipped.length ? `\nFicaram de fora: ${p.skipped.join('; ')}.` : ''}`;
 
+/** Ferramentas que leem ou propõem linhas da planilha semanal. Até 08/11/2026 o curto prazo era aberto a todos e
+ * elas não conferiam nível; desde então ele é liberado por pessoa, e quem não o tem não lê a planilha pela Claudia. */
+const SHORT_TERM_TOOLS = new Set(['listar_semana', 'propor_levar', 'propor_criar_linhas', 'propor_apontar']);
+
 /** Executa uma ferramenta pelo nome. Entrada inválida vira texto de erro para o modelo corrigir. */
 export function runAgentTool(name: string, input: unknown, ctx: ToolContext): ToolOutcome {
   const args = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  if (SHORT_TERM_TOOLS.has(name) && !ctx.levels.includes('curto'))
+    return { result: 'O curto prazo não está liberado para esta pessoa.', error: true };
   switch (name) {
     case 'listar_semana':
       return listWeek(args, ctx);

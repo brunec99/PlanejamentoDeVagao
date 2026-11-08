@@ -532,3 +532,21 @@ test('cada proposta recebe um id novo do contexto', () => {
   assert.notEqual(a.id, b.id);
   assert.match(a.id, /^prop-\d+$/);
 });
+
+test('curto prazo liberado por pessoa (08/11/2026): sem o nível curto, nada da planilha é lido nem proposto', () => {
+  const semCurto = ctx({ levels: ['longo', 'medio'] });
+  for (const [name, input] of [
+    ['listar_semana', { semana: 'atual' }],
+    ['propor_levar', { linhas: ['L1'] }],
+    ['propor_criar_linhas', { linhas: [] }],
+    ['propor_apontar', { apontamentos: [] }],
+  ] as const) {
+    const out = runAgentTool(name, input, semCurto);
+    assert.equal(out.error, true, name);
+    assert.ok(out.result.includes('curto prazo não está liberado'), name);
+    assert.equal(out.proposal, undefined, name);
+  }
+  // O manual e os outros níveis seguem valendo.
+  assert.notEqual(runAgentTool('listar_tarefas_mes', {}, semCurto).result.includes('curto prazo não está liberado'), true);
+  assert.equal(runAgentTool('consultar_manual', { tema: 'apontamento' }, ctx({ levels: [] })).error, undefined);
+});
