@@ -63,7 +63,7 @@ A marca **"Takt vencido"** no detalhe (e "Atrasado" na coluna "Prazo" da lista) 
 
 ### Quem vê esta aba
 
-A aba 2 é um módulo ainda em desenvolvimento: aparece para administradores, para quem desenvolve o sistema e para quem recebeu o módulo "Vagões" liberado pelo administrador em Configurações. Quem não tem acesso é levado ao curto prazo da obra. O perfil Consulta vê tudo, mas não tem nenhum botão de ação; planejador, gestor e admin registram. Algumas ações exigem gestor ou admin, indicadas nas seções seguintes.`,
+A aba 2 é um módulo liberado por pessoa: aparece para administradores, para quem desenvolve o sistema e para quem recebeu o módulo "Vagões" liberado pelo administrador em Configurações. Quem não tem acesso é levado ao Dashboard da obra (aba 0). O perfil Consulta vê tudo, mas não tem nenhum botão de ação; planejador, gestor e admin registram. Algumas ações exigem gestor ou admin, indicadas nas seções seguintes.`,
   },
   {
     id: 'vagoes-lista',

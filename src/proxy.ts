@@ -84,11 +84,11 @@ export async function proxy(request: NextRequest) {
   const forwarded = NextResponse.next({ request: { headers: forwardedHeaders(request, user) } });
   response.cookies.getAll().forEach(cookie => forwarded.cookies.set(cookie));
   response = forwarded;
-  // Go-live só do curto prazo: os demais módulos da obra ficam com quem desenvolve (DEVELOPER_EMAILS),
-  // com os admins e com quem tem o módulo liberado pelo admin. O acesso local sem login já
-  // saiu acima e conta como desenvolvedor. As rotas repetem a conferência dos comandos. O perfil só
-  // é lido do banco quando o e-mail não basta e o endereço é restrito, para as demais requisições
-  // não pagarem uma consulta a mais.
+  // Módulos liberados por pessoa (desde 08/11/2026 também o curto prazo e a terminalidade): ficam com quem
+  // desenvolve (DEVELOPER_EMAILS), com os admins e com quem tem o módulo liberado pelo admin; quem não tem
+  // cai no dashboard da obra. O acesso local sem login já saiu acima e conta como desenvolvedor. As rotas
+  // repetem a conferência. O perfil só é lido do banco quando o e-mail não basta e o endereço é restrito,
+  // para as demais requisições não pagarem uma consulta a mais.
   const { pathname } = request.nextUrl;
   const restrictedApi = isRestrictedApi(pathname);
   const target = restrictedPageRedirect(pathname);

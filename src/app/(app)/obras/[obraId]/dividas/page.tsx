@@ -9,6 +9,6 @@ export default async function Page({ params }: { params: Promise<{ obraId: strin
   const { obraId } = await params;
   // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
   const access = await getRouteAccess();
-  if (!hasSectionAccess('dividas', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  if (!hasSectionAccess('dividas', access)) redirect(`/obras/${encodeURIComponent(obraId)}/dashboard`);
   return <DebtsOverview workId={obraId} />;
 }

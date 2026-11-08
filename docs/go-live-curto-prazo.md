@@ -7,7 +7,7 @@ Continuidade entre os modelos de IA. Este documento registra o que foi entregue 
 - **Banco novo** no Supabase pago da ATR. O banco antigo (`fanktscgrprylqqnwjje`) é **abandonado**, sem migração de dados. **Atualização de 08/10/2026:** para não pagar outro projeto, o banco é o **mesmo projeto `takt-hub`** (ref `guoipstyngcylfyfzoup`), dividido com o Takt Hub. Veja [Projeto compartilhado com o Takt Hub](#projeto-compartilhado-com-o-takt-hub-08102026).
 - **Mesmo endereço** na Vercel (`obra360-atr.vercel.app`). A virada é feita trocando as três variáveis do Supabase.
 - **Histórico do Sheets importado:** os planejamentos semanais de cada obra entram no sistema para que o passado não se perca. As planilhas são lidas pelo conector Google Drive.
-- **Curto prazo aberto a todos.** Longo prazo, vagões, médio prazo e todo o grupo Apoio (federado, IFC, dívidas, integrações) ficam **restritos ao desenvolvedor**, e serão liberados em etapas, conforme ficarem prontos.
+- **Curto prazo aberto a todos.** Longo prazo, vagões, médio prazo e todo o grupo Apoio (federado, IFC, dívidas, integrações) ficam **restritos ao desenvolvedor**, e serão liberados em etapas, conforme ficarem prontos. *Atualizado em 08/11/2026:* curto prazo e terminalidade passaram a ser liberados por pessoa; veja [Curto prazo e terminalidade liberados por pessoa](#curto-prazo-e-terminalidade-liberados-por-pessoa-08112026).
 
 ## 1. Restrição dos módulos ao desenvolvedor
 
@@ -290,6 +290,30 @@ Quem entra com o Google e não tem cadastro vê, abaixo do aviso, o botão **"So
 - Testes novos: em `tests/module-access.test.ts`, `accessBatchChange` (liberar, revogar, sem mudança, ordem do catálogo, admin) e `set_access_batch` (obras e módulos de várias pessoas, quem não muda fica com o carimbo, histórico, as oito recusas e a gravação em `module_access`). Em `tests/local-apply.test.ts`, a projeção (quem não muda mantém o mesmo objeto, próprio acesso e usuário desconhecido sem projeção, entrada intacta).
 - Tela aberta com `next dev` local, Supabase falso e as APIs respondidas pelo Playwright com as regras reais (`applyCommand`), com 9 usuários e 3 obras, a 1280 px e a 390 px. Foram conferidos: Shift+clique marcando 4 pessoas; "Liberar para 4 pessoas" mandando **um** comando com os 4; a célula marcada 150 ms após o clique, com o servidor simulado levando 500 ms; o botão passando a "Revogar de 4 pessoas"; o diálogo de confirmação e a revogação; na visão Módulos, "Selecionar todos" com "Todos" dando "Liberar para 8 pessoas" e o admin de fora; a pesquisa mantendo a seleção com o aviso dos que estão fora da lista; e nenhuma rolagem horizontal da página no celular.
 - **Não validado:** a tela logada em produção com o banco real.
+
+## Curto prazo e terminalidade liberados por pessoa (08/11/2026)
+
+**Pedido do usuário:** "coloque terminalidade e curto prazo no pool de funções que são liberadas apenas para pessoas selecionadas." Até aqui as abas 4 e 5 eram abertas a todos que tinham a obra liberada.
+
+**Decisão do usuário sobre quem já usava:** "Manter quem já usa". A migração **0042** (`supabase/migrations/0042_short_term_terminality_access.sql`) marca curto prazo e terminalidade em `profiles.module_access` de todo perfil que não é admin. No deploy ninguém perdeu acesso; o admin revoga, na visão Módulos (célula ou lote), de quem não deve ter. Leitura feita antes de aplicar: 27 perfis, 2 admins e 25 não-admins (5 gestores, 16 planejadores, 3 consultas e 1 TST), nenhum com os dois módulos na lista. O TST também recebeu os dois, porque também via as duas abas. **Usuário cadastrado a partir de agora começa sem os dois módulos.**
+
+**Regra nova (`src/application/module-access.ts`):**
+
+| Abertos a todos que têm a obra | Liberados por pessoa (admin e desenvolvedor veem todos) |
+| --- | --- |
+| Lista de obras, aba 0 Dashboard (cada quadro segue o módulo de origem), aba 6 Segurança do trabalho (consulta; TST e admin gravam), Configurações da obra | Longo prazo, vagões, médio prazo, **curto prazo**, **terminalidade**, modelo federado, arquivos IFC, dívidas, integrações |
+
+- `RESTRICTED_SECTIONS` ganhou `curto-prazo` e `terminalidade`; o catálogo `MODULES` perdeu o `open` dos dois, então a grade de Configurações → Usuários → Módulos ganhou as duas colunas, e a nota da grade lista como abertos Dashboard, Segurança do trabalho e Configurações da obra.
+- **Páginas:** quem não tem o módulo é desviado para o **Dashboard da obra** (`/obras/<id>/dashboard`), e não mais para o curto prazo (que agora também pode estar fechado). Vale no proxy e na conferência repetida em cada página restrita. As folhas de impressão `/imprimir/curto-prazo/<obra>` e `/imprimir/terminalidade/<obra>` seguem a regra da aba de origem (`RESTRICTED_PRINT`).
+- **APIs:** `/api/curto-prazo/*` (análise, locais, ranking) e `/api/terminalidade/*` (lista, comandos, fotos e `campo`) entraram em `RESTRICTED_API_PREFIXES`: o proxy responde 403 e cada handler confere de novo com `requireModuleAccess`. O modo de campo `/campo/terminalidade` continua fora do proxy (casca estática), mas lê tudo de `/api/terminalidade/campo`, que passou a exigir o módulo. `/api/work-locals` (Configurações) e `/api/planning` continuam abertos.
+- **Comandos:** os da planilha semanal (`create_commitment`, `update_commitment`, `delete_commitment`, `reorder_commitments`, `record_fulfillment`, `record_fulfillments`, `clear_fulfillment`) saíram de `NON_DEVELOPER_COMMANDS` e foram para `SECTION_COMMANDS['curto-prazo']`. Ficam abertos só os de equipes e de administração.
+- **Dados:** `slimForModules` só manda os compromissos (`commitments`) a quem tem o curto prazo ou o médio prazo (a janela de três meses esconde o que já está na planilha). Sem eles, o cartão da obra fica sem o PPC e Configurações da obra esconde o atalho "Curto prazo" e a contagem "N no curto". O Dashboard geral (`/api/dashboard/obras`) só lê a terminalidade das obras para quem tem o módulo.
+- **Mensagem de recusa:** passou de "Módulo disponível apenas para desenvolvimento." para **"Módulo não liberado para você. Peça a liberação a um administrador."**, porque hoje o grupo inclui módulos em produção.
+- Manual da Claudia e tours (Configurações e Dashboard geral) atualizados para a regra nova.
+
+**Ordem de publicação:** a 0042 foi **aplicada no `takt-hub` em 08/11/2026, antes do push** (pooler, numa transação; 25 linhas atualizadas; conferido depois: os 25 não-admins com os dois módulos, os 2 admins sem mudança). O código novo sem ela tiraria as duas abas de todos os não-admins. Entre a aplicação e o fim do deploy, um clique de módulo feito pela tela antiga poderia limpar os dois módulos da pessoa clicada (o código antigo normaliza a lista sem eles); vale conferir a contagem de novo depois do deploy.
+
+**Validação:** testes de `tests/module-access.test.ts` (desvio para o dashboard, folhas de impressão, APIs, comandos, catálogo, `set_module_access` e lote com os dois módulos) e `tests/scope-planning.test.ts` (compromissos só com curto ou médio prazo); a 0042 rodada duas vezes num PostgreSQL isolado (PGlite), sem duplicar nada e sem tocar admin. **Não validado:** a tela logada em produção com uma pessoa sem os módulos.
 
 ## Contas da Takt Engenharia (28/10/2026)
 

@@ -34,7 +34,7 @@ O "Gantt de legalização" (os 12 meses até a entrega da obra) usa este mesmo c
 
 ## Quem vê e quem edita
 
-- O módulo está **em desenvolvimento**: só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Médio prazo" liberado pelo admin na lista de usuários das Configurações. Quem não tem acesso é levado ao curto prazo da obra.
+- É um **módulo liberado por pessoa**: só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Médio prazo" liberado pelo admin na lista de usuários das Configurações. Quem não tem acesso é levado ao Dashboard da obra (aba 0).
 - É preciso ter acesso à obra ("Você não tem acesso a esta obra.").
 - Perfil **consulta** só lê: vê a grade, as visões e as seções, mas não libera a edição, não salva, não cria cronograma nem define linha de base. **Planejador, gestor e admin** fazem tudo isso. Se consulta tentar gravar, recebe "Seu perfil permite apenas consulta."
 

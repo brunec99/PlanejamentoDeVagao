@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
+import { getRouteAccess, requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { SupabasePlanningRepository } from '@/infrastructure/repositories/supabase/planning-repository';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { scopePlanning } from '@/application/use-cases/scope-planning';
@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
   const companies = strings(body.companies),
     teams = strings(body.teams);
 
+  // Liberada por pessoa desde 08/11/2026: o proxy já barra quem não tem o módulo; a rota confere de novo.
+  const gate = await requireModuleAccess('curto-prazo');
+  if (gate.error) return gate.error;
   const { profile } = await getRouteAccess();
   // Leitura apenas: quem consulta a obra também pode pedir a análise.
   if (!profile?.workIds.includes(workId)) return fail('Você não tem acesso a esta obra.', 403);

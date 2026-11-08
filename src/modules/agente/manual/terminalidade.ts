@@ -30,7 +30,7 @@ export const sections: ManualSection[] = [
 
 É a "Lista de pendências" da obra, no mesmo formato da planilha usada antes: cada linha é um problema encontrado na vistoria, com local, apartamento, tipo, quem da ATR acompanha, qual empreiteiro corrige, a foto do problema e, depois, a foto da correção. A lista existe para ser zerada: uma pendência só fecha com a foto do serviço corrigido e a data da correção.
 
-A aba é aberta a todos os usuários que têm a obra liberada. O botão "?" ("Como funciona") do cabeçalho abre a explicação da tela, e o "Como usar a lista", ao lado do título "Lista de pendências", resume a ordem, a classificação e os cliques.
+Desde 08/11/2026 a aba é **liberada por pessoa**: aparece para quem tem a obra e o módulo "Terminalidade" liberados pelo administrador (Configurações → Usuários, visão "Módulos"); admin e desenvolvedor veem sempre. Antes era aberta a todos com a obra; quem já a usava em 08/11/2026 continuou com acesso. Sem o módulo, a aba some da lateral, o endereço leva ao Dashboard da obra (aba 0), e o modo de campo e o PDF também recusam. O botão "?" ("Como funciona") do cabeçalho abre a explicação da tela, e o "Como usar a lista", ao lado do título "Lista de pendências", resume a ordem, a classificação e os cliques.
 
 ## Colunas da lista
 
@@ -58,7 +58,7 @@ Sem pavimentos cadastrados, a aba mostra só o aviso "A lista de pendências é 
 
 - Perfil "Consulta": vê tudo, abre a pendência ("Ver"), amplia as fotos, filtra, classifica e gera o PDF. Não vê "Nova pendência", as caixas de marcar, "Resolver", "Reabrir" nem o "✕". Se algo tentar gravar, o servidor responde "Seu perfil permite apenas consulta."
 - "Planejador", "Gestor" e "Admin": incluem, editam, editam em lote, resolvem, reabrem e excluem pendências. Na terminalidade não há diferença entre esses três papéis.
-- Em qualquer papel, a obra precisa estar liberada para a pessoa; senão aparece "Você não tem acesso a esta obra."
+- Em qualquer papel, a obra precisa estar liberada para a pessoa; senão aparece "Você não tem acesso a esta obra." O módulo "Terminalidade" também; senão a recusa é "Módulo não liberado para você. Peça a liberação a um administrador."
 
 ## Ordem padrão, celular e campo
 
@@ -300,7 +300,7 @@ O modo de campo, em "/campo/terminalidade", é a lista de pendências feita para
 
 ## Como abrir e baixar a obra (com sinal)
 
-1. Na aba 5, toque em "Usar no celular, sem sinal", ou digite "/campo/terminalidade" no navegador do celular, com o mesmo login.
+1. Na aba 5, toque em "Usar no celular, sem sinal", ou digite "/campo/terminalidade" no navegador do celular, com o mesmo login. O modo de campo exige o módulo "Terminalidade" liberado para você, como a aba 5; sem ele, o servidor recusa com "Módulo não liberado para você. Peça a liberação a um administrador."
 2. Na primeira vez aparece "Prepare com sinal": toque em "Carregar minhas obras" (só com internet).
 3. Toque na obra: se ainda não está no aparelho, ela é baixada com as fotos das pendências abertas e passa a mostrar "Pronta sem sinal · N abertas"; daí em diante abre mesmo em modo avião.
 4. Com sinal, "Atualizar a obra com o que está no servidor", no fim da lista, traz o que a equipe lançou no computador e em outros celulares, sem perder a fila do aparelho.
@@ -376,6 +376,7 @@ Clique no nome dele no quadro "Abertas por responsável terceiro" ou "Abertas po
 
 - "Seu perfil permite apenas consulta.": o papel "Consulta" não grava. Peça ao admin para mudar o papel nas Configurações.
 - "Você não tem acesso a esta obra.": a obra precisa ser liberada para você pelo admin.
+- "Módulo não liberado para você. Peça a liberação a um administrador.": desde 08/11/2026 a terminalidade é liberada por pessoa, e o módulo "Terminalidade" não está liberado para você. Peça ao admin. Até essa data a mensagem era "Módulo disponível apenas para desenvolvimento."
 - "Não foi possível abrir a foto. Se o link venceu, ela volta em instantes; senão, recarregue a página.": os links das fotos valem uma hora; a aba renova sozinha, e recarregar resolve.
 - "Registro não encontrado. Recarregue a página.": outra pessoa alterou ou excluiu a pendência.
 - "Esta obra ainda não tem pavimentos cadastrados.": cadastre os locais em "Configurações da obra", no computador.

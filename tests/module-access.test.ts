@@ -50,14 +50,8 @@ test('Admins também acessam os módulos em desenvolvimento, sem estar na lista'
   assert.equal(hasDeveloperAccess({ email: undefined, role: undefined }, env), false);
 });
 
-test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da administração', () => {
+test('Sem módulo liberado, só comandos das equipes e da administração', () => {
   for (const type of [
-    'create_commitment',
-    'update_commitment',
-    'delete_commitment',
-    'record_fulfillment',
-    'record_fulfillments',
-    'clear_fulfillment',
     'create_team',
     'update_team',
     'delete_team',
@@ -68,7 +62,15 @@ test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da adm
     'create_work',
   ])
     assert.equal(isCommandAllowedForNonDeveloper(type), true, type);
+  // 08/11/2026: os comandos da planilha semanal passaram a exigir o curto prazo liberado.
   for (const type of [
+    'create_commitment',
+    'update_commitment',
+    'delete_commitment',
+    'reorder_commitments',
+    'record_fulfillment',
+    'record_fulfillments',
+    'clear_fulfillment',
     'create_restriction',
     'create_wagon',
     'create_plan_task',
@@ -83,12 +85,51 @@ test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da adm
     assert.equal(isCommandAllowedForNonDeveloper(type), false, String(type));
 });
 
-test('Páginas restritas da obra desviam para o curto prazo da mesma obra', () => {
+test('Páginas restritas da obra desviam para o dashboard da mesma obra', () => {
   for (const section of RESTRICTED_SECTIONS)
-    assert.equal(restrictedPageRedirect(`/obras/obra-1/${section}`), '/obras/obra-1/curto-prazo', section);
-  assert.equal(restrictedPageRedirect('/obras/obra%201/vagoes/vagao-9'), '/obras/obra%201/curto-prazo');
-  for (const open of ['/obras', '/obras/obra-1/curto-prazo', '/obras/obra-1/configuracoes', '/configuracoes', '/obras/obra-1/vagoes-extra'])
+    assert.equal(restrictedPageRedirect(`/obras/obra-1/${section}`), '/obras/obra-1/dashboard', section);
+  assert.equal(restrictedPageRedirect('/obras/obra%201/vagoes/vagao-9'), '/obras/obra%201/dashboard');
+  for (const open of [
+    '/obras',
+    '/obras/obra-1/dashboard',
+    '/obras/obra-1/seguranca',
+    '/obras/obra-1/configuracoes',
+    '/configuracoes',
+    '/obras/obra-1/vagoes-extra',
+    '/imprimir/dashboard/obra-1',
+    '/imprimir/seguranca/obra-1',
+    '/imprimir/dashboard-geral',
+  ])
     assert.equal(restrictedPageRedirect(open), null, open);
+});
+
+test('Curto prazo e terminalidade (08/11/2026): aba, folha de impressão e modo de campo seguem o módulo', () => {
+  assert.ok(RESTRICTED_SECTIONS.includes('curto-prazo'));
+  assert.ok(RESTRICTED_SECTIONS.includes('terminalidade'));
+  assert.equal(restrictedPageRedirect('/obras/obra-1/curto-prazo'), '/obras/obra-1/dashboard');
+  assert.equal(restrictedPageRedirect('/imprimir/curto-prazo/obra%201'), '/obras/obra%201/dashboard');
+  assert.equal(restrictedSectionOf('/imprimir/terminalidade/obra-1'), 'terminalidade');
+  assert.equal(restrictedSectionOf('/imprimir/curto-prazo/obra-1'), 'curto-prazo');
+  assert.equal(restrictedSectionOf('/imprimir/curto-prazo'), null);
+  const nobody = { developer: false, modules: [] };
+  const curto = { developer: false, modules: ['curto-prazo'] };
+  const terminal = { developer: false, modules: ['terminalidade'] };
+  for (const section of ['curto-prazo', 'terminalidade']) assert.equal(hasSectionAccess(section, nobody), false, section);
+  for (const section of ['dashboard', 'seguranca', 'configuracoes']) assert.equal(hasSectionAccess(section, nobody), true, section);
+  assert.equal(hasSectionAccess('curto-prazo', curto), true);
+  assert.equal(hasSectionAccess('terminalidade', curto), false);
+  assert.equal(hasSectionAccess('terminalidade', terminal), true);
+  // O modo de campo (`/campo/terminalidade`) fica fora do proxy, mas lê os dados desta API.
+  assert.equal(isRestrictedApi('/api/terminalidade/campo'), true);
+  assert.equal(hasApiAccess('/api/terminalidade/campo', terminal), true);
+  assert.equal(hasApiAccess('/api/terminalidade/commands', curto), false);
+  assert.equal(hasApiAccess('/api/curto-prazo/ranking', curto), true);
+  assert.equal(hasApiAccess('/api/curto-prazo/analise', nobody), false);
+  for (const type of ['create_commitment', 'record_fulfillments', 'reorder_commitments', 'clear_fulfillment']) {
+    assert.equal(isCommandAllowed(type, curto), true, type);
+    assert.equal(isCommandAllowed(type, terminal), false, type);
+  }
+  assert.equal(isCommandAllowed('create_team', nobody), true);
 });
 
 test('O desvio das páginas restritas (servidor) coincide com o do proxy, mesmo com id a codificar', () => {
@@ -96,7 +137,7 @@ test('O desvio das páginas restritas (servidor) coincide com o do proxy, mesmo 
   // bruto. Os dois precisam cair no mesmo endereço, senão o proxy e a página divergiriam.
   for (const workId of ['obra-1', 'obra 2', 'ç/ã'])
     for (const section of RESTRICTED_SECTIONS)
-      assert.equal(restrictedPageRedirect(workPath(workId, section)), workPath(workId, 'curto-prazo'), `${workId}/${section}`);
+      assert.equal(restrictedPageRedirect(workPath(workId, section)), workPath(workId, 'dashboard'), `${workId}/${section}`);
 });
 
 test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
@@ -107,9 +148,24 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     '/api/prevision/schedule',
     '/api/ifc/status',
     '/api/history',
+    '/api/curto-prazo/ranking',
+    '/api/curto-prazo/locais',
+    '/api/terminalidade',
+    '/api/terminalidade/upload-url',
   ])
     assert.equal(isRestrictedApi(path), true, path);
-  for (const path of ['/api/planning', '/api/planning/commands', '/api/work-settings', '/api/admin/users', '/api/health', '/api/ifcx'])
+  for (const path of [
+    '/api/planning',
+    '/api/planning/commands',
+    '/api/work-settings',
+    '/api/work-locals',
+    '/api/seguranca',
+    '/api/dashboard/obras',
+    '/api/admin/users',
+    '/api/health',
+    '/api/ifcx',
+    '/api/terminalidadex',
+  ])
     assert.equal(isRestrictedApi(path), false, path);
 });
 
@@ -119,20 +175,23 @@ test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada al�
   const dev = { developer: true, modules: [] };
   assert.equal(hasSectionAccess('medio-prazo', medio), true);
   assert.equal(hasSectionAccess('longo-prazo', medio), false);
-  assert.equal(hasSectionAccess('curto-prazo', nobody), true);
-  assert.equal(hasSectionAccess('terminalidade', nobody), true);
+  assert.equal(hasSectionAccess('curto-prazo', nobody), false);
+  assert.equal(hasSectionAccess('terminalidade', nobody), false);
+  assert.equal(hasSectionAccess('seguranca', nobody), true);
   assert.equal(hasSectionAccess('medio-prazo', nobody), false);
   assert.equal(hasSectionAccess('ifc', dev), true);
   assert.equal(restrictedSectionOf('/obras/obra-1/medio-prazo'), 'medio-prazo');
   assert.equal(restrictedSectionOf('/obras/obra-1/vagoes/v-1'), 'vagoes');
-  assert.equal(restrictedSectionOf('/obras/obra-1/curto-prazo'), null);
+  assert.equal(restrictedSectionOf('/obras/obra-1/curto-prazo'), 'curto-prazo');
+  assert.equal(restrictedSectionOf('/obras/obra-1/dashboard'), null);
   assert.equal(hasApiAccess('/api/history', medio), true);
   assert.equal(hasApiAccess('/api/ifc/upload-url', medio), false);
   assert.equal(hasApiAccess('/api/ifc/upload-url', { developer: false, modules: ['federacao'] }), true);
   assert.equal(hasApiAccess('/api/prevision', { developer: false, modules: ['importar'] }), true);
   assert.deepEqual(sectionsForApi('/api/long-term-plan/sync'), ['longo-prazo']);
   assert.equal(isCommandAllowed('save_plan_revision', medio), true);
-  assert.equal(isCommandAllowed('record_fulfillment', nobody), true);
+  assert.equal(isCommandAllowed('record_fulfillment', nobody), false);
+  assert.equal(isCommandAllowed('record_fulfillment', { developer: false, modules: ['curto-prazo'] }), true);
   assert.equal(isCommandAllowed('set_module_access', nobody), true);
   assert.equal(isCommandAllowed('release', medio), false);
   assert.equal(isCommandAllowed('release', { developer: false, modules: ['vagoes'] }), true);
@@ -142,14 +201,16 @@ test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada al�
 });
 
 test('Catálogo: os abertos não são liberáveis, e a lista gravada é limpa e ordenada', () => {
-  assert.ok(MODULES.some(m => m.section === 'curto-prazo' && m.open));
+  assert.ok(MODULES.some(m => m.section === 'seguranca' && m.open));
+  assert.ok(!MODULES.some(m => (m.section === 'curto-prazo' || m.section === 'terminalidade') && m.open));
   assert.deepEqual(
     MODULES.filter(m => !m.open)
       .map(m => m.section)
       .sort(),
     [...RESTRICTED_SECTIONS].sort(),
   );
-  assert.deepEqual(normalizeModules(['ifc', 'curto-prazo', 'xyz', 'medio-prazo', 'ifc', 3]), ['medio-prazo', 'ifc']);
+  assert.deepEqual(normalizeModules(['ifc', 'configuracoes', 'xyz', 'medio-prazo', 'ifc', 3]), ['medio-prazo', 'ifc']);
+  assert.deepEqual(normalizeModules(['terminalidade', 'seguranca', 'curto-prazo']), ['curto-prazo', 'terminalidade']);
   assert.deepEqual(normalizeModules('medio-prazo'), []);
 });
 
@@ -167,9 +228,16 @@ test('admin libera e bloqueia módulos; demais papéis e módulos abertos são r
   assert.deepEqual(other.modules, ['medio-prazo']);
   assert.throws(() => run(other.id, { type: 'set_module_access', userId: admin.id, section: 'ifc', enabled: true }), /administradores/);
   assert.throws(
-    () => run(admin.id, { type: 'set_module_access', userId: other.id, section: 'curto-prazo', enabled: false }),
+    () => run(admin.id, { type: 'set_module_access', userId: other.id, section: 'seguranca', enabled: false }),
     /não é liberado/,
   );
+  // 08/11/2026: curto prazo e terminalidade passaram a ser liberados por pessoa.
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'terminalidade', enabled: true });
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'curto-prazo', enabled: true });
+  assert.deepEqual(other.modules, ['medio-prazo', 'curto-prazo', 'terminalidade']);
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'curto-prazo', enabled: false });
+  run(admin.id, { type: 'set_module_access', userId: other.id, section: 'terminalidade', enabled: false });
+  assert.deepEqual(other.modules, ['medio-prazo']);
   assert.throws(() => run(admin.id, { type: 'set_module_access', userId: 'x', section: 'ifc', enabled: true }), /não encontrado/);
   const payload = planningDataToPayload(data) as unknown as Rows;
   const row = payload.profiles.find(r => r.id === other.id)!;
@@ -236,7 +304,7 @@ test('set_access_batch: admin libera e revoga obras e módulos de várias pessoa
   assert.throws(() => batch({ workIds: [], sections: [] }), /ao menos uma obra ou um módulo/);
   assert.throws(() => batch({ userIds: [ana.id, 'ninguem'] }), /Usuário não encontrado/);
   assert.throws(() => batch({ workIds: ['obra-x'] }), /Obra não encontrada/);
-  assert.throws(() => batch({ workIds: undefined, sections: ['curto-prazo'] }), /não é liberado/);
+  assert.throws(() => batch({ workIds: undefined, sections: ['seguranca'] }), /não é liberado/);
   assert.throws(() => batch({ enabled: 'sim' as never }), /liberado ou revogado/);
   assert.throws(() => batch({ userIds: 'user-3' as never }), /Lista de usuários inválida/);
 

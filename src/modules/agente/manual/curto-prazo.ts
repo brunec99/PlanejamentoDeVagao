@@ -32,7 +32,7 @@ export const sections: ManualSection[] = [
     screen: 'curto-prazo',
     body: `## Para que serve
 
-A aba 4, "Cronograma de curto prazo", é a planilha semanal de produção: o que cada empreiteiro se compromete a fazer na semana, se cumpriu ("Sim" ou "Não") e por quê. Tem a mesma estrutura da planilha do Google Sheets que a obra usava e é o módulo aberto a todos em produção desde 07/10/2026. Ela se sustenta sozinha: não depende do plano do mês nem de cadastro feito em outra tela. Cada linha é um compromisso.
+A aba 4, "Cronograma de curto prazo", é a planilha semanal de produção: o que cada empreiteiro se compromete a fazer na semana, se cumpriu ("Sim" ou "Não") e por quê. Tem a mesma estrutura da planilha do Google Sheets que a obra usava e está em produção desde 07/10/2026. Ela se sustenta sozinha: não depende do plano do mês nem de cadastro feito em outra tela. Cada linha é um compromisso.
 
 ## As duas seções
 
@@ -64,6 +64,7 @@ No cabeçalho da aba, "Como funciona" abre a explicação longa e "Como usar" in
 
 ## Quem pode fazer o quê
 
+- **Quem vê a aba**: desde 08/11/2026 o curto prazo é **liberado por pessoa**: aparece para quem tem a obra e o módulo "Curto prazo" liberados pelo administrador (Configurações → Usuários, visão "Módulos"); admin e desenvolvedor veem sempre. Antes era aberto a todos com a obra; quem já o usava em 08/11/2026 continuou com acesso. Sem o módulo, a aba some da lateral, o endereço leva ao Dashboard da obra (aba 0), os PDFs também recusam e um pedido ao servidor responde "Módulo não liberado para você. Peça a liberação a um administrador."
 - **Consulta (viewer)**: só lê. Sem caixa de marcar, "Desfazer", linha nova, "Inserir linha acima", alça ⠿, ✕ ou alça de arrastar valores; Status, causa e justificativa desabilitados. Pode gerar os PDFs e ver o Fechamento.
 - **Planejador, gestor e admin**: incluem, editam e excluem linhas da semana aberta e apontam em qualquer semana.
 - **Admin**: também altera linhas de semana encerrada.
@@ -430,7 +431,7 @@ Os outros filtros e a classificação da planilha não vão para o PDF: só a es
 
 ## A aba do PDF
 
-A página abre fora do layout do sistema, em A4 paisagem, e chama sozinha o diálogo de impressão do navegador. Nele, escolha "Salvar como PDF" e o modo paisagem; o título da página vira o nome do arquivo. Se o diálogo não abrir, use o botão "Imprimir / Salvar PDF" no topo da aba. Uma linha ao lado diz quantas linhas saíram, a ordem, quem ficou "fora do PDF" e o recorte de local. É preciso estar logado; a página respeita o acesso às obras do usuário. Se a janela recortou por local e a lista de locais não carregar, a aba mostra "Não foi possível carregar os locais da obra…" em vez de imprimir: feche e gere de novo.
+A página abre fora do layout do sistema, em A4 paisagem, e chama sozinha o diálogo de impressão do navegador. Nele, escolha "Salvar como PDF" e o modo paisagem; o título da página vira o nome do arquivo. Se o diálogo não abrir, use o botão "Imprimir / Salvar PDF" no topo da aba. Uma linha ao lado diz quantas linhas saíram, a ordem, quem ficou "fora do PDF" e o recorte de local. É preciso estar logado; a página respeita o acesso às obras do usuário e exige o módulo "Curto prazo" liberado para ele. Se a janela recortou por local e a lista de locais não carregar, a aba mostra "Não foi possível carregar os locais da obra…" em vez de imprimir: feche e gere de novo.
 
 O cabeçalho repete em cada folha: os logos da ATR e da Takt, "PLANEJAMENTO DE CURTO PRAZO <NOME DA OBRA>", "Semana analisada: N" e "Semana atual: N"; depois as datas de cada dia e as colunas "Empreiteiro", "Semana", "Início", "Término", "Atividade", "Local" (só quando alguma linha impressa tem local), "Equipe" e "Seg." a "Sáb" com os "x" do calendário. Com locais desmarcados, o título traz embaixo o recorte, por exemplo "Local: Torre A, Torre B" (e "sem local" quando também saem linhas sem local). Semana sem linha imprime "Semana sem linhas no planejamento."
 
@@ -507,6 +508,8 @@ Observações:
 
 **Digitei uma equipe e ela não entrou.** Equipe só é criada com a empresa preenchida na linha ("Escolha a empresa da linha antes de criar uma equipe."). Preencha "Empresa" e digite a equipe de novo.
 
-**Sou do perfil consulta e não consigo apontar.** O perfil de consulta só lê; peça a um administrador para alterar seu papel em Configurações.`,
+**Sou do perfil consulta e não consigo apontar.** O perfil de consulta só lê; peça a um administrador para alterar seu papel em Configurações.
+
+**A aba 4 sumiu (ou o endereço abre o Dashboard da obra).** Desde 08/11/2026 o curto prazo é liberado por pessoa. Sem o módulo "Curto prazo" liberado para você, a aba não aparece e o endereço leva à aba 0. Peça a liberação a um administrador.`,
   },
 ];

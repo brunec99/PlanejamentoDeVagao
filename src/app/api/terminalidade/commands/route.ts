@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { getRouteProfile, requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import {
   parseTerminalityCommand,
   planTerminalityCommand,
@@ -27,6 +27,9 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
  * regras (`planTerminalityCommand`) sobre os dados atuais da obra, grava e devolve a obra já
  * atualizada, para a tela não precisar de outra leitura. */
 export async function POST(request: Request) {
+  // Liberada por pessoa desde 08/11/2026: o proxy já barra quem não tem o módulo; a rota confere de novo.
+  const gate = await requireModuleAccess('terminalidade');
+  if (gate.error) return gate.error;
   const profile = await getRouteProfile().catch(() => null);
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);
   if (profile.role === 'viewer') return responseError('Seu perfil permite apenas consulta.', 403);

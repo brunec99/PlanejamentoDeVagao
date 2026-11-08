@@ -40,8 +40,8 @@ Para comparar esta obra com as outras, use o **Dashboard geral** (no menu, em Em
 
 ## Quem vê, e o que aparece para cada pessoa
 
-- A aba é aberta a todo papel com a obra liberada, inclusive "Consulta". Como nada se edita, não há diferença entre os papéis dentro dela.
-- Só entram os **módulos que a pessoa pode abrir**: curto prazo e terminalidade (abertos a todos) mais os que o admin liberou para ela em Configurações → Usuários; admin e desenvolvedor veem todos. Um módulo que a pessoa não pode abrir não aparece nem é citado.
+- A aba é aberta a todo papel com a obra liberada, inclusive "Consulta". Como nada se edita, não há diferença entre os papéis dentro dela. É também para ela que o sistema leva quem abre o endereço de uma aba sem liberação.
+- Só entram os **módulos que a pessoa pode abrir**: os que o admin liberou para ela em Configurações → Usuários (longo prazo, vagões, médio prazo e, desde 08/11/2026, também curto prazo e terminalidade); admin e desenvolvedor veem todos. Um módulo que a pessoa não pode abrir não aparece nem é citado.
 - Dos módulos que a pessoa pode abrir, só entram os que **têm dado nesta obra**. Módulo sem dado não ocupa espaço: a linha abaixo dos filtros diz "Módulos sem dados nesta obra: …".
 - Duas pessoas com permissões diferentes veem, portanto, dashboards diferentes da mesma obra. O PDF segue a mesma regra de quem o gera.
 
@@ -376,7 +376,7 @@ Em 04/11/2026 ela virou dois seletores, "Escala" e "Período". Na escala **Seman
 
 Dois motivos possíveis, e a tela diz qual é:
 
-- **Você não pode abrir o módulo.** Longo prazo, vagões e médio prazo são liberados por pessoa pelo admin (Configurações → Usuários, linha "Módulos"); curto prazo e terminalidade são abertos a todos. Módulo que você não pode abrir não aparece nem é citado. Peça a liberação ao admin.
+- **Você não pode abrir o módulo.** Longo prazo, vagões, médio prazo, curto prazo e terminalidade são liberados por pessoa pelo admin (Configurações → Usuários, visão "Módulos"); curto prazo e terminalidade deixaram de ser abertos a todos em 08/11/2026. Módulo que você não pode abrir não aparece nem é citado. Peça a liberação ao admin.
 - **O módulo não tem dado nesta obra.** A linha "Módulos sem dados nesta obra: …", abaixo dos filtros, lista esses. Uma obra que só usa o curto prazo e a terminalidade mostra só esses dois quadros. Para o módulo aparecer, basta a aba de origem passar a ter dado.
 
 Um terceiro caso é o filtro "Quadros" com o módulo desmarcado: marque de novo.

@@ -73,8 +73,9 @@ export function scopePlanning(data: PlanningData, actorId: string): PlanningData
   return { ...collections, history };
 }
 
-/** Partes do planejamento que cada grupo de módulos lê. O curto prazo, a lista de obras e as
- * configurações leem só obras, usuários, equipes e compromissos, que vão sempre. */
+/** Partes do planejamento que cada grupo de módulos lê. Obras, usuários e equipes vão sempre (lista de obras,
+ * configurações). Os compromissos da planilha semanal vão só a quem tem o curto prazo ou o médio prazo
+ * (08/11/2026, quando o curto prazo passou a ser liberado por pessoa). */
 const WAGON_DATA = [
   'locations',
   'sequences',
@@ -91,29 +92,32 @@ const WAGON_DATA = [
 ] as const;
 const PLAN_DATA = ['plans', 'planTasks', 'planDependencies'] as const;
 const IFC_DATA = ['ifcModels', 'ifcVersions', 'linkRules'] as const;
-type Slice = (typeof WAGON_DATA)[number] | (typeof PLAN_DATA)[number] | (typeof IFC_DATA)[number];
-/** O que cada módulo em desenvolvimento precisa receber. O médio prazo leva também os vagões: a
- * janela de três meses, a cobertura e o quadro de restrições da aba 3 leem atividades e locais. */
+const SHORT_DATA = ['commitments'] as const;
+type Slice = (typeof WAGON_DATA)[number] | (typeof PLAN_DATA)[number] | (typeof IFC_DATA)[number] | (typeof SHORT_DATA)[number];
+/** O que cada módulo liberado por pessoa precisa receber. O médio prazo leva também os vagões (a janela de três
+ * meses, a cobertura e o quadro de restrições da aba 3 leem atividades e locais) e os compromissos (a janela
+ * esconde as tarefas que já estão na planilha da semana). */
 const MODULE_DATA: Record<string, readonly Slice[]> = {
   'longo-prazo': WAGON_DATA,
   vagoes: WAGON_DATA,
   dividas: WAGON_DATA,
   importar: WAGON_DATA,
-  'medio-prazo': [...WAGON_DATA, ...PLAN_DATA],
+  'medio-prazo': [...WAGON_DATA, ...PLAN_DATA, ...SHORT_DATA],
+  'curto-prazo': SHORT_DATA,
   ifc: IFC_DATA,
   federacao: IFC_DATA,
 };
 
 /** Recorte de quem não desenvolve: só o que os módulos liberados para a pessoa leem. Sem módulo
- * liberado, é o recorte do go-live do curto prazo (o resto pesa megabytes a cada ação). Até
- * 14/10/2026 o recorte ignorava os módulos liberados, e quem tinha IFC ou médio prazo liberado abria
- * a tela vazia (os modelos criados não apareciam). Função pura: devolve um objeto novo. Efeitos
- * conhecidos no recorte do curto prazo: os cards de obra ficam sem restrição vencida, takt vencido e
- * progresso; a contagem de uso das equipes só conta compromissos. */
+ * liberado, só obras, usuários e equipes (o resto pesa megabytes a cada ação). Até 14/10/2026 o recorte
+ * ignorava os módulos liberados, e quem tinha IFC ou médio prazo liberado abria a tela vazia (os modelos
+ * criados não apareciam). Função pura: devolve um objeto novo. Efeitos conhecidos: os cards de obra ficam
+ * sem restrição vencida, takt vencido e progresso, e sem o PPC para quem não tem o curto prazo; a contagem
+ * de uso das equipes só conta o que a pessoa recebe (o servidor confere a exclusão com tudo). */
 export function slimForModules(data: PlanningData, modules: readonly string[]): PlanningData {
   const keep = new Set<Slice>(modules.flatMap(section => MODULE_DATA[section] ?? []));
   const slim: PlanningData = { ...data };
-  for (const key of [...WAGON_DATA, ...PLAN_DATA, ...IFC_DATA]) if (!keep.has(key)) slim[key] = [];
+  for (const key of [...WAGON_DATA, ...PLAN_DATA, ...IFC_DATA, ...SHORT_DATA]) if (!keep.has(key)) slim[key] = [];
   // Gantt de legalização (04/11/2026, regra 4): é da aba 1. Quem tem o longo prazo sem o médio prazo
   // recebe só ele e as linhas de base dele, com tarefas e vínculos; os planos do mês continuam fora.
   if (!keep.has('plans') && modules.includes('longo-prazo')) {
@@ -126,9 +130,9 @@ export function slimForModules(data: PlanningData, modules: readonly string[]): 
   return slim;
 }
 
-/** Recorte do go-live do curto prazo: nenhum módulo em desenvolvimento. */
+/** Recorte de quem tem só o curto prazo entre os módulos liberados por pessoa. */
 export function slimForShortTerm(data: PlanningData): PlanningData {
-  return slimForModules(data, []);
+  return slimForModules(data, ['curto-prazo']);
 }
 
 /** Ids das entidades de uma obra que podem ter histórico: é o que a rota de histórico confere

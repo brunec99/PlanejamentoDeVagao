@@ -58,7 +58,7 @@ export const steps: TourStep[] = [
   {
     target: 'obra-config-allocate',
     title: 'Alocar recursos',
-    body: 'Atalhos para as telas onde as equipes são usadas: o curto prazo e, para quem desenvolve o sistema, o médio prazo.',
+    body: 'Atalhos para as telas onde as equipes são usadas: o curto prazo, para quem tem o módulo liberado, e, para quem desenvolve o sistema, o médio prazo.',
   },
   {
     target: 'obra-config-week',

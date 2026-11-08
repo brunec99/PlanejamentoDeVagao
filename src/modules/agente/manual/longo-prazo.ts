@@ -45,7 +45,7 @@ As seções abaixo sobre salvamento, exportar e importar valem para o Planejador
 O "?" ao lado da descrição ("Como funciona") explica como as visões se encaixam.
 
 ## Quem vê e quem edita
-- O módulo está em desenvolvimento: a aba só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Longo prazo" liberado pelo admin na tela de usuários das Configurações. Quem não tem acesso é levado à aba 4; se a aba não aparece no menu, peça a liberação ao administrador.
+- É um módulo liberado por pessoa: a aba só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Longo prazo" liberado pelo admin na tela de usuários das Configurações. Quem não tem acesso é levado ao Dashboard da obra (aba 0); se a aba não aparece no menu, peça a liberação ao administrador.
 - Perfil de consulta vê tudo e não altera nada: o Planejador avisa "Seu perfil é de consulta: o plano aparece aqui, mas não pode ser alterado" e mostra só "Linhas de base", "Medições", "Pavimentos" e "Exportar".
 - Planejador, gestor e admin veem também "Novo serviço", "Recalcular", "Gerar vagões" e "Importar", e podem registrar restrições e linhas de base da obra.
 

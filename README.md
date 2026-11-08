@@ -14,7 +14,7 @@ A interface de cada obra é organizada em **seis abas numeradas**: os quatro ní
    - Fotos do problema e da correção, comprimidas no navegador.
    - Resolver exige a foto da correção e a data.
    - Lista classificável por qualquer coluna, como no Excel, e PDF (20/10/2026) agrupado por pavimento, empreiteiro ou tipo, só com os grupos escolhidos, com fotos, responsáveis e três gráficos de rosca na primeira folha; as mesmas roscas ficam no topo da aba e filtram a lista.
-   - Fica fora do snapshot (migração 0028) e é aberta a todos.
+   - Fica fora do snapshot (migração 0028). Foi aberta a todos até 08/11/2026; desde então é liberada por pessoa, como o curto prazo.
    - Veja [docs/terminalidade.md](docs/terminalidade.md).
 6. **Segurança do trabalho** (05/11/2026): a vistoria dos técnicos de segurança (TST), com o mesmo processo da terminalidade e as colunas da planilha "SST - Controle geral": tipo de apontamento, risco (consequência e probabilidade), descrição, local, data, foto do apontamento, data e foto da correção e dias para resolver.
    - **Só o TST e o admin lançam, editam, finalizam, reabrem e excluem.** TST é um tipo de usuário da lista "Papel" (Configurações → Usuários e "Cadastrar usuário"); no resto do sistema ele só consulta. Planejador, gestor e consulta só consultam a aba 6.
@@ -275,6 +275,8 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
   **28/10/2026:** histórico do curto prazo importado para Atmos e Tauá (obras criadas nesta data), Brizz, Essenza e Mozine (16.042 compromissos). A causa "Falha de Gestão da Construtora" entrou na lista oficial. Amariles, Lummi e My Sunset ficaram de fora, e a Blentt não foi tocada. Veja a [importação de 28/10](docs/go-live-curto-prazo.md#importação-do-histórico-das-demais-obras-28102026).
 
   **28/10/2026, tela de usuários:** os cartões com chips viraram uma grade pessoa × obra (ou × módulo), em ordem alfabética, com pesquisa por nome ou e-mail, filtros de papel e de obra e clique que marca a célula na hora. Veja a [tela de usuários em grade](docs/go-live-curto-prazo.md#tela-de-usuários-em-grade-28102026).
+
+  **08/11/2026, curto prazo e terminalidade liberados por pessoa:** as abas 4 e 5 deixaram de ser abertas a todos e entraram nos módulos que o admin libera por pessoa (Configurações → Usuários → Módulos). Quem já usava foi mantido pela migração 0042 (aplicada antes do deploy); usuário novo começa sem os dois. Quem não tem o módulo vai para o Dashboard da obra, e as APIs, os comandos da planilha, o modo de campo e os PDFs recusam. Abertos a todos ficam a lista de obras, o Dashboard, a Segurança do trabalho e as Configurações da obra. Veja [a mudança de 08/11](docs/go-live-curto-prazo.md#curto-prazo-e-terminalidade-liberados-por-pessoa-08112026).
 
   **08/11/2026, liberação em lote:** a grade ganhou uma caixa de seleção por pessoa (com "marcar todos" e Shift+clique). Ao marcar, aparece uma barra para escolher obras ou módulos e liberar ou revogar para todos de uma vez, numa gravação só (`set_access_batch`). Não precisa de migração. Veja a [liberação em lote](docs/go-live-curto-prazo.md#liberação-em-lote-na-grade-de-usuários-08112026).
 

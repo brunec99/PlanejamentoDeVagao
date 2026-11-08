@@ -4,7 +4,7 @@ import { scopePlanning, slimForModules, slimForShortTerm } from '../src/applicat
 import { createMockData } from '../src/mocks/planning';
 import type { PlanningData } from '../src/domain/entities';
 
-test('Fora do desenvolvimento, o payload leva só obras, usuários, equipes e compromissos', () => {
+test('Com só o curto prazo liberado, o payload leva só obras, usuários, equipes e compromissos', () => {
   const data = createMockData();
   data.commitments.push({
     id: 'c-1',
@@ -50,6 +50,12 @@ test('Fora do desenvolvimento, o payload leva só obras, usuários, equipes e co
   assert.deepEqual(Object.keys(slim).sort(), Object.keys(data).sort());
   // A entrada não é tocada: o recorte devolve um objeto novo.
   assert.deepEqual(data, snapshot);
+  // 08/11/2026: sem o curto prazo (nem o médio prazo), as linhas da planilha semanal não vão.
+  const none = slimForModules(data, []);
+  assert.deepEqual(none.commitments, []);
+  for (const key of ['works', 'users', 'teams', 'history'] as const) assert.equal(none[key], data[key], key);
+  assert.equal(slimForModules(data, ['terminalidade']).commitments.length, 0);
+  assert.equal(slimForModules(data, ['medio-prazo']).commitments, data.commitments, 'a janela do médio prazo lê os compromissos');
 });
 test('payload de consulta não expõe plano, tarefa, anotação ou histórico de outra obra', () => {
   const data = createMockData();
@@ -117,6 +123,6 @@ test('Módulo liberado leva os dados que a tela dele lê, e só eles', () => {
   assert.equal(slimForModules(data, ['federacao']).ifcModels.length, 1);
   assert.ok(slimForModules(data, ['vagoes']).wagons.length > 0);
   assert.equal(slimForModules(data, ['desconhecido']).ifcModels.length, 0);
-  assert.deepEqual(slimForModules(data, []), slimForShortTerm(data));
+  assert.deepEqual(slimForModules(data, ['curto-prazo']), slimForShortTerm(data));
   assert.equal(data.ifcModels.length, 1, 'a entrada não é alterada');
 });

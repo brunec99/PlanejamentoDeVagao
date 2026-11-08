@@ -19,7 +19,8 @@ import type { PortfolioSafetyItem, PortfolioSourcesResponse } from '@/modules/da
  * consulta a `long_term_plans` com todas as obras, e só para quem pode abrir o módulo (a rota fica fora de
  * `RESTRICTED_API_PREFIXES`: o proxy só exige login, e o acesso ao longo prazo é decidido aqui, sem 403 para
  * quem não o tem). A terminalidade vem por obra, até `TERMINALITY_CONCURRENCY` ao mesmo tempo, sem fotos
- * (nenhuma URL assinada). Nenhuma tabela nova, nenhuma migração.
+ * (nenhuma URL assinada), e desde 08/11/2026 só para quem pode abrir o módulo (passou a ser liberado por pessoa;
+ * sem ele, nenhuma obra traz `terminality` e o quadro some, como já fazia a tela). Nenhuma tabela nova.
  *
  * Segurança do trabalho (06/11/2026, regra 12 do modelo aprovado): a lista única de tipos e os apontamentos de
  * todas as obras numa leitura paginada de `safety_items`, só com as colunas do cálculo (sem descrição nem
@@ -164,6 +165,7 @@ export async function GET() {
   if (!profile) return respond({ error: 'Perfil não provisionado. Contate o gestor.' }, 403);
   const workIds = [...new Set(profile.workIds)];
   const longTermAccess = hasSectionAccess('longo-prazo', { developer, modules });
+  const terminalityAccess = hasSectionAccess('terminalidade', { developer, modules });
   const timed = async <T>(phase: string, work: Promise<T>): Promise<T> => {
     const phaseStartedAt = performance.now();
     try {
@@ -175,7 +177,7 @@ export async function GET() {
   try {
     const [longTerm, terminality, safety] = await Promise.all([
       timed('longTerm', readLongTerm(workIds, longTermAccess, profile.id)),
-      timed('terminality', readTerminality(workIds, profile.id)),
+      timed('terminality', terminalityAccess ? readTerminality(workIds, profile.id) : Promise.resolve(new Map<string, TerminalityRead>())),
       timed('safety', readSafety(workIds, profile.id)),
     ]);
     return respond(assemblePortfolioSources(workIds, longTerm, terminality, safety), 200);

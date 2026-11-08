@@ -27,7 +27,7 @@ export const WORK_TABS = [
   { section: 'medio-prazo', number: 3, short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
   { section: 'curto-prazo', number: 4, short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },
   // 08/10/2026: a "Lista de pendências" de terminalidade por pavimento, apartamento e empreiteiro,
-  // com fotos. Aberta a todos desde o primeiro dia, como o curto prazo (não está em RESTRICTED_SECTIONS).
+  // com fotos. Aberta a todos até 08/11/2026, quando ela e o curto prazo passaram a ser liberados por pessoa.
   { section: 'terminalidade', number: 5, short: 'Terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento · Fotos' },
   // 05/11/2026: a vistoria de segurança do trabalho, no processo da terminalidade (foto do apontamento,
   // finalização com foto da correção). Aberta a todos para consulta; só o TST e o admin gravam.
@@ -82,7 +82,7 @@ function useWork() {
   const context = usePlanning();
   const developer = useDeveloper();
   const modules = useModules();
-  // Fora do desenvolvimento, só as seções abertas no go-live e os módulos liberados para a pessoa;
+  // Fora do desenvolvimento, só as seções abertas a todos e os módulos liberados para a pessoa;
   // o número é o da aba, mesmo quando uma aba do meio está escondida.
   const tabs = WORK_TABS.filter(t => hasSectionAccess(t.section, { developer, modules }));
   const support = SUPPORT.filter(s => hasSectionAccess(s.section, { developer, modules }));
@@ -157,7 +157,7 @@ export function WorkTabsMobile() {
   const { workId, isActive, tabs } = useWork();
   const strip = useRef<HTMLElement>(null);
   const pathname = usePathname();
-  // A aba aberta rola para a vista: no celular o curto prazo, a única liberada em produção, ficava
+  // A aba aberta rola para a vista: no celular o curto prazo, por muito tempo a única liberada, ficava
   // fora da tela à direita e a faixa parecia não marcar onde se está.
   useEffect(() => {
     const active = strip.current?.querySelector<HTMLElement>('[aria-current="page"]');

@@ -18,7 +18,7 @@ A aba 5 é a "Lista de pendências" da obra. Ela substitui a planilha do Sheets 
 - Resolvido?
 - Foto da correção
 
-A aba fica **aberta a todos os usuários** desde o primeiro dia, como o curto prazo. Ela não está em `RESTRICTED_SECTIONS` (`src/application/module-access.ts`).
+A aba ficou **aberta a todos os usuários** do primeiro dia até 08/11/2026, como o curto prazo. **Desde 08/11/2026 ela é liberada por pessoa** (está em `RESTRICTED_SECTIONS`, `src/application/module-access.ts`): o admin marca "Terminalidade" em Configurações → Usuários → Módulos. Quem já usava foi mantido pela migração 0042. Sem o módulo, a aba some, o endereço desvia para o Dashboard da obra, e `/api/terminalidade/*` responde 403, inclusive para o modo de campo e o PDF. Veja [Curto prazo e terminalidade liberados por pessoa](go-live-curto-prazo.md#curto-prazo-e-terminalidade-liberados-por-pessoa-08112026).
 
 ## Decisões do usuário (08/10/2026)
 

@@ -78,6 +78,7 @@ Para entrar com outra conta, clique em "Continuar com o Google" e escolha a outr
       'não tem acesso a esta obra',
       'permite apenas consulta',
       'módulo disponível apenas para desenvolvimento',
+      'módulo não liberado para você',
     ],
     screen: 'geral',
     body: `## Quando o login dá errado
@@ -98,7 +99,7 @@ A tela de login mostra um quadro vermelho "Não foi possível concluir o login" 
 - **Sessão expirada. Faça login novamente.** Entre de novo; o sistema devolve você à mesma página.
 - **Você não tem acesso a esta obra.** Peça a liberação a um administrador.
 - **Seu perfil permite apenas consulta.** Você é "Consulta" e tentou alterar algo. Peça a mudança de papel a um administrador.
-- **Módulo disponível apenas para desenvolvimento.** O módulo não foi liberado para você (veja a seção de perfis e módulos).
+- **Módulo não liberado para você. Peça a liberação a um administrador.** O módulo (por exemplo, curto prazo ou terminalidade) não foi liberado para você: peça a um administrador (veja a seção de perfis e módulos). Até 08/11/2026 a mesma recusa dizia "Módulo disponível apenas para desenvolvimento."
 
 ## Solicitar acesso
 
@@ -136,6 +137,7 @@ Só e-mails dos dois domínios podem pedir ("Só contas @atrincorporadora.com.br
       'liberar módulo',
       'só vejo o curto prazo',
       'aba não aparece',
+      'aba sumiu',
     ],
     screen: 'geral',
     body: `## Os quatro papéis
@@ -149,12 +151,12 @@ Cada pessoa cadastrada tem um papel, mostrado embaixo do nome na lateral, que va
 
 | O que fazer | Consulta | Planejador | Gestor | Admin |
 | --- | --- | --- | --- | --- |
-| Ver obras liberadas, planilha semanal, indicadores, PDFs e tempo | Sim | Sim | Sim | Sim |
-| Editar a planilha do curto prazo (linhas, apontamento Sim/Não, causa, justificativa) | Não | Sim | Sim | Sim |
+| Ver as obras liberadas e, nos módulos liberados, planilha semanal, indicadores, PDFs e tempo | Sim | Sim | Sim | Sim |
+| Editar a planilha do curto prazo (linhas, apontamento Sim/Não, causa, justificativa) | Não | Se liberado | Se liberado | Sim |
 | Alterar linhas de semana já encerrada (a partir da quarta-feira seguinte) | Não | Não | Não | Sim |
 | Cadastrar, editar e excluir empreiteiros e equipes | Não | Sim | Sim | Sim |
 | Definir a semana 1 e o local da obra | Não | Sim | Sim | Sim |
-| Editar nos módulos em desenvolvimento (longo prazo, vagões, médio prazo...) | Não | Se liberado | Se liberado | Sim |
+| Editar nos demais módulos liberados por pessoa (terminalidade, longo prazo, vagões, médio prazo...) | Não | Se liberado | Se liberado | Sim |
 | Cadastrar obra | Não | Não | Sim | Sim |
 | Liberar vagão em caráter excepcional | Não | Não | Sim | Sim |
 | Reabrir vagão terminal | Não | Não | Sim | Sim |
@@ -172,17 +174,20 @@ Regras que valem para todos:
 
 ## Módulos: abertos e liberados por pessoa
 
-Os módulos ainda em desenvolvimento aparecem só para quem os tem liberados.
+Os módulos liberados por pessoa aparecem só para quem os tem liberados. Desde 08/11/2026 o curto prazo e a terminalidade fazem parte desse grupo; antes eram abertos a todos.
 
-**Abertos a todos** (basta ter a obra liberada): a lista de obras, a aba **4 "Cronograma de curto prazo"**, a aba **5 "Terminalidade"** e **"Configurações da obra"** (em Apoio). A tela "Configurações" geral é só de administradores.
+**Abertos a todos** (basta ter a obra liberada): a lista de obras, a aba **0 "Dashboard da obra"** (cada quadro só aparece para quem pode abrir o módulo de origem), a aba **6 "Segurança do trabalho"** (consulta para todos; só TST e admin lançam e finalizam) e **"Configurações da obra"** (em Apoio). O **Dashboard geral** segue a regra dele (duas obras ou mais, e sempre admin e desenvolvedor). A tela "Configurações" geral é só de administradores.
 
-**Liberados por pessoa, pelo administrador** (visão "Módulos" da grade de usuários): aba 1 **"Cronograma de longo prazo"**, aba 2 **"Planejamento por vagões"**, aba 3 **"Cronograma de médio prazo"** e, em Apoio, **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**. Administradores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
+**Liberados por pessoa, pelo administrador** (Configurações → Usuários, visão "Módulos", célula por pessoa ou em lote): aba 1 **"Cronograma de longo prazo"**, aba 2 **"Planejamento por vagões"**, aba 3 **"Cronograma de médio prazo"**, aba 4 **"Cronograma de curto prazo"**, aba 5 **"Terminalidade"** e, em Apoio, **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**. Administradores e desenvolvedores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
+
+Quem já usava o curto prazo e a terminalidade em 08/11/2026 continuou com os dois liberados; o administrador revoga de quem não deve ter. Usuário cadastrado a partir dessa data começa sem nenhum módulo, inclusive esses dois: o administrador libera.
 
 ### O que acontece sem a liberação
 
-- O item **não aparece** na lateral nem na faixa de abas do celular; a numeração das abas não muda (é normal ver só a 4 e a 5).
-- O endereço de uma aba não liberada **redireciona para o curto prazo** da mesma obra, sem mensagem.
-- Um pedido feito pela tela a um módulo não liberado responde **"Módulo disponível apenas para desenvolvimento."** Para liberar, fale com um administrador.`,
+- O item **não aparece** na lateral nem na faixa de abas do celular; a numeração das abas não muda (é normal ver, por exemplo, só a 0, a 4, a 5 e a 6).
+- O endereço de uma aba não liberada **redireciona para o Dashboard da obra** (aba 0) da mesma obra, sem mensagem. Até 08/11/2026 o desvio era para o curto prazo.
+- O modo de campo da terminalidade ("/campo/terminalidade") e os PDFs do curto prazo e da terminalidade também recusam quem não tem o módulo.
+- Um pedido feito pela tela a um módulo não liberado responde **"Módulo não liberado para você. Peça a liberação a um administrador."** (até 08/11/2026, "Módulo disponível apenas para desenvolvimento."). Para liberar, fale com um administrador.`,
   },
   {
     id: 'obras-lista',
@@ -219,11 +224,11 @@ Os módulos ainda em desenvolvimento aparecem só para quem os tem liberados.
 - **"Takt vencido"**: vagões com o período estourado. Conta como "Atenção".
 - **"Progresso em produção · N vagões"**: aparece quando a obra tem vagões em produção; é o progresso ponderado das atividades desses vagões.
 
-Os indicadores de restrições e vagões vêm dos módulos em desenvolvimento; numa obra que só usa o curto prazo eles ficam em zero e "Em dia".
+Os indicadores de restrições e vagões vêm do longo prazo e dos vagões; numa obra que só usa o curto prazo eles ficam em zero e "Em dia".
 
 ### Abrir a obra
 
-O cartão inteiro é um link ("Abrir planejamento"): clique em qualquer ponto dele. Para administradores a obra abre na aba 1, "Cronograma de longo prazo"; para todos os demais, na aba 4, "Cronograma de curto prazo", mesmo que a pessoa tenha outros módulos liberados. Depois, troque de aba pela lateral ou pela faixa de abas do celular.
+O cartão inteiro é um link ("Abrir planejamento"): clique em qualquer ponto dele. A obra abre na aba 0, "Dashboard da obra", que é aberta a todos que têm a obra. Depois, troque de aba pela lateral ou pela faixa de abas do celular; só aparecem as abas liberadas para você.
 
 ### Cadastrar obra
 
@@ -277,11 +282,11 @@ São três blocos: "Takt por obra" (takt padrão e início do primeiro vagão de
 
 ### Pedidos de acesso
 
-O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mail ("e-mail confirmado pelo Google" ou "e-mail digitado, não confirmado"), quando pediu e a mensagem. **"Cadastrar"** cria o usuário como Consulta e sem obras, e o pedido sai da lista: libere as obras e os módulos na grade e avise a pessoa para entrar de novo com o Google. **"Dispensar"** só tira o pedido da lista.
+O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mail ("e-mail confirmado pelo Google" ou "e-mail digitado, não confirmado"), quando pediu e a mensagem. **"Cadastrar"** cria o usuário como Consulta, sem obras e sem módulos (nem curto prazo e terminalidade), e o pedido sai da lista: libere as obras e os módulos na grade e avise a pessoa para entrar de novo com o Google. **"Dispensar"** só tira o pedido da lista.
 
 ### Cadastrar usuário
 
-Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
+Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. O usuário novo começa sem obras e sem módulos, inclusive curto prazo e terminalidade: libere o que ele precisa na grade. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
 
 Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuário já cadastrado. Altere o papel e as obras na lista abaixo."
 
@@ -289,7 +294,7 @@ Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuári
 
 Uma linha por pessoa (nome, e-mail e, na sua, o selo "você") e uma coluna por obra, com código, nome e quantos dos listados têm aquela obra. Célula marcada é obra liberada: **clique para liberar ou revogar; vale na hora, sem botão de salvar.** Quem não tem a obra não a vê na lista de obras; quem não tem nenhuma recebe "Sem obra liberada" na linha. Se o servidor recusar, o aviso "Não foi possível salvar." explica e a célula volta.
 
-- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo em desenvolvimento (longo prazo, vagões, médio prazo, modelo federado, arquivos IFC, dívidas, integrações). Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
+- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo liberado por pessoa: longo prazo, vagões, médio prazo, curto prazo, terminalidade, modelo federado, arquivos IFC, dívidas e integrações (as colunas "Curto prazo" e "Terminalidade" existem desde 08/11/2026). Os abertos a todos não viram coluna; a nota abaixo da grade os lista: Dashboard, Segurança do trabalho e Configurações da obra. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
 - **Várias pessoas de uma vez (liberação em lote):** marque a caixa ao lado do nome de cada pessoa. A caixa do cabeçalho "Usuário" marca todos os listados (com filtro, só os filtrados), e Shift+clique marca o intervalo entre duas caixas. Aparece uma barra com "N usuários selecionados": escolha as obras (na visão "Módulos", os módulos), ou "Todas"/"Todos", e clique em **"Liberar para N pessoas"** ou **"Revogar de N pessoas"**. O número conta só quem muda de fato; quem já tem (ou já não tem) fica como está. Revogar pede confirmação; liberar vale na hora. A seleção continua ao pesquisar e filtrar, então dá para montar a turma pesquisando nome a nome; quem saiu da lista continua marcado e entra no lote, e a barra avisa ("N estão fora da lista atual e também entram"). Em "Módulos", admins ficam de fora, porque já veem tudo. "Limpar seleção" desmarca todos. Papel e exclusão continuam linha a linha.
 - **"Pesquisar nome ou e-mail"**: cada palavra digitada precisa aparecer, sem diferença de acento. Filtros **"Todos os papéis"** e **"Todas as obras"** (com "Sem obra liberada" e "Com acesso a [obra]"); "Limpar filtros" desfaz. O contador diz "N de M usuários".
 - Clique em **"Usuário"** ou **"Papel"** no cabeçalho para ordenar; de novo, inverte.
@@ -348,7 +353,7 @@ O aviso **"N grafias"** significa que o mesmo empreiteiro foi escrito de jeitos 
 Em cada equipe:
 
 - **Capacidade** editável na própria linha: grava ao sair do campo ou com Enter. Valor inválido mostra "Capacidade inválida." e o campo volta ao anterior.
-- **Vínculos**: "N no médio", "N no curto", "N em atividades", "N em linhas de base" dizem onde a equipe aparece. Contam registros antigos também, então não são a carga da semana.
+- **Vínculos**: "N no médio", "N no curto", "N em atividades", "N em linhas de base" dizem onde a equipe aparece. Contam registros antigos também, então não são a carga da semana. "N no curto" só aparece para quem tem o curto prazo liberado.
 - **"Editar"** abre a equipe na gaveta e mantém os vínculos; mudar o nome não altera o que já foi gravado nos compromissos semanais.
 - **Lixeira**: exclui, depois de confirmar, só equipe **sem vínculo**. Com vínculos ela fica desabilitada ("A equipe tem vínculos. Preserve o cadastro ou remova suas alocações antes de excluir.").
 
@@ -358,7 +363,7 @@ Em cada equipe:
 - "Capacidade deve ser um número inteiro positivo de atividades por semana."
 - "Esta equipe tem compromissos na planilha semanal. Remova a alocação antes de excluir a equipe." (e variantes para atividades, médio prazo e linhas de base): troque a equipe nas linhas que a usam ou mantenha o cadastro.
 
-Embaixo da lista, **"Alocar recursos: Curto prazo"** leva à planilha onde as equipes são usadas.`,
+Embaixo da lista, **"Alocar recursos: Curto prazo"** leva à planilha onde as equipes são usadas; o atalho só aparece para quem tem o curto prazo liberado.`,
   },
   {
     id: 'obra-configuracoes-semana-local',

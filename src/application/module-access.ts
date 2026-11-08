@@ -1,31 +1,45 @@
 import type { Command } from './use-cases/commands';
 
-/** Go-live do curto prazo: só ele (com a lista de obras e as configurações) fica aberto a todos. Os
- * demais módulos da obra seguem em desenvolvimento e ficam restritos a quem desenvolve o sistema.
- * Ser desenvolvedor não é um papel: soma-se ao papel (consulta, planejador, gestor, admin) e às obras
- * liberadas, que continuam valendo. Funções puras: o proxy, as rotas e os testes usam as mesmas. */
+/** Acesso aos módulos da obra. Abertos a todos que têm a obra: a lista de obras, o dashboard (aba 0), a
+ * segurança do trabalho (aba 6) e as configurações da obra. Os demais, inclusive o curto prazo e a
+ * terminalidade desde 08/11/2026, ficam com quem desenvolve, com os admins e com quem tem o módulo liberado
+ * pelo admin. Ser desenvolvedor não é um papel: soma-se ao papel (consulta, planejador, gestor, admin) e às
+ * obras liberadas, que continuam valendo. Funções puras: o proxy, as rotas e os testes usam as mesmas. */
 
 /** Primeiro admin, provisionado no primeiro login; também o desenvolvedor quando `DEVELOPER_EMAILS` falta. */
 export const BOOTSTRAP_ADMIN_EMAIL = 'bruno.engenharia@atrincorporadora.com.br';
 
-export const RESTRICTED_MODULE_MESSAGE = 'Módulo disponível apenas para desenvolvimento.';
+export const RESTRICTED_MODULE_MESSAGE = 'Módulo não liberado para você. Peça a liberação a um administrador.';
 
-/** Seções da obra restritas ao desenvolvimento. Ficam abertas `curto-prazo` e `configuracoes`. */
-export const RESTRICTED_SECTIONS = ['longo-prazo', 'vagoes', 'medio-prazo', 'federacao', 'ifc', 'dividas', 'importar'] as const;
+/** Seções da obra liberadas por pessoa. Ficam abertas `dashboard`, `seguranca` e `configuracoes`. Curto prazo e
+ * terminalidade entraram aqui em 08/11/2026, a pedido do usuário; quem já os usava foi mantido (migração 0042). */
+export const RESTRICTED_SECTIONS = [
+  'longo-prazo',
+  'vagoes',
+  'medio-prazo',
+  'curto-prazo',
+  'terminalidade',
+  'federacao',
+  'ifc',
+  'dividas',
+  'importar',
+] as const;
 
-/** APIs que só servem às seções restritas. `/api/history` é lido pelo vagão e pelo médio prazo. */
-export const RESTRICTED_API_PREFIXES = ['/api/long-term-plan', '/api/lob', '/api/prevision', '/api/ifc', '/api/history'] as const;
+/** APIs que só servem às seções restritas. `/api/history` é lido pelo vagão e pelo médio prazo. A terminalidade
+ * inclui `/api/terminalidade/campo`, de onde o modo de campo (`/campo/terminalidade`, fora do proxy) lê os dados. */
+export const RESTRICTED_API_PREFIXES = [
+  '/api/long-term-plan',
+  '/api/lob',
+  '/api/prevision',
+  '/api/ifc',
+  '/api/history',
+  '/api/curto-prazo',
+  '/api/terminalidade',
+] as const;
 
-/** Comandos do curto prazo, das equipes (configurações da obra) e da administração; o resto é dos
- * módulos em desenvolvimento. Os papéis continuam conferidos em `applyCommand`. */
+/** Comandos das equipes (configurações da obra) e da administração; o resto é dos módulos liberados por pessoa
+ * (os do curto prazo saíram daqui em 08/11/2026). Os papéis continuam conferidos em `applyCommand`. */
 export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Command['type']>([
-  'create_commitment',
-  'update_commitment',
-  'delete_commitment',
-  'reorder_commitments',
-  'record_fulfillment',
-  'record_fulfillments',
-  'clear_fulfillment',
   'create_team',
   'update_team',
   'delete_team',
@@ -37,15 +51,15 @@ export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Comm
   'create_work',
 ]);
 
-/** Catálogo de módulos que a tela de usuários mostra (14/10/2026): os sempre abertos aparecem marcados
- * e travados; os em desenvolvimento o admin libera por pessoa (`User.modules`), sem torná-la admin nem
- * desenvolvedora. Admin e `DEVELOPER_EMAILS` veem todos. */
+/** Catálogo de módulos que a tela de usuários mostra (14/10/2026): os abertos não viram coluna na grade; os
+ * demais o admin libera por pessoa (`User.modules`), sem torná-la admin nem desenvolvedora. Admin e
+ * `DEVELOPER_EMAILS` veem todos. */
 export interface ModuleInfo {
   section: string;
   label: string;
   hint: string;
   group: 'Planejamento' | 'Apoio';
-  /** Aberto a todos desde o go-live; não depende de liberação. */
+  /** Aberto a todos que têm a obra; não depende de liberação. */
   open?: boolean;
 }
 export const MODULES: readonly ModuleInfo[] = [
@@ -54,8 +68,9 @@ export const MODULES: readonly ModuleInfo[] = [
   { section: 'longo-prazo', label: 'Longo prazo', hint: 'Linha de balanço, fluxos, medições e restrições', group: 'Planejamento' },
   { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações', group: 'Planejamento' },
   { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
-  { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento', open: true },
-  { section: 'terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento, com fotos', group: 'Planejamento', open: true },
+  // 08/11/2026: curto prazo e terminalidade deixaram de ser abertos a todos e passaram a ser liberados por pessoa.
+  { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento' },
+  { section: 'terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento, com fotos', group: 'Planejamento' },
   // 05/11/2026: aberta a todos para consulta; só o tipo TST (`User.tst`) e os admins lançam e finalizam.
   { section: 'seguranca', label: 'Segurança do trabalho', hint: 'Vistorias dos TSTs, com fotos', group: 'Planejamento', open: true },
   { section: 'federacao', label: 'Modelo federado', hint: 'Modelos IFC combinados', group: 'Apoio' },
@@ -73,11 +88,13 @@ const SECTION_APIS: Record<string, readonly string[]> = {
   'longo-prazo': ['/api/long-term-plan', '/api/lob', '/api/prevision'],
   vagoes: ['/api/history'],
   'medio-prazo': ['/api/history'],
+  'curto-prazo': ['/api/curto-prazo'],
+  terminalidade: ['/api/terminalidade'],
   federacao: ['/api/ifc'],
   ifc: ['/api/ifc'],
   importar: ['/api/prevision'],
 };
-/** Comandos de cada módulo em desenvolvimento. Comando sem módulo aqui fica só com quem desenvolve;
+/** Comandos de cada módulo liberado por pessoa. Comando sem módulo aqui fica só com quem desenvolve;
  * os papéis e as obras continuam conferidos em `applyCommand`. */
 const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
   // 04/11/2026: o Gantt de legalização da aba 1 usa o cronograma do médio prazo (regra 4: quem vê a
@@ -138,6 +155,16 @@ const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
     'resolve_restriction',
     'move_restriction',
   ],
+  // 08/11/2026: a planilha semanal. A terminalidade grava pela rota própria (`/api/terminalidade/commands`).
+  'curto-prazo': [
+    'create_commitment',
+    'update_commitment',
+    'delete_commitment',
+    'reorder_commitments',
+    'record_fulfillment',
+    'record_fulfillments',
+    'clear_fulfillment',
+  ],
   federacao: ['create_link_rule', 'delete_link_rule'],
   ifc: ['create_ifc_model', 'update_ifc_model', 'add_ifc_version'],
   dividas: ['create_pending', 'resolve_pending'],
@@ -146,12 +173,12 @@ const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
 
 export interface ModuleAccess {
   developer: boolean;
-  /** Módulos em desenvolvimento liberados para a pessoa. */
+  /** Módulos liberados para a pessoa. */
   modules: readonly string[];
 }
 
-/** Quem pode abrir uma seção da obra: as abertas, todos; as em desenvolvimento, quem desenvolve e
- * quem tem o módulo liberado. */
+/** Quem pode abrir uma seção da obra: as abertas, todos; as demais, quem desenvolve e quem tem o módulo
+ * liberado. */
 export function hasSectionAccess(section: string, access: ModuleAccess): boolean {
   return !isRestrictedSection(section) || access.developer || access.modules.includes(section);
 }
@@ -174,7 +201,7 @@ export function isCommandAllowed(type: unknown, access: ModuleAccess): boolean {
   return access.modules.some(section => SECTION_COMMANDS[section]?.includes(type as Command['type']));
 }
 
-/** Lista de módulos gravável: só seções em desenvolvimento conhecidas, sem repetição, na ordem do catálogo. */
+/** Lista de módulos gravável: só seções liberáveis conhecidas, sem repetição, na ordem do catálogo. */
 export function normalizeModules(list: unknown): string[] {
   const wanted = new Set(Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string') : []);
   return MODULES.map(m => m.section).filter(section => wanted.has(section) && isRestrictedSection(section));
@@ -230,18 +257,28 @@ export function isCommandAllowedForNonDeveloper(type: unknown): boolean {
   return typeof type === 'string' && NON_DEVELOPER_COMMANDS.has(type as Command['type']);
 }
 
-const RESTRICTED_PAGE = new RegExp(`^/obras/([^/]+)/(?:${RESTRICTED_SECTIONS.join('|')})(?:/|$)`);
+const SECTION_PATTERN = RESTRICTED_SECTIONS.join('|');
+const RESTRICTED_PAGE = new RegExp(`^/obras/([^/]+)/(${SECTION_PATTERN})(?:/|$)`);
+/** Folhas de impressão fora do layout (`/imprimir/curto-prazo/obra-1`): seguem a regra da aba de origem. */
+const RESTRICTED_PRINT = new RegExp(`^/imprimir/(${SECTION_PATTERN})/([^/]+)(?:/|$)`);
 
-/** Para uma página restrita da obra, o endereço do curto prazo da mesma obra; senão, null. */
+function restrictedPage(pathname: string): { workId: string; section: string } | null {
+  const page = pathname.match(RESTRICTED_PAGE);
+  if (page) return { workId: page[1], section: page[2] };
+  const print = pathname.match(RESTRICTED_PRINT);
+  return print ? { workId: print[2], section: print[1] } : null;
+}
+
+/** Para uma página restrita da obra, o dashboard da mesma obra (aba 0, aberta a todos); senão, null. Até
+ * 08/11/2026 o destino era o curto prazo, que passou a ser liberado por pessoa. */
 export function restrictedPageRedirect(pathname: string): string | null {
-  const workId = pathname.match(RESTRICTED_PAGE)?.[1];
-  return workId ? `/obras/${workId}/curto-prazo` : null;
+  const page = restrictedPage(pathname);
+  return page ? `/obras/${page.workId}/dashboard` : null;
 }
 
 /** A seção restrita de um endereço de página da obra ("medio-prazo"), ou null. */
 export function restrictedSectionOf(pathname: string): string | null {
-  const match = pathname.match(RESTRICTED_PAGE);
-  return match ? pathname.slice(match[0].indexOf(match[1]) + match[1].length + 1).split('/')[0] : null;
+  return restrictedPage(pathname)?.section ?? null;
 }
 
 export function isRestrictedApi(pathname: string): boolean {

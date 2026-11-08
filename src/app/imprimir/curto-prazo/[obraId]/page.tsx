@@ -1,3 +1,6 @@
+import { redirect } from 'next/navigation';
+import { hasSectionAccess } from '@/application/module-access';
+import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { PlanningProvider } from '@/modules/planejamento/planning-provider';
 import { PrintSheet } from '@/modules/curto-prazo/print-sheet';
 import { listParam } from '@/modules/curto-prazo/print-options';
@@ -5,7 +8,8 @@ import { listParam } from '@/modules/curto-prazo/print-options';
 export const metadata = { title: 'Planejamento de curto prazo' };
 
 /** Fora do layout do sistema (sem lateral nem cabeçalho) para imprimir só a planilha. O login segue
- * exigido pelo proxy, e os dados vêm da mesma /api/planning, recortada pelas obras da pessoa. */
+ * exigido pelo proxy, e os dados vêm da mesma /api/planning, recortada pelas obras da pessoa. Desde 08/11/2026
+ * o proxy também desvia quem não tem o curto prazo liberado; a página confere de novo. */
 export default async function Page({
   params,
   searchParams,
@@ -22,6 +26,7 @@ export default async function Page({
   }>;
 }) {
   const [{ obraId }, { semana, tipo, ordem, excluir, 'excluir-local': excluirLocal, painel }] = await Promise.all([params, searchParams]);
+  if (!hasSectionAccess('curto-prazo', await getRouteAccess())) redirect(`/obras/${encodeURIComponent(obraId)}/dashboard`);
   const week = semana && /^\d{4}-\d{2}-\d{2}$/.test(semana) ? semana : undefined;
   return (
     <PlanningProvider>

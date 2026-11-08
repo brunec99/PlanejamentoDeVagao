@@ -6,7 +6,8 @@ import { ArrowRight, ChevronRight, Pencil, Plus, Search, Trash2, Users } from 'l
 import type { Command } from '@/application/use-cases/commands';
 import type { Team } from '@/domain/entities';
 import { teamLabel, teamUsage } from '@/domain/resources';
-import { useDeveloper, usePlanning } from '@/modules/planejamento/planning-provider';
+import { hasSectionAccess } from '@/application/module-access';
+import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
 import { Field } from '@/modules/planejamento/forms';
 import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import { Drawer } from '@/modules/layout/drawer';
@@ -69,6 +70,9 @@ export function WorkResources({ workId }: { workId: string }) {
   const context = usePlanning();
   // O médio prazo ainda está em desenvolvimento: fora dele, o uso aparece sem o atalho.
   const developer = useDeveloper();
+  // Curto prazo liberado por pessoa desde 08/11/2026: sem ele, nem o atalho nem a contagem (a pessoa não recebe
+  // as linhas da planilha, e a contagem sairia zerada).
+  const shortTerm = hasSectionAccess('curto-prazo', { developer, modules: useModules() });
   const { toast } = useToast();
   const confirm = useConfirm();
   const id = useId();
@@ -356,6 +360,7 @@ export function WorkResources({ workId }: { workId: string }) {
                             usage={usages.get(team.id)!}
                             workId={workId}
                             developer={developer}
+                            shortTerm={shortTerm}
                             readOnly={readOnly}
                             busy={busy}
                             onEdit={() => open(team)}
@@ -408,15 +413,17 @@ export function WorkResources({ workId }: { workId: string }) {
       </div>
 
       <div data-tour="obra-config-allocate" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-        <span className="text-slate-500">Alocar recursos:</span>
+        {(developer || shortTerm) && <span className="text-slate-500">Alocar recursos:</span>}
         {developer && (
           <Link className="text-link inline-flex items-center gap-1" href={workPath(workId, 'medio-prazo')}>
             Médio prazo <ArrowRight size={14} aria-hidden />
           </Link>
         )}
-        <Link className="text-link inline-flex items-center gap-1" href={workPath(workId, 'curto-prazo')}>
-          Curto prazo <ArrowRight size={14} aria-hidden />
-        </Link>
+        {shortTerm && (
+          <Link className="text-link inline-flex items-center gap-1" href={workPath(workId, 'curto-prazo')}>
+            Curto prazo <ArrowRight size={14} aria-hidden />
+          </Link>
+        )}
         {readOnly && <span className="text-xs text-slate-400">Seu perfil permite consulta ao cadastro.</span>}
       </div>
     </section>
@@ -429,6 +436,7 @@ function TeamRow({
   usage,
   workId,
   developer,
+  shortTerm,
   readOnly,
   busy,
   onEdit,
@@ -439,6 +447,7 @@ function TeamRow({
   usage: Usage;
   workId: string;
   developer: boolean;
+  shortTerm: boolean;
   readOnly: boolean;
   busy: boolean;
   onEdit: () => void;
@@ -484,9 +493,11 @@ function TeamRow({
         ) : (
           <span className="text-slate-500">{usage.medium} no médio</span>
         )}
-        <Link className="text-link" href={workPath(workId, 'curto-prazo')}>
-          {usage.short} no curto
-        </Link>
+        {shortTerm && (
+          <Link className="text-link" href={workPath(workId, 'curto-prazo')}>
+            {usage.short} no curto
+          </Link>
+        )}
         {usage.activities > 0 && <span className="text-slate-500">{usage.activities} em atividades</span>}
         {usage.baselines > 0 && <span className="text-slate-500">{usage.baselines} em linhas de base</span>}
         {usage.legalization > 0 && <span className="text-slate-500">{usage.legalization} no Gantt de legalização</span>}

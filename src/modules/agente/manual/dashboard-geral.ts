@@ -38,7 +38,7 @@ A lista de obras continua sendo a página inicial do sistema.
 
 - O item e o botão aparecem para quem tem **duas obras ou mais** liberadas (com uma só não há o que comparar), e **sempre** para admin e desenvolvedor.
 - Cada pessoa vê **as mesmas obras da lista de obras**, e nenhuma outra.
-- Os quadros e as colunas seguem os **módulos liberados**, como na aba 0: curto prazo, terminalidade e segurança do trabalho para todos; longo prazo, vagões e médio prazo para quem o admin liberou (admin e desenvolvedor veem todos). Módulo que você não pode abrir não aparece nem vira coluna. A segurança aparece para todos com a obra liberada, como a aba 6, e não só para TST e admin.
+- Os quadros e as colunas seguem os **módulos liberados**, como na aba 0: segurança do trabalho para todos; longo prazo, vagões, médio prazo, curto prazo e terminalidade para quem o admin liberou (curto prazo e terminalidade entraram nessa regra em 08/11/2026; admin e desenvolvedor veem todos). Módulo que você não pode abrir não aparece nem vira coluna. A segurança aparece para todos com a obra liberada, como a aba 6, e não só para TST e admin.
 - O papel "Consulta" também vê a página e gera o PDF, como nas outras telas de leitura.
 
 ## A página, de cima para baixo

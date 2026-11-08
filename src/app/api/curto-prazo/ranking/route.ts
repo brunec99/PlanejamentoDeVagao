@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { getRouteProfile, requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { logRouteError } from '@/infrastructure/log';
 import { startOfWeek, validateDate } from '@/domain/validation';
@@ -66,6 +66,9 @@ export async function GET(request: NextRequest) {
   } catch {
     return responseError('Semana inválida: use AAAA-MM-DD.', 400);
   }
+  // Liberada por pessoa desde 08/11/2026: o proxy já barra quem não tem o módulo; a rota confere de novo.
+  const gate = await requireModuleAccess('curto-prazo');
+  if (gate.error) return gate.error;
   const profile = await getRouteProfile();
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);
   if (!profile.workIds.length) return responseError('Nenhuma obra liberada para você.', 403);

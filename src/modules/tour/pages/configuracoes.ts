@@ -63,7 +63,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-users-view',
     title: 'Obras ou módulos',
-    body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo em desenvolvimento. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
+    body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo liberado por pessoa, inclusive Curto prazo e Terminalidade. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
   },
   {
     target: 'config-users-select',
@@ -83,7 +83,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-user-modules',
     title: 'Módulos liberados',
-    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo em desenvolvimento para a pessoa. Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
+    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo para a pessoa: longo prazo, vagões, médio prazo, curto prazo, terminalidade e, no Apoio, modelo federado, arquivos IFC, dívidas e integrações. Sem o módulo, a aba some e o endereço leva ao Dashboard da obra. Dashboard, segurança do trabalho e configurações da obra são abertos a todos e não aparecem, como diz a nota abaixo da grade. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
   },
   {
     target: 'config-user-delete',

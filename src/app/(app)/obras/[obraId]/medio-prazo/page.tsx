@@ -67,7 +67,7 @@ export default async function Page({
   // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve nem tem permissão de teste; a
   // página confere de novo.
   const access = await getRouteAccess();
-  if (!hasSectionAccess('medio-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  if (!hasSectionAccess('medio-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/dashboard`);
   const { secao } = await searchParams;
   const section: Section = isSection(secao) ? secao : 'cronograma';
   const base = workPath(obraId, 'medio-prazo');

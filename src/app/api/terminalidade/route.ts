@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { getRouteProfile, requireModuleAccess } from '@/infrastructure/auth/supabase-server';
 import {
   loadTerminality,
   TerminalityUnavailableError,
@@ -16,6 +16,9 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
 export async function GET(request: NextRequest) {
   const workId = request.nextUrl.searchParams.get('workId') ?? '';
   if (!workId) return responseError('Obra não informada.', 400);
+  // Liberada por pessoa desde 08/11/2026: o proxy já barra quem não tem o módulo; a rota confere de novo.
+  const gate = await requireModuleAccess('terminalidade');
+  if (gate.error) return gate.error;
   const profile = await getRouteProfile().catch(() => null);
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);
   if (!profile.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);

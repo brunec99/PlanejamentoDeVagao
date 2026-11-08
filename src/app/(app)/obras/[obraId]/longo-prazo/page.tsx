@@ -51,7 +51,7 @@ export default async function Page({
   const { obraId } = await params;
   // Módulo em desenvolvimento: o proxy já desvia quem não desenvolve; a página confere de novo.
   const access = await getRouteAccess();
-  if (!hasSectionAccess('longo-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/curto-prazo`);
+  if (!hasSectionAccess('longo-prazo', access)) redirect(`/obras/${encodeURIComponent(obraId)}/dashboard`);
   const { visao } = await searchParams;
   const view: View = VIEWS.some(v => v.id === visao) ? (visao as View) : 'lob';
   const base = workPath(obraId, 'longo-prazo');

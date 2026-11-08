@@ -40,7 +40,7 @@ O sistema trata o IFC como uma base de dados, não como um desenho. No envio, o 
 Cada envio empilha uma versão nova (v1, v2, v3…). A mais recente é a "versão atual"; as anteriores ficam como "histórico", disponíveis no quantitativo, no visualizador e no federado. Nenhuma versão é substituída ou excluída, e não existe botão para apagar modelo ou versão. Para corrigir um nome, use "Renomear"; para corrigir um arquivo, envie uma versão nova.
 
 ## Quem vê e quem pode
-- O módulo está em desenvolvimento: o item "Arquivos IFC" só aparece na lateral para administradores, desenvolvedores e pessoas com o módulo liberado. O administrador libera por pessoa em "Configurações" (fora da obra), na grade de usuários, visão "Módulos", clicando na célula. Sem liberação, o item não aparece e o endereço digitado volta para o Curto prazo da obra.
+- É um módulo liberado por pessoa: o item "Arquivos IFC" só aparece na lateral para administradores, desenvolvedores e pessoas com o módulo liberado. O administrador libera por pessoa em "Configurações" (fora da obra), na grade de usuários, visão "Módulos", clicando na célula. Sem liberação, o item não aparece e o endereço digitado leva ao Dashboard da obra (aba 0).
 - Dentro do módulo, o perfil de consulta vê os modelos, usa o quantitativo e o visualizador e baixa o arquivo guardado, mas não vê "Cadastrar modelo", "Renomear" nem "Enviar nova versão". Planejador, gestor e administrador fazem tudo isso, sempre só nas obras liberadas para eles.`,
   },
   {
@@ -232,7 +232,7 @@ O quadro "Elemento selecionado" mostra a classe IFC, o "Name", o "GlobalId" e o 
 A tela "Modelo federado" reúne versões de vários modelos IFC da obra (arquitetura, estrutura, instalações…) numa mesma cena 3D, para a análise virtual dos projetos: disciplinas sobrepostas, isoladas ou cortadas, com consulta de peças. Fica no grupo "Apoio" da lateral (o endereço termina em /federacao). Ela depende de "Arquivos IFC": só entra na cena uma versão que já tem dados transcritos e geometria 3D. O botão "Arquivos IFC" do cabeçalho leva para lá.
 
 ## Quem vê e quem pode
-Módulo em desenvolvimento: aparece para administradores, desenvolvedores e pessoas com "Modelo federado" liberado em "Configurações" (liberação separada da de "Arquivos IFC"). O perfil de consulta monta, carrega e explora o conjunto e abre composições salvas, mas não salva: no lugar do formulário aparece "Seu perfil permite consultar e explorar as composições salvas.". Planejador, gestor e administrador salvam.
+Módulo liberado por pessoa: aparece para administradores, desenvolvedores e pessoas com "Modelo federado" liberado em "Configurações" (liberação separada da de "Arquivos IFC"); sem liberação, o endereço leva ao Dashboard da obra (aba 0). O perfil de consulta monta, carrega e explora o conjunto e abre composições salvas, mas não salva: no lugar do formulário aparece "Seu perfil permite consultar e explorar as composições salvas.". Planejador, gestor e administrador salvam.
 
 ## Montar o conjunto
 - O painel "Modelos do conjunto" lista os modelos da obra, com o contador "incluídos/total". Ao abrir a tela, todo modelo que tem versão já vem marcado na versão mais recente.

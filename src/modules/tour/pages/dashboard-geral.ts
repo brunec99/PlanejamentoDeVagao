@@ -49,7 +49,7 @@ export const steps: TourStep[] = [
   {
     target: 'geral-quadros',
     title: 'Quadros',
-    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir; curto prazo, terminalidade e segurança do trabalho são abertos a todos.',
+    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir: a segurança do trabalho é aberta a todos; os demais, inclusive curto prazo e terminalidade, dependem da liberação do admin.',
   },
   {
     target: 'geral-escopo',
