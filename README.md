@@ -276,6 +276,8 @@ Validação: testes de terminalidade, permissões, rollback, importação, norma
 
   **28/10/2026, tela de usuários:** os cartões com chips viraram uma grade pessoa × obra (ou × módulo), em ordem alfabética, com pesquisa por nome ou e-mail, filtros de papel e de obra e clique que marca a célula na hora. Veja a [tela de usuários em grade](docs/go-live-curto-prazo.md#tela-de-usuários-em-grade-28102026).
 
+  **08/11/2026, liberação em lote:** a grade ganhou uma caixa de seleção por pessoa (com "marcar todos" e Shift+clique). Ao marcar, aparece uma barra para escolher obras ou módulos e liberar ou revogar para todos de uma vez, numa gravação só (`set_access_batch`). Não precisa de migração. Veja a [liberação em lote](docs/go-live-curto-prazo.md#liberação-em-lote-na-grade-de-usuários-08112026).
+
 - **08/10/2026 — revisão visual com base no Takt Hub (não publicada):**
   - a marca passou ao azul-petróleo da Takt e os neutros ganharam um tom desse azul;
   - lateral azul profunda, com cabeçalho fixo e trilha;

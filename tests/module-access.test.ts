@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  accessBatchChange,
   BOOTSTRAP_ADMIN_EMAIL,
   developerEmails,
   hasDeveloperAccess,
@@ -63,6 +64,7 @@ test('Fora do desenvolvimento, só comandos do curto prazo, das equipes e da adm
     'set_role',
     'grant_access',
     'revoke_access',
+    'set_access_batch',
     'create_work',
   ])
     assert.equal(isCommandAllowedForNonDeveloper(type), true, type);
@@ -175,4 +177,69 @@ test('admin libera e bloqueia módulos; demais papéis e módulos abertos são r
   assert.deepEqual(rowsToPlanningData(payload).users.find(u => u.id === other.id)!.modules, ['medio-prazo']);
   delete row.module_access;
   assert.deepEqual(rowsToPlanningData(payload).users.find(u => u.id === other.id)!.modules, []);
+});
+
+test('acessos em lote (08/11/2026): só muda quem precisa, e admin não ganha nem perde módulo', () => {
+  const ana = { role: 'viewer', workIds: ['obra-1'], modules: ['ifc'] };
+  assert.deepEqual(accessBatchChange(ana, { workIds: ['obra-2', 'obra-1', 'obra-2'], enabled: true }), { workIds: ['obra-1', 'obra-2'] });
+  assert.equal(accessBatchChange(ana, { workIds: ['obra-1'], enabled: true }), null);
+  assert.deepEqual(accessBatchChange(ana, { workIds: ['obra-1', 'obra-3'], enabled: false }), { workIds: [] });
+  assert.equal(accessBatchChange(ana, { workIds: ['obra-3'], enabled: false }), null);
+  // Na ordem do catálogo, como `normalizeModules` grava.
+  assert.deepEqual(accessBatchChange(ana, { sections: ['medio-prazo'], enabled: true }), { modules: ['medio-prazo', 'ifc'] });
+  assert.deepEqual(accessBatchChange(ana, { sections: ['ifc', 'vagoes'], enabled: false }), { modules: [] });
+  assert.equal(accessBatchChange(ana, { sections: ['ifc'], enabled: true }), null);
+  assert.equal(accessBatchChange({ role: 'admin', workIds: [] }, { sections: ['ifc'], enabled: true }), null);
+  assert.deepEqual(accessBatchChange({ role: 'admin', workIds: [] }, { workIds: ['obra-1'], enabled: true }), { workIds: ['obra-1'] });
+  assert.deepEqual(ana, { role: 'viewer', workIds: ['obra-1'], modules: ['ifc'] });
+});
+
+test('set_access_batch: admin libera e revoga obras e módulos de várias pessoas numa gravação, tudo ou nada', () => {
+  const data = createMockData();
+  const admin = data.users.find(u => u.id === 'user-1')!;
+  admin.role = 'admin';
+  const ana = data.users.find(u => u.id === 'user-3')!;
+  const rafael = data.users.find(u => u.id === 'user-2')!;
+  const run = (actorId: string, command: Command) =>
+    applyCommand(data, command, { actorId, today: '2026-11-08', now: '2026-11-08T12:00:00Z', newId: () => 'id' });
+  const before = ana.updatedAt;
+
+  run(admin.id, { type: 'set_access_batch', userIds: [ana.id, rafael.id], workIds: ['obra-2'], enabled: true });
+  assert.deepEqual(rafael.workIds, ['obra-1', 'obra-2']);
+  // Ana já tinha a obra: não é regravada.
+  assert.deepEqual(ana.workIds, ['obra-1', 'obra-2']);
+  assert.equal(ana.updatedAt, before);
+  assert.equal(rafael.updatedAt, '2026-11-08T12:00:00Z');
+
+  run(admin.id, { type: 'set_access_batch', userIds: [ana.id, rafael.id, admin.id], sections: ['ifc', 'medio-prazo'], enabled: true });
+  assert.deepEqual(ana.modules, ['medio-prazo', 'ifc']);
+  assert.deepEqual(rafael.modules, ['medio-prazo', 'ifc']);
+  assert.equal(admin.modules, undefined);
+
+  run(admin.id, {
+    type: 'set_access_batch',
+    userIds: [ana.id, rafael.id],
+    workIds: ['obra-1', 'obra-2'],
+    sections: ['ifc'],
+    enabled: false,
+  });
+  assert.deepEqual([ana.workIds, rafael.workIds], [[], []]);
+  assert.deepEqual([ana.modules, rafael.modules], [['medio-prazo'], ['medio-prazo']]);
+  const history = data.history.filter(h => h.action === 'set_access_batch');
+  assert.equal(history.length, 3);
+
+  // Recusas: nada muda quando uma parte do lote é inválida (o repositório descarta o rascunho com o erro).
+  const batch = (change: Partial<Extract<Command, { type: 'set_access_batch' }>>, actorId = admin.id) =>
+    run(actorId, { type: 'set_access_batch', userIds: [ana.id], workIds: ['obra-1'], enabled: true, ...change } as Command);
+  assert.throws(() => batch({}, rafael.id), /administradores/);
+  assert.throws(() => batch({ userIds: [] }), /ao menos um usuário/);
+  assert.throws(() => batch({ workIds: [], sections: [] }), /ao menos uma obra ou um módulo/);
+  assert.throws(() => batch({ userIds: [ana.id, 'ninguem'] }), /Usuário não encontrado/);
+  assert.throws(() => batch({ workIds: ['obra-x'] }), /Obra não encontrada/);
+  assert.throws(() => batch({ workIds: undefined, sections: ['curto-prazo'] }), /não é liberado/);
+  assert.throws(() => batch({ enabled: 'sim' as never }), /liberado ou revogado/);
+  assert.throws(() => batch({ userIds: 'user-3' as never }), /Lista de usuários inválida/);
+
+  const payload = planningDataToPayload(data) as unknown as Rows;
+  assert.deepEqual(payload.profiles.find(r => r.id === rafael.id)!.module_access, ['medio-prazo']);
 });

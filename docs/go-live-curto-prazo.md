@@ -263,6 +263,34 @@ Quem entra com o Google e não tem cadastro vê, abaixo do aviso, o botão **"So
 - Tela aberta numa prévia temporária fora do proxy, com 18 usuários fictícios e as APIs respondidas pelo Playwright, a 1280 px e a 390 px. Foram conferidos: a ordem A–Z com acento, Z–A, ordem por papel, a pesquisa, os filtros "Sem obra liberada" e "Com acesso a Mozine", a célula marcada 100 ms após o clique (com o servidor simulado levando 600 ms), o módulo do admin travado e nenhuma rolagem horizontal da página no celular.
 - **Não validado:** a tela logada em produção. A prévia foi apagada antes do commit.
 
+## Liberação em lote na grade de usuários (08/11/2026)
+
+**Pedido do usuário:** "em configurações permita que eu faça um batch select para acelerar a liberação de permissões por usuários." Na grade, liberar uma obra nova para dez pessoas eram dez cliques, cada um uma ida ao servidor; liberar três módulos para cinco pessoas, quinze.
+
+**O que mudou (Configurações → Usuários e acessos):**
+
+1. **Seleção:** cada linha ganhou uma caixa ao lado do nome. A do cabeçalho "Usuário" marca ou desmarca todos os listados (com filtro, só os filtrados) e fica em estado intermediário quando parte está marcada. Shift+clique marca ou desmarca o intervalo entre a última caixa clicada e a atual, na ordem da lista. A linha marcada fica com o fundo azul-claro.
+2. **Barra do lote:** aparece entre os filtros e a grade quando há alguém marcado. Ela mostra "N usuários selecionados", "Limpar seleção" e uma ficha por obra (código, com o nome no título), ou por módulo em desenvolvimento na visão Módulos, além de "Todas"/"Todos". Os botões são **"Liberar para N pessoas"** e **"Revogar de N pessoas"**.
+3. **Contagem honesta:** o N de cada botão conta só quem muda de fato, pela mesma conta do servidor (`accessBatchChange`). Quem já tem a obra não conta para liberar, e quem não tem não conta para revogar. Botão sem ninguém a mudar fica desabilitado, e só quem muda vai no comando.
+4. **Revogar pede confirmação** ("Revogar Mozine de 4 pessoas?"); liberar vale na hora, como o clique na célula. O resultado vai para um aviso ("Acesso liberado: Mozine para 4 pessoas.").
+5. **A seleção sobrevive** à pesquisa, aos filtros, à ordem e à troca Obras/Módulos. Assim dá para montar a turma pesquisando nome a nome. Quem saiu da lista continua marcado e entra no lote, e a barra avisa ("8 estão fora da lista atual e também entram"). As fichas escolhidas voltam a zero ao trocar de visão, porque obras e módulos não se misturam.
+6. **Admin no lote de módulos:** fica de fora, como na célula travada, porque admin vê todos os módulos. A barra avisa ("1 admin já vê todos os módulos e fica de fora"). No lote de obras, admin entra normalmente.
+7. Papel e exclusão continuam linha a linha.
+
+**Servidor:** o comando novo é `set_access_batch { userIds, workIds?, sections?, enabled }` (`src/application/use-cases/commands.ts`). É uma gravação só, tudo ou nada: se uma pessoa, obra ou módulo for inválido, o lote inteiro é recusado com a mensagem ("Usuário não encontrado.", "Obra não encontrada.", "Esse módulo não é liberado por pessoa.", "Selecione ao menos um usuário.", "Escolha ao menos uma obra ou um módulo."). Só admin pode usar. Quem já está como o lote pede não é regravado nem tem o carimbo trocado. O histórico registra o comando com a lista de pessoas. O comando entrou em `NON_DEVELOPER_COMMANDS`, como os outros de acesso, e usa o recorte completo da leitura, como `grant_access`.
+
+**Tela imediata:** `set_access_batch` entrou na projeção local (`local-apply.ts`). As células das pessoas marcadas mudam no clique, e o servidor confirma por trás. Se o lote incluir o **próprio** acesso de quem está gravando, a projeção não acontece e a tela espera a recarga, mesmo critério do clique. Como só quem muda vai no comando, marcar a própria linha sem que ela mude não força a recarga.
+
+**Sem migração:** o lote grava os mesmos campos de `profiles` (`work_ids`, `module_access`) que os comandos de célula.
+
+**Código:** `src/application/module-access.ts` (`accessBatchChange`, pura), `commands.ts` (validação e gravação), `local-apply.ts` (projeção), `src/modules/configuracoes/users-table.tsx` (caixas, `BulkAccessBar`). Também foram atualizados o tour (passo "Várias pessoas de uma vez", alvo `config-users-select`), a ajuda "Como funciona" da página, o rodapé da grade e o manual da Claudia (seção `configuracoes-usuarios-acessos`).
+
+**Validação:**
+
+- Testes novos: em `tests/module-access.test.ts`, `accessBatchChange` (liberar, revogar, sem mudança, ordem do catálogo, admin) e `set_access_batch` (obras e módulos de várias pessoas, quem não muda fica com o carimbo, histórico, as oito recusas e a gravação em `module_access`). Em `tests/local-apply.test.ts`, a projeção (quem não muda mantém o mesmo objeto, próprio acesso e usuário desconhecido sem projeção, entrada intacta).
+- Tela aberta com `next dev` local, Supabase falso e as APIs respondidas pelo Playwright com as regras reais (`applyCommand`), com 9 usuários e 3 obras, a 1280 px e a 390 px. Foram conferidos: Shift+clique marcando 4 pessoas; "Liberar para 4 pessoas" mandando **um** comando com os 4; a célula marcada 150 ms após o clique, com o servidor simulado levando 500 ms; o botão passando a "Revogar de 4 pessoas"; o diálogo de confirmação e a revogação; na visão Módulos, "Selecionar todos" com "Todos" dando "Liberar para 8 pessoas" e o admin de fora; a pesquisa mantendo a seleção com o aviso dos que estão fora da lista; e nenhuma rolagem horizontal da página no celular.
+- **Não validado:** a tela logada em produção com o banco real.
+
 ## Contas da Takt Engenharia (28/10/2026)
 
 **Pedido do usuário:** a equipe da Takt Engenharia tem e-mail `@taktengenharia.com.br` e precisa ser cadastrada. O login, o cadastro pelo admin e o pedido de acesso só aceitavam `@atrincorporadora.com.br`: a tela de login respondia "Só contas @atrincorporadora.com.br podem pedir acesso", e o "Cadastrar usuário" em Configurações recusava o e-mail.

@@ -252,6 +252,9 @@ Clique em **"Salvar"** (ou "Cancelar"). Ao salvar, a obra **já fica liberada pa
       'liberar obra',
       'liberar acesso',
       'revogar acesso',
+      'liberar em lote',
+      'várias pessoas de uma vez',
+      'selecionar vários usuários',
       'grade de usuários',
       'pessoa por obra',
       'módulos',
@@ -287,6 +290,7 @@ Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuári
 Uma linha por pessoa (nome, e-mail e, na sua, o selo "você") e uma coluna por obra, com código, nome e quantos dos listados têm aquela obra. Célula marcada é obra liberada: **clique para liberar ou revogar; vale na hora, sem botão de salvar.** Quem não tem a obra não a vê na lista de obras; quem não tem nenhuma recebe "Sem obra liberada" na linha. Se o servidor recusar, o aviso "Não foi possível salvar." explica e a célula volta.
 
 - **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo em desenvolvimento (longo prazo, vagões, médio prazo, modelo federado, arquivos IFC, dívidas, integrações). Curto prazo, terminalidade, segurança do trabalho e configurações da obra são abertos a todos e não aparecem. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
+- **Várias pessoas de uma vez (liberação em lote):** marque a caixa ao lado do nome de cada pessoa. A caixa do cabeçalho "Usuário" marca todos os listados (com filtro, só os filtrados), e Shift+clique marca o intervalo entre duas caixas. Aparece uma barra com "N usuários selecionados": escolha as obras (na visão "Módulos", os módulos), ou "Todas"/"Todos", e clique em **"Liberar para N pessoas"** ou **"Revogar de N pessoas"**. O número conta só quem muda de fato; quem já tem (ou já não tem) fica como está. Revogar pede confirmação; liberar vale na hora. A seleção continua ao pesquisar e filtrar, então dá para montar a turma pesquisando nome a nome; quem saiu da lista continua marcado e entra no lote, e a barra avisa ("N estão fora da lista atual e também entram"). Em "Módulos", admins ficam de fora, porque já veem tudo. "Limpar seleção" desmarca todos. Papel e exclusão continuam linha a linha.
 - **"Pesquisar nome ou e-mail"**: cada palavra digitada precisa aparecer, sem diferença de acento. Filtros **"Todos os papéis"** e **"Todas as obras"** (com "Sem obra liberada" e "Com acesso a [obra]"); "Limpar filtros" desfaz. O contador diz "N de M usuários".
 - Clique em **"Usuário"** ou **"Papel"** no cabeçalho para ordenar; de novo, inverte.
 - **"Papel"**: a lista troca o papel assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O **TST** (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa, e consulta o resto do sistema; ao escolher, aparece "[nome] agora é TST.". O Admin também lança na aba 6. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador."). Quem estava com a aba 6 aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo).

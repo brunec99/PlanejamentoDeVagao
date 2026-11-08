@@ -282,6 +282,23 @@ test('acessos da tela de usuários: obra, papel e módulo projetados antes da re
   ]);
   assert.equal(snapshot(before), copy);
 });
+test('acessos em lote (08/11/2026): as células das pessoas marcadas mudam antes da resposta', () => {
+  const before = planning();
+  const copy = snapshot(before);
+  const user = (p: Planning | null, id: string) => p?.data.users.find(u => u.id === id);
+  assert.equal(projectsBeforeServer({ type: 'set_access_batch' } as Command), true);
+  const granted = apply(before, { type: 'set_access_batch', userIds: ['user-2', 'user-3'], workIds: ['obra-2'], enabled: true });
+  assert.deepEqual(user(granted, 'user-2')?.workIds, ['obra-1', 'obra-2']);
+  assert.equal(user(granted, 'user-2')?.updatedAt, NOW);
+  // Quem já tinha a obra fica como estava, inclusive o carimbo.
+  assert.equal(user(granted, 'user-3'), user(before, 'user-3'));
+  const modules = apply(before, { type: 'set_access_batch', userIds: ['user-2'], sections: ['ifc'], enabled: true });
+  assert.deepEqual(user(modules, 'user-2')?.modules, ['ifc']);
+  // O próprio acesso e o usuário desconhecido esperam a recarga, como no clique.
+  assert.equal(apply(before, { type: 'set_access_batch', userIds: ['user-2', ACTOR], workIds: ['obra-2'], enabled: true }), null);
+  assert.equal(apply(before, { type: 'set_access_batch', userIds: ['user-2', 'ninguem'], workIds: ['obra-2'], enabled: true }), null);
+  assert.equal(snapshot(before), copy);
+});
 test('acessos: o próprio acesso e o usuário desconhecido esperam a recarga', () => {
   const before = planning();
   assert.equal(apply(before, { type: 'revoke_access', userId: ACTOR, workId: 'obra-1' }), null);

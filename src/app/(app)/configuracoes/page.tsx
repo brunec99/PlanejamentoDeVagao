@@ -16,8 +16,9 @@ export default function ConfiguracoesPage() {
             </p>
             <p>
               <strong>Usuários e acessos</strong>: o convite cria o perfil com o papel escolhido. Na grade, cada linha é uma pessoa e cada
-              coluna uma obra (ou um módulo, na visão Módulos): clique na célula para liberar ou revogar. A grade pesquisa por nome ou
-              e-mail, filtra por papel e por obra e ordena pelo cabeçalho. Quem é Admin herda o que o Gestor pode.
+              coluna uma obra (ou um módulo, na visão Módulos): clique na célula para liberar ou revogar. Para várias pessoas de uma vez,
+              marque a caixa ao lado dos nomes, escolha as obras ou módulos na barra que aparece e clique em Liberar ou Revogar. A grade
+              pesquisa por nome ou e-mail, filtra por papel e por obra e ordena pelo cabeçalho. Quem é Admin herda o que o Gestor pode.
             </p>
             <p>
               <strong>Banco de dados</strong> lista as migrações conhecidas e pergunta ao banco quais já estão aplicadas. As críticas fazem

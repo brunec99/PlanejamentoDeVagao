@@ -33,6 +33,7 @@ export const NON_DEVELOPER_COMMANDS: ReadonlySet<Command['type']> = new Set<Comm
   'set_module_access',
   'grant_access',
   'revoke_access',
+  'set_access_batch',
   'create_work',
 ]);
 
@@ -177,6 +178,31 @@ export function isCommandAllowed(type: unknown, access: ModuleAccess): boolean {
 export function normalizeModules(list: unknown): string[] {
   const wanted = new Set(Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string') : []);
   return MODULES.map(m => m.section).filter(section => wanted.has(section) && isRestrictedSection(section));
+}
+
+/** Acessos em lote (08/11/2026): o que muda numa pessoa quando o admin libera ou revoga as mesmas obras e
+ * módulos para várias de uma vez. Admin vê todos os módulos (a grade trava as células dele), então o lote
+ * não mexe nos módulos de admin, como o clique na célula. Devolve só os campos que mudam, ou `null` quando
+ * a pessoa já está como o lote pede. Puro: o comando, a projeção local e a barra de seleção fazem a mesma conta. */
+export function accessBatchChange(
+  user: { role: string; workIds: readonly string[]; modules?: readonly string[] },
+  batch: { workIds?: readonly string[]; sections?: readonly string[]; enabled: boolean },
+): { workIds?: string[]; modules?: string[] } | null {
+  const change: { workIds?: string[]; modules?: string[] } = {};
+  const works = [...new Set(batch.workIds ?? [])];
+  if (works.length) {
+    const next = batch.enabled
+      ? [...user.workIds, ...works.filter(id => !user.workIds.includes(id))]
+      : user.workIds.filter(id => !works.includes(id));
+    if (next.length !== user.workIds.length) change.workIds = next;
+  }
+  const sections = batch.sections ?? [];
+  if (sections.length && user.role !== 'admin') {
+    const current = normalizeModules(user.modules ?? []);
+    const next = normalizeModules(batch.enabled ? [...current, ...sections] : current.filter(s => !sections.includes(s)));
+    if (next.join() !== current.join()) change.modules = next;
+  }
+  return change.workIds || change.modules ? change : null;
 }
 
 /** Lista de `DEVELOPER_EMAILS` (vírgulas, sem diferença de maiúsculas); vazia ou ausente, o admin inicial. */

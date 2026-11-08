@@ -2,7 +2,7 @@ import type { NonFulfillmentCause, PlanningData, Team, WeeklyCommitment } from '
 import { addDays, startOfWeek } from '../../domain/validation';
 import { commitmentCompanyOf } from '../../domain/agent-briefing';
 import { insertionOrder, orderPositions } from '../../domain/commitment-order';
-import { normalizeModules } from '../module-access';
+import { accessBatchChange, normalizeModules } from '../module-access';
 import type { Command } from './commands';
 import type { Planning } from './get-planning';
 
@@ -31,6 +31,8 @@ export function projectsBeforeServer(command: Command): boolean {
     case 'revoke_access':
     case 'set_role':
     case 'set_module_access':
+    // Lote da grade de usuários (08/11/2026): as células das pessoas marcadas mudam no clique.
+    case 'set_access_batch':
       return true;
     default:
       return false;
@@ -183,6 +185,17 @@ export function applyCommandLocally(planning: Planning, command: Command, id: st
                 };
       const users = data.users.slice();
       users[index] = { ...user, ...changed, updatedAt: now };
+      return { ...planning, data: { ...data, users } };
+    }
+    case 'set_access_batch': {
+      // Mesmo critério do clique: o próprio acesso e quem a tela não conhece esperam a recarga.
+      const ids = new Set(command.userIds);
+      if (ids.has(actorId) || [...ids].some(userId => !data.users.some(u => u.id === userId))) return null;
+      const users = data.users.map(user => {
+        if (!ids.has(user.id)) return user;
+        const change = accessBatchChange(user, command);
+        return change ? { ...user, ...change, updatedAt: now } : user;
+      });
       return { ...planning, data: { ...data, users } };
     }
     default:

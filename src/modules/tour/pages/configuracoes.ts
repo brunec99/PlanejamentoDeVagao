@@ -66,6 +66,11 @@ export const steps: TourStep[] = [
     body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo em desenvolvimento. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
   },
   {
+    target: 'config-users-select',
+    title: 'Várias pessoas de uma vez',
+    body: 'Marque a caixa ao lado de cada nome; a do cabeçalho marca todos os listados, e Shift+clique marca o intervalo. Aparece uma barra: escolha as obras (ou, na visão Módulos, os módulos) e clique em Liberar ou Revogar. Os botões dizem quantas pessoas mudam de fato. A seleção continua ao pesquisar e filtrar, para montar a turma nome a nome.',
+  },
+  {
     target: 'config-user-role',
     title: 'Papel do usuário',
     body: 'Troca o papel da pessoa assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, e consulta o resto do sistema; o Admin também lança na aba 6. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',

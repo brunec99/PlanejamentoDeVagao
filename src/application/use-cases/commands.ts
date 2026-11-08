@@ -1,4 +1,4 @@
-import { grantableSection, normalizeModules } from '../module-access';
+import { accessBatchChange, grantableSection, normalizeModules } from '../module-access';
 import {
   scheduleTasks,
   planSnapshot,
@@ -118,6 +118,9 @@ export type Command =
   | { type: 'revoke_access'; userId: string; workId: string }
   | { type: 'set_role'; userId: string; role: 'viewer' | 'planner' | 'manager' | 'admin' }
   | { type: 'set_module_access'; userId: string; section: string; enabled: boolean }
+  /** Acessos em lote (08/11/2026): a seleção da grade de usuários libera ou revoga as mesmas obras e/ou
+   * módulos para várias pessoas numa gravação só; célula a célula seriam pessoas × obras idas ao servidor. */
+  | { type: 'set_access_batch'; userIds: string[]; workIds?: string[]; sections?: string[]; enabled: boolean }
   | { type: 'create_team'; workId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'update_team'; teamId: string; company: string; name: string; weeklyCapacity: number }
   | { type: 'delete_team'; teamId: string }
@@ -1764,6 +1767,38 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
       target.modules = normalizeModules([...current]);
       touch(target);
       entityId = target.id;
+      break;
+    }
+    case 'set_access_batch': {
+      // Tudo ou nada, como o apontamento em lote: uma pessoa, obra ou módulo inválido recusa o lote inteiro,
+      // porque o rascunho é descartado com o erro.
+      if (actor.role !== 'admin') throw new Error('Somente administradores podem gerenciar acessos.');
+      if (typeof command.enabled !== 'boolean') throw new Error('Informe se o acesso fica liberado ou revogado.');
+      const list = (value: unknown, what: string) => {
+        if (value === undefined) return [];
+        if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new Error(`Lista de ${what} inválida.`);
+        return [...new Set(value as string[])];
+      };
+      const userIds = list(command.userIds, 'usuários');
+      const workIds = list(command.workIds, 'obras');
+      const sections = list(command.sections, 'módulos');
+      if (!userIds.length) throw new Error('Selecione ao menos um usuário.');
+      if (!workIds.length && !sections.length) throw new Error('Escolha ao menos uma obra ou um módulo.');
+      for (const workId of workIds) if (!data.works.some(w => w.id === workId)) throw new Error('Obra não encontrada.');
+      for (const section of sections) if (!grantableSection(section)) throw new Error('Esse módulo não é liberado por pessoa.');
+      const targets = userIds.map(id => {
+        const target = data.users.find(u => u.id === id);
+        if (!target) throw new Error('Usuário não encontrado.');
+        return target;
+      });
+      // Só quem muda é regravado: quem já está como o lote pede fica intacto.
+      for (const target of targets) {
+        const change = accessBatchChange(target, { workIds, sections, enabled: command.enabled });
+        if (!change) continue;
+        Object.assign(target, change);
+        touch(target);
+      }
+      entityId = targets[0].id;
       break;
     }
     case 'set_takt': {
