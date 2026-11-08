@@ -5,7 +5,7 @@
 -- de ajustes do bootstrap. Monta do zero as 32 tabelas, as funções commit_planning e
 -- planning_snapshot, os gatilhos de imutabilidade e o bucket privado 'ifc' do Storage.
 --
--- GERADO AUTOMATICAMENTE — não edite à mão. Fonte: 40 migrações, de 0001_init.sql a 0040_safety.sql.
+-- GERADO AUTOMATICAMENTE — não edite à mão. Fonte: 42 migrações, de 0001_init.sql a 0042_short_term_terminality_access.sql.
 -- Para regenerar depois de criar uma migração nova:  npm run bootstrap:sql
 --
 -- COMO USAR: só num projeto Supabase VAZIO (recém-criado). Abra o SQL Editor do projeto, cole o
@@ -6825,6 +6825,58 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+-- ===== 0041_agent_global.sql =====
+
+-- 0041 — Claudia geral (08/11/2026). Os admins conversam com a Claudia em qualquer tela e sobre várias
+-- obras numa mesma pergunta. A pergunta que não é de uma obra só é gravada no livro-razão sem obra
+-- (work_id nulo) e aparece como "Geral (várias obras)" em Configurações → Agente de IA. O teto mensal e o
+-- limite por pessoa continuam somando tudo; só a parte de cada obra ignora essas linhas.
+-- Sem esta migração o código grava a pergunta geral na obra da tela (ou na primeira obra consultada).
+-- Pode ser rodada de novo.
+
+alter table agent_usage alter column work_id drop not null;
+
+-- Sonda da tela de migrações (Configurações): a coluna aceitar nulo não aparece numa leitura comum.
+create or replace function agent_usage_allows_general()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select is_nullable = 'YES'
+       from information_schema.columns
+      where table_schema = 'public' and table_name = 'agent_usage' and column_name = 'work_id'),
+    false
+  );
+$$;
+revoke all on function agent_usage_allows_general() from public, anon, authenticated;
+grant execute on function agent_usage_allows_general() to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ===== 0042_short_term_terminality_access.sql =====
+
+-- Curto prazo e terminalidade liberados por pessoa (08/11/2026): até aqui as abas 4 e 5 eram abertas a todos
+-- que tinham a obra liberada. O usuário pediu que entrassem no grupo de módulos liberados pelo admin
+-- (profiles.module_access, da 0031), como médio prazo e IFC. Para ninguém perder o acesso no deploy (decisão
+-- do usuário: "manter quem já usa"), todo perfil que não é admin ganha os dois; o admin revoga em lote, em
+-- Configurações → Usuários → Módulos, de quem não deve ter. Admin vê todos os módulos e fica de fora, como no
+-- lote. Só dados, nenhuma coluna nova. Pode ser rodada de novo, mas devolve os dois módulos a quem o admin já
+-- tiver revogado: rode uma vez.
+--
+-- Aplique ANTES de publicar o código: o código novo sem esta migração tira as duas abas de todos os não-admins;
+-- o código antigo ignora as duas seções na lista.
+update profiles
+set module_access = module_access || array(
+  select section
+  from unnest(array['curto-prazo', 'terminalidade']) as section
+  where not (section = any(module_access))
+)
+where role <> 'admin'
+  and not (module_access @> array['curto-prazo', 'terminalidade']);
 
 -- ===== Ajustes do bootstrap (gerados por scripts/build-bootstrap-sql.mjs; não são migração) =====
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SafetyType } from '../src/domain/safety';
-import { assemblePortfolioSources, SAFETY_ERROR } from '../src/app/api/dashboard/obras/route';
+import { assemblePortfolioSources, SAFETY_ERROR } from '../src/infrastructure/repositories/supabase/portfolio-sources';
 import { DASHBOARD_MODULES, moduleInfo, PORTFOLIO_MODULES, type PortfolioModule, type Segment } from '../src/modules/dashboard/model';
 import { resolvePeriod, type PeriodContext } from '../src/modules/dashboard/period';
 import { aggregatePortfolio, KPIS_SHOWN, SAFETY_TYPES_SHOWN } from '../src/modules/dashboard/portfolio/aggregate';

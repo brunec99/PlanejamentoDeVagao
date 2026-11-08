@@ -15,6 +15,7 @@ import { TourProvider } from '@/modules/tour/tour-provider';
 import { TourOverlay } from '@/modules/tour/tour-overlay';
 import { HelpButton } from '@/modules/tour/help-button';
 import { AgentButton } from '@/modules/agente/agent-panel';
+import { ClaudiaButton, ClaudiaProvider, ClaudiaWindow } from '@/modules/agente/claudia-window';
 import { signOut } from '../login/actions';
 import { roleLabels } from '@/shared/format';
 
@@ -29,6 +30,9 @@ function initials(name: string) {
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { profile, developer, modules } = await getRouteAccess();
+  // Claudia geral (08/11/2026): o admin tem a janela flutuante em toda tela, com os assuntos guardados; os
+  // demais seguem com a Claudia da obra (gaveta, só dentro da obra).
+  const claudiaGeral = profile?.role === 'admin';
   // O mesmo conteúdo serve a lateral do desktop e a gaveta do celular: marca, abas, Apoio e perfil.
   // Os dois ficam no azul-petróleo da marca (`nav-dark`); modo reunião e ajuda foram para o
   // cabeçalho, ao lado da trilha, que é onde se procuram.
@@ -110,44 +114,49 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       )}
     </>
   );
+  const shell = (
+    <div data-app-shell className="flex h-screen overflow-hidden">
+      <a className="skip-link" href="#main">
+        Ir para o conteúdo
+      </a>
+      <SidebarWrapper>{navigation}</SidebarWrapper>
+      <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto">
+        <TopBar
+          start={
+            <div className="flex shrink-0 items-center gap-1 md:hidden">
+              <MobileDrawer>{navigation}</MobileDrawer>
+              <Link href="/obras" className="flex items-center gap-2 pl-1" aria-label="Obra 360 — obras">
+                <Image src="/logo-atr.png" alt="" width={90} height={39} className="h-5 w-auto object-contain" priority />
+              </Link>
+              <span aria-hidden className="mx-1 h-5 w-px bg-slate-200" />
+            </div>
+          }
+          end={
+            <>
+              {/* O agente de IA fica ao lado da ajuda: em toda tela da obra (27/10/2026) e, para o admin,
+                          em toda tela do sistema (08/11/2026). */}
+              {claudiaGeral ? <ClaudiaButton /> : <AgentButton />}
+              <ZoomToggle variant="icon" />
+              <HelpButton variant="icon" />
+            </>
+          }
+        />
+        <WorkTabsMobile />
+        <ConnectionBanner />
+        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:p-5 md:p-8">
+          {children}
+        </main>
+      </div>
+      <TourOverlay />
+      {claudiaGeral && <ClaudiaWindow />}
+    </div>
+  );
   return (
     <TourProvider>
       <ToastProvider>
         <ConfirmProvider>
           <PlanningProvider developer={developer} modules={modules}>
-            <div data-app-shell className="flex h-screen overflow-hidden">
-              <a className="skip-link" href="#main">
-                Ir para o conteúdo
-              </a>
-              <SidebarWrapper>{navigation}</SidebarWrapper>
-              <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto">
-                <TopBar
-                  start={
-                    <div className="flex shrink-0 items-center gap-1 md:hidden">
-                      <MobileDrawer>{navigation}</MobileDrawer>
-                      <Link href="/obras" className="flex items-center gap-2 pl-1" aria-label="Obra 360 — obras">
-                        <Image src="/logo-atr.png" alt="" width={90} height={39} className="h-5 w-auto object-contain" priority />
-                      </Link>
-                      <span aria-hidden className="mx-1 h-5 w-px bg-slate-200" />
-                    </div>
-                  }
-                  end={
-                    <>
-                      {/* O agente de IA fica ao lado da ajuda, em toda tela da obra (27/10/2026). */}
-                      <AgentButton />
-                      <ZoomToggle variant="icon" />
-                      <HelpButton variant="icon" />
-                    </>
-                  }
-                />
-                <WorkTabsMobile />
-                <ConnectionBanner />
-                <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:p-5 md:p-8">
-                  {children}
-                </main>
-              </div>
-              <TourOverlay />
-            </div>
+            {claudiaGeral && profile ? <ClaudiaProvider userId={profile.id}>{shell}</ClaudiaProvider> : shell}
           </PlanningProvider>
         </ConfirmProvider>
       </ToastProvider>

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { AgentBriefing } from '../../domain/agent-briefing';
 import { costOf, type TokenUsage } from '../../domain/agent-cost';
 import { AGENT_TOOL_SPECS, runAgentTool, type AgentProposal, type ToolContext } from '../../application/use-cases/agent-tools';
+import { GLOBAL_TOOL_SPECS, runGlobalTool, worksListText, type GlobalToolContext } from '../../application/use-cases/agent-global-tools';
 import { AGENT } from '../../modules/agente/agent-identity';
 import { manualIndex, SCREEN_LABEL } from '../../modules/agente/manual';
 
@@ -178,11 +179,16 @@ export function trimHistory(history: ChatTurn[]): ChatTurn[] {
   return kept;
 }
 
-const TOOLS: Anthropic.Beta.BetaTool[] = AGENT_TOOL_SPECS.map(spec => ({
+const toBetaTool = (spec: { name: string; description: string; input_schema: Record<string, unknown> }): Anthropic.Beta.BetaTool => ({
   name: spec.name,
   description: spec.description,
   input_schema: spec.input_schema as Anthropic.Beta.BetaTool.InputSchema,
-}));
+});
+const TOOLS: Anthropic.Beta.BetaTool[] = AGENT_TOOL_SPECS.map(toBetaTool);
+/** Ferramentas da Claudia geral; o `cache_control` na última guarda as definições no prefixo em cache. */
+const GLOBAL_TOOLS: Anthropic.Beta.BetaTool[] = GLOBAL_TOOL_SPECS.map((spec, index, all) =>
+  index === all.length - 1 ? { ...toBetaTool(spec), cache_control: { type: 'ephemeral' } } : toBetaTool(spec),
+);
 
 /** Pergunta com ferramentas: laço manual de até `MAX_TOOL_ITERATIONS` idas ao modelo. Cada resposta
  * com `tool_use` é devolvida inteira (inclusive os blocos de raciocínio) seguida de UMA mensagem da
@@ -256,4 +262,155 @@ export async function answerQuestion(input: {
       ? 'Proposta montada: confira abaixo e clique em Aplicar.'
       : 'A resposta voltou vazia. Tente perguntar de outro jeito.';
   return { text, usage: tally.usage, costUsd: tally.costUsd, model: tally.model, calls: tally.calls, proposals, toolCalls };
+}
+
+// ─── Claudia geral (08/11/2026) ────────────────────────────────────────────────
+
+/** Idas ao modelo numa pergunta da Claudia geral: o panorama e o detalhe de duas ou três obras pedem mais
+ * voltas que a pergunta de uma obra só. As ferramentas de uma mesma volta rodam em paralelo. */
+export const MAX_GLOBAL_TOOL_ITERATIONS = 8;
+/** A rota tem 60 s. Passado este tempo, a próxima ida ao modelo vai sem ferramentas (`tool_choice: none`),
+ * para ela responder com o que já leu em vez de a função ser cortada no meio. */
+export const GLOBAL_TIME_BUDGET_MS = 38_000;
+
+export interface GlobalChatResult extends ChatResult {
+  /** Selos do que ela consultou, na ordem e sem repetir ("Terminalidade · Mozine"). */
+  consulted: string[];
+  /** Obras lidas pelas ferramentas: decidem em que obra o custo é gravado. */
+  workIds: string[];
+}
+
+/** Prompt da Claudia geral: fixo por pessoa (a lista de obras dela) e por isso guardado em cache com as
+ * ferramentas. A tela, a obra do contexto e a data vão num bloco à parte, fora do cache. */
+export function globalSystemText(worksList: string): string {
+  return `Você é ${AGENT.name}, ${AGENT.persona}
+Esta é a ${AGENT.name} geral do Obra 360, aberta só para os administradores: a conversa acontece numa janela que fica aberta em qualquer tela do sistema e pode tratar de qualquer obra e de qualquer módulo — curto prazo (planilha semanal, PPC e causas), médio prazo (plano do mês e restrições), longo prazo (plano macro e Linha de Balanço com medições), vagões, terminalidade, segurança do trabalho e configurações da obra — e comparar obras.
+Responda curto e direto, em português do Brasil, em markdown simples (listas com -, negrito com **; títulos só se a resposta for longa; tabela em markdown só para comparar obras). Diga sempre de qual obra é cada número. Cite nomes e números que as ferramentas devolverem; não invente nada. Se faltar informação para responder ou para propor, pergunte.
+
+Como escolher a obra:
+- Se a pessoa cita uma obra (nome ou sigla da lista abaixo), use essa. Se o nome não bater com nenhuma ou bater com mais de uma, pergunte.
+- Se não cita, vale a obra do contexto (bloco "Contexto da pergunta"). Se o contexto não tem obra (lista de obras, dashboard geral, configurações), a pergunta vale para todas as obras.
+- Para comparar obras ou responder sobre "as obras", comece por panorama_obras (os mesmos números do Dashboard geral) e só detalhe as obras que a pergunta pede ou que o panorama destacar. Não abra o detalhe de todas as obras uma a uma.
+- As perguntas anteriores da pessoa vêm com "[Tela: …]": é de onde ela perguntou naquele momento. "Aqui" e "daqui" se referem a essa tela.
+
+Ferramentas de leitura: panorama_obras (comparação das obras), resumo_obra (dossiê de uma obra com o radar dos três níveis), listar_semana (planilha semanal, apelidos "c:…"), listar_tarefas_mes (plano do mês, apelidos "t:…"), listar_servicos_macro (plano de longo prazo), consultar_lob (Linha de Balanço: previsto × medido), consultar_vagoes (vagões, restrições e pendências), consultar_terminalidade (pendências por apartamento; aceita "todas" as obras), consultar_seguranca (apontamentos dos TSTs; aceita "todas" as obras), consultar_configuracoes_obra (semana 1, locais e equipes) e consultar_manual (o manual do sistema). Use só as que a pergunta pede.
+Edições: só na planilha semanal do curto prazo, com propor_levar, propor_criar_linhas e propor_apontar, sempre informando a obra. Primeiro use listar_semana ou listar_tarefas_mes da mesma obra para achar os apelidos certos e só então proponha. Nunca diga que algo foi gravado: a proposta aparece na janela com a obra e o botão Aplicar, e só a pessoa grava. Depois de propor, resuma em uma ou duas linhas o que a proposta faz e o que ficou de fora. Pendências da terminalidade e apontamentos de segurança você só lê.
+Você também é a ajuda do Obra 360. Quando a pergunta for sobre o sistema — como fazer algo, onde fica um botão ou campo, o que uma coluna ou aviso significa, por que não consegue editar, quem pode fazer o quê, ou o que você mesma sabe fazer — chame consultar_manual com o id da seção (índice abaixo) ou com o tema em palavras, e responda com o que o manual devolver, com os nomes dos botões, campos e abas entre aspas. Se o manual não cobrir a dúvida, diga isso e indique o botão "?" (Como usar) da tela; nunca descreva uma funcionalidade que o manual não confirme.
+Limites: você não vê as fotos (só sabe quantas há e o que a descrição diz), não gera PDF nem planilha e não manda mensagem a ninguém. Se pedirem, diga onde a pessoa faz isso na tela.
+
+## Obras que a pessoa pode abrir (sigla | nome | situação)
+${worksList}
+
+## Índice do manual do sistema (id: o que a seção responde)
+${manualIndex()}`;
+}
+
+/** Contexto da pergunta, fora do cache: tela, obra da tela e data de hoje. */
+export function globalContextBlock(input: {
+  screen?: string;
+  work?: { name: string; code: string };
+  today: string;
+}): Anthropic.Beta.BetaTextBlockParam {
+  const label = input.screen ? SCREEN_LABEL[input.screen] : undefined;
+  const where = [
+    label ? `tela "${label}"` : undefined,
+    input.work ? `obra ${input.work.name}${input.work.code ? ` (${input.work.code})` : ''}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const today = `${input.today.slice(8, 10)}/${input.today.slice(5, 7)}/${input.today.slice(0, 4)}`;
+  return {
+    type: 'text',
+    text: `## Contexto da pergunta\nHoje é ${today}. A pessoa está agora em: ${where || 'uma tela fora das obras'}.${
+      input.work ? ` Pergunta sem obra citada vale para a obra ${input.work.name}.` : ' Pergunta sem obra citada vale para todas as obras.'
+    }`,
+  };
+}
+
+/** Pergunta da Claudia geral: o mesmo laço manual da pergunta de uma obra, com ferramentas assíncronas (cada
+ * uma carrega só a obra e o módulo de que precisa) e sem dossiê fixo no prompt — a obra do contexto entra
+ * pelo bloco de contexto e o dossiê, pela ferramenta resumo_obra. */
+export async function answerGlobalQuestion(input: {
+  config: ChatConfig;
+  question: string;
+  history: ChatTurn[];
+  toolContext: GlobalToolContext;
+  screen?: string;
+}): Promise<GlobalChatResult> {
+  const client = new Anthropic({ apiKey: input.config.apiKey });
+  const tally = new Tally();
+  const proposals: AgentProposal[] = [];
+  const toolCalls: string[] = [];
+  const consulted: string[] = [];
+  const workIds = new Set<string>();
+  const ctx = input.toolContext;
+  const contextWork = ctx.contextWorkId ? ctx.works.find(w => w.id === ctx.contextWorkId) : undefined;
+  const messages: Anthropic.Beta.BetaMessageParam[] = [
+    ...trimHistory(input.history).map(turn => ({ role: turn.role, content: turn.content })),
+    { role: 'user', content: input.question },
+  ];
+  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+    { type: 'text', text: globalSystemText(worksListText(ctx.works)), cache_control: { type: 'ephemeral' } },
+    globalContextBlock({ screen: input.screen, work: contextWork, today: ctx.today }),
+  ];
+  let text = '';
+  const startedAt = Date.now();
+  for (let iteration = 0; iteration < MAX_GLOBAL_TOOL_ITERATIONS; iteration++) {
+    // Última volta (pelo número ou pelo relógio): sem ferramentas, ela responde com o que já tem.
+    const lastRound = iteration === MAX_GLOBAL_TOOL_ITERATIONS - 1 || Date.now() - startedAt > GLOBAL_TIME_BUDGET_MS;
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      response = await client.beta.messages.create({
+        model: input.config.model,
+        max_tokens: QUESTION_MAX_TOKENS,
+        betas: BETAS,
+        fallbacks: 'default',
+        output_config: { effort: 'medium' },
+        system,
+        tools: GLOBAL_TOOLS,
+        ...(lastRound ? { tool_choice: { type: 'none' as const } } : {}),
+        messages,
+      });
+    } catch (cause) {
+      throw translate(cause);
+    }
+    tally.add(response);
+    if (response.stop_reason === 'refusal') throw new AgentModelError('O modelo não pôde analisar estes dados.', 502);
+    text = textOf(response);
+    if (response.stop_reason !== 'tool_use') break;
+    const uses = response.content.filter((block): block is Anthropic.Beta.BetaToolUseBlock => block.type === 'tool_use');
+    const outcomes = await Promise.all(uses.map(block => runGlobalTool(block.name, block.input, ctx)));
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((block, index) => {
+      const outcome = outcomes[index];
+      toolCalls.push(block.name);
+      if (outcome.proposal) proposals.push(outcome.proposal);
+      if (outcome.consulted && !outcome.error && !consulted.includes(outcome.consulted)) consulted.push(outcome.consulted);
+      for (const id of outcome.workIds) workIds.add(id);
+      return { type: 'tool_result', tool_use_id: block.id, content: outcome.result, ...(outcome.error ? { is_error: true } : {}) };
+    });
+    messages.push({ role: 'assistant', content: response.content });
+    messages.push({ role: 'user', content: results });
+    if (lastRound)
+      text =
+        text ||
+        (proposals.length
+          ? 'Montei as propostas abaixo; confira e clique em Aplicar nas que fizerem sentido.'
+          : 'Precisei de mais consultas do que cabem numa pergunta só. Tente dividir a pergunta (uma obra ou um módulo por vez).');
+    if (lastRound) break;
+  }
+  if (!text)
+    text = proposals.length
+      ? 'Proposta montada: confira abaixo e clique em Aplicar.'
+      : 'A resposta voltou vazia. Tente perguntar de outro jeito.';
+  return {
+    text,
+    usage: tally.usage,
+    costUsd: tally.costUsd,
+    model: tally.model,
+    calls: tally.calls,
+    proposals,
+    toolCalls,
+    consulted,
+    workIds: [...workIds],
+  };
 }

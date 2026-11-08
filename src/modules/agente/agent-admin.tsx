@@ -9,7 +9,9 @@ import { AGENT } from './agent-identity';
 
 /** Painel do administrador sobre o agente de IA (27/10/2026): quanto cada pessoa e cada obra gastaram
  * no mês, o limite mensal por pessoa e o corte de acesso. Lê `GET /api/admin/agente?month=` e grava
- * com `PUT /api/admin/agente/{userId}`; cada gravação atualiza só a linha, sem reler tudo. */
+ * com `PUT /api/admin/agente/{userId}`; cada gravação atualiza só a linha, sem reler tudo.
+ * Desde 08/11/2026 a tabela de obras ganha, quando houver, a linha "Geral (várias obras)": as perguntas
+ * da Claudia geral que não são de uma obra só. Ela não tem parte do teto nem entra na de cada obra. */
 
 export interface AgentAdminUser {
   id: string;
@@ -32,6 +34,11 @@ export interface AgentAdminWork {
   calls: number;
   workBudgetUsd: number;
 }
+/** Gasto do mês gravado sem obra (Claudia geral, migração 0041). */
+export interface AgentAdminGeneral {
+  usd: number;
+  calls: number;
+}
 export interface AgentAdminReport {
   month: string;
   budgetUsd: number;
@@ -40,6 +47,8 @@ export interface AgentAdminReport {
   totals: { monthUsd: number; calls: number };
   users: AgentAdminUser[];
   works: AgentAdminWork[];
+  /** Ausente na resposta anterior a 08/11/2026; nulo quando o mês não tem pergunta geral. */
+  general?: AgentAdminGeneral | null;
 }
 type UserPatch = { monthlyLimitUsd?: number | null; blocked?: boolean };
 type Load = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; report: AgentAdminReport };
@@ -290,6 +299,28 @@ function UserRow({ user, first, onSaved }: { user: AgentAdminUser; first: boolea
   );
 }
 
+/** Linha "Geral (várias obras)" (08/11/2026): fecha a tabela de obras, separada delas, sem parte do teto
+ * e sem barra, porque o teto de cada obra não soma estas perguntas. O teto do mês e o da pessoa somam. */
+function GeneralRow({ general }: { general: AgentAdminGeneral }) {
+  return (
+    <tr className="border-t-2 border-slate-200 bg-slate-50">
+      <th scope="row">
+        <span className="block font-semibold">Geral (várias obras)</span>
+        <span className="block max-w-md text-xs font-normal text-slate-500">
+          Perguntas da {AGENT.name} geral que não são de uma obra só; não entram na parte de cada obra.
+        </span>
+      </th>
+      <td className="tabular-nums font-semibold text-slate-800">{formatUsd(general.usd)}</td>
+      <td className="tabular-nums">{formatCalls(general.calls)}</td>
+      <td className="text-slate-400">
+        <span aria-hidden>—</span>
+        <span className="sr-only">sem parte do teto</span>
+      </td>
+      <td className="text-xs text-slate-500">fora da parte das obras</td>
+    </tr>
+  );
+}
+
 function SectionTitle({ id, icon, children }: { id: string; icon: ReactNode; children: ReactNode }) {
   return (
     <h2 id={id} className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
@@ -401,6 +432,7 @@ export function AgentAdmin() {
   const tone = toneOf(ratio);
   const users = [...report.users].sort((a, b) => b.usd - a.usd || a.name.localeCompare(b.name, 'pt-BR'));
   const works = [...report.works].sort((a, b) => b.usd - a.usd || a.code.localeCompare(b.code, 'pt-BR'));
+  const general = report.general && (report.general.usd > 0 || report.general.calls > 0) ? report.general : null;
   const totals = users.reduce(
     (sum, u) => ({
       usd: sum.usd + u.usd,
@@ -496,7 +528,7 @@ export function AgentAdmin() {
           Obras
         </SectionTitle>
         <div data-tour="agente-admin-obras" className="panel">
-          {works.length === 0 ? (
+          {works.length === 0 && !general ? (
             <div className="p-5">
               <Empty>Nenhuma obra cadastrada.</Empty>
             </div>
@@ -535,6 +567,7 @@ export function AgentAdmin() {
                       </tr>
                     );
                   })}
+                  {general && <GeneralRow general={general} />}
                 </tbody>
               </table>
             </div>

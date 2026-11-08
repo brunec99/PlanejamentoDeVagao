@@ -186,7 +186,42 @@ function AiAnalysis({ request, disabled }: { request: AnalysisRequest; disabled:
 export function renderMarkdown(markdown: string): ReactNode {
   const blocks: ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
+  // Tabela simples (08/11/2026): a Claudia geral compara obras em tabela de markdown; linhas "| a | b |" seguidas,
+  // a primeira é o cabeçalho e a de traços é ignorada.
+  let table: string[][] | null = null;
+  const flushTable = () => {
+    if (!table) return;
+    const [head, ...rows] = table;
+    blocks.push(
+      <div key={blocks.length} className="mb-2 overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs tabular-nums">
+          <thead>
+            <tr>
+              {head.map((cell, i) => (
+                <th key={i} className="border-b border-slate-200 px-2 py-1 font-semibold text-slate-500">
+                  {inline(cell)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, r) => (
+              <tr key={r}>
+                {head.map((_, c) => (
+                  <td key={c} className="border-b border-slate-100 px-2 py-1">
+                    {inline(row[c] ?? '')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    );
+    table = null;
+  };
   const flush = () => {
+    flushTable();
     if (!list) return;
     const Tag = list.ordered ? 'ol' : 'ul';
     blocks.push(
@@ -202,6 +237,20 @@ export function renderMarkdown(markdown: string): ReactNode {
     const line = raw.trim();
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
+    if (line.startsWith('|') && line.endsWith('|') && line.length > 1) {
+      const cells = line
+        .slice(1, -1)
+        .split('|')
+        .map(cell => cell.trim());
+      if (cells.every(cell => /^:?-{2,}:?$/.test(cell))) continue;
+      if (!table) {
+        flush();
+        table = [];
+      }
+      table.push(cells);
+      continue;
+    }
+    flushTable();
     if (bullet) {
       const ordered = /^\d/.test(line);
       if (!list || list.ordered !== ordered) {

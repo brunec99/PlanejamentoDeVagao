@@ -41,6 +41,11 @@ export default async function AgenteAdminPage() {
               continua funcionando. Liberar reabre na hora.
             </p>
             <p>
+              <strong>Geral (várias obras)</strong>: perguntas da {AGENT.name} geral (só admin) que não são de uma obra só. Contam no teto
+              do mês e no limite da pessoa, mas não na parte de nenhuma obra. Sem a migração 0041, ficam na obra da tela ou na primeira obra
+              consultada.
+            </p>
+            <p>
               <strong>Custo</strong>: calculado dos tokens que a API da Anthropic devolve a cada chamada, com a tabela de preço do modelo em
               uso; não é estimativa.
             </p>

@@ -8,7 +8,7 @@ import {
   mapLimited,
   TERMINALITY_ERROR,
   type TerminalityRead,
-} from '../src/app/api/dashboard/obras/route';
+} from '../src/infrastructure/repositories/supabase/portfolio-sources';
 
 /** `GET /api/dashboard/obras` (Dashboard geral, regra 15): a montagem da resposta a partir das leituras do
  * longo prazo (uma consulta para todas as obras) e da terminalidade (por obra), e o limite de leituras ao

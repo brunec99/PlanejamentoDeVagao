@@ -248,11 +248,13 @@ Tudo em `src/modules/dashboard/`, reaproveitando os quadros da aba 0. O cálculo
 | Extração por obra (uma linha do comparativo a partir dos quadros) | `src/modules/dashboard/portfolio/extract.ts` |
 | Consolidação (totais, cartões, frase, mapa de calor, Pareto, empreiteiros, responsáveis, obras sem dado) | `src/modules/dashboard/portfolio/aggregate.ts` |
 | Carga (planejamento já carregado + rota única), um estado por módulo | `src/modules/dashboard/portfolio/use-portfolio-data.ts` |
+| Ajudantes da carga, comuns ao hook e ao servidor (movidos do hook em 08/11/2026, sem mudança) | `src/modules/dashboard/portfolio/sources.ts` |
+| Composição no servidor, com as mesmas etapas do hook, e o texto para a Claudia geral (08/11/2026) | `src/modules/dashboard/portfolio/compose.ts` (`composePortfolio`), `src/modules/dashboard/portfolio/portfolio-text.ts` (`portfolioText`) |
 | Tela do Dashboard geral | `src/modules/dashboard/portfolio/portfolio-overview.tsx` |
 | Página de impressão (até 4 folhas) | `src/modules/dashboard/portfolio/portfolio-print.tsx` |
 | Rota da página (`/dashboard`) | `src/app/(app)/dashboard/page.tsx` |
 | Rota da impressão (`/imprimir/dashboard-geral`) | `src/app/imprimir/dashboard-geral/page.tsx` |
-| Rota de leitura (`GET /api/dashboard/obras`): longo prazo (só com o módulo) e terminalidade sem fotos, para todas as obras liberadas | `src/app/api/dashboard/obras/route.ts` |
+| Rota de leitura (`GET /api/dashboard/obras`): longo prazo (só com o módulo) e terminalidade sem fotos, para todas as obras liberadas | `src/app/api/dashboard/obras/route.ts`; desde 08/11/2026 os leitores ficam em `src/infrastructure/repositories/supabase/portfolio-sources.ts` (`readPortfolioSources`), que a Claudia geral também usa |
 | Menu: `PortfolioLink` e `canComparePortfolio` (2+ obras, admin ou desenvolvedor) | `src/modules/layout/work-nav.tsx`, usado em `src/app/(app)/layout.tsx` |
 | Migalha "Obras › Dashboard geral" | `src/modules/layout/top-bar.tsx` |
 | Botão "Comparar obras" (`data-tour="obras-comparar"`) | `src/modules/obras/works-overview.tsx` |
@@ -332,6 +334,8 @@ Tudo em `src/modules/dashboard/`, reaproveitando os quadros da aba 0. O cálculo
 - **Frase:** o PPC das obras e a comparação com o anterior, a melhor e a pior, as obras em início, o físico e a terminalidade (vagões não entram na frase). Período parcial: "(parcial: N de M semanas encerradas)", em que N conta as semanas do calendário que já terminaram (o modelo dizia "apuradas"; trocado em 04/11/2026 porque a frase podia dizer "9 de 13 semanas apuradas" e logo depois "nenhuma obra tem semana apurada"); na escala semanal, "(semana em andamento)". *Atualizado em 06/11/2026:* a frase ganha, no fim, a oração da segurança do trabalho (ver a seção da segurança).
 
 ### Carga do geral (`use-portfolio-data.ts`)
+
+*08/11/2026:* a Claudia geral (admin) repete estas etapas no servidor com `composePortfolio` (`portfolio/compose.ts`), sobre as mesmas funções puras e os mesmos leitores, para o panorama dela ter os números desta página. Os ajudantes que viviam no hook foram para `portfolio/sources.ts` sem mudança; o hook só trocou os imports.
 
 - **Âncora (regra 6):** a última semana antes da atual em que alguma das obras escolhidas tem todas as linhas com Status; o geral abre no balde dela (em Mensal, o mês).
 - **Primeira semana (`since`):** a mais antiga entre as obras escolhidas.

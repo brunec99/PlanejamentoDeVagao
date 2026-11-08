@@ -121,7 +121,10 @@ export interface MonthUsage {
   totalUsd: number;
   totalCalls: number;
 }
-type UsageRow = { work_id: string; actor_id: string; kind: string; calls: unknown; cost_usd: unknown; created_at: string };
+type UsageRow = { work_id: string | null; actor_id: string; kind: string; calls: unknown; cost_usd: unknown; created_at: string };
+/** Chave de `byWork` das perguntas da Claudia geral gravadas sem obra (08/11/2026, migração 0041). A tela
+ * do admin mostra como "Geral (várias obras)"; o teto de cada obra não soma esta chave. */
+export const GENERAL_USAGE_KEY = '__geral__';
 const round6 = (usd: number) => Math.round(usd * 1_000_000) / 1_000_000;
 
 /** Tudo o que o mês gastou, numa só consulta paginada em blocos de 1000 (o PostgREST corta em 1000 por
@@ -154,10 +157,11 @@ export async function monthUsage(month: string): Promise<LedgerResult<MonthUsage
       calls = Math.max(0, Math.round(number(row.calls)));
     totalUsd += usd;
     totalCalls += calls;
-    const work = byWork.get(row.work_id) ?? { usd: 0, calls: 0 };
+    const workKey = row.work_id ?? GENERAL_USAGE_KEY;
+    const work = byWork.get(workKey) ?? { usd: 0, calls: 0 };
     work.usd = round6(work.usd + usd);
     work.calls += calls;
-    byWork.set(row.work_id, work);
+    byWork.set(workKey, work);
     const user = byUser.get(row.actor_id) ?? { usd: 0, calls: 0, leituras: 0, perguntas: 0 };
     user.usd = round6(user.usd + usd);
     user.calls += calls;
@@ -170,7 +174,11 @@ export async function monthUsage(month: string): Promise<LedgerResult<MonthUsage
 }
 
 export interface UsageRecord {
-  workId: string;
+  /** Nulo = pergunta da Claudia geral que não é de uma obra só (precisa da migração 0041). */
+  workId: string | null;
+  /** Obra usada quando o banco ainda recusa a linha sem obra (0041 não aplicada): a da tela ou a primeira
+   * consultada. Assim o teto continua somando a chamada, que já foi paga. */
+  fallbackWorkId?: string;
   actorId: string;
   month: string;
   kind: AgentCallKind;
@@ -181,12 +189,24 @@ export interface UsageRecord {
   costUsd: number;
 }
 
+/** `not_null_violation` do PostgreSQL: a coluna `work_id` ainda é obrigatória (0041 não aplicada). */
+const isNotNullViolation = (error: { code?: string | null } | null | undefined) => error?.code === '23502';
+
 export async function recordUsage(record: UsageRecord): Promise<LedgerResult<null>> {
+  const first = await insertUsage(record, record.workId);
+  if (first.ok || record.workId !== null || !record.fallbackWorkId || !first.notNull) return first.result;
+  return (await insertUsage(record, record.fallbackWorkId)).result;
+}
+
+async function insertUsage(
+  record: UsageRecord,
+  workId: string | null,
+): Promise<{ ok: boolean; notNull: boolean; result: LedgerResult<null> }> {
   try {
     const { error } = await getServiceClient()
       .from('agent_usage')
       .insert({
-        work_id: record.workId,
+        work_id: workId,
         actor_id: record.actorId,
         month: record.month,
         kind: record.kind,
@@ -198,10 +218,10 @@ export async function recordUsage(record: UsageRecord): Promise<LedgerResult<nul
         output_tokens: Math.round(record.usage.output),
         cost_usd: record.costUsd,
       });
-    if (error) return failed(error);
-    return { ok: true, value: null };
+    if (error) return { ok: false, notNull: isNotNullViolation(error), result: failed(error) };
+    return { ok: true, notNull: false, result: { ok: true, value: null } };
   } catch (cause) {
-    return caught(cause);
+    return { ok: false, notNull: false, result: caught(cause) };
   }
 }
 

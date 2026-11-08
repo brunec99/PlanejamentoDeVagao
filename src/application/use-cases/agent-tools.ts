@@ -33,6 +33,9 @@ export interface AgentProposal {
   weekStart: string;
   /** Pedidos que ficaram de fora e por quê (linha já levada, apelido não achado). */
   skipped: string[];
+  /** Obra da proposta. A Claudia geral (08/11/2026) conversa sobre várias obras: o cartão mostra a obra. */
+  workId?: string;
+  workName?: string;
 }
 export interface ToolContext {
   data: PlanningData;

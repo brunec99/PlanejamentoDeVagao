@@ -12,14 +12,17 @@ import { usePlanning } from '@/modules/planejamento/planning-provider';
 import { Callout } from '@/modules/planejamento/ui';
 import { formatDate, formatTimestamp } from '@/shared/format';
 import { AGENT } from './agent-identity';
+import type { ProposalCard, ProposalState } from './claudia-topics';
 
 /** Painel do agente de IA (27/10/2026): botão no cabeçalho que abre uma gaveta com a leitura guardada
  * da obra, o radar determinístico (achados do dossiê, que funciona sem chave da API), a conversa com
  * propostas de edição aplicáveis e o uso do mês. Toda a sessão vive aqui, no botão, e não na gaveta:
  * a `Drawer` desmonta os filhos ao fechar, e a conversa precisa sobreviver a fechar e reabrir. */
 
-/** Contrato de `GET /api/agente` e das respostas do `POST`, escrito pela rota em paralelo. */
-interface AgentReading {
+/** Contrato de `GET /api/agente` e das respostas do `POST`, escrito pela rota em paralelo. Os tipos, a
+ * aba "Obra" (leitura e radar) e o cartão de proposta são exportados para a Claudia geral dos admins
+ * (`claudia-window.tsx`, 08/11/2026), que é uma janela flutuante em toda tela. */
+export interface AgentReading {
   markdown: string;
   model: string;
   generatedAt: string;
@@ -29,7 +32,7 @@ interface AgentReading {
   /** A leitura foi feita sobre os dados atuais (mesmo `hash` do dossiê). */
   current: boolean;
 }
-interface AgentUsage {
+export interface AgentUsage {
   monthUsd: number;
   budgetUsd: number;
   workUsd: number;
@@ -38,7 +41,7 @@ interface AgentUsage {
   userLimitUsd: number | null;
   model: string;
 }
-interface AgentOverview {
+export interface AgentOverview {
   agent: { name: string; tagline: string };
   briefing: AgentBriefing;
   reading: AgentReading | null;
@@ -52,17 +55,8 @@ interface AgentOverview {
 }
 type OverviewState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: AgentOverview };
 
-type ProposalState =
-  | { status: 'pendente' }
-  | { status: 'aplicando'; done: number }
-  | { status: 'aplicada' }
-  | { status: 'descartada' }
-  /** `done` é quantos comandos já foram gravados: "Tentar de novo" continua dali, sem repetir. */
-  | { status: 'falhou'; done: number; message: string };
-interface ProposalCard {
-  proposal: AgentProposal;
-  state: ProposalState;
-}
+/** O estado de cada cartão (`ProposalState`, com o `done` que deixa "Tentar de novo" continuar de onde
+ * parou) mora em `claudia-topics.ts`, porque a Claudia geral o guarda no assunto. */
 /** Uma rodada da conversa: a pergunta e, quando chega, a resposta com as propostas, ou o erro. */
 interface Turn {
   id: number;
@@ -122,7 +116,7 @@ export function screenOf(pathname: string | null): string | undefined {
 
 /** Lê o JSON e transforma status de erro em `Error` com o `error` do corpo, mostrado como veio
  * (o 429 do limite mensal, por exemplo, já explica o que houve). */
-async function readJson<T>(response: Response): Promise<T> {
+export async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as Partial<T> & { error?: unknown };
   if (!response.ok) {
     const error = typeof body.error === 'string' && body.error ? body.error : `O servidor respondeu com erro (HTTP ${response.status}).`;
@@ -130,7 +124,7 @@ async function readJson<T>(response: Response): Promise<T> {
   }
   return body as T;
 }
-const messageOf = (cause: unknown) => {
+export const messageOf = (cause: unknown) => {
   if (cause instanceof TypeError) return 'Sem conexão com o servidor. Verifique a rede e tente de novo.';
   return cause instanceof Error && cause.message ? cause.message : 'Não foi possível falar com o servidor.';
 };
@@ -148,7 +142,7 @@ const withData = (session: Session, update: (data: AgentOverview) => AgentOvervi
 
 /** Título do aviso de sucesso: "3 linhas criadas na semana de 27/10/2026". Conta por linha, não por
  * comando, porque o apontamento vai num comando só com várias linhas. */
-function appliedTitle(proposal: AgentProposal) {
+export function appliedTitle(proposal: AgentProposal) {
   const count = proposal.lines.length;
   const verbs: Record<ProposalKind, [string, string, string]> = {
     levar: ['levada', 'levadas', 'para a'],
@@ -161,7 +155,7 @@ function appliedTitle(proposal: AgentProposal) {
 }
 
 /** Textarea de 2 linhas que cresce com o texto até o `max-h` do CSS. */
-const grow = (element: HTMLTextAreaElement) => {
+export const grow = (element: HTMLTextAreaElement) => {
   element.style.height = 'auto';
   element.style.height = `${element.scrollHeight}px`;
 };
@@ -409,16 +403,9 @@ function PanelBody({
   onApply: (turnId: number, card: ProposalCard) => void;
   onDiscard: (turnId: number, card: ProposalCard) => void;
 }) {
-  const { briefing, reading, usage, configured, migrationMissing, canEdit, blocked, budget } = data;
+  const { briefing, usage, configured, canEdit, blocked } = data;
   const modelOff = !configured || blocked;
   const canSend = !modelOff && !asking && session.question.trim().length > 0;
-  const readTitle = reading?.current
-    ? 'Os dados não mudaram desde a última leitura'
-    : !configured
-      ? 'A IA não está configurada no servidor'
-      : blocked
-        ? 'Seu acesso ao agente foi cortado'
-        : `Pede ao modelo uma leitura nova da obra (10 a 30 s)`;
   const firstProposalTurn = session.turns.find(t => t.proposals.length > 0)?.id;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter envia; Shift+Enter quebra linha. Durante a composição (acentos no celular) o Enter é do teclado.
@@ -429,103 +416,9 @@ function PanelBody({
 
   return (
     <div className="flex min-h-full flex-col gap-6">
-      {(!configured || migrationMissing || blocked || budget?.allowed === false) && (
-        <div className="space-y-2">
-          {!configured && (
-            <Callout tone="warning" role="status">
-              A IA não está configurada no servidor (ANTHROPIC_API_KEY). O radar abaixo continua funcionando.
-            </Callout>
-          )}
-          {migrationMissing && (
-            <Callout tone="warning" role="status">
-              Aplique a migração 0035_agent.sql para guardar leituras e controlar o uso.
-            </Callout>
-          )}
-          {blocked && (
-            <Callout tone="danger" role="alert">
-              Seu acesso ao agente foi cortado pelo administrador. O radar continua disponível.
-            </Callout>
-          )}
-          {budget?.allowed === false && !blocked && (
-            <Callout tone="warning" role="status">
-              {budget.message ?? 'O limite mensal de IA foi atingido. O radar continua funcionando.'}
-            </Callout>
-          )}
-        </div>
-      )}
-
-      <section data-tour="agente-leitura" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="eyebrow">Leitura de {AGENT.name}</h3>
-          <button
-            type="button"
-            className="button-secondary px-3 py-1.5 text-xs"
-            disabled={session.requesting || modelOff || reading?.current === true}
-            title={readTitle}
-            onClick={onRead}
-          >
-            <RefreshCw size={14} aria-hidden className={session.requesting ? 'animate-spin' : undefined} />
-            {session.requesting ? 'Lendo…' : 'Nova leitura'}
-          </button>
-        </div>
-        {session.requesting && (
-          <p role="status" className="text-xs text-slate-500">
-            Lendo a obra… (10 a 30 s)
-          </p>
-        )}
-        {session.readingError && (
-          <Callout tone="danger" role="alert">
-            {session.readingError}
-          </Callout>
-        )}
-        {reading ? (
-          <>
-            {!reading.current && (
-              <span className={`${CHIP} border-warning-ring bg-warning-soft text-warning`}>Os dados mudaram desde esta leitura</span>
-            )}
-            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-800 [&>*:last-child]:mb-0">
-              {renderMarkdown(reading.markdown)}
-            </div>
-            <p className="text-xs text-slate-500">
-              Leitura de {formatTimestamp(reading.generatedAt)} por {reading.generatedBy.name} · {reading.model} ·{' '}
-              {formatUsd(reading.costUsd)}
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">Ainda não há leitura desta obra.</p>
-        )}
-      </section>
-
-      <section data-tour="agente-radar" className="space-y-3">
-        <h3 className="eyebrow">Radar</h3>
-        {briefing.findings.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum achado nos níveis lidos.</p>
-        ) : (
-          <ul className="space-y-2">
-            {briefing.findings.map((finding, index) => (
-              <li key={`${finding.id}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`${CHIP} ${SEVERITY[finding.severity].className}`}>{SEVERITY[finding.severity].label}</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{LEVEL_LABEL[finding.level]}</span>
-                </div>
-                <p className="mt-1 font-semibold text-slate-900">{finding.title}</p>
-                <p className="leading-5 text-slate-600">{finding.detail}</p>
-                {finding.items && finding.items.length > 0 && (
-                  <details className="mt-1">
-                    <summary className="text-link cursor-pointer text-xs">Ver itens</summary>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
-                      {finding.items.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-slate-500">Níveis lidos: {briefing.levels.map(level => READ_LEVEL[level]).join(', ')}</p>
-      </section>
+      <OverviewNotices data={data} />
+      <ReadingSection data={data} requesting={session.requesting} readingError={session.readingError} onRead={onRead} />
+      <RadarSection briefing={briefing} />
 
       <section data-tour="agente-conversa" className="space-y-3">
         <h3 className="eyebrow">Conversa</h3>
@@ -606,10 +499,7 @@ function PanelBody({
         </form>
       </section>
 
-      <details className="command-box">
-        <summary>O que o agente leu</summary>
-        <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{briefing.text}</pre>
-      </details>
+      <BriefingDetails briefing={briefing} />
 
       <footer
         data-tour="agente-uso"
@@ -623,7 +513,237 @@ function PanelBody({
   );
 }
 
-function ProposalCardView({
+/** Avisos do topo: IA sem chave, migração faltando, acesso cortado, teto do mês atingido. */
+function OverviewNotices({ data }: { data: AgentOverview }) {
+  const { configured, migrationMissing, blocked, budget } = data;
+  if (configured && !migrationMissing && !blocked && budget?.allowed !== false) return null;
+  return (
+    <div className="space-y-2">
+      {!configured && (
+        <Callout tone="warning" role="status">
+          A IA não está configurada no servidor (ANTHROPIC_API_KEY). O radar abaixo continua funcionando.
+        </Callout>
+      )}
+      {migrationMissing && (
+        <Callout tone="warning" role="status">
+          Aplique a migração 0035_agent.sql para guardar leituras e controlar o uso.
+        </Callout>
+      )}
+      {blocked && (
+        <Callout tone="danger" role="alert">
+          Seu acesso ao agente foi cortado pelo administrador. O radar continua disponível.
+        </Callout>
+      )}
+      {budget?.allowed === false && !blocked && (
+        <Callout tone="warning" role="status">
+          {budget.message ?? 'O limite mensal de IA foi atingido. O radar continua funcionando.'}
+        </Callout>
+      )}
+    </div>
+  );
+}
+
+/** A leitura guardada da obra, com o botão "Nova leitura". */
+function ReadingSection({
+  data,
+  requesting,
+  readingError,
+  onRead,
+}: {
+  data: AgentOverview;
+  requesting: boolean;
+  readingError?: string;
+  onRead: () => void;
+}) {
+  const { reading, configured, blocked } = data;
+  const modelOff = !configured || blocked;
+  const readTitle = reading?.current
+    ? 'Os dados não mudaram desde a última leitura'
+    : !configured
+      ? 'A IA não está configurada no servidor'
+      : blocked
+        ? 'Seu acesso ao agente foi cortado'
+        : `Pede ao modelo uma leitura nova da obra (10 a 30 s)`;
+  return (
+    <section data-tour="agente-leitura" className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="eyebrow">Leitura de {AGENT.name}</h3>
+        <button
+          type="button"
+          className="button-secondary px-3 py-1.5 text-xs"
+          disabled={requesting || modelOff || reading?.current === true}
+          title={readTitle}
+          onClick={onRead}
+        >
+          <RefreshCw size={14} aria-hidden className={requesting ? 'animate-spin' : undefined} />
+          {requesting ? 'Lendo…' : 'Nova leitura'}
+        </button>
+      </div>
+      {requesting && (
+        <p role="status" className="text-xs text-slate-500">
+          Lendo a obra… (10 a 30 s)
+        </p>
+      )}
+      {readingError && (
+        <Callout tone="danger" role="alert">
+          {readingError}
+        </Callout>
+      )}
+      {reading ? (
+        <>
+          {!reading.current && (
+            <span className={`${CHIP} border-warning-ring bg-warning-soft text-warning`}>Os dados mudaram desde esta leitura</span>
+          )}
+          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-800 [&>*:last-child]:mb-0">
+            {renderMarkdown(reading.markdown)}
+          </div>
+          <p className="text-xs text-slate-500">
+            Leitura de {formatTimestamp(reading.generatedAt)} por {reading.generatedBy.name} · {reading.model} ·{' '}
+            {formatUsd(reading.costUsd)}
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-slate-500">Ainda não há leitura desta obra.</p>
+      )}
+    </section>
+  );
+}
+
+/** Os achados determinísticos do dossiê, que funcionam sem a chave da API. */
+function RadarSection({ briefing }: { briefing: AgentBriefing }) {
+  return (
+    <section data-tour="agente-radar" className="space-y-3">
+      <h3 className="eyebrow">Radar</h3>
+      {briefing.findings.length === 0 ? (
+        <p className="text-sm text-slate-500">Nenhum achado nos níveis lidos.</p>
+      ) : (
+        <ul className="space-y-2">
+          {briefing.findings.map((finding, index) => (
+            <li key={`${finding.id}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`${CHIP} ${SEVERITY[finding.severity].className}`}>{SEVERITY[finding.severity].label}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{LEVEL_LABEL[finding.level]}</span>
+              </div>
+              <p className="mt-1 font-semibold text-slate-900">{finding.title}</p>
+              <p className="leading-5 text-slate-600">{finding.detail}</p>
+              {finding.items && finding.items.length > 0 && (
+                <details className="mt-1">
+                  <summary className="text-link cursor-pointer text-xs">Ver itens</summary>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                    {finding.items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-slate-500">Níveis lidos: {briefing.levels.map(level => READ_LEVEL[level]).join(', ')}</p>
+    </section>
+  );
+}
+
+function BriefingDetails({ briefing }: { briefing: AgentBriefing }) {
+  return (
+    <details className="command-box">
+      <summary>O que o agente leu</summary>
+      <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{briefing.text}</pre>
+    </details>
+  );
+}
+
+const fetchOverview = async (workId: string) => readJson<AgentOverview>(await fetch(`/api/agente?workId=${encodeURIComponent(workId)}`));
+
+/** Aba "Obra" da Claudia geral (08/11/2026): a leitura e o radar da obra do contexto, iguais aos da gaveta.
+ * Carrega sozinha (`GET /api/agente?workId=`) e pede a "Nova leitura" pelo mesmo `POST` da gaveta. Quem
+ * usa monta com `key={workId}`, para a troca de obra começar do zero. `refreshSignal` diferente de zero
+ * recarrega por trás do conteúdo (depois de aplicar uma proposta, por exemplo). */
+export function WorkOverviewTab({ workId, refreshSignal = 0 }: { workId: string; refreshSignal?: number }) {
+  const { toast } = useToast();
+  const [overview, setOverview] = useState<OverviewState>({ status: 'loading' });
+  const [requesting, setRequesting] = useState(false);
+  const [readingError, setReadingError] = useState<string>();
+
+  const show = (cause: unknown) => setOverview({ status: 'error', message: messageOf(cause) });
+  const retry = () => {
+    setOverview({ status: 'loading' });
+    fetchOverview(workId).then(data => setOverview({ status: 'ready', data }), show);
+  };
+  // A primeira carga parte do esqueleto do estado inicial; a de `refreshSignal` recarrega por trás do
+  // conteúdo e, se falhar, deixa o que está na tela.
+  useEffect(() => {
+    fetchOverview(workId).then(
+      data => setOverview({ status: 'ready', data }),
+      cause => setOverview({ status: 'error', message: messageOf(cause) }),
+    );
+  }, [workId]);
+  useEffect(() => {
+    if (!refreshSignal) return;
+    fetchOverview(workId).then(
+      data => setOverview({ status: 'ready', data }),
+      () => {},
+    );
+  }, [refreshSignal, workId]);
+
+  const requestReading = async () => {
+    setRequesting(true);
+    setReadingError(undefined);
+    try {
+      const response = await fetch('/api/agente', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ workId, kind: 'leitura' }),
+      });
+      const body = await readJson<{ reading?: AgentReading | null; usage?: AgentUsage; unchanged?: boolean }>(response);
+      setOverview(current =>
+        current.status === 'ready'
+          ? {
+              status: 'ready',
+              data: { ...current.data, reading: body.reading ?? current.data.reading, usage: body.usage ?? current.data.usage },
+            }
+          : current,
+      );
+      if (body.unchanged)
+        toast({
+          title: 'Os dados não mudaram desde a última leitura.',
+          description: 'A leitura guardada continua valendo; o modelo não foi chamado.',
+          tone: 'info',
+        });
+      else toast({ title: `${AGENT.name} leu a obra.`, tone: 'success' });
+    } catch (cause) {
+      setReadingError(messageOf(cause));
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  if (overview.status === 'loading') return <PanelSkeleton />;
+  if (overview.status === 'error')
+    return (
+      <div className="space-y-3">
+        <Callout tone="danger" role="alert">
+          {overview.message}
+        </Callout>
+        <button type="button" className="button-ghost" onClick={retry}>
+          <RefreshCw size={15} aria-hidden />
+          Tentar de novo
+        </button>
+      </div>
+    );
+  const { data } = overview;
+  return (
+    <div className="space-y-6">
+      <OverviewNotices data={data} />
+      <ReadingSection data={data} requesting={requesting} readingError={readingError} onRead={requestReading} />
+      <RadarSection briefing={data.briefing} />
+      <BriefingDetails briefing={data.briefing} />
+    </div>
+  );
+}
+
+export function ProposalCardView({
   card,
   first,
   canEdit,
@@ -650,6 +770,12 @@ function ProposalCardView({
     <div data-tour={first ? 'agente-proposta' : undefined} className={`rounded-xl border px-3.5 py-3 text-sm ${tone}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`${CHIP} border-primary-ring bg-primary-soft text-primary-ink`}>{KIND_LABEL[proposal.kind]}</span>
+        {/* A Claudia geral conversa sobre várias obras: o cartão diz em qual a proposta grava. */}
+        {proposal.workName && (
+          <span className={`${CHIP} border-slate-200 bg-white text-slate-500`} title="Obra da proposta">
+            {proposal.workName}
+          </span>
+        )}
         <p className="font-semibold text-slate-900">{proposal.title}</p>
       </div>
       <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-slate-700">

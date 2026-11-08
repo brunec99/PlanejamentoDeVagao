@@ -25,6 +25,19 @@ export const WORK_SHARE_TOLERANCE = 1.5;
 /** Reserva conferida antes de chamar o modelo, para a última chamada do mês não passar do teto. */
 export const ESTIMATED_CALL_USD = { leitura: 0.1, pergunta: 0.08 } as const;
 export type AgentCallKind = keyof typeof ESTIMATED_CALL_USD;
+/** Reserva da pergunta da Claudia geral (08/11/2026, só admin): o panorama das obras e as consultas por
+ * módulo fazem mais idas ao modelo. Gravada no livro-razão como `pergunta`; não conta no teto da obra. */
+export const ESTIMATED_GLOBAL_QUESTION_USD = 0.12;
+
+/** Em que obra a pergunta da Claudia geral é gravada (regra 10 do modelo aprovado em 08/11/2026): a única
+ * obra que as ferramentas leram; nenhuma lida = a obra da tela, se houver; várias = sem obra (nulo, que a
+ * tela do admin mostra como "Geral (várias obras)"). */
+export function globalUsageWorkOf(read: readonly string[], contextWorkId: string | undefined): string | null {
+  const unique = [...new Set(read)];
+  if (unique.length === 1) return unique[0];
+  if (unique.length === 0) return contextWorkId ?? null;
+  return null;
+}
 
 export interface TokenUsage {
   input: number;

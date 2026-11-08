@@ -4,12 +4,15 @@ import { getServiceClient } from '@/infrastructure/repositories/supabase/client'
 import { todayInSaoPaulo } from '@/infrastructure/clock';
 import { logRouteError } from '@/infrastructure/log';
 import { agentConfigFromEnv, monthKey, workBudgetOf } from '@/domain/agent-cost';
-import { allUserSettings, monthUsage, type MonthUsage, type UserAgentSettings } from '@/infrastructure/agent/ledger';
+import { allUserSettings, GENERAL_USAGE_KEY, monthUsage, type MonthUsage, type UserAgentSettings } from '@/infrastructure/agent/ledger';
 
 export const runtime = 'nodejs';
 
 /** Painel do admin para o agente de IA (27/10/2026): gasto do mês por pessoa e por obra, limites
- * individuais e corte de acesso. Só leitura aqui; o PUT em `[userId]` grava os limites. */
+ * individuais e corte de acesso. Só leitura aqui; o PUT em `[userId]` grava os limites.
+ * Desde 08/11/2026 a resposta traz também `general`: as perguntas da Claudia geral gravadas sem obra
+ * (migração 0041), que a tela mostra como "Geral (várias obras)". Elas entram no total do mês e no
+ * gasto de cada pessoa, mas não são uma obra: ficam fora de `works` e da parte de cada obra. */
 
 const headers = { 'Cache-Control': 'no-store' };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers });
@@ -82,6 +85,10 @@ export async function GET(request: NextRequest) {
       };
     })
     .sort((a, b) => b.usd - a.usd || Number(b.active) - Number(a.active) || a.code.localeCompare(b.code, 'pt-BR'));
+  // Nulo quando o mês não tem pergunta geral (ou a 0041 ainda não foi aplicada e tudo caiu numa obra).
+  const generalSpent = used.byWork.get(GENERAL_USAGE_KEY);
+  const general =
+    generalSpent && (generalSpent.usd > 0 || generalSpent.calls > 0) ? { usd: generalSpent.usd, calls: generalSpent.calls } : null;
 
   return NextResponse.json(
     {
@@ -93,6 +100,7 @@ export async function GET(request: NextRequest) {
       totals: { monthUsd: used.totalUsd, calls: used.totalCalls },
       users,
       works: workList,
+      general,
     },
     { headers },
   );

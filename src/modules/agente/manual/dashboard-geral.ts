@@ -2,8 +2,9 @@ import type { ManualSection } from './types';
 
 /** Manual do Dashboard geral (04/11/2026, modelo aprovado "Dashboard geral e escalas de tempo"): a página fora
  * das obras que compara as obras liberadas para a pessoa no período escolhido, e as escalas de tempo, que valem
- * também na aba 0. A assistente só abre dentro de uma obra, então estas seções respondem a quem pergunta de
- * dentro de uma obra sobre a página geral. A página não edita nada: o manual é de leitura. */
+ * também na aba 0. Para quem não é admin, a assistente só abre dentro de uma obra, então estas seções respondem
+ * a quem pergunta de dentro de uma obra sobre a página geral; o admin tem a Claudia geral também aqui (08/11/2026).
+ * A página não edita nada: o manual é de leitura. */
 export const sections: ManualSection[] = [
   {
     id: 'dashboard-geral-visao-geral',
@@ -56,7 +57,7 @@ O filtro de **Pavimento** não existe aqui, de propósito: os nomes mudam de uma
 
 ## A assistente nesta página
 
-A assistente só abre dentro de uma obra; no Dashboard geral não há o botão dela. Para tirar uma dúvida sobre a página geral, abra qualquer obra e pergunte lá.`,
+Para administradores, a Claudia geral abre também aqui (botão "Claudia" no cabeçalho, ou Ctrl+J / ⌘J) e compara as obras com os mesmos números desta página (seção da Claudia geral). Para os outros perfis, a assistente só abre dentro de uma obra: para tirar uma dúvida sobre a página geral, abra qualquer obra e pergunte lá.`,
   },
   {
     id: 'dashboard-geral-escalas-e-periodo',

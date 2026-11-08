@@ -44,7 +44,7 @@ Nem todo mundo vê todas as abas. **Abertos a todos** que têm acesso à obra fi
 
 ## Ajuda dentro do sistema
 
-Toda tela tem, no cabeçalho, o botão **"?" (Como usar)**, que escurece a tela e explica cada botão e campo, um por vez, sem alterar nada. O cabeçalho da aba traz uma linha dizendo o que ela responde e o botão **"Como funciona"**, com a explicação longa. E há a assistente **Claudia** (botão com o nome dela no cabeçalho de toda tela da obra), que lê os níveis do planejamento, aponta o que não bate entre eles, propõe edições na planilha da semana e responde dúvidas sobre o sistema.`,
+Toda tela tem, no cabeçalho, o botão **"?" (Como usar)**, que escurece a tela e explica cada botão e campo, um por vez, sem alterar nada. O cabeçalho da aba traz uma linha dizendo o que ela responde e o botão **"Como funciona"**, com a explicação longa. E há a assistente **Claudia** (botão com o nome dela no cabeçalho de toda tela da obra; para administradores, em toda tela do sistema, com Ctrl+J), que lê os níveis do planejamento, aponta o que não bate entre eles, propõe edições na planilha da semana e responde dúvidas sobre o sistema.`,
   },
   {
     id: 'geral-niveis-de-planejamento',

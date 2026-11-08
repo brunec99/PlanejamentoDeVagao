@@ -3,14 +3,18 @@ import { AGENT } from '../agent-identity';
 
 /** O manual da própria assistente (29/10/2026): o que ela faz, o que não faz, como aplicar uma proposta,
  * os avisos do painel e a tela do admin. Escrito a partir de `agent-panel.tsx`, `agent-tools.ts`,
- * `agent-cost.ts`, da rota `/api/agente` e de `agent-admin.tsx`. */
+ * `agent-cost.ts`, da rota `/api/agente` e de `agent-admin.tsx`.
+ * Em 08/11/2026 entrou a seção da Claudia geral dos administradores (`agente-claudia-geral`), escrita a
+ * partir do modelo de UX aprovado e de `globalSystemText` em `chat.ts`; as outras seções passaram a dizer
+ * que o painel lateral, de uma obra só, é o de quem não é administrador. O índice do manual vai no prompt
+ * e está perto do limite do teste (14.000 caracteres): por isso uma seção nova só, e resumos curtos. */
 const N = AGENT.name;
 
 export const sections: ManualSection[] = [
   {
     id: 'agente-o-que-faz',
     title: `Quem é ${N} e o que ela faz`,
-    summary: 'A assistente de IA: onde fica o botão, as partes do painel (Leitura, Radar, Conversa, uso) e o que ela lê da obra.',
+    summary: 'A assistente de IA: onde fica o botão, as partes do painel da obra (Leitura, Radar, Conversa) e o que ela lê.',
     keywords: [
       'claudia',
       'assistente',
@@ -37,11 +41,13 @@ ${N} é a assistente de planejamento do Obra 360. Ela fica no botão com o nome 
 
 No rodapé fica o uso de IA do mês ("Uso de IA no mês: X de Y · esta obra: … · modelo").
 
+Para **administradores**, desde 08/11/2026, o botão está em **toda tela do sistema** (também na lista de obras, no Dashboard geral e em Configurações, e com o atalho Ctrl+J ou ⌘J) e abre a **${N} geral**: uma janela que não bloqueia a página, guarda as conversas em assuntos e fala de qualquer obra (seção "${N} geral (administradores): em toda tela, sobre todas as obras"). O painel lateral descrito aqui é o de quem não é administrador; na janela geral, a aba "Obra" mostra a mesma Leitura e o mesmo Radar da obra em que você está.
+
 ## O que ela lê
 
-${N} recebe um **dossiê** montado pelo sistema a partir dos três níveis do planejamento da obra aberta: o longo prazo (plano macro, Linha de Balanço, medições, vagões e restrições vencidas), o médio prazo (plano do mês vivo, linha de base, tarefas vencidas e abaixo do alvo, vínculos, equipes sobrecarregadas) e o curto prazo (planilha semanal: PPC da semana e das últimas oito, tendência, Pareto de causas, linhas que repetem falha, empreiteiros com PPC baixo, linhas sem apontamento e os "Não" da semana anterior que não foram levados adiante). Ela só lê os níveis que **você** pode abrir: se o médio prazo não está liberado para você, ele não entra no dossiê nem nas respostas, e o painel diz "Níveis lidos: curto", por exemplo.
+${N} recebe um **dossiê** montado pelo sistema a partir dos três níveis do planejamento da obra aberta: o longo prazo (plano macro, Linha de Balanço, medições, vagões e restrições vencidas), o médio prazo (plano do mês vivo, linha de base, tarefas vencidas e abaixo do alvo, vínculos, equipes sobrecarregadas) e o curto prazo (planilha semanal: PPC da semana e das últimas oito, tendência, Pareto de causas, linhas que repetem falha, empreiteiros com PPC baixo, linhas sem apontamento e os "Não" da semana anterior que não foram levados adiante). Ela só lê os níveis que **você** pode abrir: se o médio prazo (ou, desde 08/11/2026, o curto prazo) não está liberado para você, ele não entra no dossiê nem nas respostas, e o painel diz "Níveis lidos: curto", por exemplo.
 
-Ela **não lê** a lista de pendências da Terminalidade, os modelos IFC, as dívidas nem as fotos: sobre essas telas ela só explica como usar. E ela vê apenas a obra que está aberta; para falar de outra obra, abra a outra obra e abra o painel de novo.
+No painel da obra ela **não lê** a lista de pendências da Terminalidade, os apontamentos da Segurança do trabalho, os modelos IFC, as dívidas nem as fotos: sobre essas telas ela só explica como usar. E ela vê apenas a obra que está aberta; para falar de outra obra, abra a outra obra e abra o painel de novo. A ${N} geral dos administradores lê também a terminalidade, a segurança do trabalho, os vagões e as configurações de qualquer obra, e compara as obras.
 
 ## O que ela não faz
 
@@ -54,8 +60,7 @@ Ela **não lê** a lista de pendências da Terminalidade, os modelos IFC, as dí
   {
     id: 'agente-leitura-e-radar',
     title: 'Leitura da obra e Radar: como pedir, quando é refeita, o que significam os achados',
-    summary:
-      'Botão "Nova leitura", aviso "Os dados mudaram desde esta leitura", leitura guardada por obra, e os chips de gravidade do Radar.',
+    summary: 'Botão "Nova leitura", aviso "Os dados mudaram desde esta leitura", leitura guardada por obra e chips do Radar.',
     keywords: [
       'nova leitura',
       'leitura',
@@ -100,8 +105,7 @@ O Radar e a leitura são refeitos por trás sempre que você aplica uma proposta
   {
     id: 'agente-conversa-e-propostas',
     title: 'Conversa: perguntar, pedir edições e aplicar propostas',
-    summary:
-      'Como perguntar, o que ela consegue listar e propor (levar, criar, apontar), os botões Aplicar e Descartar, Desfazer e limites.',
+    summary: 'Como perguntar, o que ela lista e propõe (levar, criar, apontar), os botões Aplicar e Descartar, Desfazer e limites.',
     keywords: [
       'perguntar',
       'conversa',
@@ -152,13 +156,14 @@ Quem tem perfil de **consulta** vê a conversa e as listas, mas não recebe prop
 
 ## O histórico
 
-A conversa vive no seu navegador, presa à obra aberta: fechar e reabrir o painel mantém a conversa; trocar de obra ou recarregar a página começa do zero. Ela leva em conta as últimas 8 mensagens da conversa ao responder, então uma pergunta pode se referir à anterior ("e na semana passada?").`,
+No painel da obra, a conversa vive no seu navegador, presa à obra aberta: fechar e reabrir o painel mantém a conversa; trocar de obra ou recarregar a página começa do zero. Ela leva em conta as últimas 8 mensagens da conversa ao responder, então uma pergunta pode se referir à anterior ("e na semana passada?").
+
+Na ${N} geral dos administradores é diferente: as conversas ficam guardadas como **assuntos** (os últimos 20, neste navegador), sobrevivem a trocar de tela e a recarregar a página, e as propostas podem ser de qualquer obra, com a obra escrita no cartão. Veja a seção "${N} geral (administradores): em toda tela, sobre todas as obras".`,
   },
   {
     id: 'agente-duvidas-sobre-o-sistema',
     title: `Tirar dúvidas sobre o sistema com ${N}`,
-    summary:
-      'Como pedir ajuda de uso ("como faço…", "onde fica…", "por que não consigo…"), o que ela sabe do sistema e o que fazer se não souber.',
+    summary: 'Ajuda de uso ("como faço…", "onde fica…", "por que não consigo…"), o que ela sabe do sistema e se ela não souber.',
     keywords: [
       'ajuda',
       'dúvida',
@@ -197,10 +202,80 @@ Se o manual não cobre a dúvida, ela diz isso em vez de inventar, e sugere o bo
 Dúvidas sobre o sistema custam pouco (uma consulta ao manual), mas cada pergunta ainda conta no uso de IA do mês mostrado no rodapé do painel. Para uma dúvida rápida de um botão da tela em que você está, o "?" é imediato e não custa nada.`,
   },
   {
+    id: 'agente-claudia-geral',
+    title: `${N} geral (administradores): em toda tela, sobre todas as obras`,
+    summary: `Só admin: janela em toda tela (Ctrl+J), assuntos, contexto, várias obras, aba "Obra", custo e dúvidas comuns.`,
+    keywords: [
+      'claudia geral',
+      'janela da claudia',
+      'janela flutuante',
+      'novo assunto',
+      'assuntos',
+      'sumiu meu assunto',
+      'ctrl+j',
+      'atalho',
+      'minimizar',
+      'contexto',
+      'várias obras',
+      'panorama das obras',
+      'não vejo a janela',
+      'geral várias obras',
+    ],
+    screen: 'agente',
+    body: `## O que é
+
+A **${N} geral** é a ${N} dos **administradores** (desde 08/11/2026). Em vez do painel lateral preso a uma obra, ela abre numa **janela** que fica sobre qualquer tela do sistema e conversa sobre **qualquer obra e qualquer módulo**, inclusive comparando as obras. Quem não é administrador continua com a ${N} de antes: o botão só nas telas da obra, uma obra por vez, e a conversa recomeça ao trocar de obra.
+
+## Onde abre
+
+- Botão **"${N}"** no cabeçalho de **toda tela**: lista de obras, Dashboard geral, Configurações e todas as telas da obra. O atalho **Ctrl+J** (**⌘J** no Mac) abre e fecha a janela.
+- A janela **não bloqueia a página**: dá para continuar rolando, filtrando e editando a tela com ela aberta.
+- **Minimizar** vira uma pílula com o título do assunto; **expandir** deixa a janela mais larga, para ler tabelas. No celular ela ocupa a tela toda, com a seta de voltar no alto.
+- Se a resposta chega com a janela minimizada ou fechada, aparece um ponto de "não lida" e um aviso na tela.
+
+## Assuntos
+
+Cada conversa é um **assunto**. **"Novo assunto"** começa outro; a lista mostra os **últimos 20** (o mais antigo sai quando entra o 21º), e cada um pode ser renomeado ou excluído. Os assuntos ficam **guardados neste navegador**: continuam ao trocar de tela, de obra ou recarregar a página, e ninguém mais os vê. Ao responder, ela leva em conta as **últimas 8 perguntas e respostas** do assunto ("e na outra obra?" funciona).
+
+## Contexto: de que obra é a pergunta
+
+No alto da janela, o chip de **contexto** mostra a obra e a tela da página em que você está, e muda quando você navega.
+
+- Pergunta **sem obra**, feita dentro de uma obra: vale para a obra do contexto.
+- Pergunta sem obra, feita **fora de uma obra** (lista de obras, Dashboard geral, Configurações): vale para **todas as obras**.
+- **Citar a obra pelo nome ou pelo código** faz a pergunta valer para ela, em qualquer tela. Se o nome bater com mais de uma obra, ela pergunta qual.
+
+## O que ela lê (só leitura)
+
+De qualquer obra: o **curto prazo** (planilha da semana, PPC e causas), o **médio prazo** (plano do mês e restrições), o **longo prazo** (plano macro e Linha de Balanço com as medições), os **vagões** (restrições e pendências), a **terminalidade** (pendências por apartamento), a **segurança do trabalho** (apontamentos dos TSTs) e as **configurações da obra** (semana 1, locais e equipes). Para comparar, ela usa o **panorama das obras**, com os mesmos números do Dashboard geral, e só depois abre o detalhe das obras que a pergunta pede. Os **chips cinza** embaixo da resposta mostram o que ela consultou.
+
+Ela **não lê**: o conteúdo das fotos (só sabe quantas há e o que a descrição diz), os PDFs, os modelos IFC, os usuários e acessos e os dados de uso de IA. Não gera PDF nem planilha e não manda mensagem a ninguém; sobre essas telas ela explica como usar.
+
+Exemplos: "Qual obra tem o PPC mais baixo nas últimas semanas?", "Compare o avanço físico das obras com o previsto", "Quais obras têm mais pendências abertas na terminalidade?", "Resuma a segurança do trabalho do mês em todas as obras".
+
+## Edições
+
+As mesmas três da planilha da semana: **levar** linhas, **criar** linhas e **apontar**, em qualquer obra e de qualquer tela. O cartão da proposta mostra **a obra** e **nada é gravado sem "Aplicar"**; as regras são as da planilha daquela obra (seção "Conversa: perguntar, pedir edições e aplicar propostas"). Pendências da terminalidade e apontamentos de segurança ela só lê.
+
+## A aba "Obra"
+
+Mostra a **Leitura** e o **Radar** da obra do contexto, os mesmos do painel da obra (seção "Leitura da obra e Radar: como pedir, quando é refeita, o que significam os achados"). Fora de uma obra a aba some.
+
+## Custo
+
+Pergunta sobre uma obra só: cerca de **US$ 0,03 a 0,04**. Pergunta que cruza obras: estimada entre **US$ 0,04 e 0,10**. Tudo conta no teto do mês e no limite da pessoa, mas a pergunta que não é de uma obra só **não** entra na parte de nenhuma obra: ela fica registrada sem obra e aparece em Configurações → Agente de IA na linha **"Geral (várias obras)"**. Enquanto o banco não recebe a migração 0041, essa pergunta é registrada na obra do contexto ou na primeira obra consultada.
+
+## Dúvidas comuns
+
+- **"Sumiu meu assunto."** Os assuntos ficam no navegador: em outro computador, outro navegador ou janela anônima eles não aparecem, e limpar os dados do navegador apaga. Passando de 20, o mais antigo sai.
+- **"Por que não vejo a janela nem o atalho?"** A ${N} geral é só para administradores. Os outros perfis usam o painel dentro da obra.
+- **"Ela respondeu sobre a obra errada."** Confira o chip de contexto ou cite a obra pelo nome ou código.
+- **"A pergunta foi recusada por limite."** Valem o teto do mês e o seu limite pessoal (seção "Avisos do painel, limite mensal de IA e a tela do admin (Configurações → Agente de IA)").`,
+  },
+  {
     id: 'agente-limites-e-custo',
     title: 'Avisos do painel, limite mensal de IA e a tela do admin (Configurações → Agente de IA)',
-    summary:
-      'O que fazer em "IA não configurada", "acesso cortado", "limite mensal atingido"; como o custo é contado; limites por pessoa e por obra.',
+    summary: 'Avisos "IA não configurada", "acesso cortado", "limite mensal atingido"; custo; limites; a linha "Geral (várias obras)".',
     keywords: [
       'limite mensal',
       'custo',
@@ -229,7 +304,7 @@ Dúvidas sobre o sistema custam pouco (uma consulta ao manual), mas cada pergunt
 
 ## Como o custo é contado
 
-Cada chamada à inteligência artificial (uma leitura ou uma pergunta) tem o custo calculado pelos tokens que o provedor devolve e gravado por obra, pessoa e mês. Uma leitura custa alguns centavos de dólar (medido: cerca de US$ 0,02 numa obra pequena, estimado até US$ 0,05 numa obra com os três níveis cheios) e uma pergunta com edição parecido (cerca de US$ 0,03 a 0,06). Uma leitura só é cobrada quando os dados mudaram; pedir de novo com os mesmos dados não chama a IA.
+Cada chamada à inteligência artificial (uma leitura ou uma pergunta) tem o custo calculado pelos tokens que o provedor devolve e gravado por obra, pessoa e mês. Uma leitura custa alguns centavos de dólar (medido: cerca de US$ 0,02 numa obra pequena, estimado até US$ 0,05 numa obra com os três níveis cheios) e uma pergunta com edição parecido (cerca de US$ 0,03 a 0,06). Uma leitura só é cobrada quando os dados mudaram; pedir de novo com os mesmos dados não chama a IA. Na ${N} geral (só administradores), a pergunta de uma obra só custa o mesmo (cerca de US$ 0,03 a 0,04) e a que cruza obras é estimada entre US$ 0,04 e 0,10.
 
 Antes de cada chamada o servidor confere, nesta ordem:
 
@@ -237,6 +312,8 @@ Antes de cada chamada o servidor confere, nesta ordem:
 2. **Teto do mês**, em dólares, para todas as obras juntas (padrão US$ 20).
 3. **Parte da obra**: 1,5 × (teto ÷ obras ativas). Com o teto padrão e seis obras ativas, US$ 5,00 por obra; a parte existe para uma obra não consumir o crédito das outras.
 4. **Limite da pessoa**, só quando o admin definiu um.
+
+A pergunta da ${N} geral que não é de uma obra só passa pelo corte, pelo teto do mês e pelo limite da pessoa, mas **não** pela parte de nenhuma obra.
 
 Quando um deles estoura, a pergunta ou a leitura é recusada com a mensagem correspondente, e o Radar continua. O teto do mês zera quando o mês vira. O rodapé do painel mostra onde você está: "Uso de IA no mês: gasto de teto · esta obra: gasto de parte · você: gasto de limite (quando há) · modelo".
 
@@ -247,7 +324,7 @@ Só para administradores (link "Agente de IA" na barra lateral, abaixo de Config
 - **Seletor de mês** (setas; não passa do mês atual).
 - **Resumo do mês**: gasto contra o teto (a barra fica amarela a partir de 70% e vermelha a partir de 90%), chamadas (leituras e perguntas) e o modelo em uso.
 - **Pessoas**, da que mais gastou para a que menos: nome, papel, gasto, chamadas, última chamada, o campo **"Limite mensal"** em dólares (salva ao sair do campo ou com Enter; vazio é sem limite) e o botão de **cortar/liberar acesso** (chip "Cortado"). Liberar reabre na hora.
-- **Obras**, da que mais gastou para a que menos: código, nome, gasto, chamadas e a parte da obra no teto. Obra inativa aparece em cinza: conta o que gastou, mas não entra na divisão do teto.
+- **Obras**, da que mais gastou para a que menos: código, nome, gasto, chamadas e a parte da obra no teto. Obra inativa aparece em cinza: conta o que gastou, mas não entra na divisão do teto. No fim, quando o mês tiver, a linha **"Geral (várias obras)"** soma as perguntas da ${N} geral que não são de uma obra só: entram no gasto do mês e no da pessoa, mas não na parte de nenhuma obra (por isso a linha não tem parte nem barra).
 - "Como funciona" explica as regras na própria tela.
 
 O teto geral do mês e o modelo não são alterados nessa tela: são configuração do servidor, feita pela equipe que mantém o sistema.`,

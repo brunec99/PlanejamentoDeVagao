@@ -259,6 +259,14 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A aba 6 (Segurança do trabalho) responde "indisponível" e ninguém pode ser marcado como TST; as demais seguem normais.',
     critical: false,
   },
+  {
+    migration: '0041_agent_global',
+    label: 'Claudia geral: uso de IA sem obra ("Geral (várias obras)")',
+    probe: { kind: 'function', name: 'agent_usage_allows_general', args: {} },
+    effect:
+      'A pergunta da Claudia geral que lê várias obras é gravada na obra da tela (ou na primeira consultada), e a linha "Geral (várias obras)" não aparece em Configurações → Agente de IA; o teto do mês segue somando tudo.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

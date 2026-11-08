@@ -1,7 +1,9 @@
+import { AGENT } from '../../agente/agent-identity';
 import type { TourStep } from '../tours';
 
 /** Tour da tela Administração › Agente de IA (27/10/2026): consumo por pessoa e por obra, limite
- * mensal por pessoa e corte de acesso. Só administrador vê a tela. */
+ * mensal por pessoa e corte de acesso. Só administrador vê a tela. Em 08/11/2026 o passo "Obras" passou a
+ * explicar a linha "Geral (várias obras)" da Claudia geral. */
 export const steps: TourStep[] = [
   {
     title: 'Agente de IA',
@@ -40,6 +42,6 @@ export const steps: TourStep[] = [
   {
     target: 'agente-admin-obras',
     title: 'Obras',
-    body: 'Uma linha por obra, da que mais gastou para a que menos gastou: gasto, chamadas, a parte do teto que cabe a ela e quanto dessa parte já foi usado. Obra inativa aparece em cinza; ela ainda conta o que gastou, mas não entra na divisão do teto.',
+    body: `Uma linha por obra, da que mais gastou para a que menos gastou: gasto, chamadas, a parte do teto que cabe a ela e quanto dessa parte já foi usado. Obra inativa aparece em cinza; ela ainda conta o que gastou, mas não entra na divisão do teto. No fim, quando houver, a linha "Geral (várias obras)" soma as perguntas da ${AGENT.name} geral que não são de uma obra só: contam no teto do mês e no gasto da pessoa, mas não na parte de nenhuma obra.`,
   },
 ];

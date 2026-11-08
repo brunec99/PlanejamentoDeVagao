@@ -489,7 +489,7 @@ No computador, a barra azul à esquerda é o menu. De cima para baixo:
 
 A barra fixa no topo mostra a **trilha** "Obras › nome da obra › aba": "Obras" leva à lista; o nome da obra, à aba inicial dela. À direita:
 
-- **Claudia** (estrela): a assistente de planejamento, nas telas da obra. Responde perguntas sobre os três prazos e propõe edições que só são gravadas quando você clica em "Aplicar". Veja a seção da assistente.
+- **Claudia** (ícone de brilho): a assistente de planejamento, nas telas da obra; para administradores, em toda tela, numa janela que não bloqueia a página (Ctrl+J / ⌘J). Responde perguntas sobre os três prazos e propõe edições que só são gravadas quando você clica em "Aplicar". Veja a seção da assistente.
 - **"Modo reunião"** (ícone de apresentação): aumenta o texto do sistema inteiro um degrau, para o projetor da sala. Fica aceso quando ligado, vale em todas as telas e a escolha fica neste navegador.
 - **"Como usar"** ("?"): o tour da tela, descrito abaixo.
 
