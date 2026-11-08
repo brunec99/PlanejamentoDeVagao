@@ -63,12 +63,16 @@ A barra de seções fica no cabeçalho da aba. A seção vai no endereço da pá
     id: 'medio-prazo-criar-salvar-exportar',
     title: 'Criar o cronograma do mês, salvar o rascunho e exportar',
     summary:
-      'Novo cronograma (em branco ou cópia), cadeado, rascunho, "Revisar e salvar" com motivo, conflito de versão, descartar e .xml.',
+      'Novo cronograma (em branco, cópia ou importado do MS Project), cadeado, rascunho, "Revisar e salvar" com motivo, conflito de versão, descartar e .xml.',
     keywords: [
       'criar cronograma',
       'novo cronograma do mês',
       'copiar mês anterior',
       'em branco',
+      'importar do project',
+      'importar xml',
+      'subir arquivo do project',
+      'mpp',
       'liberar edição',
       'cadeado',
       'bloqueado',
@@ -85,10 +89,20 @@ A barra de seções fica no cabeçalho da aba. A seção vai no endereço da pá
     body: `## Criar o cronograma de um mês
 
 - Sem nenhum cronograma, a seção "Cronograma" mostra só o botão "Novo cronograma do mês". Depois, ele fica no rodapé, para planejador, gestor e admin, e só sem alteração pendente.
-- Campos: "Mês" (vem sugerido o mês seguinte ao último criado), "Partir de" ("Cópia de Mmm/aa · nome" ou "Em branco") e "Nome (opcional)" (sem nome, fica "Plano de AAAA-MM"). "Criar cronograma" grava na hora e abre o mês novo.
+- Campos: "Mês" (vem sugerido o mês seguinte ao último criado), "Partir de" ("Cópia de Mmm/aa · nome", "Em branco" ou "Importar do MS Project (.xml)") e "Nome (opcional)" (sem nome, fica "Plano de AAAA-MM"). "Criar cronograma" grava na hora e abre o mês novo.
 - A **cópia** leva tarefas, vínculos, recursos, anotações, % concluída, datas reais e o calendário. Ficam de fora as tarefas 100% concluídas que terminaram antes do novo horizonte e os resumos que ficaram sem subitens. Tarefa que perdeu a predecessora ganha "Não iniciar antes de" na data em que estava, para não pular. O mês de origem não muda.
 - Recusas: "Esta obra já tem um plano para este mês." (um plano vivo por mês), "O plano de origem deve ser de um mês anterior ao novo plano." e "Copie de um plano vivo, não de uma linha de base."
 - Não há botão para excluir um cronograma na tela.
+
+## Importar do MS Project
+
+- Em "Partir de", escolha "Importar do MS Project (.xml)" e o arquivo. O sistema lê o **.xml** que o próprio Project grava: no Project, Arquivo › Salvar como › tipo "Formato XML (*.xml)". O .mpp é recusado com essa explicação.
+- Antes de gravar, a gaveta mostra a **conferência**: linhas, resumos, vínculos, concluídas e em andamento, a linha de base do Project, o calendário (dias úteis, horas por dia, dias sem trabalho), quantas tarefas ficam fora do horizonte e os avisos do que mudou.
+- **Recursos → equipes**: cada recurso do Project é ligado à equipe da obra de mesmo nome (sem diferenciar acento e maiúscula, também "EMPRESA - NOME"); sem equipe correspondente, a sugestão é criar uma com o nome do Project e a empresa antes do " - ". Dá para trocar cada um por outra equipe ou "Sem recurso". As equipes criadas ficam com capacidade 1 e aparecem também no curto prazo.
+- **Datas**: o sistema refaz a rede como o Project. A gaveta lista as tarefas cuja data ficaria diferente do arquivo, antes de criar.
+- Entra tudo do arquivo: níveis, durações, % concluída, início e término reais, restrições, prazo final, anotações e vínculos nos quatro tipos com defasagem. Tarefa manual vira automática com "Não iniciar antes de" na data dela; inativa e linha em branco não entram; vínculo com tarefa-resumo passa para as subtarefas; defasagem em horas ou % vira dias.
+- A linha de base do Project vira a linha de base "Linha de base do Project", já exibida no Gantt.
+- Quem pode: quem cria cronograma do mês (planejador, gestor ou admin com o módulo de médio prazo). Um plano vivo por mês continua valendo.
 
 ## Trocar de mês
 

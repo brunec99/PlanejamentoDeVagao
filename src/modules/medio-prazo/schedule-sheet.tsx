@@ -75,7 +75,7 @@ import { isMonthlyPlan } from '@/domain/legalization';
 import { parseLinks, formatLink, rollUpPlan } from '@/domain/rules';
 import { validateDate } from '@/domain/validation';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
-import { CommandForm, Field, TextField, value } from '@/modules/planejamento/forms';
+import { CommandForm, TextField, value } from '@/modules/planejamento/forms';
 import { useHistory } from '@/modules/planejamento/history';
 import { useConfirm } from '@/modules/layout/confirm';
 import { useToast } from '@/modules/layout/toast';
@@ -96,6 +96,7 @@ import { TimelineBand, type TimelineBandProps, type TimelineItem } from './timel
 import { TeamPlanner } from './team-planner';
 import { ResourceUsageView } from './resource-usage-view';
 import { ResourceSheetView } from './resource-sheet-view';
+import { NewPlanDrawer } from './new-plan-drawer';
 import { TaskInfoDialog, type TaskInfoChange, type TaskInfoTab, type TaskInfoValues } from './task-info-dialog';
 
 /* Cronograma do mês no layout do MS Project: tabela à esquerda, Gantt de acompanhamento à direita,
@@ -381,11 +382,6 @@ const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', '
 const projectDate = (d?: string) =>
   d ? `${WEEKDAYS[new Date(d + 'T00:00:00Z').getUTCDay()]} ${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : 'ND';
 const monthLabel = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
-const nextMonth = (m: string) => {
-  const y = Number(m.slice(0, 4)),
-    n = Number(m.slice(5, 7));
-  return n === 12 ? `${y + 1}-01` : `${y}-${String(n + 1).padStart(2, '0')}`;
-};
 const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const stamp = () => ({ createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
 const blank = (s: string) => !s.trim() || /^nd$/i.test(s.trim());
@@ -515,65 +511,11 @@ export function ScheduleSheet({ workId }: { workId: string }) {
             anterior.
           </p>
           <span data-tour="medio-primeiro-plano" className="inline-flex">
-            <NewPlanForm workId={workId} plans={plans} today={today} onDone={setId} tone="primary" />
+            <NewPlanDrawer workId={workId} plans={plans} today={today} onDone={setId} tone="primary" />
           </span>
         </div>
       )}
     </section>
-  );
-}
-
-/** Abre numa gaveta; no estado vazio é o botão primário da tela, no rodapé do cronograma é discreto. */
-function NewPlanForm({
-  workId,
-  plans,
-  today,
-  onDone,
-  tone = 'ghost',
-}: {
-  workId: string;
-  plans: MediumTermPlan[];
-  today: string;
-  onDone: (id: string) => void;
-  tone?: 'primary' | 'ghost';
-}) {
-  const latest = plans[0];
-  const month = latest ? nextMonth(latest.month) : today.slice(0, 7);
-  return (
-    <CommandForm
-      title="Novo cronograma do mês"
-      description="Cada mês tem o seu cronograma, com horizonte de três meses."
-      submit="Criar cronograma"
-      tone={tone}
-      success="Cronograma criado"
-      onDone={onDone}
-      command={d => ({
-        type: 'create_plan',
-        workId,
-        month: value(d, 'month'),
-        name: value(d, 'name') || undefined,
-        copyFrom: value(d, 'copyFrom') || undefined,
-      })}
-    >
-      <TextField name="month" label="Mês" type="month" defaultValue={month} />
-      {plans.length > 0 && (
-        <Field label="Partir de">
-          <select className="field" name="copyFrom" defaultValue={latest.id}>
-            {plans.map(p => (
-              <option key={p.id} value={p.id}>
-                Cópia de {monthLabel(p.month)} · {p.name}
-              </option>
-            ))}
-            <option value="">Em branco</option>
-          </select>
-        </Field>
-      )}
-      <p className="text-xs text-slate-500">
-        A cópia leva tarefas, vínculos, recursos, % concluída e datas reais. Tarefas já concluídas antes do novo horizonte ficam de fora; o
-        cronograma do mês anterior não muda.
-      </p>
-      <TextField name="name" label="Nome (opcional)" required={false} />
-    </CommandForm>
   );
 }
 
@@ -3198,7 +3140,7 @@ export function Sheet({
               variant.footerExtra
             ) : (
               <span data-tour="medio-novo-plano" className="inline-flex">
-                <NewPlanForm workId={plan.workId} plans={plans} today={today} onDone={choose} />
+                <NewPlanDrawer workId={plan.workId} plans={plans} today={today} onDone={choose} />
               </span>
             )}
           </>

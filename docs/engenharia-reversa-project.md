@@ -73,7 +73,7 @@ A pendência principal deste documento era conferir a bancada e a exportação n
   3. Enviar os `.xml` para `C:\Users\Public\msp\xml\` e rodar `vm.sh usuario scripts/ms-project/abrir-xml.ps1 400`, que grava `xml-aberto.json`.
   4. Baixar os resultados com `vm.sh baixar project.json` e `vm.sh baixar xml-aberto.json`, e rodar `python3 -I scripts/ms-project/comparar.py <pasta>`.
 - **Modelagem no Project**: o início do projeto é o menor `inicio` do cenário, e um `inicio` mais tarde vira NIAD. Restrições de término e o prazo final ficam na hora de término padrão; as de início, na hora de início padrão. Nenhuma tarefa é manual nem estimada. Folgas foram convertidas de minutos para dias úteis.
-- **Armadilhas encontradas**: `FieldNameToFieldConstant("Duration")` devolve a "Duração agendada", e a Duração de verdade é a constante 188743709. Em pt-BR, dia corrido se escreve "diasd". `DateAdd` não aceita minutos negativos (usar `DateSubtract`). O `utmctl exec` não espera o comando terminar, e o `file pull` sai com 0 mesmo quando falha. Um `FileSaveAs` no formato XML não gravou nada e outro travou o Project num diálogo invisível. Por isso não houve XML gravado pelo próprio Project para comparar.
+- **Armadilhas encontradas**: `FieldNameToFieldConstant("Duration")` devolve a "Duração agendada", e a Duração de verdade é a constante 188743709. Em pt-BR, dia corrido se escreve "diasd". `DateAdd` não aceita minutos negativos (usar `DateSubtract`). O `utmctl exec` não espera o comando terminar, e o `file pull` sai com 0 mesmo quando falha. Um `FileSaveAs` no formato XML não gravou nada e outro travou o Project num diálogo invisível. Por isso não houve XML gravado pelo próprio Project para comparar. Resolvido em 08/11/2026: o `FileSaveAs` com `FormatID = 'MSProject.XML'` grava quando chamado por `InvokeMember` com argumentos nomeados (`Name`, `FormatID`); a chamada posicional com `[Type]::Missing` não acha a sobrecarga no PowerShell. Está em `scripts/ms-project/converter-xml.ps1`, usado na importação do médio prazo.
 - **O que rodou**: os 34 cenários da fixture e 21 cenários extras (X1–X21), criados durante a conferência para isolar cada regra suspeita. Os extras não estão na fixture; os que importam aparecem nas regras abaixo com a montagem descrita.
 
 ### Resultado em números
@@ -180,3 +180,9 @@ O plano continua guardando dias. Dentro do `analyzeSchedule`, cada data é um **
 
 - O oráculo automático é o próprio Project, pelos scripts de `scripts/ms-project/`. Toda mudança no motor deve ser conferida de novo com os passos de "Como foi feito", e cada divergência vira cenário na fixture.
 - Recursos na exportação (`<Resources>`/`<Assignments>`): a coluna de recursos ainda chega vazia ao Project.
+
+## Importação do Project (08/11/2026)
+
+O médio prazo passou a importar o `.xml` que o Project grava (`src/domain/mspdi-import.ts`, ver `docs/planejamento-tres-niveis.md`, seção de 08/11/2026). Nos quatro arquivos reais de novembro, o motor sobre o que foi lido chega às datas que o Project mostra em 655 de 656 tarefas-folha. A diferença é de exibição, e não de instante:
+
+- **IT com defasagem negativa:** tarefa com vínculo IT de -10 dias úteis a partir de uma predecessora que começa em 15/12 às 08:00. O Project mostra o término em 01/12 às 08:00; o motor, em 30/11 (fim do dia útil anterior). O instante em horas de trabalho é o mesmo; muda a data na tabela, pela regra "subtrair cai no fim do dia" da passada direta. Vale virar cenário da bancada se a equipe estranhar.

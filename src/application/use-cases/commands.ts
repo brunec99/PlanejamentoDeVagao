@@ -7,6 +7,7 @@ import {
   constraintOf,
   constraintNeedsDate,
   validateConstraint,
+  validateCalendar,
   DEFAULT_CALENDAR,
   type WorkCalendar,
 } from '../../domain/plan-schedule';
@@ -170,6 +171,22 @@ export type Command =
   | { type: 'move_restriction'; restrictionId: string; boardStatus: Exclude<BoardStatus, 'resolvida'> }
   /** `copyFrom`: plano vivo de mês anterior da mesma obra, copiado como ponto de partida. */
   | { type: 'create_plan'; workId: string; month: string; name?: string; copyFrom?: string }
+  /** Cronograma do mês importado de um arquivo do MS Project (08/11/2026). O navegador lê o XML
+   * (`src/domain/mspdi-import.ts`) e manda as linhas já convertidas, ligadas por `key`; o servidor
+   * cria as equipes novas, refaz as datas pela rede e, com `baselineName`, congela a linha de base
+   * que veio do Project. */
+  | {
+      type: 'import_plan';
+      workId: string;
+      month: string;
+      name?: string;
+      fileName: string;
+      calendar: WorkCalendar;
+      tasks: ImportedPlanTask[];
+      links: ImportedPlanLink[];
+      resources: ImportedPlanResource[];
+      baselineName?: string;
+    }
   /** Gantt de legalização da aba 1 (04/11/2026): um por obra, a partir da entrega contratual, com o
    * modelo ATR ou em branco. `update_legalization_plan` troca a entrega (e o prazo final do marco). */
   | { type: 'create_legalization_plan'; workId: string; deliveryDate: string; template: 'atr' | 'blank'; name?: string }
@@ -227,6 +244,45 @@ export type Command =
   | { type: 'set_sequence_start'; sequenceId: string; startDate: string | null }
   | { type: 'regenerate_sequence'; sequenceId: string; projectId: string; rows: ImportedActivity[]; responsibleId: string }
   | { type: 'sync_long_term_plan'; sequenceId: string; responsibleId: string; slots: LongTermSlot[] };
+/** Linha do cronograma importado do Project. `key` liga vínculos, recurso e linha de base dentro do
+ * comando (é o UID do Project); o id gravado é novo. `resource` é o nome do recurso no arquivo,
+ * resolvido pela lista `resources`. */
+export interface ImportedPlanTask {
+  key: string;
+  name: string;
+  level: number;
+  duration?: PlanTask['duration'];
+  plannedStart: string;
+  plannedEnd: string;
+  actualStart?: string;
+  actualEnd?: string;
+  progress: number;
+  constraintType?: PlanTask['constraintType'];
+  constraintDate?: string;
+  deadline?: string;
+  notes?: string;
+  resource?: string;
+  baseline?: { start: string; end: string };
+}
+export interface ImportedPlanLink {
+  predecessorKey: string;
+  successorKey: string;
+  type: LinkType;
+  lagDays: number;
+  lagBusiness: boolean;
+}
+/** O que fazer com cada recurso do arquivo: ligar a uma equipe da obra (`teamId`), criar uma
+ * equipe (`create`) ou nenhum dos dois, e as tarefas dele ficam sem recurso. */
+export interface ImportedPlanResource {
+  name: string;
+  teamId?: string;
+  create?: { name: string; company: string };
+}
+/** Capacidade da equipe criada pela importação: 1 atividade de cada vez, como as "Unidades máximas"
+ * de 100% com que o Project cria o recurso. Ajustável nas configurações da obra. */
+export const IMPORTED_TEAM_CAPACITY = 1;
+export const MAX_IMPORTED_TASKS = 3000;
+export const MAX_IMPORTED_LINKS = 10000;
 export interface ImportedActivity {
   externalId: string;
   name: string;
@@ -1159,6 +1215,197 @@ export function applyCommand(data: PlanningData, command: Command, context: Comm
         data.planTasks.push(...copy.tasks);
         data.planDependencies.push(...copy.links);
       }
+      entityId = plan.id;
+      break;
+    }
+    case 'import_plan': {
+      checkWork(command.workId);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(command.month)) throw new Error('Informe o mês no formato AAAA-MM.');
+      if (data.plans.some(p => p.workId === command.workId && p.month === command.month && !p.baselineOf && !isLegalizationPlan(p)))
+        throw new Error('Esta obra já tem um plano para este mês.');
+      const fileName = requireText(command.fileName, 'Arquivo');
+      if (!Array.isArray(command.tasks) || !command.tasks.length) throw new Error('O arquivo não tem tarefas para importar.');
+      if (command.tasks.length > MAX_IMPORTED_TASKS || !Array.isArray(command.links) || command.links.length > MAX_IMPORTED_LINKS)
+        throw new Error(`A importação aceita até ${MAX_IMPORTED_TASKS} tarefas e ${MAX_IMPORTED_LINKS} vínculos.`);
+      if (!Array.isArray(command.resources) || command.resources.length > MAX_IMPORTED_TASKS)
+        throw new Error('Lista de recursos inválida.');
+      const calendar = structuredClone(command.calendar);
+      validateCalendar(calendar);
+      const plan: MediumTermPlan = {
+        ...base(),
+        workId: command.workId,
+        month: command.month,
+        name: command.name?.trim() || `Plano de ${command.month}`,
+        createdBy: actorId,
+        calendar,
+      };
+      // Recursos: equipe existente da obra, equipe criada agora (ou reaproveitada, se já houver uma com
+      // o mesmo nome e empresa) ou nenhum.
+      const teamOf = new Map<string, string>();
+      let teamsCreated = 0;
+      for (const resource of command.resources) {
+        const name = typeof resource?.name === 'string' ? resource.name.trim() : '';
+        if (!name || teamOf.has(name)) continue;
+        if (resource.teamId) {
+          if (!data.teams.some(t => t.id === resource.teamId && t.workId === command.workId))
+            throw new Error(`Recurso "${name}": equipe deve pertencer à obra.`);
+          teamOf.set(name, resource.teamId);
+        } else if (resource.create) {
+          const teamName = requireText(resource.create.name, `Nome da equipe do recurso "${name}"`);
+          const company = requireText(resource.create.company, `Empresa do recurso "${name}"`);
+          const same = data.teams.find(
+            t =>
+              t.workId === command.workId &&
+              t.name.trim().toLowerCase() === teamName.toLowerCase() &&
+              t.company.trim().toLowerCase() === company.toLowerCase(),
+          );
+          if (same) teamOf.set(name, same.id);
+          else {
+            const team = { ...base(), workId: command.workId, name: teamName, company, weeklyCapacity: IMPORTED_TEAM_CAPACITY };
+            data.teams.push(team);
+            teamOf.set(name, team.id);
+            teamsCreated++;
+          }
+        }
+      }
+      const idOf = new Map<string, string>();
+      const tasks: PlanTask[] = command.tasks.map((input, index) => {
+        const row = `Linha ${index + 1}`;
+        if (typeof input?.key !== 'string' || !input.key || idOf.has(input.key))
+          throw new Error(`${row}: identificador repetido no arquivo.`);
+        const id = newId();
+        idOf.set(input.key, id);
+        if (!Number.isFinite(input.progress) || input.progress < 0 || input.progress > 100)
+          throw new Error(`${row}: % concluída deve ficar entre 0 e 100.`);
+        if (!Number.isInteger(input.level) || input.level < 0 || input.level > (index ? command.tasks[index - 1].level + 1 : 0))
+          throw new Error(`${row}: hierarquia inválida.`);
+        validatePeriod(input.plannedStart, input.plannedEnd);
+        const constraint = constraintOf({ constraintType: input.constraintType, constraintDate: input.constraintDate });
+        validateConstraint(constraint);
+        if (input.deadline) validateDate(input.deadline);
+        if (input.actualStart) validateDate(input.actualStart);
+        if (input.actualEnd) validateDate(input.actualEnd);
+        const summary = command.tasks[index + 1]?.level > input.level;
+        if (summary && (constraint.type !== 'ASAP' || input.deadline))
+          throw new Error(`${row}: tarefa-resumo não recebe restrição nem prazo final; informe nas subtarefas.`);
+        if (summary && (input.actualStart || input.actualEnd))
+          throw new Error(`${row}: tarefa-resumo não recebe início ou término real; informe nas subtarefas.`);
+        if (input.actualEnd && !input.actualStart) throw new Error(`${row}: término real exige início real.`);
+        if (input.actualStart && input.actualEnd && input.actualStart > input.actualEnd)
+          throw new Error(`${row}: início real não pode ser depois do término real.`);
+        if (input.actualEnd && input.progress !== 100) throw new Error(`${row}: tarefa com término real deve estar 100% concluída.`);
+        if (!summary && input.progress > 0 && !input.actualStart) throw new Error(`${row}: tarefa com % concluído precisa de início real.`);
+        const notes = typeof input.notes === 'string' && input.notes.trim() ? input.notes.trim() : undefined;
+        return {
+          ...base(),
+          id,
+          planId: plan.id,
+          name: requireText(input.name, `${row}: nome`),
+          plannedStart: input.plannedStart,
+          plannedEnd: input.plannedEnd,
+          progress: input.progress,
+          level: input.level,
+          order: index + 1,
+          teamId: (input.resource && teamOf.get(input.resource.trim())) || undefined,
+          notes,
+          duration: input.duration,
+          constraintType: constraint.type === 'ASAP' ? undefined : constraint.type,
+          constraintDate: constraintNeedsDate(constraint.type) ? constraint.date : undefined,
+          deadline: input.deadline || undefined,
+          actualStart: input.actualStart || undefined,
+          actualEnd: input.actualEnd || undefined,
+          version: 1,
+        };
+      });
+      const pairs = new Set<string>();
+      const links: PlanDependency[] = command.links.map((input, index) => {
+        const predecessorId = idOf.get(input?.predecessorKey),
+          successorId = idOf.get(input?.successorKey);
+        if (!predecessorId || !successorId) throw new Error(`Vínculo ${index + 1}: tarefa inexistente no arquivo.`);
+        if (predecessorId === successorId) throw new Error(`Vínculo ${index + 1}: uma linha não pode depender de si mesma.`);
+        if (pairs.has(`${predecessorId}>${successorId}`)) throw new Error(`Vínculo ${index + 1}: vínculo repetido.`);
+        pairs.add(`${predecessorId}>${successorId}`);
+        if (!LINK_TYPES.includes(input.type)) throw new Error(`Vínculo ${index + 1}: tipo deve ser TI, II, TT ou IT.`);
+        if (!Number.isInteger(input.lagDays) || Math.abs(input.lagDays) > 365)
+          throw new Error(`Vínculo ${index + 1}: a defasagem vai de -365 a 365 dias.`);
+        return {
+          ...base(),
+          predecessorId,
+          successorId,
+          type: input.type,
+          lagDays: input.lagDays,
+          lagBusiness: input.lagBusiness !== false,
+        };
+      });
+      // As datas gravadas são as do motor, como em qualquer revisão: o arquivo dá durações, vínculos,
+      // restrições e datas reais, e a rede é refeita aqui (ciclo no arquivo cai na mensagem do motor).
+      const calculated = scheduleTasks(tasks, links, calendar);
+      data.plans.push(plan);
+      data.planTasks.push(...calculated);
+      data.planDependencies.push(...links);
+      // Linha de base do Project: um plano congelado com as datas de base de cada linha que as tem.
+      // Folha sem base fica fora (no Project ela aparece sem base); resumo entra sempre, para a
+      // estrutura continuar a mesma.
+      const withBaseline = command.tasks.filter(t => t.baseline);
+      let baselineId: string | undefined;
+      if (command.baselineName?.trim() && withBaseline.length) {
+        const frozen: MediumTermPlan = {
+          ...base(),
+          calendar: structuredClone(calendar),
+          version: 0,
+          workId: plan.workId,
+          month: plan.month,
+          name: command.baselineName.trim(),
+          baselineOf: plan.id,
+          frozenAt: now,
+          createdBy: actorId,
+        };
+        const copies = new Map<string, string>();
+        command.tasks.forEach((input, index) => {
+          const summary = command.tasks[index + 1]?.level > input.level;
+          if (!input.baseline && !summary) return;
+          if (input.baseline) validatePeriod(input.baseline.start, input.baseline.end);
+          const live = calculated.find(t => t.id === idOf.get(input.key))!;
+          const copy: PlanTask = {
+            ...live,
+            ...base(),
+            planId: frozen.id,
+            sourceTaskId: live.id,
+            plannedStart: input.baseline?.start ?? live.plannedStart,
+            plannedEnd: input.baseline?.end ?? live.plannedEnd,
+            progress: 0,
+            actualStart: undefined,
+            actualEnd: undefined,
+          };
+          copies.set(live.id, copy.id);
+          data.planTasks.push(copy);
+        });
+        for (const link of links)
+          if (copies.has(link.predecessorId) && copies.has(link.successorId))
+            data.planDependencies.push({
+              ...link,
+              ...base(),
+              predecessorId: copies.get(link.predecessorId)!,
+              successorId: copies.get(link.successorId)!,
+            });
+        data.plans.push(frozen);
+        baselineId = frozen.id;
+      }
+      data.history.push({
+        id: newId(),
+        entityId: plan.id,
+        entityType: 'planning',
+        action: 'plan_import',
+        authorId: actorId,
+        occurredAt: now,
+        changes: {
+          fileName,
+          tasks: calculated.length,
+          links: links.length,
+          teamsCreated,
+          baselineId: baselineId ?? null,
+        },
+      });
       entityId = plan.id;
       break;
     }

@@ -328,7 +328,7 @@ export const steps: TourStep[] = [
   {
     target: 'medio-novo-plano',
     title: 'Novo cronograma do mês',
-    body: 'Cria o plano de um mês, como cópia de um plano existente ou em branco. A cópia leva tarefas, vínculos, recursos, % concluída e datas reais, deixa de fora o que terminou antes do novo horizonte e não altera o mês de origem.',
+    body: 'Cria o plano de um mês, como cópia de um plano existente, em branco ou importado do MS Project (o .xml do "Salvar como"). A cópia leva tarefas, vínculos, recursos, % concluída e datas reais, deixa de fora o que terminou antes do novo horizonte e não altera o mês de origem. A importação mostra a conferência do arquivo antes de gravar.',
   },
   {
     target: 'medio-descartar',

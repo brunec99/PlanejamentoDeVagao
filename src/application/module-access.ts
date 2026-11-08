@@ -139,6 +139,7 @@ const SECTION_COMMANDS: Record<string, readonly Command['type'][]> = {
   ],
   'medio-prazo': [
     'create_plan',
+    'import_plan',
     'delete_plan',
     'freeze_plan_baseline',
     'save_plan_revision',

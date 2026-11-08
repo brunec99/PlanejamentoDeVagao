@@ -1027,3 +1027,66 @@ Testes novos: `tests/commitment-local.test.ts` (11), `tests/commitment-local-com
 
 - Conferir logado, numa obra real: cadastrar os locais nas Configurações da obra e escolher um na coluna Local do curto prazo.
 - A terminalidade tem o seu próprio cadastro de "Pavimentos e unidades" na mesma página; as duas listas são independentes. Unificar, se fizer sentido, é outra decisão.
+
+## Médio prazo: importar do MS Project e carga dos cronogramas de novembro (08/11/2026)
+
+**Pedido do usuário:** "dentro do médio prazo quero criar uma ferramenta que possibilite que o usuário suba arquivos do MS Project direto para o sistema", ao criar um novo cronograma, e "inserir todos os médios prazos do mês de novembro no sistema para que comecem a operar 100% dentro da plataforma". Isso muda a decisão de 25/09/2026 ("Origem do plano: digitado direto no sistema, sem importar XML do Project").
+
+Antes de codar, o modelo da tela foi publicado com as regras numeradas e a carga de novembro (https://claude.ai/artifact/2YVb8UYKWXFXP8Gn6UpRN5). O usuário respondeu "aprovado tudo", confirmou a exclusão do cronograma de teste da Blentt, mandou usar a versão do Drive do arquivo da Atmos e decidiu liberar o módulo de médio prazo **pessoa por pessoa** (em Configurações › Usuários, como já era), sem abrir para todos.
+
+### Regras aprovadas
+
+1. **Formato:** o `.xml` que o próprio Project grava (Arquivo › Salvar como › "Formato XML (*.xml)"). O `.mpp` é um formato fechado; ao escolher um, a gaveta explica o passo do XML. Aceitar o `.mpp` direto exigiria rodar no servidor um conversor de terceiros (o MPXJ compilado, pacote `@byteink/mppjs`, 68 MB, código aberto LGPL com proveniência SLSA) com acesso às chaves do sistema; ficou de fora porque a importação acontece uma vez por obra e, depois dela, cada mês nasce como cópia do anterior dentro do sistema.
+2. **O que entra:** todas as tarefas do arquivo, na ordem e nos níveis do Project, com duração, % concluída, início e término reais, restrições, prazo final, anotações e vínculos nos quatro tipos com defasagem. O resumo do projeto (tarefa 0) não entra: o sistema calcula a linha 0.
+3. **Recursos viram equipes:** liga à equipe da obra quando o nome bate (sem diferenciar acento e maiúscula, também no formato "EMPRESA - NOME", e "EMPRESA - NOME" casa com a equipe NOME da empresa que começa por EMPRESA, como "ATR - Adenir" com "adenir · ATR OBRA"). Sem candidata única, sugere criar a equipe com o nome do Project e a empresa antes do " - " (a empresa que já existe na obra mantém a grafia de lá). Na conferência dá para trocar cada um por outra equipe ou "Sem recurso". A equipe criada nasce com capacidade 1 (as "Unidades máximas" de 100% do Project) e aparece também no curto prazo.
+4. **Linha de base:** a linha de base 0 do Project vira uma linha de base congelada do cronograma, "Linha de base do Project", já exibida no Gantt. Folha sem base fica fora dela (no Project aparece sem base); resumo entra sempre, para a estrutura não mudar.
+5. **Calendário:** dias úteis, horas por dia e dias sem trabalho do calendário do projeto, inclusive períodos (recesso de fim de ano). Dia trabalhado fora do normal e calendário por recurso não existem no sistema e geram aviso.
+6. **O que o sistema não tem:** tarefa manual vira automática com "Não iniciar antes de" na data dela; inativa não entra; linha em branco é ignorada; defasagem em horas ou % vira dias; vínculo com tarefa-resumo passa para as subtarefas (o sistema só vincula subtarefas): o que chega no resumo vai para as subtarefas sem predecessora dentro dele, o que sai, das subtarefas sem sucessora dentro dele. Cada caso vira um aviso na conferência.
+7. **Datas:** o sistema refaz a rede ao gravar, como o Project faz ao abrir, e a conferência lista antes as tarefas cuja data ficaria diferente do arquivo.
+8. **Quem pode:** quem já cria cronograma do mês (planejador, gestor ou admin com o módulo de médio prazo). Continua valendo um plano vivo por mês por obra.
+
+### O que mudou
+
+- **Leitor do XML** (`src/domain/mspdi-import.ts`, puro, sem dependência, roda no navegador e no Node): `parseMspdi(xml)` lê o MSPDI com um leitor XML próprio (pula o `TimephasedData`, que é a maior parte do arquivo) e `buildPlanImport(project, { month, fileName })` devolve o rascunho nas regras do servidor: linhas por `key` (o UID do Project), vínculos, calendário, linha de base, as datas que o Project mostra (`fileDates`), recursos com a contagem de tarefas, avisos agrupados por código e contagens.
+- **Ponte com o comando** (`src/application/use-cases/plan-import.ts`): `suggestResourceChoices` (regra 3), `toImportCommand` e `compareWithProject`, que calcula as datas pelo mesmo `scheduleTasks` do servidor e lista as folhas diferentes do arquivo. A tela e o script usam as mesmas funções.
+- **Comando `import_plan`** (`commands.ts`, liberado pelo módulo `medio-prazo` em `module-access.ts`): numa gravação só, cria o cronograma do mês com o calendário do arquivo, cria ou reaproveita as equipes (mesmo nome e empresa não duplica), grava as tarefas com as datas do motor e, com `baselineName`, congela a linha de base do Project. Valida como o "Revisar e salvar" (hierarquia, %, datas reais, restrição e prazo só em subtarefa, defasagem inteira de -365 a 365, vínculo sem tarefa, repetido ou para si mesma; ciclo cai na mensagem do motor) e recusa segundo plano no mesmo mês. Registra `plan_import` no histórico com o arquivo e as contagens. **Nenhuma migração**: tudo cabe nas tabelas e no `schedule_meta` que já existem.
+- **Gaveta "Novo cronograma do mês"** (`src/modules/medio-prazo/new-plan-drawer.tsx`, no lugar do formulário antigo de `schedule-sheet.tsx`): "Partir de" ganhou "Importar do MS Project (.xml)". Escolhido o arquivo, a gaveta se alarga e mostra a conferência: linhas e resumos, vínculos, concluídas e em andamento, recursos; linha de base, calendário e horizonte; os avisos; a tabela de recursos → equipes com a escolha por linha; e as datas que mudam (até 40 linhas, depois "mais N"). O nome vem do título do arquivo (ou do nome do arquivo, quando o título é genérico como "msproj11"). O botão vira "Criar cronograma de Nov/26".
+- **Script da carga** (`scripts/import-medio-prazo.ts`): o mesmo caminho da tela, por obra. Sem `--apply` simula e imprime o relatório; `--replace` exclui na mesma transação o cronograma vivo do mês e as linhas de base dele.
+- **Conversão .mpp → .xml pela VM** (`scripts/ms-project/converter-xml.ps1`): no Project 2019 da VM, o `FileSaveAs` com `FormatID = 'MSProject.XML'` funciona quando chamado por `InvokeMember` com argumentos nomeados; a chamada posicional com `[Type]::Missing` não acha a sobrecarga. Em 20/10 o "Salvar como XML" tinha falhado (ver `docs/engenharia-reversa-project.md`).
+- **Manual da Claudia** (seção "Criar o cronograma do mês…", com "Importar do MS Project") e **tour** ("Novo cronograma do mês").
+
+### Carga de novembro
+
+Arquivos que o usuário salvou em `~/Downloads/Médio prazo/`, exceto a Atmos, que veio do Drive compartilhado ("ATM Médio Prazo nov-fev.26.mpp", salvo em 06/11; a cópia da pasta Downloads era de 03/11, sem avanço). Os quatro foram convertidos para XML no Project da VM e simulados contra o banco de produção antes de gravar:
+
+| Obra | Arquivo | Linhas | Vínculos | Linha de base | Datas iguais ao Project | Recursos |
+| --- | --- | --- | --- | --- | --- | --- |
+| Blentt | BLT_Médio Prazo NOV - JAN | 290 | 251 | 287 linhas | 273 de 274 folhas | 47: 16 ligados, 31 criados |
+| Atmos | ATM Médio Prazo nov-fev.26 | 372 | 360 | 372 linhas | 285 de 285 | 18 criados |
+| Brizz | Médio Prazo 05 - NOV - JAN (título BRZ-OUT-DEZ_26) | 94 | 118 (8 de resumo viraram 50) | 94 linhas | 80 de 80 | 1 criado |
+| Tauá | 05 NOV - JAN - Atualização Gabriel | 25 | 14 | 25 linhas | 17 de 17 | 6 criados |
+
+A única data diferente é a da linha 6 da Blentt ("SS2 - Infra carregadores carros elétricos"): vínculo IT com defasagem de -10 dias úteis a partir de uma tarefa que começa em 15/12 às 08:00. O Project mostra o término em 01/12 às 08:00 e o motor em 30/11, o fim do dia útil anterior: é o mesmo instante em horas de trabalho, com outra data na tabela (regra "subtrair cai no fim do dia" da passada direta; registrado em `docs/engenharia-reversa-project.md`).
+
+**Gravado em produção em 08/11/2026** pelo `scripts/import-medio-prazo.ts --apply`, com o perfil do usuário, uma transação por obra, e conferido no banco:
+
+- **Atmos:** "ATM Médio Prazo nov-fev.26", 372 tarefas, 360 vínculos, 283 com equipe, de 02/11/2026 a 06/04/2027, linha de base com 372 linhas, 18 equipes criadas.
+- **Brizz:** "BRZ-OUT-DEZ_26", 94 tarefas, 118 vínculos, de 03/11/2026 a 20/01/2027, linha de base com 94 linhas, 1 equipe criada (Carpinteiros).
+- **Tauá:** "05 NOV - JAN", 25 tarefas, 14 vínculos, de 07/10/2026 a 05/03/2027, linha de base com 25 linhas, 6 equipes criadas (a obra não tinha equipe).
+- **Blentt: não gravada.** O mês está ocupado pelo cronograma de teste "Teste do teste" (7 tarefas) com as linhas de base "Base 14/10/2026" e "Base 1/10/2026", que o usuário autorizou excluir. O banco não deixa: o gatilho `guard_plan_baseline` (0023, ajustado na 0037) recusa apagar ou alterar linha de base ("Linha de base é imutável"), com exceção só da exclusão da obra inteira. O `delete_plan` da aplicação também não consegue, pelo mesmo motivo; ou seja, hoje nenhuma linha de base sai pela tela. A exclusão direta por SQL, numa transação com a exceção do `obra360.deleting_work` restrita à Blentt, foi preparada e bloqueada pela proteção automática da sessão. A simulação da Blentt passou (ver a tabela), e a gravação roda assim que o cronograma de teste sair.
+
+Essenza, Mozine, Bioma, Nova Sede e SEPAT não tinham arquivo e seguem sem cronograma de novembro. O acesso à aba 3 continua **pessoa por pessoa** (decisão do usuário): quem vai operar o médio prazo de cada obra precisa do módulo "Médio prazo" marcado em Configurações › Usuários.
+
+### Validação (08/11/2026)
+
+- **Testes novos:** `tests/mspdi-import.test.ts` (15: níveis, nulas e inativas, formatos de duração, marco, manual, estimada, restrições, vínculos nos quatro tipos com defasagem útil, corrida, negativa e em horas, vínculo com resumo, recursos, calendário com recesso, feriado e exceção de dia útil, linha de base, entidades e BOM, XML que não é do Project, e ida e volta com `buildMspdi`), `tests/plan-import-command.test.ts` (7: gravação completa com equipe existente, equipe criada, vínculo, datas pela rede, feriado e linha de base; equipe reaproveitada; sem linha de base; 14 recusas; mês ocupado; ciclo; módulo) e `tests/plan-import.test.ts` (3: sugestão de equipes, montagem do comando e comparação de datas).
+- **Arquivos reais:** leitura de 1 a 23 ms por arquivo; o motor sobre o rascunho chega às datas do Project em 655 de 656 folhas.
+- **Navegador:** a gaveta foi aberta numa página de prévia temporária com `next dev` e as APIs respondidas pelo Playwright com as regras reais (`applyCommand` sobre os dados de exemplo), com o XML real da Blentt. Em 1440 px: o .mpp é recusado com a explicação, a conferência aparece com os números do arquivo, a troca de equipe de um recurso funciona, "Criar cronograma de Nov/26" grava (290 tarefas) e avisa "Cronograma importado do Project", sem erro de console. Em 400 px, sem rolagem lateral. A primeira passada achou a gaveta cortada à direita no celular (o `fieldset` não encolhia; ganhou `min-w-0`) e o nome do arquivo repetido; os dois foram corrigidos. **Não foi aberta no app logado.**
+
+### Pendências
+
+- **Blentt:** excluir o cronograma de teste e as 2 linhas de base (SQL pronto, precisa da autorização do usuário ou de rodar no SQL Editor) e então gravar o cronograma de novembro pelo script.
+- Liberar o módulo "Médio prazo" para as pessoas de cada obra (Configurações › Usuários).
+- Conferir logado, numa obra real: abrir os cronogramas importados, a linha de base do Project no Gantt e as equipes novas no Planejador de Equipe.
+- Não há como excluir linha de base pela tela (gatilho do banco). Se for preciso, é uma migração que abra a exceção para o `delete_plan`.
+- Fora do escopo aprovado: importar por cima de um cronograma que já existe e aceitar o .mpp direto.
