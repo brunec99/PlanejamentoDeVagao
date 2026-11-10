@@ -3,11 +3,12 @@ import type { TourStep } from '../tours';
 /** Tour da aba 1. A tela tem seis visões (`?visao=`): os passos das visões fechadas são pulados
  * sozinhos, porque os alvos delas não estão na tela. Os passos seguem a ordem visual: primeiro o comum
  * a todas, depois Linha de Balanço, Fluxos de serviços e Medições (04/11/2026), o Gantt de legalização
- * (04/11/2026), o Planejador e, por fim, "Vagões e restrições". */
+ * (04/11/2026), o Planejador e, por fim, "Vagões" (o quadro de restrições saiu daqui em 10/11/2026: virou a "Lista de
+ * pendência" da aba 2). */
 export const steps: TourStep[] = [
   {
     title: 'Aba 1 · Cronograma de longo prazo',
-    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, o Gantt de legalização dos 12 meses até a entrega, "Vagões e restrições" e o Planejador anterior.',
+    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, o Gantt de legalização dos 12 meses até a entrega, "Vagões" e o Planejador anterior. As pendências da obra ficam na aba 2, visão "Lista de pendência".',
   },
   {
     target: 'work-nav',
@@ -27,7 +28,7 @@ export const steps: TourStep[] = [
   {
     target: 'longo-visoes',
     title: 'As visões da aba',
-    body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos; o Gantt de legalização mostra os 12 meses até a entrega, com o caminho crítico da obra e a legalização. "Vagões e restrições" mostra as atividades dos vagões, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
+    body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos; o Gantt de legalização mostra os 12 meses até a entrega, com o caminho crítico da obra e a legalização. "Vagões" mostra as atividades dos vagões, a curva de avanço e as linhas de base, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
   },
 
   // ─── Linha de Balanço ─────────────────────────────────────────────────────────
@@ -60,6 +61,11 @@ export const steps: TourStep[] = [
     target: 'longo-lob-painel',
     title: 'Bloco selecionado',
     body: 'Início, duração, equipe, predecessoras com a espera, quantos blocos acompanham ao arrastar, o atraso com o motivo da medição, as datas reais e as fotos da última medição.',
+  },
+  {
+    target: 'longo-lob-criar-pendencia',
+    title: 'Criar pendência do serviço',
+    body: 'Cria um card na Lista de pendência (aba 2) ligado ao serviço do bloco selecionado. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação. Só aparece para quem tem a aba 2 liberada.',
   },
   {
     target: 'longo-lob-desfazer',
@@ -295,7 +301,7 @@ export const steps: TourStep[] = [
     body: 'Pico diário de pessoas por equipe em cada semana, somando os serviços que usam a mesma equipe no mesmo dia. As cores comparam cada semana com o pico da própria equipe. As equipes vêm do cadastro de cada serviço.',
   },
 
-  // ─── Vagões e restrições ──────────────────────────────────────────────────────
+  // ─── Vagões ───────────────────────────────────────────────────────────────────
   {
     target: 'longo-lob',
     title: 'Linha de Balanço dos vagões',
@@ -324,27 +330,7 @@ export const steps: TourStep[] = [
   {
     target: 'longo-lob-grafico',
     title: 'Barras das atividades',
-    body: 'Clique numa barra para ver início, término, duração e % executado; com linha de base escolhida, também as datas de base e o desvio. Ali dá para criar uma pendência ligada à tarefa, com prazo pelo lead time. A linha tracejada âmbar é hoje.',
-  },
-  {
-    target: 'longo-restricoes-registrar',
-    title: 'Registrar restrição',
-    body: 'Abre o cadastro: descrição, local, atividade vinculada, responsável e lead time. Com lead time, o limite sai do início previsto da atividade menos esses dias; sem ele, digite o prazo. Marque se bloqueia execução e terminalidade (as duas vêm marcadas).',
-  },
-  {
-    target: 'longo-restricoes-indicadores',
-    title: 'Resumo das restrições',
-    body: 'Quantas restrições estão abertas, quantas já passaram do limite e qual é a mais próxima de vencer, com a data e a descrição.',
-  },
-  {
-    target: 'longo-board',
-    title: 'Quadro de restrições',
-    body: 'Três colunas: Identificada, Em tratativa e Resolvida. Cada card mostra o vagão, a atividade, o limite e o lead time, com borda vermelha quando o prazo venceu. Se a atividade for reprogramada, o limite acompanha o novo início.',
-  },
-  {
-    target: 'longo-restricao-card',
-    title: 'Abrir uma restrição',
-    body: 'O card abre o detalhe: descrição completa, de onde veio a data limite, responsável e bloqueios. Ali a restrição vai de Identificada para Em tratativa (e volta), e só chega a Resolvida com "Registrar resolução", contando como foi resolvida.',
+    body: 'Clique numa barra para ver início, término, duração e % executado; com linha de base escolhida, também as datas de base e o desvio. A linha tracejada âmbar é hoje.',
   },
   {
     target: 'longo-curva-s',

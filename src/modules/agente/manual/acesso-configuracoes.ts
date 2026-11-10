@@ -178,7 +178,7 @@ Os módulos liberados por pessoa aparecem só para quem os tem liberados. Desde 
 
 **Abertos a todos** (basta ter a obra liberada): a lista de obras, a aba **0 "Dashboard da obra"** (cada quadro só aparece para quem pode abrir o módulo de origem), a aba **6 "Segurança do trabalho"** (consulta para todos; só TST e admin lançam e finalizam) e **"Configurações da obra"** (em Apoio). O **Dashboard geral** segue a regra dele (duas obras ou mais, e sempre admin e desenvolvedor). A tela "Configurações" geral é só de administradores.
 
-**Liberados por pessoa, pelo administrador** (Configurações → Usuários, visão "Módulos", célula por pessoa ou em lote): aba 1 **"Cronograma de longo prazo"**, aba 2 **"Planejamento por vagões"**, aba 3 **"Cronograma de médio prazo"**, aba 4 **"Cronograma de curto prazo"**, aba 5 **"Terminalidade"** e, em Apoio, **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**. Administradores e desenvolvedores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
+**Liberados por pessoa, pelo administrador** (Configurações → Usuários, visão "Módulos", célula por pessoa ou em lote): aba 1 **"Cronograma de longo prazo"**, aba 2 **"Planejamento de vagão e lista de pendência"** (o módulo "Vagões" da grade, que libera também a Lista de pendência), aba 3 **"Cronograma de médio prazo"**, aba 4 **"Cronograma de curto prazo"**, aba 5 **"Terminalidade"** e, em Apoio, **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**. Administradores e desenvolvedores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
 
 Quem já usava o curto prazo e a terminalidade em 08/11/2026 continuou com os dois liberados; o administrador revoga de quem não deve ter. Usuário cadastrado a partir dessa data começa sem nenhum módulo, inclusive esses dois: o administrador libera.
 
@@ -479,7 +479,7 @@ No computador, a barra azul à esquerda é o menu. De cima para baixo:
 
 - Os logos e **"Obra 360"**: voltam à lista de obras.
 - **"Empreendimentos" → "Obras"**: a lista de obras.
-- Dentro de uma obra, o **nome da obra** e as abas numeradas: **1 Cronograma de longo prazo**, **2 Planejamento por vagões**, **3 Cronograma de médio prazo**, **4 Cronograma de curto prazo**, **5 Terminalidade** e **6 Segurança do trabalho**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
+- Dentro de uma obra, o **nome da obra** e as abas numeradas: **1 Cronograma de longo prazo**, **2 Planejamento de vagão e lista de pendência**, **3 Cronograma de médio prazo**, **4 Cronograma de curto prazo**, **5 Terminalidade** e **6 Segurança do trabalho**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
 - **"Administração"** (só admin): **"Configurações"** e **"Agente de IA"**.
 - Embaixo, o cartão com suas iniciais, nome e papel e o botão **"Sair do sistema"**.
 

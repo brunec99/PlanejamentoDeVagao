@@ -1873,7 +1873,7 @@ function rowControls({
               className="button-ghost justify-start whitespace-nowrap px-2 py-1 text-xs"
               aria-haspopup="dialog"
               aria-label={`Gerar restrição a partir de ${row.name}`}
-              title="Gerar restrição no longo prazo a partir desta falha"
+              title="Gerar restrição do vagão a partir desta falha"
               onClick={() => actions.openPendency(row)}
             >
               Restrição
@@ -2423,9 +2423,9 @@ function PendencyDialog({
             )}
             {savedId && (
               <Callout tone="success" role="status">
-                Restrição criada. Acompanhe no{' '}
-                <Link className="text-link" href={workPath(workId, 'longo-prazo')}>
-                  quadro de restrições
+                Restrição criada. Ela aparece no detalhe do vagão, em{' '}
+                <Link className="text-link" href={workPath(workId, 'vagoes')}>
+                  Planejamento de vagão
                 </Link>
                 .
               </Callout>

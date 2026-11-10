@@ -8,7 +8,7 @@ export const steps: TourStep[] = [
   {
     target: 'work-nav',
     title: 'Seções da obra',
-    body: 'O vagão pertence à aba 2, Planejamento por vagões, acesa na lateral. Daqui se chega às demais abas e às telas de Apoio da obra.',
+    body: 'O vagão pertence à aba 2, Planejamento de vagão e lista de pendência, acesa na lateral. Daqui se chega às demais abas e às telas de Apoio da obra.',
   },
   {
     target: 'modo-reuniao',
@@ -123,7 +123,7 @@ export const steps: TourStep[] = [
   {
     target: 'vagao-resolver-restricao',
     title: 'Resolver restrição',
-    body: '"Registrar resolução" pede como a restrição foi resolvida e a encerra, soltando o que ela bloqueava. No módulo de restrições do longo prazo, ela passa para "Resolvida".',
+    body: '"Registrar resolução" pede como a restrição foi resolvida e a encerra, soltando o que ela bloqueava. Ela não se confunde com os cards da Lista de pendência da aba 2, que não travam o vagão.',
   },
   {
     target: 'vagao-dividas',

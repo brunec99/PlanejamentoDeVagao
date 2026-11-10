@@ -148,6 +148,8 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     '/api/prevision/schedule',
     '/api/ifc/status',
     '/api/history',
+    '/api/pendencias',
+    '/api/pendencias/commands',
     '/api/curto-prazo/ranking',
     '/api/curto-prazo/locais',
     '/api/terminalidade',
@@ -165,8 +167,22 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     '/api/health',
     '/api/ifcx',
     '/api/terminalidadex',
+    '/api/pendenciasx',
   ])
     assert.equal(isRestrictedApi(path), false, path);
+});
+
+test('Lista de pendência (10/11/2026): a API é de quem abre a aba 2, e de mais ninguém', () => {
+  const vagoes = { developer: false, modules: ['vagoes'] };
+  for (const path of ['/api/pendencias', '/api/pendencias/commands']) {
+    assert.deepEqual(sectionsForApi(path), ['vagoes'], path);
+    assert.equal(hasApiAccess(path, vagoes), true, path);
+    assert.equal(hasApiAccess(path, { developer: true, modules: [] }), true, path);
+    assert.equal(hasApiAccess(path, { developer: false, modules: [] }), false, path);
+    // Os outros módulos, juntos, não abrem a lista de pendência.
+    const others = RESTRICTED_SECTIONS.filter(section => section !== 'vagoes');
+    assert.equal(hasApiAccess(path, { developer: false, modules: others }), false, path);
+  }
 });
 
 test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada além', () => {

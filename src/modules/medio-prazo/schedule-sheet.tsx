@@ -6,6 +6,7 @@ import {
   BookUser,
   CalendarClock,
   ChartGantt,
+  ClipboardList,
   Check,
   ChevronDown,
   ChevronRight,
@@ -74,7 +75,9 @@ import { buildMspdi } from '@/domain/mspdi';
 import { isMonthlyPlan } from '@/domain/legalization';
 import { parseLinks, formatLink, rollUpPlan } from '@/domain/rules';
 import { validateDate } from '@/domain/validation';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
+import { hasSectionAccess } from '@/application/module-access';
+import { CreatePendingDialog, type PendingSource } from '@/modules/pendencias/create-pending-dialog';
 import { CommandForm, TextField, value } from '@/modules/planejamento/forms';
 import { useHistory } from '@/modules/planejamento/history';
 import { useConfirm } from '@/modules/layout/confirm';
@@ -568,6 +571,13 @@ export function Sheet({
     [showResourceNames, setShowResourceNames] = useState(true);
   // Informações da tarefa (Shift+F2): a linha aberta e a aba em que o diálogo abre.
   const [infoOpen, setInfoOpen] = useState<{ id: string; tab?: TaskInfoTab } | null>(null);
+  // "Criar pendência" (10/11/2026): a tarefa vira card da Lista de pendência da aba 2. Só para quem abre a
+  // aba 2 (a API das pendências é do módulo "vagoes") e só no cronograma do mês: o Gantt de legalização
+  // usa esta mesma tela, mas as tarefas dele não são origem de card.
+  const developer = useDeveloper(),
+    modules = useModules();
+  const canPend = !variant && hasSectionAccess('vagoes', { developer, modules });
+  const [pending, setPending] = useState<PendingSource | null>(null);
   // Selecionar uma tarefa escondida (resumo recolhido ou filtro) abre o caminho até ela; a rolagem
   // até a barra espera a pintura em que a linha aparece.
   const pendingScroll = useRef<string | null>(null);
@@ -650,6 +660,21 @@ export function Sheet({
         JSON.stringify(original.links.filter(l => l.successorId === t.id)),
   );
   const removed = original.tasks.filter(t => !draft.tasks.some(n => n.id === t.id));
+  /** Por que a tarefa não pode virar pendência agora; vazio quando pode. O card guarda o id da tarefa e a
+   * entrega dele sai do início gravado no banco: por isso a linha nova ou alterada pede o salvamento antes. */
+  const pendingBlock = (t?: PlanTask): string => {
+    if (!t) return 'Selecione uma tarefa para criar a pendência';
+    if (plan.frozenAt || plan.baselineOf) return 'Linha de base não recebe pendência: use o cronograma do mês';
+    if (roll.get(t.id)?.summary) return 'Tarefa-resumo não recebe pendência: escolha uma tarefa do grupo';
+    if (!original.tasks.some(o => o.id === t.id) || changed.includes(t)) return 'Salve o cronograma antes de criar a pendência';
+    return '';
+  };
+  const pendingSource = (t: PlanTask): PendingSource => ({
+    origin: 'medio_prazo',
+    sourceId: t.id,
+    label: t.name,
+    start: roll.get(t.id)?.plannedStart ?? t.plannedStart,
+  });
   const baselineTasks = useMemo(() => data.planTasks.filter(t => t.planId === baseId), [data.planTasks, baseId]);
   const baselineRoll = useMemo(() => rollUpPlan(baselineTasks), [baselineTasks]);
   const visibleCols = order.map(k => COLUMN[k]).filter(c => !hidden.includes(c.key) || c.key === 'name');
@@ -2110,6 +2135,21 @@ export function Sheet({
                 <Info size={14} aria-hidden />
                 Informações
               </button>
+              {canPend && (
+                <button
+                  data-tour="medio-criar-pendencia"
+                  className={tool}
+                  disabled={!!editor || !!pendingBlock(active)}
+                  onClick={() => active && setPending(pendingSource(active))}
+                  title={
+                    pendingBlock(active) ||
+                    'Cria um card na Lista de pendência (aba 2) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
+                  }
+                >
+                  <ClipboardList size={14} aria-hidden />
+                  Criar pendência
+                </button>
+              )}
               <button
                 data-tour="medio-linha-tempo-adicionar"
                 className={tool}
@@ -3293,8 +3333,21 @@ export function Sheet({
           teams={teams}
           onApply={(changes, timeline) => applyInfo(infoTask.id, changes, timeline)}
           onClose={closeInfo}
+          pendency={
+            canPend
+              ? {
+                  blocked: pendingBlock(infoTask),
+                  // O formulário da pendência abre no lugar deste diálogo, que é modal.
+                  onCreate: () => {
+                    setPending(pendingSource(infoTask));
+                    setInfoOpen(null);
+                  },
+                }
+              : undefined
+          }
         />
       )}
+      {pending && <CreatePendingDialog workId={plan.workId} source={pending} open onClose={() => setPending(null)} />}
     </div>
   );
 }

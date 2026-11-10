@@ -43,7 +43,7 @@ export const SCREEN_LABEL: Readonly<Record<string, string>> = {
   dashboard: 'Aba 0 · Dashboard da obra',
   'dashboard-geral': 'Dashboard geral (todas as obras)',
   'longo-prazo': 'Aba 1 · Cronograma de longo prazo',
-  vagoes: 'Aba 2 · Planejamento por vagões',
+  vagoes: 'Aba 2 · Planejamento de vagão e lista de pendência',
   'medio-prazo': 'Aba 3 · Cronograma de médio prazo',
   'curto-prazo': 'Aba 4 · Cronograma de curto prazo',
   terminalidade: 'Aba 5 · Terminalidade',

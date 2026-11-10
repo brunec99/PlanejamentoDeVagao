@@ -5,7 +5,6 @@ import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { BaselinesOverview } from '@/modules/longo-prazo/baselines-overview';
 import { LineOfBalance } from '@/modules/longo-prazo/line-of-balance';
 import { SCurve } from '@/modules/longo-prazo/s-curve';
-import { RestrictionsBoard } from '@/modules/longo-prazo/restrictions-board';
 import { LongTermPlanner } from '@/modules/longo-prazo/planner/long-term-planner';
 import { LobView } from '@/modules/longo-prazo/lob/lob-view';
 import { FlowsView } from '@/modules/longo-prazo/lob/flows-view';
@@ -17,7 +16,8 @@ import { workPath } from '@/shared/format';
 export const metadata = { title: 'Cronograma de longo prazo' };
 
 /** Visões da aba 1 (04/11/2026, modelo aprovado, regra 1): a Linha de Balanço no estilo Prevision é
- * a padrão; Fluxos de serviços e Medições são as outras duas visões novas. "Vagões e restrições"
+ * a padrão; Fluxos de serviços e Medições são as outras duas visões novas. "Vagões" (antes
+ * "Vagões e restrições": em 10/11/2026 o quadro de restrições foi para a aba 2, "Lista de pendência")
  * continua, e o Planejador (fluxograma) fica por último até a Linha de Balanço assumir "Gerar
  * vagões". O endereço guarda a visão em `?visao=`. O Gantt de legalização (04/11/2026, segundo modelo
  * aprovado, regra 1) entra depois de Medições: os 12 meses até a entrega, no cronograma do Project. */
@@ -26,7 +26,7 @@ const VIEWS = [
   { id: 'fluxos', label: 'Fluxos de serviços' },
   { id: 'medicoes', label: 'Medições' },
   { id: 'legalizacao', label: 'Gantt de legalização' },
-  { id: 'prevision', label: 'Vagões e restrições' },
+  { id: 'prevision', label: 'Vagões' },
   { id: 'planejador', label: 'Planejador' },
 ] as const;
 type View = (typeof VIEWS)[number]['id'];
@@ -36,7 +36,7 @@ const DESCRIPTIONS: Record<View, string> = {
   medicoes: 'Medições: o acumulado realizado de cada serviço em cada local, com foto do que avançou.',
   legalizacao:
     'Gantt de legalização: os 12 meses até a entrega, com o caminho crítico da obra e os documentos de cada órgão até as chaves.',
-  prevision: 'As atividades dos vagões em Linha de Balanço, como base para identificar e tratar as restrições de cada frente.',
+  prevision: 'As atividades dos vagões em Linha de Balanço, só para leitura, com a curva de avanço e as linhas de base da obra.',
   planejador:
     'Fluxograma de serviços que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes (ferramenta anterior).',
 };
@@ -76,10 +76,19 @@ export default async function Page({
         de Balanço.
       </p>
       <p>
-        <strong>Vagões e restrições</strong> mostra as atividades dos vagões só para leitura, para criar e acompanhar restrições. O{' '}
-        <strong>Planejador</strong> é a ferramenta anterior (fluxograma por pavimento); o plano dele pode ser importado para a Linha de
-        Balanço pelo botão "Importar do Planejador", e ele continua gerando os vagões até a Linha de Balanço assumir essa função. Obras que
-        ainda não geraram vagões pelo plano mostram o que veio do Prevision (
+        <strong>Vagões</strong> mostra as atividades dos vagões só para leitura, com a curva de avanço e as linhas de base. As pendências da
+        obra ficam na{' '}
+        {hasSectionAccess('vagoes', access) ? (
+          <Link className="text-link" href={`${workPath(obraId, 'vagoes')}?visao=pendencias`}>
+            aba 2 → Lista de pendência
+          </Link>
+        ) : (
+          'aba 2 → Lista de pendência'
+        )}
+        , inclusive as restrições que estavam aqui, copiadas como cards. O <strong>Planejador</strong> é a ferramenta anterior (fluxograma
+        por pavimento); o plano dele pode ser importado para a Linha de Balanço pelo botão "Importar do Planejador", e ele continua gerando
+        os vagões até a Linha de Balanço assumir essa função. Obras que ainda não geraram vagões pelo plano mostram o que veio do Prevision
+        (
         <Link className="text-link" href={workPath(obraId, 'importar')}>
           Integrações
         </Link>
@@ -122,7 +131,6 @@ export default async function Page({
             e use "Gerar vagões".
           </Callout>
           <LineOfBalance workId={obraId} />
-          <RestrictionsBoard workId={obraId} />
           <SCurve workId={obraId} />
           <BaselinesOverview workId={obraId} />
         </>

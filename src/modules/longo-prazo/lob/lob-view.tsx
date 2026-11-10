@@ -18,7 +18,9 @@ import {
   type LocalDate,
 } from '@/domain/lob';
 import { addDays, daysBetween, isLocalDate } from '@/domain/long-term-plan';
-import { usePlanning } from '@/modules/planejamento/planning-provider';
+import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
+import { hasSectionAccess } from '@/application/module-access';
+import { CreatePendingDialog, type PendingSource } from '@/modules/pendencias/create-pending-dialog';
 import { Callout, LoadState, StatCard } from '@/modules/planejamento/ui';
 import { useConfirm } from '@/modules/layout/confirm';
 import { useToast } from '@/modules/layout/toast';
@@ -263,6 +265,12 @@ function LobViewInner({ workId }: { workId: string }) {
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const undoRef = useRef<() => void>(() => {});
+  // "Criar pendência" de um serviço (10/11/2026): card da Lista de pendência da aba 2, só para quem abre
+  // a aba 2 (a API das pendências é do módulo "vagoes").
+  const developer = useDeveloper(),
+    modules = useModules();
+  const canPend = hasSectionAccess('vagoes', { developer, modules });
+  const [pending, setPending] = useState<PendingSource>();
 
   const ready = context.state === 'ready' ? context : undefined;
   const actor = ready?.planning.data.users.find(u => u.id === ready.actorId);
@@ -381,6 +389,14 @@ function LobViewInner({ workId }: { workId: string }) {
   const serviceName = (id: string) => data.services.find(s => s.id === id)?.name ?? 'Serviço';
   const label = (a: LobActivity) => `${serviceName(a.serviceId)} · ${localName(a.localId)}`;
   const selected = selectedId ? data.activities.find(a => a.id === selectedId) : undefined;
+  /** A entrega do card sai do primeiro início do serviço na obra: o menor `start` entre os blocos dele.
+   * Serviço sem bloco não tem de onde tirar a data (e nem aparece aqui: chega-se a ele por um bloco). */
+  const createPending = (serviceId: string) => {
+    const service = data.services.find(s => s.id === serviceId);
+    const starts = data.activities.filter(a => a.serviceId === serviceId).map(a => a.start);
+    if (!service || !starts.length) return;
+    setPending({ origin: 'longo_prazo', sourceId: service.id, label: service.name, start: starts.reduce((a, b) => (b < a ? b : a)) });
+  };
   const span = lobSpan(data.activities);
   const baseline = data.baselines.find(b => b.id === baselineId);
   const baselineFinish = baseline?.snapshot.reduce<LocalDate | undefined>((max, e) => {
@@ -811,6 +827,7 @@ function LobViewInner({ workId }: { workId: string }) {
               onExecute={run}
               onClose={() => setSelectedId(undefined)}
               onSelect={setSelectedId}
+              onCreatePending={canPend ? createPending : undefined}
             />
           ) : data.activities.length ? (
             <div className="text-sm text-slate-500">
@@ -879,6 +896,7 @@ function LobViewInner({ workId }: { workId: string }) {
           }}
         />
       )}
+      {pending && <CreatePendingDialog workId={workId} source={pending} open onClose={() => setPending(undefined)} />}
       {panel === 'late' && (
         <LateDialog
           rows={lateRows}

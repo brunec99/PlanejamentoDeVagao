@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { Camera, Plus, Trash2, X } from 'lucide-react';
+import { Camera, ClipboardList, Plus, Trash2, X } from 'lucide-react';
 import {
   LOB_LIMITS,
   activityFinish,
@@ -127,6 +127,7 @@ export function LobActivityPanel({
   onExecute,
   onClose,
   onSelect,
+  onCreatePending,
 }: {
   activity: LobActivity;
   data: LobData;
@@ -136,6 +137,9 @@ export function LobActivityPanel({
   onExecute: (command: LobCommand) => Promise<unknown>;
   onClose: () => void;
   onSelect: (id: string | undefined) => void;
+  /** "Criar pendência" do serviço deste bloco (Lista de pendência da aba 2). Ausente para quem não
+   * abre a aba 2: aí o botão não aparece. */
+  onCreatePending?: (serviceId: string) => void;
 }) {
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -309,6 +313,17 @@ export function LobActivityPanel({
         </dd>
       </dl>
       <p className="mt-1 text-[11px] text-slate-400">Equipe e unidade valem para o serviço inteiro, em todos os locais.</p>
+      {onCreatePending && service && (
+        <button
+          type="button"
+          data-tour="longo-lob-criar-pendencia"
+          className="button-ghost mt-2 px-2.5 py-1.5 text-xs"
+          onClick={() => onCreatePending(service.id)}
+          title={`Cria um card na Lista de pendência (aba 2) ligado ao serviço ${service.name}: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação`}
+        >
+          <ClipboardList size={14} aria-hidden /> Criar pendência do serviço
+        </button>
+      )}
 
       <label htmlFor="lob-activity-notes" className={`${sectionTitle} block`}>
         Observação

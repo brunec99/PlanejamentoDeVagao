@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, X } from 'lucide-react';
 import { CONSTRAINT_TYPES, LINK_TYPES, type ConstraintType, type LinkType, type Team } from '@/domain/entities';
 import { CONSTRAINT_LABELS, constraintNeedsDate } from '@/domain/plan-schedule';
 import { formatLink } from '@/domain/rules';
@@ -128,6 +128,10 @@ export interface TaskInfoDialogProps {
   /** Aplica tudo de uma vez; devolve a mensagem de erro, se a grade recusar. */
   onApply: (changes: TaskInfoChange[], timeline: boolean) => string | undefined;
   onClose: () => void;
+  /** "Criar pendência" (Lista de pendência da aba 2). Ausente para quem não abre a aba 2 e no Gantt de
+   * legalização; `blocked` traz o motivo quando a tarefa não pode virar card agora (resumo, linha de
+   * base, cronograma não salvo). `onCreate` fecha este diálogo e abre o formulário da pendência. */
+  pendency?: { blocked: string; onCreate: () => void };
 }
 
 export function TaskInfoDialog({
@@ -142,6 +146,7 @@ export function TaskInfoDialog({
   teams,
   onApply,
   onClose,
+  pendency,
 }: TaskInfoDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   // O ponto de partida fica guardado: a comparação do OK é contra o que o diálogo mostrou ao abrir.
@@ -174,6 +179,10 @@ export function TaskInfoDialog({
     `-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors ${on ? 'border-primary text-primary-ink' : 'border-transparent text-slate-500 hover:text-slate-800'}`;
   const label = 'block text-xs font-semibold text-slate-600';
   const linksLocked = !editable.links;
+  // Criar a pendência fecha o diálogo: com algo digitado e ainda não aplicado, o botão espera o OK.
+  const unapplied = canEdit && JSON.stringify(values) !== JSON.stringify(start);
+  const pendencyBlock =
+    pendency?.blocked || (unapplied ? 'Aplique as alterações (OK) e salve o cronograma antes de criar a pendência' : '');
 
   return (
     <dialog
@@ -533,7 +542,24 @@ export function TaskInfoDialog({
           </p>
         )}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
-          {!canEdit && <p className="mr-auto text-xs text-slate-500">Somente leitura: libere a edição da grade para alterar.</p>}
+          {pendency && (
+            <button
+              type="button"
+              className="button-ghost mr-auto"
+              disabled={!!pendencyBlock}
+              onClick={pendency.onCreate}
+              title={
+                pendencyBlock ||
+                'Cria um card na Lista de pendência (aba 2) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
+              }
+            >
+              <ClipboardList size={15} aria-hidden />
+              Criar pendência
+            </button>
+          )}
+          {!canEdit && (
+            <p className={`${pendency ? '' : 'mr-auto '}text-xs text-slate-500`}>Somente leitura: libere a edição da grade para alterar.</p>
+          )}
           <button type="button" className="button-ghost" onClick={onClose}>
             {canEdit ? 'Cancelar' : 'Fechar'}
           </button>

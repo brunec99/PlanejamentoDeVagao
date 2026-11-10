@@ -455,7 +455,9 @@ test('plano novo nasce como cópia do anterior, sem o que já terminou e com ví
       ['Fachada', 0, 6],
     ],
   );
-  assert.ok(rows.every(t => !t.id.startsWith('s') && t.sourceTaskId === undefined && t.version === undefined));
+  // Id novo, sem versão, e o elo com a tarefa do mês anterior (é o que a lista de pendência segue).
+  const previous = new Map(saved.planTasks.filter(t => t.planId === 'set').map(t => [t.id, t.name]));
+  assert.ok(rows.every(t => !t.id.startsWith('s') && previous.get(t.sourceTaskId ?? '') === t.name && t.version === undefined));
   const named = (name: string) => rows.find(t => t.name === name)!;
   // Elevação perdeu a predecessora: ganha a restrição no início atual e não salta.
   assert.equal(named('Elevação').anchorStart, undefined);

@@ -176,6 +176,11 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
     storage_path: `${w}/${p}-sst/foto.jpg`,
     thumb_path: `${w}/${p}-sst/foto-thumb.jpg`,
   });
+  // 0043: a lista de pendência também cai pelo `on delete cascade` de work_id.
+  await insert('pending_cards', { id: `${p}-card`, work_id: w, title: 'Pendência', due_date: '2026-11-20', responsible_id: ADMIN });
+  await insert('pending_checklists', { id: `${p}-cl`, card_id: `${p}-card`, work_id: w, title: 'Compra' });
+  await insert('pending_checklist_items', { id: `${p}-cli`, checklist_id: `${p}-cl`, card_id: `${p}-card`, work_id: w, text: 'Cotar' });
+  await insert('pending_messages', { id: `${p}-msg`, card_id: `${p}-card`, work_id: w, author_id: ADMIN, body: 'Olá' });
   await insert('agent_insights', { work_id: w });
   await insert('agent_usage', { work_id: w, actor_id: ADMIN, month: '2026-10', kind: 'leitura', cost_usd: 0.05 });
   await insert('history_events', { id: `${p}-h`, entity_id: `${p}-v1`, entity_type: 'wagon', action: 'release', author_id: ADMIN });

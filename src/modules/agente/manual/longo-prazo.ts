@@ -1,8 +1,8 @@
 import type { ManualSection } from './types';
 
-/** Manual da aba 1, Cronograma de longo prazo (29/10/2026): as duas visões (Planejador e "Vagões e
- * restrições"), o cadastro de serviços, o gráfico, linhas de base e medições, a geração de vagões,
- * o módulo de restrições e a curva de avanço. Escrito a partir do código dos componentes; quando o
+/** Manual da aba 1, Cronograma de longo prazo (29/10/2026): as duas visões (Planejador e "Vagões"), o
+ * cadastro de serviços, o gráfico, linhas de base e medições, a geração de vagões e a curva de avanço
+ * (o módulo de restrições saiu em 10/11/2026: virou a Lista de pendência da aba 2). Escrito a partir do código dos componentes; quando o
  * tour ou a documentação divergiam, valeu o código. Em 04/11/2026 entraram a Linha de Balanço, os
  * fluxos de serviços, as medições e o Gantt de legalização. */
 export const sections: ManualSection[] = [
@@ -10,13 +10,13 @@ export const sections: ManualSection[] = [
     id: 'longo-prazo-visao-geral',
     title: 'Aba 1 · Cronograma de longo prazo: as duas visões, quem edita e como o plano é salvo',
     summary:
-      'O que a aba 1 mostra, as visões Planejador e Vagões e restrições, permissões, salvamento automático, trava de revisão, exportar e importar.',
+      'O que a aba 1 mostra, as visões Planejador e Vagões, permissões, salvamento automático, trava de revisão, exportar e importar.',
     keywords: [
       'longo prazo',
       'cronograma de longo prazo',
       'aba 1',
       'planejador',
-      'vagões e restrições',
+      'visões da aba 1',
       'somente leitura',
       'salvando',
       'não salvo',
@@ -37,7 +37,7 @@ Ela tem seis visões, alternadas pelo seletor no cabeçalho (desde 04/11/2026):
 - **"Fluxos de serviços"**: o molde da empresa (o "macrofluxo" do Prevision) com a sequência de serviços, a duração por local e as dependências, pronto para lançar em qualquer obra. Veja "Fluxos de serviços" e "Lançar um fluxo".
 - **"Medições"**: rodadas com data em que se lança o acumulado realizado de cada bloco, com foto de cada avanço. Veja "Medições".
 - **"Gantt de legalização"**: os 12 meses até a entrega da obra, com o caminho crítico da obra e a legalização por órgão até as chaves, no mesmo cronograma do médio prazo (tabela e Gantt do Project). Um por obra. Veja "Gantt de legalização".
-- **"Vagões e restrições"**: as atividades dos vagões em Linha de Balanço, só para leitura, mais o módulo de restrições, a curva de avanço acumulado e as linhas de base da obra. Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
+- **"Vagões"** (antes "Vagões e restrições"): as atividades dos vagões em Linha de Balanço, só para leitura, mais a curva de avanço acumulado e as linhas de base da obra. O módulo de restrições que ficava aqui virou a "Lista de pendência" da aba 2. Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
 - **"Planejador"**: a ferramenta anterior, um fluxograma de serviços por pavimento que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. Ainda é o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (aba 2). O plano dele pode ser levado para a Linha de Balanço nova por "Importar do Planejador".
 
 As seções abaixo sobre salvamento, exportar e importar valem para o Planejador; a Linha de Balanço, os fluxos e as medições gravam cada alteração na hora, sem botão de salvar (as medições têm "Salvar medição", que fecha a rodada). O Gantt de legalização grava como o médio prazo: rascunho e "Revisar e salvar".
@@ -47,7 +47,7 @@ O "?" ao lado da descrição ("Como funciona") explica como as visões se encaix
 ## Quem vê e quem edita
 - É um módulo liberado por pessoa: a aba só aparece para administradores, para quem desenvolve o sistema e para quem teve o módulo "Longo prazo" liberado pelo admin na tela de usuários das Configurações. Quem não tem acesso é levado ao Dashboard da obra (aba 0); se a aba não aparece no menu, peça a liberação ao administrador.
 - Perfil de consulta vê tudo e não altera nada: o Planejador avisa "Seu perfil é de consulta: o plano aparece aqui, mas não pode ser alterado" e mostra só "Linhas de base", "Medições", "Pavimentos" e "Exportar".
-- Planejador, gestor e admin veem também "Novo serviço", "Recalcular", "Gerar vagões" e "Importar", e podem registrar restrições e linhas de base da obra.
+- Planejador, gestor e admin veem também "Novo serviço", "Recalcular", "Gerar vagões" e "Importar", e podem definir linhas de base da obra.
 
 ## Salvamento automático
 O plano é salvo sozinho cerca de um segundo depois de cada alteração; não há botão "Salvar" para o plano inteiro. O texto no canto superior direito diz a situação: "Ainda não salvo" (obra sem plano), "Salvo em <data e hora>", "Alterações não salvas…", "Salvando…", "Salvo", "Não salvo" ou "Somente leitura". Fechar a aba do navegador com alteração pendente faz o navegador perguntar antes.
@@ -192,7 +192,7 @@ O botão "Linhas de base" (o número ao lado diz quantas existem) abre a gaveta 
 - **"Restaurar"**: troca os serviços atuais pelos da foto, depois de confirmar ("Os serviços atuais serão substituídos por esta foto"). Se a foto tinha mais pavimentos que a obra hoje, o número de pavimentos cresce. Nomes de pavimentos, medições e as outras linhas de base ficam como estão.
 - **"Excluir"**: remove a foto, depois de confirmar.
 
-Perfil de consulta abre a gaveta e compara, mas não salva, restaura nem exclui. Essas linhas de base são do Planejador e viajam com o plano no "Exportar"; não confunda com as "Linhas de base" da visão "Vagões e restrições", que fotografam os vagões.
+Perfil de consulta abre a gaveta e compara, mas não salva, restaura nem exclui. Essas linhas de base são do Planejador e viajam com o plano no "Exportar"; não confunda com as "Linhas de base" da visão "Vagões", que fotografam os vagões.
 
 ## Medições físicas
 O botão "Medições" (com o número de rodadas) abre "Medições físicas", com duas abas.
@@ -257,56 +257,47 @@ A linha abaixo da barra de ações diz: "Vagões em dia com este plano (gerados 
 - Depois da primeira geração, "Atualizar do Prevision" (Integrações) deixa de refazer essa sequência, para não apagar a cauda montada pelo plano.`,
   },
   {
-    id: 'longo-prazo-vagoes-restricoes',
-    title: 'Visão Vagões e restrições: Linha de Balanço dos vagões e módulo de restrições',
-    summary:
-      'Como ler a Linha de Balanço das atividades dos vagões e como registrar, mover e resolver restrições com lead time e data limite.',
+    id: 'longo-prazo-visao-vagoes',
+    title: 'Visão Vagões: Linha de Balanço dos vagões e para onde foi o módulo de restrições',
+    summary: 'Como ler a Linha de Balanço das atividades dos vagões e onde ficam agora as restrições do longo prazo.',
     keywords: [
+      'visão vagões',
       'vagões e restrições',
-      'restrição',
-      'registrar restrição',
+      'linha de balanço dos vagões',
+      'inverter locais',
       'módulo de restrições',
-      'lead time',
-      'data limite',
-      'prazo vencido',
+      'quadro de restrições',
+      'registrar restrição',
+      'restrições do longo prazo',
+      'onde foram as restrições',
       'identificada',
       'em tratativa',
-      'registrar resolução',
-      'iniciar tratativa',
-      'bloqueia execução',
-      'bloqueia terminalidade',
-      'linha de balanço dos vagões',
-      'criar pendência',
     ],
     screen: 'longo-prazo',
     body: `## Linha de Balanço dos vagões
-As atividades dos vagões são só leitura aqui: datas, serviços e pavimentos mudam pelo Planejador e por "Gerar vagões". Obras sem vagões gerados mostram o que veio do Prevision.
+A visão "Vagões" (chamada "Vagões e restrições" até 10/11/2026) mostra as atividades dos vagões só para leitura: datas, serviços e pavimentos mudam pelo Planejador e por "Gerar vagões". Obras sem vagões gerados mostram o que veio do Prevision.
 
 - Cada linha é um local da obra, em ordem de altura: por padrão o local mais baixo fica na primeira linha; marque **"Inverter locais"** para ver como um corte do prédio, com a cobertura no alto. Cada barra é uma atividade, colorida e rotulada pelo serviço; atividades do mesmo local que se sobrepõem descem para uma sub-faixa, e as fatias ("parte 1 de 2") aparecem como o mesmo serviço.
 - **"Escala"**: "Mês" compacta a obra inteira; "Semana" alarga os dias e numera as semanas.
 - **"Ver tabela"** / **"Ver gráfico"**: a tabela lista "Serviço", "Local", "Início previsto", "Término previsto" e "Executado".
 - **"Linha de base"** (só quando a obra já tem linha de base salva): escolha uma para ver o fim dela em linha pontilhada cinza. A linha tracejada âmbar é hoje.
-- Clique numa barra para ver "Início", "Término", "Duração" e "Executado"; com linha de base escolhida, também "Início da linha de base", "Término da linha de base" e "Desvio no término". No mesmo diálogo, **"Criar pendência para esta tarefa"** cria uma restrição ligada à atividade, com você como responsável, bloqueando execução e terminalidade: informe a descrição e o lead time. Apesar do nome, ela entra no módulo de restrições abaixo.
+- Clique numa barra para ver "Início", "Término", "Duração" e "Executado"; com linha de base escolhida, também "Início da linha de base", "Término da linha de base" e "Desvio no término".
 
-## Módulo de restrições
-Uma restrição é algo que precisa ser resolvido antes de uma frente começar (projeto, material, contratação, liberação). Ela aponta para uma atividade de vagão e, com lead time, o **limite de resolução = início previsto da atividade − lead time**: a obtenção precisa caber antes de a frente começar. Se a atividade for reprogramada, o limite mostrado acompanha o novo início, e o detalhe avisa "A atividade foi reprogramada desde o cadastro: o limite registrado é dd/mm".
+Abaixo do gráfico ficam a curva de avanço acumulado e as linhas de base da obra (veja a seção seguinte).
 
-**"Registrar restrição"** (planejador, gestor e admin): "Descrição da restrição", "Local" (só locais com atividade), "Atividade vinculada" (depois do local; mostra o início previsto), responsável, "Lead time (dias para obter)" e as caixas "Bloqueia execução" e "Bloqueia terminalidade" (vêm marcadas). Com lead time, a tela mostra "Data limite para resolução: dd/mm — início previsto … menos N dias de lead time"; sem lead time, digite o "Prazo".
+## O módulo de restrições saiu daqui
+Até 10/11/2026 esta visão tinha o "Módulo de restrições": o botão "Registrar restrição", os indicadores e o quadro "Identificada", "Em tratativa" e "Resolvida", além de "Criar pendência para esta tarefa" no diálogo da barra. Tudo isso foi retirado do longo prazo.
 
-**Indicadores**: "Restrições abertas", "Com prazo vencido" e "Mais próxima do limite".
+- O acompanhamento passou para a **"Lista de pendência"**, na aba 2 ("Planejamento de vagão e lista de pendência"): um quadro de cards com cinco colunas, prazo em dias úteis, responsável, conversa e checklists. Veja a seção "Lista de pendência".
+- As restrições que estavam no quadro antigo **foram copiadas para lá como cards de origem "Restrição"**; nada se perdeu.
+- Para ligar uma pendência a um serviço do longo prazo, use **"Criar pendência do serviço"** no painel do bloco, na visão "Linha de Balanço".
 
-**Quadro em três colunas**: "Identificada", "Em tratativa" e "Resolvida", com a contagem. Cada card mostra a descrição, o vagão e a atividade, "Limite dd/mm" (borda vermelha e "Prazo vencido" quando passou) e "Lead time N d". Os cards ficam em ordem de limite.
-
-**Abrir um card** ("Detalhe da restrição"): descrição, atividade vinculada com link para o vagão e período previsto, lead time (ou "Sem lead time — prazo digitado manualmente"), data limite e de onde ela veio, responsável, situação, bloqueios e, se resolvida, a resolução.
-- "Iniciar tratativa →" e "← Voltar para identificada" movem entre as duas primeiras colunas (qualquer perfil que edite).
-- "Resolvida" só se alcança por **"Registrar resolução"**, respondendo "Como foi resolvido?". Restrição resolvida não volta ao quadro.
-
-## Efeito nos vagões
-Enquanto uma restrição aberta marcar "Bloqueia execução", a atividade dela (ou o vagão inteiro, se não há atividade vinculada) não aceita lançamento de progresso: "Resolva a restrição de execução antes de avançar". Marcando "Bloqueia terminalidade", o vagão não fecha. Restrições impeditivas abertas nos vagões anteriores também impedem a liberação do vagão seguinte. Ao "Gerar vagões", as restrições dos vagões que saem da cauda saem junto (a prévia avisa).`,
+## O que continua travando o vagão
+O card da Lista de pendência não trava vagão. A **restrição impeditiva do vagão** continua existindo e é registrada no detalhe do vagão (aba 2, botão "Restrição"): enquanto estiver aberta com "Bloqueia execução", a atividade dela (ou o vagão inteiro, se não há atividade vinculada) não aceita lançamento de progresso ("Resolva a restrição de execução antes de avançar"); com "Bloqueia terminalidade", o vagão não fecha. Restrições impeditivas abertas nos vagões anteriores também impedem a liberação do vagão seguinte. Ao "Gerar vagões", as restrições dos vagões que saem da cauda saem junto (a prévia avisa).`,
   },
   {
     id: 'longo-prazo-curva-avanco-linhas-base',
-    title: 'Visão Vagões e restrições: curva de avanço acumulado e linhas de base da obra',
+    title: 'Visão Vagões: curva de avanço acumulado e linhas de base da obra',
     summary:
       'Como ler a curva planejado × executado (de onde vem cada linha, desvio, atraso em dias) e como definir linhas de base dos vagões.',
     keywords: [
@@ -401,6 +392,8 @@ No alto: Serviços (com quantos lançamentos e blocos), Locais, Término previst
 
 ## Painel do bloco selecionado
 Início e duração (em dias úteis) editáveis, término calculado, equipe e unidade do serviço, observação, as predecessoras ("Depois de", com a espera em dias e a ligação "equipe segue" para o mesmo serviço no local anterior), quantos blocos acompanham ao arrastar, o aviso de atraso com o motivo informado na medição, as datas reais (início real e término real, que a medição preenche e aqui podem ser corrigidas), as fotos da última medição e "Excluir bloco". Um bloco já medido não pode ser excluído.
+
+**"Criar pendência do serviço"**, logo abaixo de equipe e unidade, cria um card na "Lista de pendência" da aba 2 ligado ao serviço do bloco (ao serviço inteiro, não ao local). Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra (o bloco que começa mais cedo) e acompanha a reprogramação. O botão só aparece para quem tem a aba 2 liberada; o perfil não muda isso.
 
 ## Locais, linhas de base e outras ações
 - "Lançar fluxo" abre o lançamento de um fluxo de serviços (veja "Lançar um fluxo"). Sem locais cadastrados, a tela pede para cadastrá-los primeiro.

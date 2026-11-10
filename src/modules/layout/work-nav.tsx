@@ -23,7 +23,14 @@ export const WORK_TABS = [
     label: 'Cronograma de longo prazo',
     hint: 'Linha de balanço · Fluxos · Medições',
   },
-  { section: 'vagoes', number: 2, short: 'Vagões', label: 'Planejamento por vagões', hint: 'Períodos de takt · Terminalidade' },
+  // 10/11/2026: a aba 2 ganhou a segunda visão, a lista de pendência (quadro Kanban), e mudou de nome.
+  {
+    section: 'vagoes',
+    number: 2,
+    short: 'Vagões',
+    label: 'Planejamento de vagão e lista de pendência',
+    hint: 'Períodos de takt · Pendências',
+  },
   { section: 'medio-prazo', number: 3, short: 'Médio prazo', label: 'Cronograma de médio prazo', hint: 'Gantt · Recursos · Linha de base' },
   { section: 'curto-prazo', number: 4, short: 'Curto prazo', label: 'Cronograma de curto prazo', hint: 'Planilha semanal · PPC · Causas' },
   // 08/10/2026: a "Lista de pendências" de terminalidade por pavimento, apartamento e empreiteiro,

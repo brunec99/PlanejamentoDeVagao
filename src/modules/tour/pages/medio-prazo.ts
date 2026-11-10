@@ -86,6 +86,11 @@ export const steps: TourStep[] = [
     body: 'Abre o diálogo do Project com as abas Geral, Predecessoras, Recursos, Avançado e Anotações da tarefa selecionada. OK aplica tudo de uma vez no rascunho, num passo só do desfazer. Atalhos: Shift+F2, duplo clique na barra ou numa célula que não se edita.',
   },
   {
+    target: 'medio-criar-pendencia',
+    title: 'Criar pendência',
+    body: 'Cria um card na Lista de pendência (aba 2) ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao início da tarefa e acompanha a reprogramação. Não vale para tarefa-resumo nem para linha de base, e tarefa nova ou alterada pede salvar o cronograma antes. O mesmo botão está no rodapé de "Informações da tarefa". Só aparece para quem tem a aba 2 liberada.',
+  },
+  {
     target: 'medio-linha-tempo-adicionar',
     title: 'Adicionar à Linha do Tempo',
     body: 'Põe as tarefas selecionadas na Linha do Tempo, ou as tira, se a ativa já estiver nela; resumos e marcos também entram. É edição do rascunho: desfaz com Ctrl+Z e vai ao banco em "Revisar e salvar".',

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { PlanningActions } from './planning-actions';
 import { usePlanning } from './planning-provider';
 import { TourMark } from './wagon-actions';
@@ -11,7 +11,8 @@ import { TabHeader } from '@/modules/layout/tab-header';
 
 const COLUMNS = ['Vagão', 'Período previsto', 'Atividades', 'Progresso', 'Status', 'Prazo', 'Liberação'];
 
-export function PlanningOverview({ workId }: { workId: string }) {
+/** `switcher` é o seletor das visões da aba 2 (Vagões | Lista de pendência), montado pela página. */
+export function PlanningOverview({ workId, switcher }: { workId: string; switcher?: ReactNode }) {
   const context = usePlanning();
   const [showPast, setShowPast] = useState(false);
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
@@ -56,6 +57,7 @@ export function PlanningOverview({ workId }: { workId: string }) {
       >
         <PlanningActions workId={workId} />
       </TabHeader>
+      {switcher}
 
       <div data-tour="planejamento-stats" className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Vagões planejados" value={wagons.length} />

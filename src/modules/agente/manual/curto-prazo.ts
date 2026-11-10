@@ -208,7 +208,7 @@ Enter desce para a mesma coluna da linha de baixo e Shift+Enter sobe (em Status,
 ## Os botões da coluna "Apontamento"
 
 - **"Levar ›"**: cria a mesma linha (empresa, equipe, atividade e período) na semana seguinte, sem apontamento. A origem não muda e, se tinha "Não", ele continua no PPC dela. Aparece na linha com "Não" ou, com "Semanas vizinhas" ligado, em qualquer linha, e só quando a semana seguinte está aberta para você. Se já existe linha igual na semana seguinte, vira "Levar de novo" e avisa que criará outra.
-- **"Restrição"**: transforma o não cumprido numa restrição do longo prazo. Em desenvolvimento: só aparece para desenvolvedores.
+- **"Restrição"**: transforma o não cumprido numa restrição de um vagão, que aparece no detalhe do vagão (aba 2). Em desenvolvimento: só aparece para desenvolvedores.
 - **"Limpar"**: desfaz um "Sim" ou "Não" marcado por engano. Tira Status, causa e justificativa; a linha continua, sem Status. Pergunta "Limpar o apontamento de “…”?" quando o apontamento já estava gravado; um "Não" ainda aguardando causa é limpo sem perguntar.
 
 ## Apontamento em qualquer semana

@@ -33,6 +33,7 @@ export const RESTRICTED_API_PREFIXES = [
   '/api/prevision',
   '/api/ifc',
   '/api/history',
+  '/api/pendencias',
   '/api/curto-prazo',
   '/api/terminalidade',
 ] as const;
@@ -65,7 +66,7 @@ export interface ModuleInfo {
 export const MODULES: readonly ModuleInfo[] = [
   // 04/11/2026: a aba 0 é aberta a todos; dentro dela, cada quadro segue o acesso ao módulo de origem.
   { section: 'dashboard', label: 'Dashboard', hint: 'Os cinco níveis numa página, com filtros e PDF', group: 'Planejamento', open: true },
-  { section: 'longo-prazo', label: 'Longo prazo', hint: 'Linha de balanço, fluxos, medições e restrições', group: 'Planejamento' },
+  { section: 'longo-prazo', label: 'Longo prazo', hint: 'Linha de balanço, fluxos e medições', group: 'Planejamento' },
   { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações', group: 'Planejamento' },
   { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
   // 08/11/2026: curto prazo e terminalidade deixaram de ser abertos a todos e passaram a ser liberados por pessoa.
@@ -86,7 +87,8 @@ export const grantableSection = (section: string) => isRestrictedSection(section
 /** APIs de cada módulo: quem tem o módulo liberado usa a API dele. */
 const SECTION_APIS: Record<string, readonly string[]> = {
   'longo-prazo': ['/api/long-term-plan', '/api/lob', '/api/prevision'],
-  vagoes: ['/api/history'],
+  // 10/11/2026: a lista de pendência (Kanban da aba 2) é só de quem abre a aba 2.
+  vagoes: ['/api/history', '/api/pendencias'],
   'medio-prazo': ['/api/history'],
   'curto-prazo': ['/api/curto-prazo'],
   terminalidade: ['/api/terminalidade'],

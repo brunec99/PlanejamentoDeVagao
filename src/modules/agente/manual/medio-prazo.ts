@@ -245,6 +245,12 @@ O botão de lixeira ("Excluir tarefa e subitens") pergunta "Excluir X e N subite
 
 "Informações" (Shift+F2; ou duplo clique na barra do Gantt, num bloco do Planejador ou numa célula que não se edita: Id, Indicadores, calculadas ou grade bloqueada) abre o diálogo do Project com as abas "Geral" (Nome, Duração, % concluída, Início, Término, "Exibir na Linha do Tempo"), "Predecessoras" (Id, Nome da tarefa, Tipo e Defasagem em dias ou corridos; "Adicionar predecessora"), "Recursos", "Avançado" ("Prazo final", "Tipo de restrição", "Data da restrição") e "Anotações". "OK" aplica tudo de uma vez no rascunho, num passo só do desfazer, com as mesmas validações da grade. Com a grade bloqueada, o diálogo só mostra ("Somente leitura: libere a edição da grade para alterar.").
 
+## Criar pendência a partir de uma tarefa
+
+"Criar pendência", na barra de ferramentas (ao lado de "Informações") e no rodapé de "Informações da tarefa", cria um card na "Lista de pendência" da aba 2 ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a **entrega é o dia útil anterior ao início da tarefa** e acompanha a reprogramação (mudou a data da tarefa, muda a entrega do card). Funciona com a grade bloqueada e não altera o cronograma.
+
+O botão fica desabilitado, com o motivo ao passar o mouse, em tarefa-resumo, em linha de base e em tarefa nova ou com alteração ainda não salva ("Salve o cronograma antes de criar a pendência": use "Revisar e salvar" primeiro). No diálogo, com algo digitado e ainda não aplicado, ele também espera o "OK". Só aparece para quem tem a aba 2 liberada, e não existe no Gantt de legalização da aba 1.
+
 ## Editar pelas barras e pelo Planejador
 
 No Gantt, com a edição liberada: arrastar a barra muda o início (cria "Não iniciar antes de"; tarefa em dias úteis cai sempre em dia útil), esticar a ponta direita muda a duração, puxar o avanço dentro da barra muda o % concluída e arrastar de uma barra até outra cria um vínculo Término-Início. Tarefa iniciada não se arrasta ("Tarefa iniciada: o início real não se arrasta."); resumo não se arrasta nem se estica. No "Planejador de Equipe", arrastar o bloco para outra equipe reatribui, para "Tarefas não atribuídas" tira a equipe e para os lados muda o início; "Atribuir a" faz o mesmo pelo teclado; Esc cancela.

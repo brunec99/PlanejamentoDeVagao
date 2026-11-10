@@ -29,8 +29,8 @@ O Obra 360 é o sistema de gestão de projetos e obras da ATR Incorporadora. Ele
 
 Ao abrir uma obra, a barra lateral mostra o nome dela e **seis abas numeradas**, na ordem em que o planejamento desce do macro para a semana:
 
-1. **Cronograma de longo prazo** — o plano macro da obra: fluxograma de serviços que vira Linha de Balanço, linhas de base, medições e o módulo de restrições.
-2. **Planejamento por vagões** — os períodos de takt (vagões) com as atividades, a terminalidade de cada período e as liberações; é onde a execução é registrada.
+1. **Cronograma de longo prazo** — o plano macro da obra: fluxograma de serviços que vira Linha de Balanço, linhas de base e medições.
+2. **Planejamento de vagão e lista de pendência** — os períodos de takt (vagões) com as atividades, a terminalidade de cada período e as liberações; é onde a execução é registrada. A mesma aba tem a **Lista de pendência**, um quadro de cards com prazo, responsável, conversa e checklists.
 3. **Cronograma de médio prazo** — um cronograma por mês, com horizonte de três meses, no layout do MS Project (tabela e Gantt), recursos e linha de base.
 4. **Cronograma de curto prazo** — a planilha semanal de produção: o que cada empresa e equipe faz na semana, o Status (Sim/Não), a causa de não cumprimento e o PPC.
 5. **Terminalidade** — a lista de pendências por pavimento, apartamento e empreiteiro, com fotos de antes e depois, PDF e modo de campo para o celular.
@@ -137,7 +137,7 @@ O único lugar em que um nível alimenta outro de verdade é o botão **"Gerar v
 - **Folga total e folga livre** — quanto uma tarefa pode atrasar sem atrasar o término do cronograma (total) ou a tarefa seguinte (livre).
 - **Marco** — tarefa de duração zero, que marca uma data (entrega, vistoria).
 - **Prazo final** — no médio prazo, a data limite de uma tarefa: não reprograma, só reduz a folga e acende o indicador quando o término passa dela.
-- **Restrição** — algo que precisa ser resolvido antes de a frente começar: projeto, material, equipamento, contratação, liberação. Vive no quadro de três colunas (identificada, em tratativa, resolvida) do longo prazo e dos vagões. Pode ter **lead time**: o prazo de obtenção em dias, que faz o sistema calcular o limite de resolução a partir do início previsto da atividade.
+- **Restrição** — algo que precisa ser resolvido antes de a frente começar: projeto, material, equipamento, contratação, liberação. É registrada no detalhe do vagão (aba 2) e, enquanto aberta, pode bloquear a execução e a terminalidade dele. O quadro de restrições do longo prazo deixou de existir em 10/11/2026: as restrições que estavam nele foram copiadas como cards da Lista de pendência da aba 2. Pode ter **lead time**: o prazo de obtenção em dias, que faz o sistema calcular o limite de resolução a partir do início previsto da atividade.
 - **Pendência** — no vagão, um item de terminalidade que falta fechar (com responsável, prazo e se bloqueia a terminalidade). Na aba 5, a pendência de acabamento por apartamento, com fotos.
 - **Dívida** — uma pendência que passou de um vagão para o seguinte por meio de uma liberação excepcional. Pode ser própria ou herdada.
 - **Terminalidade** — o vagão (ou o apartamento) estar de fato terminado: critérios confirmados e pendências resolvidas. **Liberação** é a passagem para o vagão seguinte: inicial, normal (terminalidade cumprida) ou excepcional (com justificativa e dívidas).

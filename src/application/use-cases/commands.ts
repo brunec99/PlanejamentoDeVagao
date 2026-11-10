@@ -356,6 +356,10 @@ function copyPlanForward(
       ...base(),
       id: ids.get(t.id)!,
       planId: plan.id,
+      // Elo com a tarefa do mês anterior (10/11/2026): é por ele que o card da lista de pendência criado
+      // numa tarefa continua acompanhando a mesma tarefa no plano do mês seguinte. Na linha de base o
+      // mesmo campo aponta para a tarefa viva; lá ele é regravado ao congelar.
+      sourceTaskId: t.id,
       order: at + 1,
       level,
       // A restrição vai no formato atual (o `anchorStart` antigo vira "Não iniciar antes de"); quem

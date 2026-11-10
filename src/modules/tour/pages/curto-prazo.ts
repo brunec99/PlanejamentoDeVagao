@@ -178,7 +178,7 @@ export const steps: TourStep[] = [
   {
     target: 'curto-gerar-restricao',
     title: 'Gerar restrição',
-    body: 'Transforma o não cumprido numa restrição do quadro do longo prazo, ligada a um vagão e, se quiser, a uma atividade com lead time. A linha continua com o Não e a causa. Em desenvolvimento: só aparece para desenvolvedores.',
+    body: 'Transforma o não cumprido numa restrição de um vagão (ela aparece no detalhe do vagão, na aba 2), ligada, se quiser, a uma atividade com lead time. A linha continua com o Não e a causa. Em desenvolvimento: só aparece para desenvolvedores.',
   },
   {
     target: 'curto-limpar-apontamento',

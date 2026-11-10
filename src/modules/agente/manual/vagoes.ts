@@ -1,6 +1,7 @@
 import type { ManualSection } from './types';
 
-/** Manual da aba 2 (Planejamento por vagões: lista e detalhe do vagão) e das telas de apoio Dívidas e
+/** Manual da aba 2 (Planejamento de vagão e lista de pendência: lista e detalhe do vagão e, desde
+ * 10/11/2026, o quadro da Lista de pendência) e das telas de apoio Dívidas e
  * Integrações (Prevision). Escrito a partir do código dos componentes, dos tours e do README em
  * 29/10/2026; quando o tour ou a documentação divergiam do código, valeu o código. */
 export const sections: ManualSection[] = [
@@ -26,9 +27,9 @@ export const sections: ManualSection[] = [
       'em produção',
     ],
     screen: 'vagoes',
-    body: `## Planejamento por vagões (aba 2)
+    body: `## Planejamento de vagão e lista de pendência (aba 2)
 
-A aba 2, "Planejamento por vagões", organiza a produção da obra em **vagões**. Um vagão é um **período fixo de takt** dentro de uma sequência de produção: ele tem um marco inicial e um marco final e reúne as atividades previstas entre essas datas. O vagão **não tem pavimento próprio**: o local (pavimento, zona ou frente) pertence a cada atividade, e um mesmo vagão pode reunir atividades de pavimentos e zonas diferentes.
+A aba 2, "Planejamento de vagão e lista de pendência", tem duas visões, alternadas pelo seletor no cabeçalho: **"Vagões"**, o planejamento de vagão descrito aqui e nas seções seguintes, e **"Lista de pendência"**, um quadro de cards com prazo, responsável, conversa e checklists (veja a seção "Lista de pendência"). O planejamento de vagão organiza a produção da obra em **vagões**. Um vagão é um **período fixo de takt** dentro de uma sequência de produção: ele tem um marco inicial e um marco final e reúne as atividades previstas entre essas datas. O vagão **não tem pavimento próprio**: o local (pavimento, zona ou frente) pertence a cada atividade, e um mesmo vagão pode reunir atividades de pavimentos e zonas diferentes.
 
 ### Sequência de produção
 
@@ -63,7 +64,7 @@ A marca **"Takt vencido"** no detalhe (e "Atrasado" na coluna "Prazo" da lista) 
 
 ### Quem vê esta aba
 
-A aba 2 é um módulo liberado por pessoa: aparece para administradores, para quem desenvolve o sistema e para quem recebeu o módulo "Vagões" liberado pelo administrador em Configurações. Quem não tem acesso é levado ao Dashboard da obra (aba 0). O perfil Consulta vê tudo, mas não tem nenhum botão de ação; planejador, gestor e admin registram. Algumas ações exigem gestor ou admin, indicadas nas seções seguintes.`,
+A aba 2 é um módulo liberado por pessoa: aparece para administradores, para quem desenvolve o sistema e para quem recebeu o módulo "Vagões" liberado pelo administrador em Configurações; a mesma liberação vale para a Lista de pendência. Quem não tem acesso é levado ao Dashboard da obra (aba 0). O perfil Consulta vê tudo, mas não tem nenhum botão de ação; planejador, gestor e admin registram. Algumas ações exigem gestor ou admin, indicadas nas seções seguintes.`,
   },
   {
     id: 'vagoes-lista',
@@ -249,7 +250,7 @@ Restrição é um **impedimento** com responsável e prazo. O botão "Restriçã
 
 - Com "Bloqueia execução" aberta, o progresso das atividades alcançadas não avança e os critérios não podem ser confirmados; o status do vagão passa a "Com restrição".
 - Restrição aberta que bloqueie execução ou terminalidade em um vagão anterior impede liberar os vagões seguintes, **mesmo de forma excepcional** ("Resolva as restrições impeditivas dos antecessores."). Diferente da pendência, ela não é contornada e nunca vira dívida.
-- **"Registrar resolução"** encerra a restrição e solta o que ela bloqueava. No módulo de restrições da aba 1 (longo prazo), ela passa para "Resolvida".
+- **"Registrar resolução"** encerra a restrição e solta o que ela bloqueava. A restrição do vagão é diferente do card da Lista de pendência: o card não trava vagão nenhum, e é a restrição registrada aqui que bloqueia a execução, a terminalidade e a liberação.
 
 ### Em vagão terminal
 
@@ -330,6 +331,92 @@ Um vagão terminal deixa de ser terminal quando alguém reabre um critério, red
 ### Histórico
 
 O painel "Histórico" lista o que foi registrado no vagão e nas suas atividades, do mais recente ao mais antigo: vagão, atividades, critérios, pendências, restrições, liberações, reaberturas, importações do Prevision e geração pelo plano de longo prazo, com autor, data e hora e, quando houver, "Justificativa:" ou "Resolução:". Se não carregar, use "Tentar de novo".`,
+  },
+  {
+    id: 'vagoes-lista-de-pendencia',
+    title: 'Lista de pendência: quadro de cards com prazo, responsável, conversa e checklists',
+    summary: 'Lista de pendência da aba 2: colunas, prazo em dias úteis, sinais de cor, conversa com @, checklists e como criar um card.',
+    keywords: [
+      'lista de pendência',
+      'lista de pendencias',
+      'quadro de pendências',
+      'kanban',
+      'card',
+      'nova pendência',
+      'criar pendência',
+      'a fazer',
+      'fazendo',
+      'pausado',
+      'cancelado',
+      'começar até',
+      'tempo de execução',
+      'checklist',
+      'marcar com @',
+      'menção',
+      'motivo da pausa',
+      'excluir card',
+      'restrições antigas',
+    ],
+    screen: 'vagoes',
+    body: `## Para que serve
+
+A "Lista de pendência" é a segunda visão da aba 2, "Planejamento de vagão e lista de pendência": troque de "Vagões" para "Lista de pendência" no seletor do cabeçalho. É um quadro de cards (Kanban) com tudo o que precisa ser resolvido para a obra andar: cada card tem título, responsável, data de entrega, tempo de execução, conversa e checklists. Ela substitui, desde 10/11/2026, o antigo "Módulo de restrições" do longo prazo.
+
+O card **não trava vagão**. Ele é acompanhamento e cobrança. O que bloqueia a execução, a terminalidade e a liberação de um vagão continua sendo a **restrição** e a **pendência do vagão**, registradas no detalhe do vagão (veja "Critérios de terminalidade, pendências e restrições do vagão"). São coisas diferentes, apesar do nome parecido.
+
+## As cinco colunas
+
+"A fazer", "Fazendo", "Pausado", "Concluído" e "Cancelado", nessa ordem. O card muda de coluna e de posição dentro dela.
+
+- **Pausar e cancelar pedem o motivo**, que fica escrito no card enquanto ele estiver nessas colunas.
+- **Pausado continua contando prazo**: a pausa não para o relógio.
+- **Concluir com item de checklist ainda aberto** pede confirmação antes.
+
+## Prazo em dias úteis
+
+Todo prazo do quadro conta só de segunda a sexta, sem feriados.
+
+- **Entrega**: a data em que a pendência precisa estar resolvida.
+- **Tempo de execução** (o "lead time" do formulário): quantos dias úteis a pendência leva para ser resolvida.
+- **"Começar até"** = a entrega menos o tempo de execução, em dias úteis. É a última data para começar sem atrasar a entrega.
+
+O sinal de cor do card resume a situação:
+
+- **Vermelho**: a entrega já passou e o card não foi concluído, ou o "começar até" já passou e o card ainda está em "A fazer".
+- **Amarelo**: o card está em "A fazer" e precisa começar nos próximos 5 dias úteis.
+- **Verde**: dentro do prazo.
+
+Cards em "Concluído" e "Cancelado" não têm sinal de prazo.
+
+## As três formas de criar um card
+
+1. **"+ Nova pendência"**, no próprio quadro: card manual. Você informa o título, a data de entrega, o tempo de execução e o responsável.
+2. **Numa tarefa do médio prazo** (aba 3): selecione a tarefa e use "Criar pendência" na barra de ferramentas do cronograma, ou o mesmo botão no rodapé de "Informações da tarefa".
+3. **Num serviço do longo prazo** (aba 1, visão "Linha de Balanço"): clique num bloco do serviço e use "Criar pendência do serviço" no painel do bloco.
+
+Nos cards criados pelo médio ou pelo longo prazo você informa só o título, o tempo de execução e o responsável. A **entrega é o dia útil anterior ao início** da tarefa (ou ao primeiro início do serviço na obra) e **acompanha a reprogramação**: se a tarefa ou o serviço mudar de data, a entrega do card muda junto, sem ninguém editar. Nesses cards a data não é digitada. Se a tarefa ou o serviço de origem for excluído, o card fica com a última data conhecida.
+
+Cada card mostra a origem: "Manual", "Médio prazo", "Longo prazo" ou "Restrição". Os de origem **"Restrição"** são as restrições do antigo quadro do longo prazo, copiadas para cá; a entrega deles pode ser editada como a de um card manual.
+
+O responsável é escolhido entre as pessoas que têm a obra liberada.
+
+## Conversa, menções e e-mail
+
+Cada card tem uma conversa. Digite @ para marcar uma pessoa da obra: quem é marcado recebe um e-mail. O responsável também recebe um e-mail quando recebe o card (na criação ou quando o card passa para ele).
+
+O **histórico de mudanças** aparece na própria conversa, como linhas do sistema: mudança de coluna, de responsável, de data e assim por diante, com quem fez e quando.
+
+## Checklists
+
+Um card pode ter várias checklists, cada uma com título e itens que se marcam como feitos. O card mostra quantos itens já foram marcados no total.
+
+## Quem pode excluir
+
+Só quem criou o card ou um administrador exclui. Para tirar um card do caminho sem apagar a história, use "Cancelado", com o motivo.
+
+## Quem vê
+
+É o mesmo módulo dos vagões, liberado por pessoa pelo administrador (Configurações → Usuários, módulo "Vagões"); administradores e quem desenvolve o sistema veem sem liberação. Os botões "Criar pendência" do médio e do longo prazo só aparecem para quem tem a aba 2 liberada.`,
   },
   {
     id: 'dividas-tela',
