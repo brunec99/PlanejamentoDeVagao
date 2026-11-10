@@ -4,9 +4,9 @@ name: Imagem
 # (ghcr.io). O servidor da ATR busca a imagem nova sozinho: nenhuma credencial do servidor fica
 # neste repositório. Em pull request a imagem é só montada e testada, sem publicar.
 #
-# As duas variáveis públicas do Supabase vêm de Settings > Secrets and variables > Actions >
-# Variables (NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY). Em pull request valem os
-# mesmos valores fictícios do CI.
+# Os dois valores públicos do Supabase vêm de Settings > Secrets and variables > Actions:
+# NEXT_PUBLIC_SUPABASE_URL em Variables e NEXT_PUBLIC_SUPABASE_ANON_KEY em Secrets (ou em Variables).
+# Em pull request valem os mesmos valores fictícios do CI.
 on:
   push:
     branches: [main]
@@ -41,7 +41,7 @@ jobs:
           tags: ${{ env.IMAGEM }}:teste
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=${{ github.event_name == 'pull_request' && 'http://127.0.0.1:54321' || vars.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ github.event_name == 'pull_request' && 'ci-anon-key' || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ github.event_name == 'pull_request' && 'ci-anon-key' || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_AGENT_NAME=${{ vars.NEXT_PUBLIC_AGENT_NAME }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
