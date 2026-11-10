@@ -6,10 +6,10 @@ Entregue em 10/11/2026. A aba 2 passou a se chamar **Planejamento de vagão e li
 
 | Item | Situação em 10/11/2026 |
 | --- | --- |
-| Código do Obra 360 (quadro, API, botões do médio e do longo prazo) | Implementado, **sem commit** |
+| Código do Obra 360 (quadro, API, botões do médio e do longo prazo) | Commit `3382814`, enviado ao `main` em 10/11/2026; CI do GitHub verde. **A Vercel marcou o deploy desse commit como bloqueado** ("Deployment was blocked"): publicação não confirmada |
 | Migração `0043_pending_board.sql` (este repositório) | **Aplicada no takt-hub em 10/11/2026** (4 tabelas, RLS e grants conferidos; leitura REST com a chave de serviço respondeu 200) |
 | Migração `20261110090000_obra360_pendencia_email.sql` (repositório do Takt Hub) | **Aplicada no takt-hub em 10/11/2026** (`obra360.pendencia` nos dois CHECKs da fila) |
-| Modelo de e-mail `obra360.pendencia` na Edge Function `email-dispatch` (Takt Hub) | Escrito e testado, **não publicado** |
+| Modelo de e-mail `obra360.pendencia` na Edge Function `email-dispatch` (Takt Hub) | Commit `137ce34` no takt-hub. **Edge Function não publicada**: a CLI do Supabase pede login (`npx supabase login`), que só o dono da conta faz |
 | Uso real logado | Não feito |
 
 Sem a 0043 a visão mostra "indisponível" e o resto do sistema segue normal. Sem a parte do Takt Hub o quadro funciona inteiro e só o e-mail não sai (a falha fica no log do servidor, o comando não é recusado).
