@@ -35,14 +35,15 @@ test('opções do PDF da segurança vão e voltam pela URL', () => {
   assert.equal(params.get('busca'), 'guarda-corpo');
   assert.equal(params.get('de'), '2026-10-01');
   assert.equal(params.get('ate'), '2026-10-31');
-  assert.equal(params.has('quebra'), false);
+  // Folha nova por grupo é opcional desde 10/11/2026: ligada, vai como quebra=1.
+  assert.equal(params.get('quebra'), '1');
   assert.deepEqual(params.getAll('local'), ['2º pavimento', '__vazio__']);
   assert.deepEqual(params.getAll('grupo'), ['2º pavimento', '__vazio__']);
   assert.deepEqual(parsePrintParams(asRaw(params)), options);
 });
 
 test('filtros vazios não vão para a URL', () => {
-  const params = printSearchParams({ filters: DEFAULT_FILTERS, grouping: 'tipo', photos: true, pageBreak: true });
+  const params = printSearchParams({ filters: DEFAULT_FILTERS, grouping: 'tipo', photos: true, pageBreak: false });
   assert.deepEqual([...params.keys()], ['agrupar', 'situacao']);
   assert.deepEqual(parsePrintParams(asRaw(params)), {
     filters: DEFAULT_FILTERS,
@@ -50,7 +51,7 @@ test('filtros vazios não vão para a URL', () => {
     grouping: 'tipo',
     groups: undefined,
     photos: true,
-    pageBreak: true,
+    pageBreak: false,
   });
 });
 
@@ -61,7 +62,7 @@ test('URL sem opções ou com valores estranhos vira o padrão', () => {
     grouping: 'tipo',
     groups: undefined,
     photos: true,
-    pageBreak: true,
+    pageBreak: false,
   });
   const odd = parsePrintParams({
     situacao: 'x',
@@ -81,6 +82,9 @@ test('URL sem opções ou com valores estranhos vira o padrão', () => {
   assert.deepEqual(parsePrintParams({ ordem: 'observedOn' }).sort, { column: 'observedOn', dir: 'asc' });
   assert.equal(parsePrintParams({ fotos: '0', quebra: '0' }).photos, false);
   assert.equal(parsePrintParams({ fotos: '0', quebra: '0' }).pageBreak, false);
+  // Sem "quebra", os grupos seguem na mesma folha; só quebra=1 liga a folha nova por grupo.
+  assert.equal(parsePrintParams({}).pageBreak, false);
+  assert.equal(parsePrintParams({ quebra: '1' }).pageBreak, true);
 });
 
 test('agrupar por consequência e um grupo só vão pela URL como lista', () => {

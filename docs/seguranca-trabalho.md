@@ -21,6 +21,8 @@ O processo é o da terminalidade (aba 5, ver [terminalidade.md](terminalidade.md
 
 Desde 06/11/2026 a vistoria aparece também no **Dashboard geral** (`/dashboard`), comparando as obras: quadro 6 "Segurança do trabalho", três colunas no comparativo, um cartão, uma frase no resumo e a folha 5 do PDF (ver "Na comparação entre obras", abaixo). A aba 0 de cada obra ainda não tem o quadro.
 
+Em 10/11/2026 a tela recebeu os 7 ajustes pedidos pela equipe de SST: cartão "Risco de morte em aberto" no lugar de "Finalizados", período com escala e setas como na aba 0 (com "Tudo" como padrão e períodos do calendário), lista logo abaixo dos cartões, gráficos e quadro mês a mês recolhidos no fim, PDF sem folha nova por padrão e "Finalizar" verde, na coluna presa à direita e na janela do apontamento (ver "10/11/2026 — Ajustes pedidos pela equipe de SST").
+
 ## Decisões do usuário (05/11/2026)
 
 - **Pedido:** "o mesmo processo da terminalidade, mas com os TSTs", acesso logo abaixo da terminalidade, e um **tipo de usuário TST, o único que pode colocar e finalizar informações**. Também pediu para importar os dados da planilha.
@@ -50,7 +52,7 @@ Desde 06/11/2026 a vistoria aparece também no **Dashboard geral** (`/dashboard`
 | Repositório | `src/infrastructure/repositories/supabase/safety-repository.ts` |
 | API | `src/app/api/seguranca/route.ts` (GET), `commands/route.ts`, `upload-url/route.ts`, `campo/route.ts` e `tst/route.ts` |
 | Cliente | `src/modules/seguranca/api.ts` (`useSafety`, `uploadSafetyPhoto`, `uploadPendingSafetyPhotos`) |
-| Tela | `src/modules/seguranca/safety-overview.tsx` e `safety-view.ts` (testes em `tests/safety-view.test.ts`) |
+| Tela | `src/modules/seguranca/safety-overview.tsx`, `safety-view.ts` (testes em `tests/safety-view.test.ts`) e, desde 10/11/2026, `period.ts` (escalas e períodos do calendário; testes em `tests/safety-period.test.ts`) |
 | Diálogos | `src/modules/seguranca/item-dialog.tsx`, `resolve-dialog.tsx`, `bulk-edit-dialog.tsx` e `types-dialog.tsx` |
 | PDF | `src/modules/seguranca/print-dialog.tsx`, `print-options.ts` e `print-list.tsx`; página `src/app/imprimir/seguranca/[obraId]/page.tsx` |
 | Modo de campo | `src/modules/seguranca/field-app.tsx`, `offline-store.ts` e `offline-model.ts`; página `src/app/campo/seguranca/page.tsx` |
@@ -91,29 +93,31 @@ Todos passam por `POST /api/seguranca/commands?workId=<obra aberta>`. O `workId`
 
 ## A tela (aba 6)
 
-`SafetyOverview`, com a lógica pura em `safety-view.ts` (testada).
+`SafetyOverview`, com a lógica pura em `safety-view.ts` e, desde 10/11/2026, a do período em `period.ts` (testadas).
+
+Ordem da página desde 10/11/2026 (ver "10/11/2026 — Ajustes pedidos pela equipe de SST", abaixo): cabeçalho → barra do período → cartões → "Apontamentos" (situação, busca, filtros e lista) → "Gráficos por tipo, consequência e probabilidade" (recolhido) → "Apontamentos por tipo, mês a mês" (recolhido). A lista fica logo abaixo dos cartões porque é o que os TSTs mais usam.
 
 - **Cabeçalho:** "Novo apontamento" e "Tipos de apontamento" (só TST e admin), "Usar no celular, sem sinal" e "Gerar PDF". Quem não grava vê o aviso de consulta com os TSTs da obra, ou como o admin dá o papel TST a alguém.
-- **Período (06/11/2026):** a barra "Período · pela data do apontamento", no topo do painel (acima dos cartões), com "Início" e "Término" (campos de data, os dois dias inclusive; um lado vazio não limita). Pedido do usuário: "adicione filtros temporais [...] deixe data de apontamento como data filtrada [...] selecione data de início e término". O período faz parte de `SafetyFilters` (`from`/`to`, AAAA-MM-DD), então vale para os cartões, as roscas, o quadro mês a mês, a lista, a contagem dos filtros e o PDF (`de` e `ate` na URL; o PDF escreve "apontados de … a …" na linha de filtros). "Limpar período" limpa só ele; "Limpar filtros" limpa tudo, período incluído. Início depois do término avisa e zera a tela. Como as roscas seguem a situação da lista, um período sem aberto (com a lista em Abertos) mostra no lugar delas "Os gráficos seguem a situação da lista: nenhum apontamento aberto nesta seleção." e o botão "Ver todos os N". No celular, o título fica numa linha e as duas datas lado a lado. Conferido no navegador (computador e celular) com dados simulados: total, roscas, quadro (jun–ago e um mês só, sem "Diferença"), lista, aviso de datas invertidas, URL e linha de filtros do PDF, "Limpar período" e nenhuma rolagem lateral. O período não fica salvo (recarregar volta sem período) e não existe no modo de campo. A data é sempre a do apontamento, não a da correção.
-- **Cartões:** total, abertos, finalizados (com %), média de dias para resolver (só finalizados, uma casa decimal) e abertos há mais de 7 dias. Contam a seleção dos filtros nas duas situações.
-- **Roscas:** por tipo, por consequência e por probabilidade, no máximo 6 fatias (5 maiores + "Outros"). Cada uma ignora o próprio filtro; clicar na legenda liga ou desliga o valor no filtro. O centro diz "apontamentos" (o `DonutRing` da aba 5 ganhou a propriedade `noun`).
-- **"Apontamentos por tipo, mês a mês":** o comparativo da aba "Página15" da planilha. Os 4 últimos meses até o mês atual, pela data do apontamento, com a diferença do mês atual (em andamento) para o anterior ("(novo)" quando o anterior foi zero) e a linha GERAL. Segue os filtros, menos a situação. Com período (`monthWindow`), mostra do mês do início ao do término: término no futuro para no mês de hoje; só o término mostra os 4 meses até ele; mais de 12 meses mostra os 12 últimos e avisa; mês cortado pelo período conta só os dias de dentro; um mês só esconde a coluna "Diferença".
+- **Período (06/11/2026; controle trocado em 10/11/2026):** no topo do painel, acima dos cartões, filtra pela data do apontamento. Desde 10/11/2026 é o controle do "Dashboard da obra" (aba 0): "Escala" com os botões Tudo, Semanal, Mensal, Trimestral, Anual e Personalizado, e "Período" com as setas ‹ › e a lista. "Tudo" é o padrão (sem limite de data). Os períodos são do calendário (semana de segunda a domingo, mês do dia 1º ao último, trimestre e ano do calendário), diferente das semanas inteiras da aba 0; o Personalizado mostra "Início" e "Término" (os dois dias inclusive; um lado vazio não limita). Detalhes e motivos na seção de 10/11/2026. O período faz parte de `SafetyFilters` (`from`/`to`, AAAA-MM-DD, e a escala em `scale`), então vale para os cartões, os gráficos, o quadro mês a mês, a lista, a contagem dos filtros e o PDF (`de` e `ate` na URL; o PDF escreve "apontados de … a …" na linha de filtros). "Limpar filtros" limpa tudo e volta o período para "Tudo". Como as roscas seguem a situação da lista, um período sem aberto (com a lista em Abertos) mostra no lugar delas "Os gráficos seguem a situação da lista: nenhum apontamento aberto nesta seleção." e o botão "Ver todos os N". O período não fica salvo nem vai na URL da tela (recarregar volta em "Tudo") e não existe no modo de campo. A data é sempre a do apontamento, não a da correção. *Histórico:* em 06/11/2026 o período era uma barra "Período · pela data do apontamento" com dois campos de data e "Limpar período" (pedido do usuário: "adicione filtros temporais [...] deixe data de apontamento como data filtrada [...] selecione data de início e término"); foi trocada em 10/11/2026 a pedido da equipe de SST.
+- **Cartões (revistos em 10/11/2026):** "Total", "Abertos", "Média de dias para resolver" (só finalizados, uma casa decimal), "Abertos há mais de 7 dias" e "Risco de morte em aberto" (abertos com consequência "Morte", em vermelho quando há algum; a linha de baixo diz há quantos dias o mais antigo está aberto, ou, sem nenhum aberto, a média de dias dos finalizados com "Morte", ou "nenhum na seleção"; `summarizeDeathRisk` em `safety-view.ts`). Contam a seleção dos filtros e do período nas duas situações. O cartão "Finalizados" (com %) saiu em 10/11/2026; a contagem de finalizados segue no botão "Finalizados" da situação, acima da lista.
 - **Filtros:** situação (abre em Abertos), tipo, consequência, probabilidade e local, cada um com várias escolhas e contagem, e busca sem acento na descrição, no local, no tipo e em "Como foi corrigido". O local junta grafias que só diferem em acento, caixa, espaço e "°"/"º"; a tabela mostra a grafia de cada linha, e filtros, grupos e roscas usam a mais frequente na obra.
 - **Lista:** colunas da planilha, classificáveis (crescente → decrescente → padrão, vazios no fim); ordem padrão do mais recente para o mais antigo. Consequência em chip colorido (Morte vermelho, Severa laranja, Significativa âmbar, Leve verde, Nenhuma cinza, Autuação/Multa violeta), sempre com o texto. Selo "Planilha" no histórico importado. "Dias para resolver": "N dias" no finalizado; "há N dias" no aberto, em âmbar e em vermelho depois de 7 dias. 100 linhas por vez, com "Mostrar mais".
-- **Ações do TST e do admin:** Finalizar, Reabrir e ✕ por linha; marcação e edição em lote (bloqueada acima de 500 marcados). Um 409 recarrega a lista e avisa.
+- **Ações do TST e do admin:** Finalizar, Reabrir e ✕ por linha, na coluna "Ações", que desde 10/11/2026 fica presa na borda direita da tabela (a tabela tem 1.400 px de largura e o botão ficava fora da tela); o "Finalizar" é verde, como no aplicativo de campo. Marcação e edição em lote (bloqueada acima de 500 marcados). Um 409 recarrega a lista e avisa.
+- **"Gráficos por tipo, consequência e probabilidade" (recolhido desde 10/11/2026):** seção no fim da página, logo acima do quadro mês a mês, aberta pelo clique no título. As três roscas, no máximo 6 fatias cada (5 maiores + "Outros"). Cada uma ignora o próprio filtro; clicar na legenda liga ou desliga o valor no filtro da lista. O centro diz "apontamentos" (o `DonutRing` da aba 5 ganhou a propriedade `noun`).
+- **"Apontamentos por tipo, mês a mês" (no fim da página e recolhido desde 10/11/2026):** aberto pelo clique no título; conteúdo e regras iguais. O comparativo da aba "Página15" da planilha. Os 4 últimos meses até o mês atual, pela data do apontamento, com a diferença do mês atual (em andamento) para o anterior ("(novo)" quando o anterior foi zero) e a linha GERAL. Segue os filtros, menos a situação. Com período (`monthWindow`), mostra do mês do início ao do término: término no futuro para no mês de hoje; só o término mostra os 4 meses até ele; mais de 12 meses mostra os 12 últimos e avisa; mês cortado pelo período conta só os dias de dentro; um mês só (a escala Mensal, por exemplo) esconde a coluna "Diferença".
 - **Diálogos:**
-  - *Novo/Editar apontamento:* tipo obrigatório no apontamento novo ("Sem tipo" só aparece se o apontamento já não tinha tipo), consequência, probabilidade, descrição, local com sugestões, data e fotos (opcionais, como na aba 5; uma vaga fica reservada para a correção). "Salvar e lançar outro" mantém tipo, local e data e limpa descrição e risco, porque cada apontamento tem a própria avaliação. O último tipo e local ficam lembrados no navegador, por obra. Se uma foto falha depois de salvar, "Tentar de novo" reenvia só o que faltou. A leitura mostra situação, dias para resolver, "Apontado por" (ou "Planilha SST - Controle geral") e "Como foi corrigido".
-  - *Finalizar apontamento:* foto da correção (salvo se já houver), data da correção e "Como foi corrigido".
+  - *Novo/Editar apontamento:* tipo obrigatório no apontamento novo ("Sem tipo" só aparece se o apontamento já não tinha tipo), consequência, probabilidade, descrição, local com sugestões, data e fotos (opcionais, como na aba 5; uma vaga fica reservada para a correção). "Salvar e lançar outro" mantém tipo, local e data e limpa descrição e risco, porque cada apontamento tem a própria avaliação. O último tipo e local ficam lembrados no navegador, por obra. Se uma foto falha depois de salvar, "Tentar de novo" reenvia só o que faltou. A leitura mostra situação, dias para resolver, "Apontado por" (ou "Planilha SST - Controle geral") e "Como foi corrigido". Desde 10/11/2026, no apontamento aberto, o rodapé tem o botão verde "Finalizar apontamento" (só TST e admin), que abre o diálogo de finalizar.
+  - *Finalizar apontamento:* foto da correção (salvo se já houver), data da correção e "Como foi corrigido". Abre pelo "Finalizar" da linha ou, desde 10/11/2026, pelo "Finalizar apontamento" do diálogo do apontamento.
   - *Edição em lote:* tipo, consequência, probabilidade e local, todos em "Manter como está" com o valor atual embaixo.
   - *Tipos de apontamento:* a lista única (o diálogo avisa), com uso nesta obra, incluir, renomear, desativar/reativar e subir/descer.
 - **Textos reaproveitados da aba 5:** o seletor de fotos (`noun`) e o visualizador (`issueLabel`) ganharam propriedades opcionais para dizer "apontamento" e "Apontamento"; a aba 5 continua igual.
-- **Tour:** `src/modules/tour/pages/seguranca.ts` (14 passos, com o do período), ligado em `tours.ts`. Na grade de usuários, o passo do "Papel" explica o TST.
+- **Tour:** `src/modules/tour/pages/seguranca.ts` (14 passos), ligado em `tours.ts`. Desde 10/11/2026 os passos seguem a ordem nova da página: depois dos botões do cabeçalho, período → indicadores → filtros → lista → ações da linha → lote → gráficos → mês a mês. Na grade de usuários, o passo do "Papel" explica o TST.
 
 ## PDF
 
-"Gerar PDF" abre `/imprimir/seguranca/<obra>` em outra aba, com os filtros e a ordem da lista na URL (tipo, consequência, probabilidade e local repetidos; `busca`; `de` e `ate` do período, conferidos como data válida).
+"Gerar PDF" abre `/imprimir/seguranca/<obra>` em outra aba, com os filtros e a ordem da lista na URL (tipo, consequência, probabilidade e local repetidos; `busca`; `de` e `ate` do período, conferidos como data válida; `quebra=1` para cada grupo em folha nova). Com o período em "Tudo", `de` e `ate` não vão; numa escala do calendário, vão o primeiro e o último dia do período.
 
-- **Janela:** agrupar por tipo, local ou consequência (abre em tipo; em local ou consequência quando a lista está filtrada só por eles), com ou sem fotos, cada grupo em folha nova, e a escolha dos grupos (busca, "Selecionar tudo", "Limpar"; vai na URL só o que entra).
+- **Janela:** agrupar por tipo, local ou consequência (abre em tipo; em local ou consequência quando a lista está filtrada só por eles), com ou sem fotos, "Cada <grupo> começa em folha nova" (**desmarcado por padrão desde 10/11/2026**: os grupos seguem um depois do outro na mesma folha, separados pela faixa azul do título; marcado, um grupo por folha; na URL, `quebra=1` liga as quebras e sem ele não há quebra; antes era o contrário, ligado por padrão e `quebra=0` desligava), e a escolha dos grupos (busca, "Selecionar tudo", "Limpar"; vai na URL só o que entra).
 - **Primeira folha:** logos ATR e Takt, "VISTORIA DE SEGURANÇA DO TRABALHO <OBRA>", agrupamento, situação, data, filtros, grupos escolhidos e ordem; cartões (as duas situações: total, abertos, finalizados, % e média de dias; só abertos: total, abertos há mais de 7 dias, média de dias em aberto, locais com aberto; só finalizados: total, média de dias, finalizados em até 7 dias, locais) e as três roscas.
 - **Grupos:** tipos na ordem do cadastro e "Sem tipo" no fim; locais em ordem alfabética e "Sem local" no fim; consequências da mais grave para a mais leve. Colunas: Nº (contínuo), Tipo, Consequência, Probabilidade, Descrição, Local, Data do apontamento, Situação ("Aberto há N dias" ou "Finalizado em DD/MM/AAAA · N dias", com "Correção: …"), Foto e Foto da correção (até 2 miniaturas e "+N"). A coluna do agrupamento sai da tabela.
 - **Impressão:** espera as fotos (até 20 s), A4 paisagem, arquivo "Segurança <CÓDIGO> - Por <agrupamento> - DD-MM-AAAA". Dados de `GET /api/seguranca/campo?workId=`.
@@ -137,11 +141,67 @@ Pedido do usuário: "adicione no dashboard geral os dados de segurança do traba
 
 - **Onde:** quadro 6 "Segurança do trabalho" depois da terminalidade, chave "Segurança" em "Quadros" (`quadros=seguranca`), cartão "Apontamentos de segurança em aberto" (o 7º do topo), uma frase no resumo, colunas "Em aberto", "Feitos / finaliz." e "> 7 dias" no comparativo, e a folha 5 do PDF. Só no geral: a aba 0 continua sem o quadro.
 - **Quem vê:** todos com a obra liberada, como a aba 6.
-- **Datas:** período em semanas inteiras, como o resto do geral (da segunda-feira inicial ao sábado final). Feitos pela data do apontamento; finalizados pela data de correção; em aberto e abertos há mais de 7 dias como retrato no sábado final (os dias contam até ele, ou até hoje no período em andamento). Diferente do filtro de período da aba 6, que usa datas exatas.
+- **Datas:** período em semanas inteiras, como o resto do geral (da segunda-feira inicial ao sábado final). Feitos pela data do apontamento; finalizados pela data de correção; em aberto e abertos há mais de 7 dias como retrato no sábado final (os dias contam até ele, ou até hoje no período em andamento). Diferente do filtro de período da aba 6, que desde 10/11/2026 usa períodos do calendário (semana de segunda a domingo, mês do dia 1º ao último) ou datas exatas no Personalizado.
 - **Histórico da planilha** conta igual ao lançado no sistema.
 - **Risco:** os feitos no período por consequência; graves = Morte + Severa. **Tipos:** até 6 somando as obras, pela lista única.
 - **Empreiteiro:** a vistoria não registra empresa; com empreiteiro escolhido no geral, o quadro diz "sem recorte de empreiteiro". O estado da obra não muda com a segurança.
 - **Dados:** a leitura única do geral (`GET /api/dashboard/obras`) traz a lista de tipos e os apontamentos de todas as obras, só com as colunas do cálculo (sem descrição, local nem fotos), por `loadSafetyOverview` no repositório da aba 6; nenhuma migração nova (usa a 0040). Falha deixa só o quadro de segurança indisponível.
+
+## 10/11/2026 — Ajustes pedidos pela equipe de SST
+
+Origem: o documento "Ajustes portal de apontamentos", escrito pela equipe de SST (TST Renata), com 7 itens. Os 7 foram implementados em 10/11/2026, sem migração nova e sem rota de API nova. O modo de campo (`/campo/seguranca`) não mudou.
+
+### O que mudou (implementado)
+
+1. **Cartões ("Indicadores"):** o cartão "Finalizados" saiu. Ficaram "Total", "Abertos", "Média de dias para resolver", "Abertos há mais de 7 dias" e o novo **"Risco de morte em aberto"**: conta os abertos com "Risco: consequência" igual a "Morte", dentro dos filtros e do período; fica vermelho quando passa de zero. A linha de baixo diz há quantos dias está aberto o mais antigo deles ("aberto há N dias" ou "aberto hoje" com um só; "o mais antigo aberto há N dias" com mais). Sem nenhum aberto, mostra a média de dias que os finalizados com "Morte" levaram para ser resolvidos ("nenhum aberto · N dias para resolver, em média") ou "nenhum na seleção". A quantidade de finalizados continua no botão "Finalizados" da situação, acima da lista.
+2. **"Apontamentos por tipo, mês a mês"** foi para o **fim da página, recolhido**: o clique no título abre e fecha. Conteúdo e regras iguais.
+3. **Período:** a barra com os dois campos de data deu lugar ao controle do "Dashboard da obra" (aba 0): "Escala" com os botões **Tudo | Semanal | Mensal | Trimestral | Anual | Personalizado** e "Período" com as setas ‹ › e a lista. Diferenças para a aba 0, de propósito:
+   - **"Tudo"**, a mais, é o **padrão** e não limita a data: a lista de abertos tem de continuar mostrando os abertos de qualquer data.
+   - Os períodos são **do calendário**, não de semanas inteiras: Semanal = segunda a domingo; Mensal = do dia 1º ao último dia do mês; Trimestral = o trimestre do calendário; Anual = o ano do calendário. A aba 0 usa semanas inteiras de segunda a sábado, cada semana no mês da sua segunda-feira.
+   - A lista do "Período" vai do mais recente ao mais antigo, do período do apontamento mais antigo da obra até hoje, com o atual marcado "(atual)". Rótulos: semana "26/10 a 01/11/2026", mês "outubro de 2026", trimestre "4º trimestre de 2026 (out–dez)", ano "2026". As setas andam um período e ficam desabilitadas nas pontas.
+   - "Personalizado" mostra os campos "Início" e "Término" (um lado vazio não limita).
+   - Trocar a escala mantém o lugar: abre o período da nova escala que contém o fim do período de antes, ou hoje.
+   - "Limpar filtros" volta o período para "Tudo".
+   - O período continua valendo para cartões, gráficos, quadro mês a mês, lista e PDF, pela "Data do apontamento", e continua fora da URL da tela.
+4. **Roscas:** "Por tipo", "Por consequência" e "Por probabilidade" ficam numa seção recolhida no fim da página, **"Gráficos por tipo, consequência e probabilidade"** (logo acima da seção do quadro mês a mês), aberta pelo clique no título. Clicar num item da legenda continua ligando e desligando aquele filtro na lista.
+5. **PDF:** a opção "Cada <grupo> começa em folha nova" vem **desmarcada**. Os grupos (por exemplo, cada pavimento ao agrupar por local) ficam separados pela faixa azul do título, mas seguem um depois do outro na mesma folha, para poupar papel. Marcada, volta a um grupo por folha. Na URL de impressão, `quebra=1` liga as quebras; sem ele, não há quebra. Antes, a quebra vinha ligada e `quebra=0` desligava.
+6. **Ordem da página:** cabeçalho → barra do período → cartões → "Apontamentos" (situação, busca, filtros e lista) → "Gráficos…" recolhido → "Apontamentos por tipo, mês a mês" recolhido.
+7. **Finalizar no computador, como no aplicativo de campo:**
+   - O "Finalizar" de cada linha aberta ficou **verde**, como no aplicativo, e a coluna "Ações" ficou **presa na borda direita** da tabela, visível sem rolar de lado. A tabela tem 1.400 px de largura, e o botão ficava fora da tela.
+   - A janela do apontamento (aberta pelo clique na linha) ganhou, no rodapé, o botão verde **"Finalizar apontamento"** nos abertos, só para TST e admin. Ele abre a mesma janela "Finalizar" (foto da correção, data da correção e "Como foi corrigido", opcional). "Reabrir" e "✕" continuam na linha.
+
+### Decisões
+
+- **Cartão de risco de morte (é uma interpretação):** o pedido dizia "Incluir dias para risco de morte e tirar os finalizados". Foi lido assim: um cartão com quantos apontamentos de "Morte" estão em aberto e, embaixo, os dias do mais antigo (ou, sem aberto, a média de dias dos finalizados com "Morte"); e o cartão "Finalizados" sai. Se a equipe quis dizer outra coisa (por exemplo, os dias médios de todos os de "Morte", ou uma coluna na lista), o usuário pode ajustar.
+- **"Tudo" como padrão:** com um mês já escolhido ao abrir, um aberto de meses atrás sumiria da lista, que é o que os TSTs mais usam.
+- **Períodos do calendário em vez das semanas inteiras da aba 0:** a lista, o quadro mês a mês e o PDF contam pela data de calendário do apontamento, então "outubro de 2026" tem de ser de 01/10 a 31/10. O Dashboard geral continua em semanas inteiras (ver "Na comparação entre obras").
+- **Lista logo abaixo dos cartões**, e gráficos e quadro recolhidos no fim: a lista de abertos é a ferramenta do dia a dia; os gráficos e o comparativo são consulta.
+- **As seções recolhidas abrem sempre fechadas** (não ficam lembradas no navegador), e o conteúdo só é montado quando abertas.
+- **PDF sem quebra por padrão**, para poupar papel; a faixa azul do título continua separando os grupos.
+- **"Finalizar" nos dois lugares:** na linha (verde, na coluna presa à direita) e no rodapé da janela do apontamento. "Reabrir" e "✕" ficam só na linha.
+- O período continua **fora da URL** da tela e não existe no modo de campo, como antes.
+
+### Arquivos
+
+| O quê | Arquivo |
+| --- | --- |
+| Escalas e períodos do calendário (puros): chaves, rótulos, lista com o atual, setas e troca de escala | `src/modules/seguranca/period.ts` (novo), com testes em `tests/safety-period.test.ts` (novo) |
+| `scale` em `SafetyFilters` e `summarizeDeathRisk` (o cartão novo) | `src/modules/seguranca/safety-view.ts` |
+| Ordem da página, cartões, seletor de período, seções recolhidas e coluna "Ações" presa à direita | `src/modules/seguranca/safety-overview.tsx` |
+| "Finalizar apontamento" no rodapé da janela | `src/modules/seguranca/item-dialog.tsx` |
+| Quebra de folha desligada por padrão e `quebra=1` | `src/modules/seguranca/print-dialog.tsx` e `print-options.ts`, com testes em `tests/safety-print-options.test.ts` |
+| Tour na ordem nova | `src/modules/tour/pages/seguranca.ts` |
+| Manual da Claudia | `src/modules/agente/manual/seguranca.ts` |
+
+### Validação
+
+- Validação: testes unitários e CI pela sequência do ci.yml; conferência visual em navegador simulado.
+- O manual da Claudia passa em `tests/agent-manual.test.ts` (índice com cerca de 13,9 mil caracteres, dentro do teto de 14 mil) e o tour em `tests/tour-targets.test.ts`.
+
+### Pendências
+
+- Pendências: uso real logado pelos TSTs.
+- Confirmar com a equipe de SST a leitura do cartão "Risco de morte em aberto" (ver Decisões).
 
 ## Importação da planilha
 
@@ -201,7 +261,7 @@ O usuário autorizou ("faça tudo você e deixe commitado e gitpushado"). A 0040
 
 ## Manual da Claudia
 
-`src/modules/agente/manual/seguranca.ts`, com 8 seções da tela `seguranca` (visão geral e quem pode o quê, lançar e editar, finalizar/reabrir/excluir, indicadores e filtros, tipos e lote, PDF, modo de campo e perguntas frequentes), registradas em `index.ts` com o rótulo "Aba 6 · Segurança do trabalho". O índice ficou com cerca de 13.700 caracteres, dentro do teto de 14.000. Também foram atualizados: a coluna TST em `acesso-configuracoes.ts` (grade de usuários e navegação com 6 abas) e a visão geral em `geral.ts` (seis abas e a aba 6 aberta para consulta).
+`src/modules/agente/manual/seguranca.ts`, com 8 seções da tela `seguranca` (visão geral e quem pode o quê, lançar e editar, finalizar/reabrir/excluir, indicadores e filtros, tipos e lote, PDF, modo de campo e perguntas frequentes), registradas em `index.ts` com o rótulo "Aba 6 · Segurança do trabalho". O índice ficou com cerca de 13.700 caracteres, dentro do teto de 14.000. Em 10/11/2026 o manual foi revisto com os ajustes da equipe de SST: a ordem da tela (seção nova na visão geral), o período com escala e setas, os cartões com "Risco de morte em aberto", os gráficos e o quadro mês a mês recolhidos, o PDF sem folha nova por padrão, o "Finalizar" verde na coluna presa e na janela do apontamento, e duas perguntas frequentes ("Cadê o cartão Finalizados…" e "Não acho o botão Finalizar"); o índice passou a cerca de 13.850 caracteres. Na mesma revisão saiu do manual do modo de campo a frase de que o campo não reserva vaga para a foto da correção: ele reserva desde 05/11/2026 (ver "Vaga para a correção"). Também foram atualizados: a coluna TST em `acesso-configuracoes.ts` (grade de usuários e navegação com 6 abas) e a visão geral em `geral.ts` (seis abas e a aba 6 aberta para consulta).
 
 Divergências achadas ao escrever o manual, deixadas como estão de propósito:
 
@@ -221,4 +281,5 @@ Divergências achadas ao escrever o manual, deixadas como estão de propósito:
 - **Achados no navegador, não corrigidos:** no modo de campo, com alterações na fila, a faixa amarela aumenta o cabeçalho e a barra de situação fica meio escondida embaixo dele ao rolar (o modo de campo da aba 5 tem o mesmo código); no diálogo, a mensagem "Escolha o tipo de apontamento." continua na tela depois de escolher o tipo, até salvar de novo (como na aba 5); na edição em lote, "Aplicar" desabilitado com "Trocar por…" e local vazio não diz por quê; campos só de leitura não têm aparência de desabilitados.
 - **Herdado da aba 5:** arquivo de envio abandonado vira órfão no bucket; sem trava de edição simultânea (vale a última gravação).
 - **Dashboard:** o quadro da aba 6 no **Dashboard geral** foi implementado em 06/11/2026 (ver "Na comparação entre obras: Dashboard geral (06/11/2026)", acima, e [Dashboard](dashboard.md#segurança-do-trabalho-no-dashboard-geral-06112026)). A **aba 0** de cada obra continua **sem** o quadro de segurança: é a próxima etapa, se o usuário pedir (regra 2 do modelo de 06/11/2026).
-- **Período, não testado logado:** a barra do período foi conferida por testes, tipos e build, sem tela logada em produção. Atalhos de período ("este mês", "últimos 3 meses") e guardar o período escolhido ficaram de fora (não pedidos).
+- **Período, não testado logado:** o seletor de 10/11/2026 (escala e período, como na aba 0) foi conferido por testes e em navegador simulado, sem tela logada em produção. Guardar o período escolhido (no navegador ou na URL) e atalhos como "últimos 3 meses" ficaram de fora (não pedidos).
+- **Ajustes de 10/11/2026:** falta o uso real logado pelos TSTs e confirmar com a equipe de SST a leitura do cartão "Risco de morte em aberto" (ver "10/11/2026 — Ajustes pedidos pela equipe de SST").

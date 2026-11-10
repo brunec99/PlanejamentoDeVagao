@@ -4,9 +4,10 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  CalendarRange,
   Camera,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileDown,
   ListFilter,
   PencilLine,
@@ -30,7 +31,7 @@ import {
   type SafetyProbability,
 } from '@/domain/safety';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
-import { Callout, Empty, LoadState, Missing, Panel, StatCard } from '@/modules/planejamento/ui';
+import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejamento/ui';
 import { TabHeader } from '@/modules/layout/tab-header';
 import { HelpNote } from '@/modules/layout/help-note';
 import { useToast } from '@/modules/layout/toast';
@@ -58,7 +59,6 @@ import {
   donutSlices,
   filterItems,
   hasActiveFilters,
-  hasPeriod,
   indexSafety,
   isDay,
   isSortColumn,
@@ -67,13 +67,13 @@ import {
   monthWindow,
   monthlyByType,
   nextSort,
-  percentLabel,
   periodInverted,
   periodLabel,
   photosOf,
   photosOfKind,
   sortItems,
   summarize,
+  summarizeDeathRisk,
   typeName,
   type DonutField,
   type DonutSlice,
@@ -84,11 +84,26 @@ import {
   type SafetySort,
   type SafetySortColumn,
 } from './safety-view';
+import {
+  SAFETY_SCALES,
+  currentKey,
+  fixedPeriod,
+  isFixedScale,
+  periodChoices,
+  stepPeriod,
+  switchScale,
+  type SafetyPeriodPatch,
+} from './period';
 
 /** Aba 6, Segurança do trabalho (05/11/2026): a planilha "SST - Controle geral" dentro do sistema, no
  * desenho da terminalidade (aba 5) — cartões, roscas, quadro mês a mês por tipo, filtros e a lista com
  * classificação por coluna. Só o TST e o admin gravam (`canEdit`, decidido pelo servidor); os demais
- * consultam. */
+ * consultam.
+ *
+ * Ajustes da equipe de SST (10/11/2026, documento "Ajustes portal de apontamentos"): período com escala e
+ * setas, como no Dashboard da obra; cartão "Risco de morte em aberto" no lugar de "Finalizados"; a lista
+ * logo abaixo dos cartões (é o que os TSTs mais usam); roscas e quadro mês a mês recolhidos no fim da
+ * página; "Finalizar" verde e sempre à vista na borda direita da tabela, e também no diálogo do apontamento. */
 
 type DialogState =
   { kind: 'new' } | { kind: 'edit'; itemId: string } | { kind: 'resolve'; itemId: string } | { kind: 'bulk' } | { kind: 'types' };
@@ -100,6 +115,12 @@ const SITUATIONS: { value: SafetySituation; label: string }[] = [
   { value: 'all', label: 'Todos' },
 ];
 const stop = (event: MouseEvent) => event.stopPropagation();
+/** "Finalizar" verde, como no modo de campo (pedido da equipe de SST, 10/11/2026). */
+const RESOLVE_BUTTON =
+  'inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-50';
+/** A coluna de ações fica presa na borda direita da tabela (1.400 px): sem isso, "Finalizar" ficava fora da
+ * tela em notebook e só aparecia rolando a tabela para o lado. A sombra marca a borda do que rola por baixo. */
+const STICKY_ACTIONS = 'sticky right-0 z-10 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]';
 const SORT_LABEL = Object.fromEntries(SORT_COLUMNS.map(c => [c.value, c.label])) as Record<SafetySortColumn, string>;
 const DIR_LABEL = { asc: 'crescente', desc: 'decrescente' } as const;
 /** O que as roscas contam, no singular e no plural (o anel da aba 5 conta pendências por padrão). */
@@ -278,7 +299,11 @@ export function SafetyOverview({ workId }: { workId: string }) {
   const selectable = canEdit;
   const overBulkLimit = selection.length > SAFETY_LIMITS.maxBulkItems;
   // Os cartões contam a seleção dos filtros em todas as situações: abertos + finalizados = total.
-  const scope = summarize(filterItems(data.items, filters, index, ['situation']), today);
+  const inScope = filterItems(data.items, filters, index, ['situation']);
+  const scope = summarize(inScope, today);
+  const death = summarizeDeathRisk(inScope, today);
+  // O apontamento mais antigo da obra: a lista do seletor de período começa nele.
+  const since = data.items.reduce((first, item) => (!first || item.observedOn < first ? item.observedOn : first), '');
   const narrowed = hasActiveFilters({ ...filters, situation: DEFAULT_FILTERS.situation });
   // Roscas: seguem a situação e os demais filtros, mas cada uma ignora o próprio, para continuar
   // mostrando as alternativas; clicar na legenda liga ou desliga aquele valor no filtro.
@@ -441,17 +466,11 @@ export function SafetyOverview({ workId }: { workId: string }) {
         </div>
       )}
 
-      {data.items.length > 0 && <PeriodBar from={filters.from} to={filters.to} onChange={period => patch(period)} />}
+      {data.items.length > 0 && <PeriodBar filters={filters} since={since || undefined} today={today} onChange={period => patch(period)} />}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="safety-cards">
         <StatCard label="Total" value={scope.total} hint={narrowed ? 'na seleção dos filtros' : 'apontamentos da obra'} />
         <StatCard label="Abertos" value={scope.open} tone={scope.open > 0 ? 'warning' : 'default'} />
-        <StatCard
-          label="Finalizados"
-          value={scope.resolved}
-          tone={scope.resolved > 0 ? 'success' : 'default'}
-          hint={scope.total ? `${percentLabel(scope)} do total` : 'sem apontamentos'}
-        />
         <StatCard
           label="Média de dias para resolver"
           value={daysLabel(scope.avgDaysToResolve)}
@@ -463,49 +482,14 @@ export function SafetyOverview({ workId }: { workId: string }) {
           tone={scope.openOverDays > 0 ? 'danger' : 'default'}
           hint="contados até hoje"
         />
+        {/* No lugar de "Finalizados" (o número segue no botão de situação da lista): o risco que não pode esperar. */}
+        <StatCard
+          label="Risco de morte em aberto"
+          value={death.open}
+          tone={death.open > 0 ? 'danger' : 'default'}
+          hint={deathHint(death)}
+        />
       </div>
-
-      {donuts.some(donut => donut.total > 0) && (
-        // `grid-cols-1` (minmax(0, 1fr)) e não a coluna implícita: sem ela, a legenda em uma linha (nomes de tipo
-        // longos) alargava a coluna além da tela no celular e criava rolagem lateral.
-        <div
-          className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3"
-          aria-label="Apontamentos por tipo, consequência e probabilidade"
-          data-tour="safety-donuts"
-        >
-          {donuts.map(donut => (
-            <DonutPanel
-              key={donut.field}
-              title={donut.title}
-              plural={donut.plural}
-              total={donut.total}
-              slices={donut.slices}
-              selected={slice => donutSelected(donut.field, slice)}
-              onPick={slice => pickSlice(donut.field, slice)}
-            />
-          ))}
-        </div>
-      )}
-      {/* As roscas seguem a situação da lista: num período antigo, em "Abertos", elas sumiriam sem explicação. */}
-      {!donuts.some(donut => donut.total > 0) && filters.situation !== 'all' && scope.total > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          <span>
-            Os gráficos seguem a situação da lista: nenhum apontamento {filters.situation === 'open' ? 'aberto' : 'finalizado'}
-            {narrowed ? ' nesta seleção' : ''}.
-          </span>
-          <button type="button" className="button-ghost px-2.5 py-1 text-xs" onClick={() => patch({ situation: 'all' })}>
-            Ver todos os {scope.total}
-          </button>
-        </div>
-      )}
-
-      {data.items.length > 0 && (
-        <div className="mt-4">
-          <Panel title="Apontamentos por tipo, mês a mês" tourId="safety-monthly">
-            <MonthlyTable monthly={monthly} range={monthRange} period={periodLabel(filters)} narrowed={narrowed} />
-          </Panel>
-        </div>
-      )}
 
       <section className="mt-6" aria-labelledby="apontamentos-title">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
@@ -712,8 +696,8 @@ export function SafetyOverview({ workId }: { workId: string }) {
                   <SortHeader column="days" sort={sort} onSort={sortBy} className="w-24" />
                   <SortHeader column="situation" sort={sort} onSort={sortBy} className="w-24" center />
                   {canEdit && (
-                    <th scope="col" className="w-36 px-2 py-2">
-                      <span className="sr-only">Ações</span>
+                    <th scope="col" className={`w-32 bg-slate-50 px-2 py-2 text-right ${STICKY_ACTIONS}`}>
+                      Ações
                     </th>
                   )}
                 </tr>
@@ -724,7 +708,10 @@ export function SafetyOverview({ workId }: { workId: string }) {
                   const correctionPhotos = photosOfKind(index, item.id, 'correction');
                   const label = itemLabel(item);
                   const kind = typeName(index, item);
-                  const rowClass = `cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : selection.includes(item.id) ? 'bg-primary-soft/40' : 'hover:bg-slate-50/60'}`;
+                  const rowClass = `group cursor-pointer border-t border-slate-100 align-middle ${busy === item.id ? 'bg-amber-50/60' : selection.includes(item.id) ? 'bg-primary-soft/40' : 'hover:bg-slate-50/60'}`;
+                  // A célula presa à direita precisa de fundo opaco (o resto da linha passa por baixo dela).
+                  const stickyBg =
+                    busy === item.id ? 'bg-amber-50' : selection.includes(item.id) ? 'bg-primary-soft' : 'bg-white group-hover:bg-slate-50';
                   return (
                     <tr key={item.id} onClick={() => openItem(item)} className={rowClass}>
                       {selectable && (
@@ -787,12 +774,12 @@ export function SafetyOverview({ workId }: { workId: string }) {
                         {item.resolutionNote && <span className="sr-only">. Como foi corrigido: {item.resolutionNote}</span>}
                       </td>
                       {canEdit && (
-                        <td className="px-2 py-1" onClick={stop}>
+                        <td className={`${stickyBg} px-2 py-1 ${STICKY_ACTIONS}`} onClick={stop}>
                           <RowActions tourId="safety-row-actions" on={rowIndex === 0}>
                             {item.status === 'open' ? (
                               <button
                                 type="button"
-                                className="button-secondary px-2 py-1 text-xs"
+                                className={`${RESOLVE_BUTTON} px-2.5 py-1 text-xs`}
                                 disabled={!!busy}
                                 aria-haspopup="dialog"
                                 aria-label={`Finalizar o apontamento ${label}`}
@@ -947,7 +934,7 @@ export function SafetyOverview({ workId }: { workId: string }) {
                     {canEdit && !resolved && (
                       <button
                         type="button"
-                        className="button flex-1"
+                        className={`${RESOLVE_BUTTON} min-h-10 flex-1 px-3 text-sm`}
                         disabled={!!busy}
                         aria-haspopup="dialog"
                         aria-label={`Finalizar o apontamento ${label}`}
@@ -986,6 +973,53 @@ export function SafetyOverview({ workId }: { workId: string }) {
         </div>
       </section>
 
+      {/* Pedido da equipe de SST (10/11/2026): os gráficos e o quadro mês a mês ficam no fim da página, recolhidos,
+          para a lista de abertos vir logo abaixo dos cartões; um clique no título abre. */}
+      {data.items.length > 0 && (
+        <div className="mt-6 space-y-3">
+          <Collapsible id="seguranca-graficos" title="Gráficos por tipo, consequência e probabilidade" tourId="safety-donuts">
+            {donuts.some(donut => donut.total > 0) ? (
+              <>
+                <p className="mb-3 text-xs text-slate-500">
+                  Seguem a situação e os filtros da lista. Clicar num item da legenda liga ou desliga aquele valor no filtro da lista.
+                </p>
+                {/* `grid-cols-1` (minmax(0, 1fr)) e não a coluna implícita: sem ela, a legenda em uma linha (nomes de tipo
+                    longos) alargava a coluna além da tela no celular e criava rolagem lateral. */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3" aria-label="Apontamentos por tipo, consequência e probabilidade">
+                  {donuts.map(donut => (
+                    <DonutPanel
+                      key={donut.field}
+                      title={donut.title}
+                      plural={donut.plural}
+                      total={donut.total}
+                      slices={donut.slices}
+                      selected={slice => donutSelected(donut.field, slice)}
+                      onPick={slice => pickSlice(donut.field, slice)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : filters.situation !== 'all' && scope.total > 0 ? (
+              // Os gráficos seguem a situação da lista: num período antigo, em "Abertos", sairiam vazios sem explicação.
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-600">
+                <span>
+                  Os gráficos seguem a situação da lista: nenhum apontamento {filters.situation === 'open' ? 'aberto' : 'finalizado'}
+                  {narrowed ? ' nesta seleção' : ''}.
+                </span>
+                <button type="button" className="button-ghost px-2.5 py-1 text-xs" onClick={() => patch({ situation: 'all' })}>
+                  Ver todos os {scope.total}
+                </button>
+              </div>
+            ) : (
+              <Empty>Nenhum apontamento nesta seleção.</Empty>
+            )}
+          </Collapsible>
+          <Collapsible id="seguranca-mes-a-mes" title="Apontamentos por tipo, mês a mês" tourId="safety-monthly">
+            <MonthlyTable monthly={monthly} range={monthRange} period={periodLabel(filters)} narrowed={narrowed} />
+          </Collapsible>
+        </div>
+      )}
+
       {dialog?.kind === 'new' && canEdit && (
         <SafetyItemDialog
           workId={workId}
@@ -1007,6 +1041,7 @@ export function SafetyOverview({ workId }: { workId: string }) {
           locationSuggestions={suggestions}
           execute={guardedExecute}
           onClose={closeDialog}
+          onResolve={canEdit ? () => setDialog({ kind: 'resolve', itemId: editing.id }) : undefined}
         />
       )}
       {dialog?.kind === 'resolve' && editing && canEdit && (
@@ -1440,61 +1475,180 @@ function MonthlyLine({ row, compare, total = false }: { row: MonthlyRow; compare
   );
 }
 
-/** Filtro de período do painel (06/11/2026): início e término pela "Data do apontamento", os dois dias
- * inclusive. Vale para os cartões, as roscas, o quadro mês a mês, a lista e o PDF. Um lado vazio não limita. */
-function PeriodBar({ from, to, onChange }: { from: string; to: string; onChange: (period: { from?: string; to?: string }) => void }) {
-  const inverted = periodInverted({ from, to });
+/** Texto do cartão "Risco de morte em aberto": há quantos dias espera o mais antigo; sem nenhum aberto, quanto
+ * os finalizados levaram, em média. */
+function deathHint(death: ReturnType<typeof summarizeDeathRisk>) {
+  if (death.oldestOpenDays !== null) {
+    const age = death.oldestOpenDays === 0 ? 'aberto hoje' : `aberto há ${plural(death.oldestOpenDays, 'dia', 'dias')}`;
+    return death.open === 1 ? age : `o mais antigo ${age}`;
+  }
+  if (death.avgDaysToResolve !== null)
+    return `nenhum aberto · ${daysLabel(death.avgDaysToResolve)} ${death.avgDaysToResolve === 1 ? 'dia' : 'dias'} para resolver, em média`;
+  return 'nenhum na seleção';
+}
+
+/** Seção recolhida no fim da página (10/11/2026): o título é o botão que abre e fecha. Abre sempre fechada;
+ * o conteúdo só é montado aberto. A marca do tour fica na seção, que aparece mesmo recolhida. */
+function Collapsible({ id, title, tourId, children }: { id: string; title: string; tourId: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section data-tour={tourId} className="panel" aria-labelledby={`${id}-titulo`}>
+      <h2 id={`${id}-titulo`} className="text-sm font-bold text-primary-ink">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen(current => !current)}
+          className={`flex w-full items-center gap-2 bg-gradient-to-r from-brand-50/80 to-transparent px-5 py-3.5 text-left transition-colors hover:from-brand-100/80 ${open ? 'rounded-t-2xl border-b border-slate-100' : 'rounded-2xl'}`}
+        >
+          <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-gradient-to-b from-brand-400 to-brand-700" />
+          <span className="min-w-0 flex-1">{title}</span>
+          <span className="shrink-0 text-xs font-semibold text-primary">{open ? 'Recolher' : 'Mostrar'}</span>
+          <ChevronDown size={16} aria-hidden className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </h2>
+      {open && (
+        <div id={id} className="p-5">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const ARROW =
+  'grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40';
+
+/** Período pela "Data do apontamento", no desenho do seletor do Dashboard da obra (pedido da equipe de SST,
+ * 10/11/2026): os botões de escala e, ao lado, a lista com setas ‹ ›; no personalizado, início e término (os
+ * dois dias entram; um lado vazio não limita). "Tudo", o padrão, não limita a data. As regras de cada escala
+ * estão em `./period`. Vale para os cartões, os gráficos, o quadro mês a mês, a lista e o PDF. */
+function PeriodBar({
+  filters,
+  since,
+  today,
+  onChange,
+}: {
+  filters: Pick<SafetyFilters, 'scale' | 'from' | 'to'>;
+  /** Data do apontamento mais antigo da obra: o começo da lista de períodos. */
+  since?: string;
+  today: string;
+  onChange: (period: Partial<SafetyPeriodPatch>) => void;
+}) {
+  const { scale, from, to } = filters;
+  const inverted = scale === 'personalizado' && periodInverted({ from, to });
   // O campo de data devolve "" enquanto a data está incompleta; ano com mais de 4 dígitos não entra.
   const pick = (side: 'from' | 'to', value: string) => {
     if (value === '' || isDay(value)) onChange({ [side]: value });
   };
-  return (
-    <div
-      role="group"
-      aria-labelledby="seguranca-periodo"
-      data-tour="safety-period"
-      className="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
-    >
-      <div className="mr-1 basis-full self-center sm:basis-auto">
-        <p id="seguranca-periodo" className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-          <CalendarRange size={16} aria-hidden className="text-slate-500" />
+
+  let period: ReactNode;
+  if (isFixedScale(scale)) {
+    const key = currentKey(scale, from, today);
+    const back = stepPeriod(scale, key, -1, since, today);
+    const forward = stepPeriod(scale, key, 1, since, today);
+    period = (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <button type="button" className={ARROW} aria-label="Período anterior" disabled={!back} onClick={() => back && onChange(back)}>
+          <ChevronLeft size={15} aria-hidden />
+        </button>
+        <label className="sr-only" htmlFor="seguranca-periodo-lista">
           Período
-        </p>
-        <p className="text-xs text-slate-500">pela data do apontamento</p>
-      </div>
-      <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600 sm:flex-none">
-        Início
+        </label>
+        <select
+          id="seguranca-periodo-lista"
+          className="field min-w-0 max-w-72 py-1.5"
+          value={key}
+          onChange={e => onChange(fixedPeriod(scale, e.target.value))}
+        >
+          {periodChoices(scale, since, today).map(option => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+              {option.current ? ' (atual)' : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={ARROW}
+          aria-label="Próximo período"
+          disabled={!forward}
+          onClick={() => forward && onChange(forward)}
+        >
+          <ChevronRight size={15} aria-hidden />
+        </button>
+      </span>
+    );
+  } else if (scale === 'personalizado') {
+    period = (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <label className="sr-only" htmlFor="seguranca-periodo-inicio">
+          Início
+        </label>
         <input
+          id="seguranca-periodo-inicio"
           type="date"
-          className="field w-full py-1.5 sm:w-40"
+          className="field w-auto py-1.5"
           value={from}
           max={to || undefined}
           aria-invalid={inverted || undefined}
           onChange={e => pick('from', e.target.value)}
         />
-      </label>
-      <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600 sm:flex-none">
-        Término
+        <span className="font-medium text-slate-500">até</span>
+        <label className="sr-only" htmlFor="seguranca-periodo-termino">
+          Término
+        </label>
         <input
+          id="seguranca-periodo-termino"
           type="date"
-          className="field w-full py-1.5 sm:w-40"
+          className="field w-auto py-1.5"
           value={to}
           min={from || undefined}
           aria-invalid={inverted || undefined}
           onChange={e => pick('to', e.target.value)}
         />
-      </label>
-      {hasPeriod({ from, to }) ? (
-        <button
-          type="button"
-          className="text-link self-center text-left text-xs max-sm:basis-full"
-          onClick={() => onChange({ from: '', to: '' })}
+        {!from && !to && <span className="font-normal text-slate-500">Escolha o início e o término.</span>}
+      </span>
+    );
+  } else {
+    period = <span className="font-normal text-slate-500">todos os apontamentos da obra, de qualquer data</span>;
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label="Período, pela data do apontamento"
+      data-tour="safety-period"
+      className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600"
+    >
+      <span className="flex flex-wrap items-center gap-2">
+        Escala
+        <span
+          role="group"
+          aria-label="Escala do período"
+          className="inline-flex flex-wrap gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5 shadow-sm"
         >
-          Limpar período
-        </button>
-      ) : (
-        <span className="self-center text-xs text-slate-500 max-sm:basis-full">Sem período: todos os apontamentos da obra.</span>
-      )}
+          {SAFETY_SCALES.map(option => {
+            const on = scale === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => !on && onChange(switchScale({ from, to }, option.id, since, today))}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${on ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </span>
+      </span>
+      <span className="flex min-w-0 flex-wrap items-center gap-2">
+        Período
+        {period}
+      </span>
+      <span className="text-[11px] font-normal text-slate-500">pela data do apontamento</span>
       {inverted && (
         <p role="alert" className="basis-full text-xs font-semibold text-danger">
           O início está depois do término: nenhum apontamento cabe nesse período.

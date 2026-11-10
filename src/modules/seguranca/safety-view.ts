@@ -13,6 +13,7 @@ import {
 import { formatDate } from '@/shared/format';
 import { compareText, textKey } from '@/modules/curto-prazo/sheet-view';
 import type { DonutSlice } from '@/modules/terminalidade/terminality-view';
+import type { SafetyScale } from './period';
 
 export type { DonutSlice };
 
@@ -41,6 +42,10 @@ export interface SafetyFilters {
    * Vazio = sem limite daquele lado. Vale para os cartões, as roscas, o quadro mês a mês, a lista e o PDF. */
   from: string;
   to: string;
+  /** Escala do seletor de período (10/11/2026, o da aba 0): "tudo" (sem datas, o padrão), uma escala do
+   * calendário (semana, mês, trimestre, ano, cujo período vira `from`/`to`) ou "personalizado". Só a tela
+   * usa: o filtro em si são `from` e `to`. */
+  scale: SafetyScale;
 }
 /** Abertos é o padrão: a lista existe para ser zerada, e o finalizado é consulta. */
 export const DEFAULT_FILTERS: SafetyFilters = {
@@ -52,6 +57,7 @@ export const DEFAULT_FILTERS: SafetyFilters = {
   search: '',
   from: '',
   to: '',
+  scale: 'tudo',
 };
 
 export const hasActiveFilters = (filters: SafetyFilters) =>
@@ -392,6 +398,30 @@ export function summarize(items: SafetyItem[], today: string): SafetySummary {
     avgDaysToResolve: resolvedCount ? resolvedDays / resolvedCount : null,
     openOverDays,
   };
+}
+
+/** A consequência mais grave da escala: o cartão "Risco de morte em aberto" (10/11/2026) cobra estes. */
+export const DEATH_CONSEQUENCE: SafetyConsequence = 'Morte';
+
+export interface DeathRiskSummary {
+  /** Abertos com risco de morte. */
+  open: number;
+  /** Há quantos dias está aberto o mais antigo deles (0 = aberto hoje); `null` sem nenhum aberto. */
+  oldestOpenDays: number | null;
+  /** Finalizados com risco de morte e a média de dias que levaram para ser finalizados (`null` sem nenhum). */
+  resolved: number;
+  avgDaysToResolve: number | null;
+}
+
+/** O cartão "Risco de morte em aberto" (pedido da equipe de SST, "incluir dias para risco de morte"):
+ * quantos apontamentos de consequência "Morte" estão abertos e há quantos dias o mais antigo espera; sem
+ * nenhum aberto, quanto tempo os finalizados levaram, em média. */
+export function summarizeDeathRisk(items: SafetyItem[], today: string): DeathRiskSummary {
+  const death = items.filter(item => item.consequence === DEATH_CONSEQUENCE);
+  const { open, resolved, avgDaysToResolve } = summarize(death, today);
+  let oldestOpenDays: number | null = null;
+  for (const item of death) if (item.status === 'open') oldestOpenDays = Math.max(oldestOpenDays ?? 0, safetyDays(item, today));
+  return { open, oldestOpenDays, resolved, avgDaysToResolve };
 }
 
 /** Percentual para exibir: inteiro, mas sem arredondar 99,6% para 100% enquanto houver apontamento aberto. */

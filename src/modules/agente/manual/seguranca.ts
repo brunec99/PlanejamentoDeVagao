@@ -3,7 +3,9 @@ import type { ManualSection } from './types';
 /** Manual da aba 6, Segurança do trabalho (05/11/2026): a vistoria dos técnicos de segurança (TST), no
  * processo da terminalidade (foto do apontamento, finalização com a foto da correção), com a lista única de
  * tipos, a edição em lote, o PDF e o modo de campo. Escrito a partir do código das telas, dos comandos e do
- * tour; descreve só o que está implementado. */
+ * tour; descreve só o que está implementado. Revisto em 10/11/2026 com os ajustes da equipe de SST: ordem da
+ * tela, cartão "Risco de morte em aberto" no lugar de "Finalizados", escala e período como na aba 0,
+ * gráficos e quadro mês a mês recolhidos no fim, PDF sem folha nova por padrão e "Finalizar" verde. */
 export const sections: ManualSection[] = [
   {
     id: 'seguranca-visao-geral',
@@ -22,6 +24,7 @@ export const sections: ManualSection[] = [
       'histórico importado',
       'dias para resolver',
       'colunas da vistoria',
+      'ordem da tela',
     ],
     screen: 'seguranca',
     body: `## O que é a aba 6, Segurança do trabalho
@@ -29,6 +32,21 @@ export const sections: ManualSection[] = [
 É a vistoria de segurança da obra feita pelos técnicos de segurança do trabalho (TST), no formato da planilha "SST - Controle geral" usada antes. Cada linha é um apontamento: um risco encontrado na vistoria, com tipo, risco (consequência e probabilidade), descrição, local, data e foto. O processo é o da aba 5, Terminalidade: o apontamento fica aberto até ser finalizado com a foto da correção e a data em que foi corrigido.
 
 A aba fica logo abaixo da Terminalidade na lateral e é aberta a todos que têm a obra liberada. O botão "?" ("Como funciona") do cabeçalho explica a tela, e "Como usar a lista", ao lado do título "Apontamentos", resume a ordem, a classificação, os filtros e os cliques.
+
+## Como a tela está organizada (desde 10/11/2026)
+
+De cima para baixo:
+
+1. Cabeçalho: "Novo apontamento" e "Tipos de apontamento" (só TST e admin), "Usar no celular, sem sinal" e "Gerar PDF".
+2. A barra do período: "Escala" (Tudo, Semanal, Mensal, Trimestral, Anual, Personalizado) e "Período". Abre em "Tudo", a obra inteira.
+3. Os cartões dos indicadores: "Total", "Abertos", "Média de dias para resolver", "Abertos há mais de 7 dias" e "Risco de morte em aberto".
+4. "Apontamentos": a situação (Abertos, Finalizados, Todos), a busca, os filtros e a lista. Fica logo abaixo dos cartões porque é o que os TSTs mais usam.
+5. "Gráficos por tipo, consequência e probabilidade", recolhido: clique no título para abrir ou fechar.
+6. "Apontamentos por tipo, mês a mês", recolhido também, no fim da página.
+
+As duas seções recolhidas voltam fechadas toda vez que a página abre.
+
+Esses ajustes vieram de um pedido da equipe de SST em 10/11/2026: antes, os cartões tinham "Finalizados", as roscas e o quadro mês a mês ficavam abertos acima da lista e o período era só um par de datas.
 
 ## Quem pode fazer o quê
 
@@ -50,7 +68,7 @@ A aba fica logo abaixo da Terminalidade na lateral e é aberta a todos que têm 
 - "Dias para resolver": no finalizado, os dias do apontamento até a correção; no aberto, "há N dias" (ou "aberto hoje"), contados até hoje, em vermelho depois de 7 dias.
 - "Situação": "Aberto" ou "Finalizado". Com o mouse sobre "Finalizado" aparece "Como foi corrigido", quando informado.
 
-Para o TST, no fim da linha ficam "Finalizar" (aberto) ou "Reabrir" (finalizado) e o "✕" de excluir. Clicar na linha abre o apontamento. No celular, cada apontamento vira um cartão com tipo, risco, descrição, local, data e os botões "Finalizar" ou "Reabrir" e "Editar" (ou "Ver").
+Para o TST e o admin, a última coluna, "Ações", fica presa na borda direita da tabela (visível sem rolar de lado, mesmo com a tabela larga) e traz o botão verde "Finalizar" (aberto) ou "Reabrir" (finalizado) e o "✕" de excluir. Clicar na linha abre o apontamento. No celular, cada apontamento vira um cartão com tipo, risco, descrição, local, data e os botões "Finalizar" ou "Reabrir" e "Editar" (ou "Ver").
 
 ## Histórico importado da planilha
 
@@ -111,7 +129,7 @@ Clique na linha (ou em "Editar", no cartão do celular). A janela "Editar aponta
 - Dá para mudar tipo, consequência, probabilidade, descrição, local e data, juntar fotos do apontamento e excluir uma foto do apontamento pela lixeira da miniatura ("Excluir esta foto?"; não dá para desfazer).
 - "Sem tipo" só aparece no apontamento que já está sem tipo (histórico). Tipo desativado continua no apontamento que já o usa, marcado "(desativado)", mas não pode ser escolhido de novo.
 - Finalizado também se edita: a janela mostra "Como foi corrigido" e as "Fotos da correção", que não têm botão de excluir, e a data do apontamento não pode passar da correção ("O apontamento não pode ser depois da correção (dd/mm/aaaa).").
-- "Salvar alterações" só grava se algo mudou ("Apontamento atualizado."). No rodapé fica "Excluir apontamento".
+- "Salvar alterações" só grava se algo mudou ("Apontamento atualizado."). No rodapé fica "Excluir apontamento" e, no apontamento aberto, o botão verde "Finalizar apontamento", que abre a janela de finalizar (seção "Finalizar, reabrir e excluir").
 
 Quem não é TST abre a mesma janela com o título "Apontamento", tudo travado, só para ver os dados e ampliar as fotos.`,
   },
@@ -130,11 +148,18 @@ Quem não é TST abre a mesma janela com o título "Apontamento", tudo travado, 
       'apagar apontamento',
       'fechar apontamento',
       'risco corrigido',
+      'botão finalizar',
+      'coluna ações',
     ],
     screen: 'seguranca',
     body: `## Finalizar: o risco foi corrigido
 
-Quem: só TST e admin. Onde: "Finalizar", no fim da linha de um apontamento aberto (ou no cartão, no celular). Abre a janela "Finalizar apontamento", com a descrição, "Apontado: dd/mm/aaaa (há N dias)", o local, o risco (consequência · probabilidade) e as fotos em "Antes (fotos do apontamento)", para comparar ("O apontamento foi registrado sem foto." quando não há).
+Quem: só TST e admin. Onde, no computador, como no aplicativo de campo (desde 10/11/2026):
+
+- o botão verde "Finalizar" na coluna "Ações" da linha de um apontamento aberto; a coluna fica presa na borda direita da tabela, então o botão aparece sem rolar a tabela de lado;
+- ou o botão verde "Finalizar apontamento" no rodapé da janela do apontamento, aberta ao clicar na linha.
+
+No celular, "Finalizar" fica no cartão. Os dois caminhos abrem a mesma janela "Finalizar apontamento", com a descrição, "Apontado: dd/mm/aaaa (há N dias)", o local, o risco (consequência · probabilidade) e as fotos em "Antes (fotos do apontamento)", para comparar ("O apontamento foi registrado sem foto." quando não há).
 
 Preencha:
 
@@ -169,66 +194,63 @@ O "✕" no fim da linha ("Excluir apontamento") e o botão "Excluir apontamento"
   },
   {
     id: 'seguranca-indicadores-filtros',
-    title: 'Período, indicadores, roscas, quadro mês a mês, filtros e classificação da vistoria',
+    title: 'Período, indicadores, filtros, classificação, gráficos e quadro mês a mês da vistoria',
     summary:
-      'Período pela data do apontamento, cartões, roscas, quadro mês a mês por tipo, filtros de vários valores, busca e classificação.',
+      'Período (Tudo, semanal, mensal, trimestral, anual), cartões e risco de morte em aberto, filtros, busca, classificação, roscas e mês a mês.',
     keywords: [
       'período',
+      'escala',
+      'semanal',
+      'mensal',
+      'trimestral',
+      'anual',
+      'personalizado',
+      'tudo',
       'filtro de data',
-      'data de início',
-      'data de término',
       'filtrar por data',
+      'risco de morte em aberto',
+      'cartão finalizados',
       'média de dias para resolver',
       'abertos há mais de 7 dias',
+      'gráficos',
       'por consequência',
       'por probabilidade',
       'mês a mês',
       'quadro mensal',
       'diferença do mês',
-      'linha geral',
       'filtrar apontamentos',
       'buscar apontamento',
       'classificar apontamentos',
       'mostrar mais',
     ],
     screen: 'seguranca',
-    body: `## Período (data de início e de término)
+    body: `## Período: "Escala" e "Período" (desde 10/11/2026)
 
-A barra "Período", no topo do painel, logo acima dos cartões, filtra pela "Data do apontamento":
+A barra do período, no topo do painel, logo acima dos cartões, é o mesmo controle do "Dashboard da obra" (aba 0) e filtra pela "Data do apontamento":
 
-- "Início" e "Término" são campos de data; os dois dias entram no período. Um lado vazio não limita aquele lado (só o início = "a partir de"; só o término = "até").
-- O período vale para tudo da tela: os cartões, as roscas, o quadro mês a mês, a lista e o PDF (que diz "apontados de 01/10/2026 a 31/10/2026" na linha de filtros).
-- A data é a do apontamento, não a da correção: um apontamento de setembro corrigido em outubro fica fora do período de outubro.
-- "Limpar período" volta a mostrar a obra inteira; "Limpar filtros", abaixo da lista, também limpa o período.
-- Início depois do término avisa "O início está depois do término: nenhum apontamento cabe nesse período." e a tela fica zerada.
-- As roscas seguem a situação da lista: num período sem apontamento aberto, com a lista em "Abertos", aparece "Os gráficos seguem a situação da lista: nenhum apontamento aberto nesta seleção." e o botão "Ver todos os N", que passa a lista para "Todos".
-- O período não fica salvo: ao sair da aba ou recarregar a página, a tela volta sem período.
+- "Escala": "Tudo", "Semanal", "Mensal", "Trimestral", "Anual" ou "Personalizado".
+- "Tudo" é o padrão: a obra inteira, sem limite de data. Por isso a lista de abertos mostra os abertos de qualquer data enquanto ninguém escolhe um período.
+- "Período": a lista dos períodos da escala, do mais recente para o mais antigo, desde o período do apontamento mais antigo da obra até hoje; o de hoje aparece com "(atual)". As setas ‹ › andam um período de cada vez e ficam apagadas nas pontas.
+- Os períodos seguem o calendário: "Semanal" vai de segunda a domingo ("26/10 a 01/11/2026"); "Mensal" do dia 1º ao último dia do mês ("outubro de 2026" = 01/10 a 31/10); "Trimestral" é o trimestre do ano ("4º trimestre de 2026 (out–dez)"); "Anual" é o ano ("2026").
+- Diferença para a aba 0, de propósito: lá os períodos são de semanas inteiras (segunda a sábado, a semana contando no mês da sua segunda-feira) e não há "Tudo". Aqui a lista, o quadro mês a mês e o PDF contam pela data de calendário do apontamento, então "outubro de 2026" tem de ser de 01/10 a 31/10.
+- "Personalizado" mostra os campos "Início" e "Término"; os dois dias entram, e um lado vazio não limita aquele lado (só o início = "a partir de"; só o término = "até").
+- Trocar a escala mantém o lugar: abre o período da nova escala que contém o fim do período de antes (ou hoje).
+- O período vale para tudo da tela: os cartões, a lista, os gráficos, o quadro mês a mês e o PDF (que diz, por exemplo, "apontados de 01/10/2026 a 31/10/2026" na linha de filtros).
+- A data é a do apontamento, não a da correção: um apontamento de setembro corrigido em outubro fica fora de "outubro de 2026".
+- Para voltar à obra inteira, escolha "Tudo"; "Limpar filtros", acima da lista, também volta o período para "Tudo".
+- O período não fica salvo: ao sair da aba ou recarregar a página, a tela volta em "Tudo".
 
-## Cartões do topo
+## Cartões do topo ("Indicadores")
 
-Contam os apontamentos da seleção dos filtros nas duas situações, qualquer que seja a escolhida na lista (abertos + finalizados = total):
+Contam os apontamentos da seleção dos filtros e do período nas duas situações, qualquer que seja a escolhida na lista:
 
 - "Total": "apontamentos da obra" ou, com filtro, "na seleção dos filtros".
 - "Abertos".
-- "Finalizados", com o percentual do total; enquanto houver um aberto, nunca mostra 100% (fica em 99%).
 - "Média de dias para resolver": a média dos "Dias para resolver" dos finalizados, com uma casa decimal ("—" sem nenhum finalizado). Inclui o histórico importado.
 - "Abertos há mais de 7 dias": contados até hoje; fica em vermelho quando há algum.
+- "Risco de morte em aberto" (desde 10/11/2026): quantos apontamentos abertos têm "Risco: consequência" igual a "Morte". Fica em vermelho quando há algum, e a linha de baixo diz há quantos dias o mais antigo deles está aberto: "aberto há N dias" (ou "aberto hoje") com um só, "o mais antigo aberto há N dias" com mais de um. Sem nenhum aberto, a linha mostra a média de dias que os finalizados com "Morte" levaram para ser resolvidos ("nenhum aberto · N dias para resolver, em média") ou, sem nenhum com "Morte", "nenhum na seleção".
 
-## Roscas "Por tipo", "Por consequência" e "Por probabilidade"
-
-- Dividem os apontamentos que a lista mostra, com a situação e os filtros de agora. Cada rosca ignora o próprio filtro, para continuar mostrando as alternativas, com as escolhidas destacadas.
-- Mostram até seis fatias: acima disso, as cinco maiores e "Outros (N tipos)". O total fica no centro; a legenda traz cor, nome, quantidade e percentual.
-- Clique num item da legenda para ligar ou desligar aquele valor no filtro; dá para ligar vários. "Outros" só informa, não filtra.
-
-## Quadro "Apontamentos por tipo, mês a mês"
-
-É o comparativo da planilha: quantos apontamentos de cada tipo foram feitos em cada um dos últimos quatro meses (o atual e os três anteriores, como "ago/26"), pela data do apontamento, abertos e finalizados juntos. Segue os filtros, menos a situação.
-
-- A coluna "Diferença" compara o mês atual com o anterior: "+3 (+50%)", "−2 (−40%)", "0" ou "+4 (novo)" quando o mês anterior teve zero.
-- A linha "GERAL" soma todos os tipos.
-- O mês atual ainda está em andamento: no começo do mês a diferença tende a ser negativa.
-- Sem apontamento no período: "Nenhum apontamento nos últimos 4 meses."
-- Com um período escolhido, o quadro mostra os meses do período, do mês do início ao do término (término no futuro para no mês de hoje; só o término = os 4 meses até ele). Mês cortado pelo início ou pelo término conta só os dias de dentro do período. Passando de 12 meses, mostra os 12 últimos e avisa. Período dentro de um mês só mostra uma coluna, sem "Diferença".
+O cartão "Finalizados" saiu em 10/11/2026, a pedido da equipe de SST ("Incluir dias para risco de morte e tirar os finalizados"; o cartão novo foi a leitura desse pedido). A quantidade de finalizados continua no botão "Finalizados", acima da lista.
 
 ## Situação, busca e filtros
 
@@ -237,7 +259,7 @@ Contam os apontamentos da seleção dos filtros nas duas situações, qualquer q
 - Filtros "Tipo de apontamento", "Risco: consequência", "Risco: probabilidade" e "Local". Cada um abre uma lista de caixas de marcar com a contagem de cada opção e aceita vários valores (vale um OU outro); os filtros somam entre si. "Limpar este filtro" desmarca um; "(sem tipo)" e "(sem local)" trazem os apontamentos com o campo vazio; tipo desativado aparece com "(desativado)".
 - O filtro "Local" junta grafias parecidas: "2° Pavimento" e "2º pavimento" são o mesmo local, mostrado com a grafia mais usada na obra.
 - No celular, os filtros ficam no botão "Filtros (n)", em que n conta os filtros ativos e a busca.
-- Abaixo dos filtros: "Mostrando X de N apontamentos." Com filtro ativo aparece "Limpar filtros", que volta aos abertos sem filtro, mas não desfaz a classificação.
+- Abaixo dos filtros: "Mostrando X de N apontamentos." Com filtro ativo aparece "Limpar filtros", que volta aos abertos sem filtro e o período para "Tudo", mas não desfaz a classificação.
 - A lista desenha 100 apontamentos por vez: "Mostrando os 100 primeiros de X apontamentos desta seleção (N na obra)." e "Mostrar mais 100". A busca e os filtros encontram qualquer apontamento, mesmo os ainda não mostrados.
 - Lista vazia: "Nenhum apontamento com esses filtros." ou, quando tudo já foi corrigido, "Nenhum apontamento aberto: os N registrados estão finalizados."
 
@@ -247,7 +269,28 @@ Contam os apontamentos da seleção dos filtros nas duas situações, qualquer q
 - "Risco: consequência" e "Risco: probabilidade" seguem a escala da planilha: crescente começa em "Morte" e em "Provável". As colunas de foto classificam pela quantidade de fotos; "Dias para resolver", pelos dias (aberto conta até hoje); "Situação" crescente põe os abertos primeiro.
 - Ao lado da contagem: "Classificada por … (crescente)" e "Voltar à ordem padrão".
 - No celular, use "Classificar por" acima dos cartões ("Ordem padrão (mais recentes)" volta ao normal) e o botão "Crescente"/"Decrescente".
-- O PDF sai com os filtros e a classificação do momento.`,
+- O PDF sai com os filtros e a classificação do momento.
+
+## "Gráficos por tipo, consequência e probabilidade" (recolhido)
+
+Desde 10/11/2026 as três roscas ficam numa seção recolhida abaixo da lista, perto do fim da página: clique no título para abrir ou fechar.
+
+- Dividem os apontamentos que a lista mostra, com a situação, os filtros e o período de agora. Cada rosca ignora o próprio filtro, para continuar mostrando as alternativas, com as escolhidas destacadas.
+- Mostram até seis fatias: acima disso, as cinco maiores e "Outros (N tipos)". O total fica no centro; a legenda traz cor, nome, quantidade e percentual.
+- Clique num item da legenda para ligar ou desligar aquele valor no filtro da lista; dá para ligar vários. "Outros" só informa, não filtra.
+- Como seguem a situação da lista, um período sem apontamento aberto, com a lista em "Abertos", mostra "Os gráficos seguem a situação da lista: nenhum apontamento aberto nesta seleção." e o botão "Ver todos os N", que passa a lista para "Todos".
+
+## "Apontamentos por tipo, mês a mês" (recolhido, no fim da página)
+
+Desde 10/11/2026 o quadro fica no fim da página, recolhido: clique no título para abrir ou fechar. O conteúdo e as regras não mudaram.
+
+É o comparativo da planilha: quantos apontamentos de cada tipo foram feitos em cada um dos últimos quatro meses (o atual e os três anteriores, como "ago/26"), pela data do apontamento, abertos e finalizados juntos. Segue os filtros, menos a situação.
+
+- A coluna "Diferença" compara o mês atual com o anterior: "+3 (+50%)", "−2 (−40%)", "0" ou "+4 (novo)" quando o mês anterior teve zero.
+- A linha "GERAL" soma todos os tipos.
+- O mês atual ainda está em andamento: no começo do mês a diferença tende a ser negativa.
+- Sem apontamento no período: "Nenhum apontamento nos últimos 4 meses."
+- Com um período escolhido, o quadro mostra os meses do período, do mês do início ao do término (término no futuro para no mês de hoje; só o término = os 4 meses até ele). "Mensal" mostra uma coluna só, sem "Diferença"; "Trimestral", os três meses; "Anual", os meses do ano até o de hoje. Mês cortado pelo início ou pelo término conta só os dias de dentro do período. Passando de 12 meses, mostra os 12 últimos e avisa.`,
   },
   {
     id: 'seguranca-tipos-lote',
@@ -292,7 +335,7 @@ Na edição em lote o local só pode ser trocado, não apagado ("Escreva o local
   {
     id: 'seguranca-pdf',
     title: 'Gerar o PDF da vistoria de segurança',
-    summary: 'PDF: agrupar por tipo, local ou consequência, escolher grupos, fotos, folha nova e 1ª folha.',
+    summary: 'PDF: agrupar por tipo, local ou consequência, escolher grupos, fotos, folha nova (desligada) e 1ª folha.',
     keywords: [
       'pdf da vistoria',
       'pdf de segurança',
@@ -308,7 +351,7 @@ Na edição em lote o local só pode ser trocado, não apagado ("Escreva o local
     screen: 'seguranca',
     body: `## Onde fica e o que entra
 
-O botão "Gerar PDF" fica no cabeçalho e aparece para todos, inclusive quem só consulta; fica apagado quando a obra não tem apontamento. O PDF parte do que a lista mostra: a situação ("Abertos", "Finalizados" ou "Todos"), os filtros, a busca e a classificação. Filtre e classifique antes de gerar. Ao contrário da tela, que desenha 100 por vez, o PDF leva a seleção inteira.
+O botão "Gerar PDF" fica no cabeçalho e aparece para todos, inclusive quem só consulta; fica apagado quando a obra não tem apontamento. O PDF parte do que a lista mostra: a situação ("Abertos", "Finalizados" ou "Todos"), o período, os filtros, a busca e a classificação. Escolha o período, filtre e classifique antes de gerar. Ao contrário da tela, que desenha 100 por vez, o PDF leva a seleção inteira.
 
 ## A janela "PDF da vistoria de segurança"
 
@@ -316,7 +359,7 @@ O botão "Gerar PDF" fica no cabeçalho e aparece para todos, inclusive quem só
 2. "Agrupar por": "Tipo de apontamento", "Local" ou "Risco: consequência". Abre em "Tipo de apontamento"; se a lista está filtrada por local (e não por tipo), em "Local"; se só por consequência, em "Risco: consequência".
 3. "Quais tipos entram" (ou locais, ou consequências): os grupos com a quantidade de cada um. Marque e desmarque, use "Selecionar tudo" e "Limpar", ou "Pesquisar" pelo nome. "N de M" conta os marcados. Cada agrupamento guarda a própria escolha enquanto a janela está aberta.
 4. "Com as fotos do apontamento e da correção": ligado por padrão; desligue para um PDF só com texto.
-5. "Cada tipo começa em folha nova" (ou local, ou consequência): ligado por padrão.
+5. "Cada tipo começa em folha nova" (ou local, ou consequência): **desligado por padrão** desde 10/11/2026, para poupar papel. Desligado, os grupos (por exemplo, cada pavimento ao agrupar por local) seguem um depois do outro na mesma folha, separados pela faixa azul com o título do grupo. Marque para ter cada grupo numa folha própria, como era antes.
 6. "Dentro de cada grupo, na ordem da lista: …" lembra a ordem (sem classificação, a data do apontamento, do mais recente para o mais antigo).
 7. O rodapé diz "N apontamentos no PDF" ou "Marque ao menos um tipo." (um local, uma consequência). "Gerar PDF" abre a página de impressão numa aba nova; "Cancelar" fecha.
 
@@ -330,13 +373,13 @@ Na primeira folha:
 - Cartões que mudam com a situação. "Todos": total, abertos, finalizados, percentual finalizado e dias para resolver em média. "Abertos": total, abertos há mais de 7 dias, dias em aberto em média e locais com apontamento aberto. "Finalizados": total, dias para resolver em média, finalizados em até 7 dias e locais com apontamento.
 - As roscas "Por tipo", "Por consequência" e "Por probabilidade", contando só o que entrou no PDF.
 
-Depois, um bloco por grupo, com o título repetido em cada folha ("· N apontamentos" e, com "Todos", "(N abertos)") e as colunas "Nº" (contínuo no documento), "Tipo" (some ao agrupar por tipo), "Consequência" (some ao agrupar por consequência), "Probabilidade", "Descrição", "Local" (some ao agrupar por local), "Data do apontamento", "Situação" ("Aberto há N dias" ou "Finalizado em dd/mm/aaaa · N dias", com "Correção: …" quando há o texto), "Foto" e "Foto da correção" (até duas miniaturas e "+N"; somem no PDF sem fotos). Tipos saem na ordem cadastrada, locais em ordem alfabética e consequências da mais grave para a mais leve; "Sem tipo" e "Sem local" ficam no fim. O histórico importado da planilha sai com "—" nas fotos.
+Depois, um bloco por grupo, aberto pela faixa azul com o título, repetido em cada folha ("· N apontamentos" e, com "Todos", "(N abertos)"), com as colunas "Nº" (contínuo no documento), "Tipo" (some ao agrupar por tipo), "Consequência" (some ao agrupar por consequência), "Probabilidade", "Descrição", "Local" (some ao agrupar por local), "Data do apontamento", "Situação" ("Aberto há N dias" ou "Finalizado em dd/mm/aaaa · N dias", com "Correção: …" quando há o texto), "Foto" e "Foto da correção" (até duas miniaturas e "+N"; somem no PDF sem fotos). Tipos saem na ordem cadastrada, locais em ordem alfabética e consequências da mais grave para a mais leve; "Sem tipo" e "Sem local" ficam no fim. O histórico importado da planilha sai com "—" nas fotos. Sem "começa em folha nova" (o padrão), o grupo seguinte começa logo abaixo do anterior, na mesma folha.
 
 ## Exemplos rápidos
 
-- Riscos graves em aberto: na rosca "Por consequência", clique em "Morte" e em "Severa" e gere; a janela já abre agrupada por consequência.
+- Riscos graves em aberto: no filtro "Risco: consequência", marque "Morte" e "Severa" (ou clique nelas na rosca "Por consequência", em "Gráficos por tipo, consequência e probabilidade") e gere; a janela já abre agrupada por consequência.
 - Relatório de um local: filtre o local na lista, ou agrupe por "Local" e deixe marcado só ele.
-- Fechamento com a média de dias para resolver: escolha "Todos" antes de gerar.`,
+- Fechamento do mês com a média de dias para resolver: escolha a escala "Mensal" e o mês no período, e "Todos" na situação, antes de gerar.`,
   },
   {
     id: 'seguranca-modo-de-campo',
@@ -375,7 +418,7 @@ O aparelho guarda também se você é TST, do momento em que a obra foi baixada.
 - "Foto", no cartão de um apontamento aberto, junta mais fotos do apontamento ("Guardar").
 - "Finalizar": "Data de correção" (começa em hoje; não aceita futuro nem antes do apontamento), "Como foi corrigido" (opcional) e "Foto da correção (obrigatória)" ("Mais fotos da correção (opcional)" quando já há uma); "Finalizar apontamento" fica apagado sem a foto.
 - "Reabrir", nos finalizados: volta o apontamento para "Abertos" na hora, sem confirmação; a data e o texto da correção saem, as fotos ficam.
-- Limite de 10 fotos por apontamento ("Limite de 10 fotos por apontamento."). O campo não guarda vaga para a correção: com 10 fotos do apontamento não dá para finalizar até excluir uma, no computador.
+- Limite de 10 fotos por apontamento, somando apontamento e correção. Enquanto o apontamento está aberto, o campo aceita até 9 fotos do apontamento e guarda a 10ª vaga para a foto da correção ("Limite de 9 fotos do apontamento: a última vaga fica para a foto da correção."), como o computador.
 
 As regras do servidor valem no aparelho: data futura, finalizar sem foto da correção e mais de 10 fotos são recusados na hora, com a mesma mensagem.
 
@@ -394,7 +437,7 @@ A fila sobe sozinha, na ordem em que foi lançada: ao abrir a tela com sinal, qu
   {
     id: 'seguranca-perguntas-frequentes',
     title: 'Perguntas frequentes e mensagens da Segurança do trabalho',
-    summary: 'Não vejo os botões, virar TST, não finaliza, foto não sobe, sumiu, histórico sem fotos.',
+    summary: 'Não vejo os botões, virar TST, não finaliza, foto não sobe, sumiu, cartão e roscas que mudaram, histórico sem fotos.',
     keywords: [
       'não vejo novo apontamento',
       'como virar tst',
@@ -408,6 +451,9 @@ A fila sobe sozinha, na ordem em que foi lançada: ao abrir a tela com sinal, qu
       'my sunset',
       'amariles',
       'só técnicos de segurança',
+      'cadê o cartão finalizados',
+      'onde estão as roscas',
+      'não acho o finalizar',
     ],
     screen: 'seguranca',
     body: `## Não vejo "Novo apontamento" nem "Finalizar"
@@ -435,9 +481,18 @@ Esses botões são só do TST e do admin. O aviso "Consulta: só os técnicos de
 
 - A lista abre em "Abertos": o finalizado só aparece em "Finalizados" ou "Todos".
 - Algum filtro, ou item de rosca clicado, ficou ligado: veja "Mostrando X de N apontamentos" e use "Limpar filtros".
+- O período não está em "Tudo": um apontamento com data fora do período escolhido não aparece. Escolha "Tudo" na "Escala" (ou use "Limpar filtros").
 - A lista desenha 100 por vez: use a busca, os filtros ou "Mostrar mais".
 - No modo de campo, a lista é a cópia baixada: use "Atualizar a obra com o que está no servidor". O que foi lançado num celular e ainda não enviado só existe naquele aparelho, com a etiqueta "no aparelho".
 - "A lista mudou enquanto você trabalhava.": outra pessoa alterou os apontamentos ao mesmo tempo; a tela foi atualizada, confira e tente de novo. "Registro não encontrado. Recarregue a página.": o apontamento foi excluído por outra pessoa.
+
+## Cadê o cartão "Finalizados", as roscas e o quadro mês a mês?
+
+Mudaram de lugar em 10/11/2026, a pedido da equipe de SST. O cartão "Finalizados" saiu dos indicadores e deu lugar a "Risco de morte em aberto"; a quantidade de finalizados está no botão "Finalizados", acima da lista. As roscas estão em "Gráficos por tipo, consequência e probabilidade" e o quadro em "Apontamentos por tipo, mês a mês", as duas seções recolhidas no fim da página: clique no título para abrir.
+
+## Não acho o botão "Finalizar" na tabela
+
+Ele fica na coluna "Ações", presa na borda direita da tabela, em verde, só para TST e admin e só nos apontamentos abertos. Também dá para clicar na linha e usar "Finalizar apontamento", no rodapé da janela.
 
 ## Histórico da planilha "SST - Controle geral"
 

@@ -52,7 +52,9 @@ export function SafetyPrintDialog({
   });
   const [query, setQuery] = useState('');
   const [photos, setPhotos] = useState(true);
-  const [pageBreak, setPageBreak] = useState(true);
+  // Desmarcado desde 10/11/2026 (pedido da equipe de SST): os grupos seguem um embaixo do outro, separados
+  // pela faixa azul do título, e o PDF gasta menos folha. Marcar volta a um grupo por folha.
+  const [pageBreak, setPageBreak] = useState(false);
   useEffect(() => {
     const element = dialog.current;
     if (element && !element.open) element.showModal();

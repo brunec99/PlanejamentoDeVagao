@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { CheckCircle2, CircleAlert, LoaderCircle, Trash2 } from 'lucide-react';
+import { CheckCircle2, CircleAlert, CircleCheckBig, LoaderCircle, Trash2 } from 'lucide-react';
 import {
   isSafetyConsequence,
   isSafetyProbability,
@@ -71,17 +71,22 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** "Apontado por" do histórico importado da planilha, que não tem autor no sistema. */
 const SPREADSHEET_AUTHOR = 'Planilha SST - Controle geral';
 
+/** O formulário de um apontamento que já existe, como está gravado. */
+function formOf(item: SafetyItem): FormState {
+  return {
+    typeId: item.typeId ?? '',
+    consequence: item.consequence,
+    probability: item.probability,
+    description: item.description,
+    location: item.location,
+    observedOn: item.observedOn,
+  };
+}
+const sameForm = (a: FormState, b: FormState) => (Object.keys(a) as (keyof FormState)[]).every(key => a[key] === b[key]);
+
 function initialForm(props: { workId: string; data: SafetyView; today: string; item?: SafetyItem }): FormState {
   const { item, data, today } = props;
-  if (item)
-    return {
-      typeId: item.typeId ?? '',
-      consequence: item.consequence,
-      probability: item.probability,
-      description: item.description,
-      location: item.location,
-      observedOn: item.observedOn,
-    };
+  if (item) return formOf(item);
   const memory = readMemory(props.workId);
   const typeId = data.types.some(t => t.id === memory.typeId && t.active) ? memory.typeId! : '';
   return { typeId, consequence: '', probability: '', description: '', location: memory.location ?? '', observedOn: today };
@@ -118,7 +123,10 @@ function changed(item: SafetyItem, fields: Fields) {
  * agora editando o apontamento criado, com as fotos que faltam na fila para tentar de novo.
  * Editar (só TST): `update_item` só se algum campo mudou, mais as fotos novas; as já enviadas abrem grandes
  * e podem ser excluídas. `readOnly` (quem não é TST) mostra tudo e não deixa mudar nada.
- * Num 409 (outra gravação chegou antes) avisa e fecha, para a lista recarregar. */
+ * Num 409 (outra gravação chegou antes) avisa e fecha, para a lista recarregar.
+ * Finalizar (10/11/2026, "igual o do APP"): no apontamento aberto, o TST tem "Finalizar apontamento" no
+ * rodapé, que troca este diálogo pela janela de finalizar (`onResolve`). Com alteração não salva, pergunta
+ * antes de descartar. */
 export function SafetyItemDialog(props: {
   workId: string;
   data: SafetyView;
@@ -129,8 +137,10 @@ export function SafetyItemDialog(props: {
   locationSuggestions: string[];
   execute: (c: SafetyCommand) => Promise<void>;
   onClose: () => void;
+  /** Abre a janela de finalizar no lugar deste diálogo; ausente = sem o botão (consulta ou lançamento). */
+  onResolve?: () => void;
 }) {
-  const { workId, data, item, readOnly, today, locationSuggestions, execute, onClose } = props;
+  const { workId, data, item, readOnly, today, locationSuggestions, execute, onClose, onResolve } = props;
   const dialog = useRef<HTMLDialogElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const typeRef = useRef<HTMLSelectElement>(null);
@@ -328,6 +338,24 @@ export function SafetyItemDialog(props: {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Só o apontamento que abriu aberto e continua aberto; o recém-lançado com foto pendente não finaliza daqui.
+  const canResolve = !!onResolve && !readOnly && !!item && live?.status === 'open';
+  const resolveItem = async () => {
+    if (!onResolve || busy || preparing) return;
+    const dirty = pending.length > 0 || (!!live && !sameForm(form, formOf(live)));
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Descartar as alterações?',
+        description:
+          'Há alterações neste apontamento que ainda não foram salvas. Para guardá-las, use “Salvar alterações” antes de finalizar.',
+        confirmLabel: 'Descartar e finalizar',
+      });
+      if (!ok) return;
+    }
+    // Troca de diálogo pela tela: este sai da página sem disparar o `close`, que fecharia a janela de finalizar.
+    onResolve();
   };
 
   const deleteItem = async () => {
@@ -603,6 +631,18 @@ export function SafetyItemDialog(props: {
               {creating && (
                 <button className="button-secondary min-h-11" type="submit" data-next="true" disabled={busy || preparing}>
                   Salvar e lançar outro
+                </button>
+              )}
+              {canResolve && (
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                  aria-haspopup="dialog"
+                  onClick={resolveItem}
+                  disabled={busy || preparing}
+                >
+                  <CircleCheckBig size={16} aria-hidden />
+                  Finalizar apontamento
                 </button>
               )}
               {preparing && <span className="text-xs text-slate-500">Aguarde a foto ficar pronta.</span>}

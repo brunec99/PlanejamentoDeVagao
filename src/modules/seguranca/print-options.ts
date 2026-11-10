@@ -22,6 +22,8 @@ export interface SafetyPrintOptions {
    * entra, e não do que sai: um apontamento novo de outro grupo não aparece no PDF sem ter sido pedido. */
   groups?: string[];
   photos: boolean;
+  /** Cada grupo começa em folha nova. Desligado por padrão desde 10/11/2026 (pedido da equipe de SST: separar
+   * por pavimento, mas sem gastar uma folha por grupo); a faixa azul do título continua separando os grupos. */
   pageBreak: boolean;
 }
 
@@ -64,7 +66,7 @@ export function printSearchParams(options: SafetyPrintOptions): URLSearchParams 
   }
   for (const key of options.groups ?? []) params.append('grupo', key);
   if (!options.photos) params.set('fotos', '0');
-  if (!options.pageBreak) params.set('quebra', '0');
+  if (options.pageBreak) params.set('quebra', '1');
   return params;
 }
 
@@ -97,6 +99,6 @@ export function parsePrintParams(raw: RawParams): SafetyPrintOptions {
     grouping: isGrouping(grouping) ? grouping : DEFAULT_GROUPING,
     groups: raw.grupo === undefined ? undefined : ([] as string[]).concat(raw.grupo),
     photos: one(raw, 'fotos') !== '0',
-    pageBreak: one(raw, 'quebra') !== '0',
+    pageBreak: one(raw, 'quebra') === '1',
   };
 }
