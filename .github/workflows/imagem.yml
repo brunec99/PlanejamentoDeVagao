@@ -1,0 +1,70 @@
+name: Imagem
+
+# Empacota o sistema numa imagem Docker a cada envio para a main e publica no registro do GitHub
+# (ghcr.io). O servidor da ATR busca a imagem nova sozinho: nenhuma credencial do servidor fica
+# neste repositório. Em pull request a imagem é só montada e testada, sem publicar.
+#
+# Os dois valores públicos do Supabase vêm de Settings > Secrets and variables > Actions:
+# NEXT_PUBLIC_SUPABASE_URL em Variables e NEXT_PUBLIC_SUPABASE_ANON_KEY em Secrets (ou em Variables).
+# Em pull request valem os mesmos valores fictícios do CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/imagem.yml
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGEM: ghcr.io/brunec99/planejamentodevagao
+
+jobs:
+  imagem:
+    name: Montar, testar e publicar a imagem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Montar
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGEM }}:teste
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ github.event_name == 'pull_request' && 'http://127.0.0.1:54321' || vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ github.event_name == 'pull_request' && 'ci-anon-key' || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_AGENT_NAME=${{ vars.NEXT_PUBLIC_AGENT_NAME }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Roda a imagem do jeito que o servidor roda (disco só leitura, sem privilégios) e confere
+      # que a tela de login responde.
+      - name: Testar a imagem
+        run: |
+          docker run -d --name teste --read-only --tmpfs /tmp --tmpfs /app/.next/cache:uid=1000,gid=1000 \
+            --cap-drop ALL --security-opt no-new-privileges -p 3000:3000 \
+            -e SUPABASE_SERVICE_ROLE_KEY=ci-service-role-key "$IMAGEM:teste"
+          for tentativa in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3000/login; then echo "login respondeu"; exit 0; fi
+            sleep 2
+          done
+          docker logs teste
+          exit 1
+      - name: Publicar
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag "$IMAGEM:teste" "$IMAGEM:latest"
+          docker tag "$IMAGEM:teste" "$IMAGEM:${GITHUB_SHA::12}"
+          docker push "$IMAGEM:latest"
+          docker push "$IMAGEM:${GITHUB_SHA::12}"

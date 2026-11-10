@@ -1,0 +1,9 @@
+.git
+node_modules
+.next
+out
+.env*
+!.env.example
+.vercel
+test-results
+playwright-report
