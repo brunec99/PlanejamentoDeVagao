@@ -19,7 +19,8 @@ import { CHART } from '@/shared/palette';
 
 export type LobZoom = 'semana' | 'mes' | 'trimestre';
 
-/** Medidas fixas do desenho. Rótulos dos locais à esquerda, uma linha de 30 px por local. */
+/** Medidas fixas do desenho. Rótulos dos locais à esquerda, uma linha de 30 px por local; a linha
+ * cresce quando serviços do mesmo local se sobrepõem no tempo (faixas, 11/11/2026). */
 export const GEOMETRY = {
   left: 110,
   top: 34,
@@ -30,6 +31,9 @@ export const GEOMETRY = {
   blockPad: 4,
   /** Folga horizontal entre um bloco e o início do seguinte. */
   blockGap: 1.5,
+  /** Altura mínima de cada faixa quando blocos do mesmo local se sobrepõem, e o vão entre faixas. */
+  lane: 12,
+  laneGap: 1.5,
   /** Dias de respiro antes do começo e depois do fim do plano. */
   padBefore: 10,
   padAfter: 24,
@@ -105,6 +109,10 @@ export interface LobRow {
   index: number;
   /** Topo da linha, em px. */
   y: number;
+  /** Altura da linha: `GEOMETRY.row`, ou mais quando há serviços simultâneos no local. */
+  height: number;
+  /** Maior número de faixas usadas na linha (1 = nenhuma sobreposição). */
+  lanes: number;
 }
 export interface LobBlock {
   activity: LobActivity;
@@ -153,6 +161,7 @@ export interface LobLayout {
   top: number;
   right: number;
   bottom: number;
+  /** Altura base de uma linha; a de cada uma está em `rows[i].height`. */
   rowHeight: number;
   innerW: number;
   innerH: number;
@@ -221,6 +230,39 @@ function timeWindow(input: LobLayoutInput): { start: LocalDate; end: LocalDate }
   return { start: addDays(start, -GEOMETRY.padBefore), end: addDays(end, GEOMETRY.padAfter) };
 }
 
+/** Faixa de cada bloco de um local: blocos que se sobrepõem no tempo (fim exclusivo) formam um
+ * grupo e repartem a altura, cada um na primeira faixa livre, pela ordem de início e depois do
+ * serviço; quem não se sobrepõe a ninguém fica com a linha inteira. Devolve, na ordem recebida, a
+ * faixa e o total de faixas do grupo do bloco. */
+export function assignLanes(items: { start: LocalDate; end: LocalDate; order: number }[]): { lane: number; lanes: number }[] {
+  const result = items.map(() => ({ lane: 0, lanes: 1 }));
+  const sorted = items.map((item, index) => ({ ...item, index })).sort((a, b) => a.start.localeCompare(b.start) || a.order - b.order);
+  let group: number[] = [];
+  let laneEnds: LocalDate[] = [];
+  let groupEnd = '';
+  const close = () => {
+    for (const index of group) result[index].lanes = laneEnds.length;
+    group = [];
+    laneEnds = [];
+  };
+  for (const item of sorted) {
+    if (group.length && item.start >= groupEnd) close();
+    let lane = laneEnds.findIndex(end => end <= item.start);
+    if (lane < 0) lane = laneEnds.push(item.end) - 1;
+    else laneEnds[lane] = item.end;
+    result[item.index].lane = lane;
+    group.push(item.index);
+    if (group.length === 1 || item.end > groupEnd) groupEnd = item.end;
+  }
+  close();
+  return result;
+}
+/** Altura da linha que acomoda `lanes` faixas de no mínimo `GEOMETRY.lane` px. */
+export const rowHeightFor = (lanes: number) =>
+  lanes <= 1
+    ? GEOMETRY.row
+    : Math.max(GEOMETRY.row, Math.ceil(2 * GEOMETRY.blockPad + lanes * GEOMETRY.lane + (lanes - 1) * GEOMETRY.laneGap));
+
 export function pxPerDayFor(zoom: LobZoom, days: number, availableWidth: number): number {
   if (zoom === 'semana') return ZOOM_PX.semana;
   if (zoom === 'trimestre') return ZOOM_PX.trimestre;
@@ -240,14 +282,14 @@ export function lobLayout(input: LobLayoutInput): LobLayout {
   const dateAtX = (x: number) => nearestWorkday(addDays(start, Math.round((x - left) / pxPerDay)));
 
   const locals = orderedLocals(input.data.locals, input.visibleLocalIds);
-  const rows: LobRow[] = locals.map((local, index) => ({ local, index, y: top + (locals.length - 1 - index) * rowHeight }));
+  const rows: LobRow[] = locals.map((local, index) => ({ local, index, y: top, height: rowHeight, lanes: 1 }));
   const rowByLocal = new Map(rows.map(r => [r.local.id, r]));
-  const innerH = rows.length * rowHeight;
   const serviceById = new Map(input.data.services.map(s => [s.id, s]));
 
-  const blockH = rowHeight - 2 * GEOMETRY.blockPad;
-  const blocks: LobBlock[] = [];
-  const blockById = new Map<string, LobBlock>();
+  // Blocos visíveis de cada local, para repartir a linha em faixas quando se sobrepõem.
+  type Placed = { activity: LobActivity; service: LobService; row: LobRow; end: LocalDate; lane: number; lanes: number };
+  const placed: Placed[] = [];
+  const byRow = new Map<string, Placed[]>();
   for (const activity of input.data.activities) {
     if (input.hiddenServiceIds?.has(activity.serviceId)) continue;
     const row = rowByLocal.get(activity.localId);
@@ -256,16 +298,42 @@ export function lobLayout(input: LobLayoutInput): LobLayout {
     const blockEnd = activityEnd(activity);
     // Fora do período escolhido: nem desenha. Quem cruza a borda entra e o gráfico recorta.
     if (blockEnd <= start || activity.start >= end) continue;
+    const item: Placed = { activity, service, row, end: blockEnd, lane: 0, lanes: 1 };
+    placed.push(item);
+    const list = byRow.get(row.local.id);
+    if (list) list.push(item);
+    else byRow.set(row.local.id, [item]);
+  }
+  for (const [localId, list] of byRow) {
+    const lanes = assignLanes(list.map(p => ({ start: p.activity.start, end: p.end, order: p.service.orderIndex })));
+    list.forEach((p, i) => Object.assign(p, lanes[i]));
+    const row = rowByLocal.get(localId)!;
+    row.lanes = Math.max(1, ...lanes.map(l => l.lanes));
+    row.height = rowHeightFor(row.lanes);
+  }
+  // De cima para baixo: o local mais alto (último índice) fica no topo do gráfico.
+  let cursorY = top;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    rows[i].y = cursorY;
+    cursorY += rows[i].height;
+  }
+  const innerH = cursorY - top;
+
+  const blocks: LobBlock[] = [];
+  const blockById = new Map<string, LobBlock>();
+  for (const { activity, service, row, end: blockEnd, lane, lanes } of placed) {
     const x = xOf(activity.start);
+    const inner = row.height - 2 * GEOMETRY.blockPad;
+    const h = (inner - (lanes - 1) * GEOMETRY.laneGap) / lanes;
     const block: LobBlock = {
       activity,
       service,
       local: row.local,
       row,
       x: r2(x),
-      y: row.y + GEOMETRY.blockPad,
+      y: r2(row.y + GEOMETRY.blockPad + lane * (h + GEOMETRY.laneGap)),
       w: r2(Math.max(2, xOf(blockEnd) - x - GEOMETRY.blockGap)),
-      h: blockH,
+      h: r2(h),
       start: activity.start,
       end: blockEnd,
       finish: activityFinish(activity),
@@ -288,7 +356,7 @@ export function lobLayout(input: LobLayoutInput): LobLayout {
       x: r2(x),
       y: block.y,
       w: r2(Math.max(2, xOf(ghostEnd) - x - GEOMETRY.blockGap)),
-      h: blockH,
+      h: block.h,
       start: entry.start,
       durationDays: entry.durationDays,
     });

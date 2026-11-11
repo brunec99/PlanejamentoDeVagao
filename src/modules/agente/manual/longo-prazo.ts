@@ -371,7 +371,7 @@ No fim da visão. Uma linha de base é uma fotografia imutável do cronograma do
     ],
     screen: 'longo-prazo',
     body: `## O que a tela mostra
-A visão "Linha de Balanço" é o cronograma de longo prazo da obra no estilo do Prevision. No eixo vertical estão os locais da obra, de baixo para cima (Térreo embaixo); no horizontal, o tempo em semanas, com os meses no alto. Cada bloco é um serviço num local, na cor do serviço: a parte cheia é o que já foi medido e a parte clara é o que falta. Um bloco fica com contorno vermelho quando o previsto até hoje passa do medido em 10 pontos ou mais ("atrasado"). A linha tracejada âmbar é hoje; as linhas azuis com "M1", "M2"… são as datas das medições salvas.
+A visão "Linha de Balanço" é o cronograma de longo prazo da obra no estilo do Prevision. No eixo vertical estão os locais da obra, de baixo para cima (Térreo embaixo); no horizontal, o tempo em semanas, com os meses no alto. Cada bloco é um serviço num local, na cor do serviço: a parte cheia é o que já foi medido e a parte clara é o que falta. Um bloco fica com contorno vermelho quando o previsto até hoje passa do medido em 10 pontos ou mais ("atrasado"). A linha tracejada âmbar é hoje; as linhas azuis com "M1", "M2"… são as datas das medições salvas. Serviços que acontecem ao mesmo tempo no mesmo local (por exemplo, as instalações elétrica e hidráulica do mesmo pavimento) aparecem um acima do outro, em faixas mais finas dentro da linha do local, que fica mais alta só nesse caso; clique na faixa para escolher o serviço.
 
 Passe o mouse sobre um bloco para ver serviço, local, início e término, duração em dias úteis, equipe, previsto até hoje e medido. Clique para selecionar: o painel "Atividade selecionada", acima do gráfico, abre com os detalhes.
 

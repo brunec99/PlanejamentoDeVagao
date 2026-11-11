@@ -1112,3 +1112,55 @@ Desde 04/11 a área de trabalho inteira (título, comandos, Exibir, filtros, avi
 - Typecheck, ESLint (sem aviso novo), Prettier e `npm test` (1200 testes).
 - **Não foi aberta no app logado.**
 
+
+## Longo prazo: Linha de Balanço do Atmos importada do Prevision e fluxos de pavimentos (11/11/2026)
+
+**Pedido do usuário** (10/11/2026): "salvei em download a linha de balanço do atmos. Suba ela no sistema no longo prazo para que eu veja como ela ficou. Já crie os fluxogramas de pavimentos tipos e demais pavimentos". O arquivo (`Atmos.xml`) é a exportação do Prevision no formato XML do MS Project: 50 serviços no nível 1 ("EST - Estrutura de concreto", "ALV - Alvenaria"…), cada um com os seus locais no nível 2 (606 blocos), com início, término, duração e % concluído. **Não há vínculos no arquivo nem feriados no calendário** (o Prevision desconta feriados na duração, mas não os exporta).
+
+### O que entrou no banco (takt-hub, obra Atmos, 11/11/2026)
+
+Gravado pelo script `scripts/import-lob-prevision.ts --apply`, depois de simulação conferida. A Linha de Balanço do Atmos estava vazia, e não havia nenhum fluxo da empresa.
+
+- **48 locais**, de baixo para cima: demais pavimentos e tipo na ordem do Prevision (Subsolo 01, Térreo, Mezanino, 2º a 15º pavto, Caixa de água, Cobertura), depois os 14 halls, os 14 panos de fachada e "Equipamentos". Os nomes ficaram iguais aos do Prevision ("2ºpavto"), para uma próxima importação casar. A fachada vai pela data em que o trabalho começa em cada pano (Sul 2 ao 10 embaixo, Leste - Fachada Cremalheira em cima), porque o Prevision a lista do último pano ao primeiro e a diagonal sairia invertida.
+- **50 serviços**, ordenados pelo primeiro início, com as 8 cores da paleta em rodízio.
+- **606 blocos com as mesmas datas do Prevision.** A duração aqui é contada em dias úteis sem feriados (o calendário da Linha de Balanço), então em 189 blocos ela fica maior que a do Prevision (feriados e recesso de fim de ano no meio), com o término igual.
+- **1.196 dependências**, deduzidas porque o arquivo não as traz: 556 "equipe segue" (o mesmo serviço de um local ao próximo, na ordem em que acontece, com a espera igual à folga real, como o ritmo do lançamento) e 640 de sequência dentro de cada local (o bloco depende dos que começam no dia de início anterior ao dele e dos que terminam na véspera; blocos que começam juntos correm em paralelo; espera = a do fluxo, sem passar da folga real). Os equipamentos não dependem uns dos outros. Conferido: com as dependências, **nenhum bloco se move** (`cascade` vazio).
+- **Medição M1 em 11/11/2026**, salva, com o % do arquivo nos 15 blocos que têm avanço (Estrutura do Térreo ao 5º a 100%, 6º a 20%; Alvenaria do Mezanino a 100% e do Térreo a 80%; contenção, escavação, estacas e blocos a 100%; Piso do Subsolo a 29%; Grua a 41%). **Sem fotos** (a importação não passa pela regra 21). Início real = início do Prevision nos blocos com avanço; término real = término do Prevision nos blocos a 100%. Avanço físico 7,4%, igual ao previsto até 11/11; dois blocos atrasados pelo próprio arquivo: Estrutura do 6º (20% contra cerca de 38% previsto) e Alvenaria do 2º (prevista desde 10/11, 0%).
+- **Linha de base "Prevision — Atmos.xml (11/11/2026)"** com os 606 blocos, para comparar quando os blocos forem arrastados.
+
+### Fluxos de serviços criados (da empresa)
+
+Deduzidos da ordem em que os serviços acontecem em cada local do grupo. Entra o serviço presente em ao menos um terço dos locais do grupo (e em dois, no mínimo); a predecessora é a antecessora imediata dele na maioria dos locais; a espera é a menor folga real entre os dois; a duração é a mais frequente no Prevision (dias úteis dele), com a menor no empate. Os dois passam pelas travas de lançamento (um só serviço inicial, sem ciclo).
+
+- **"Pavimentos tipo — Atmos"** (2º ao 15º, 21 serviços): Estrutura 12 d → (espera 36 d) Alvenaria 10 d → Infra elétrica, Infra hidráulica + esgoto de teto e Infra de A/C + Exaustão em paralelo, 10 d → (espera 5 d) Reboco interno + Contrapiso → Lixamento de teto 5 d → Drywall estruturação → infras de drywall + fiação → fechamento das chapas → Impermeabilização → Porcelanato e azulejo → Forro de gesso → Massa corrida + 1ª demão → Portas de madeira → Limpeza grossa → Vinílico + Rodapé, Acabamentos elétricos e Marmoraria/louças/metais em paralelo → Pintura final → Limpeza fina 5 d. Ficaram de fora Mobiliários (3 pavimentos) e Instalações piscina (1).
+- **"Demais pavimentos — Atmos"** (Subsolo 01, Térreo, Mezanino, Caixa de água, Cobertura, 22 serviços): a mesma sequência, com a espera de 35 d entre Estrutura e Alvenaria e Mobiliários no fim (20 d, 70 d depois da limpeza fina, como no Térreo e no Mezanino). Ficaram de fora os serviços de um local só: contenção, escavação, estacas, blocos, Piso do Subsolo e "ALV - Cobertura". Como os demais pavimentos são diferentes entre si, a duração única é aproximada (a Estrutura tem 10 d no fluxo, mas 50 d no Térreo).
+- Halls, fachada e equipamentos não viraram fluxo (o pedido foi dos pavimentos); estão na Linha de Balanço com as dependências.
+
+### Código
+
+- `src/domain/lob-prevision-import.ts` (puro): `readPrevisionSchedule` (lê o resultado de `parseMspdi`; nível 1 = serviço, folhas abaixo = blocos, local = nomes dos níveis 2 em diante; bloco repetido, serviço sem local, tarefa sem data ou inativa viram aviso), `localGroup` (tipo, demais, hall, fachada, equipamentos, pelo nome), `buildPrevisionImport` (locais, serviços, blocos, dependências, medição, linha de base e fluxos; locais já cadastrados em Configurações são reaproveitados pelo nome) e `detachFlowIds`.
+- `scripts/import-lob-prevision.ts`: `node --import tsx scripts/import-lob-prevision.ts <arquivo.xml> --obra <código> --actor <profileId> [--date AAAA-MM-DD] [--sem-fluxos] [--env-file …] [--apply]`. Sem `--apply` só simula e imprime o relatório; recusa obra que já tem serviços, blocos, medições ou linhas de base na Linha de Balanço; não recria fluxo com nome existente; apaga o que entrou se a gravação falhar no meio. Para o takt-hub, `--env-file` aponta para o `.env.local` do App-Takt (o deste repositório é do banco antigo).
+- `tests/lob-prevision-import.test.ts`: 9 testes (grupos, ordem dos locais e da fachada, avisos, datas mantidas sem nada se mover, dependências, medição e datas reais, fluxo do tipo com paralelos e espera, ids do fluxo, locais reaproveitados).
+- Nenhuma migração. A única tela que mudou foi o gráfico, com as faixas (abaixo).
+
+### Validação (11/11/2026)
+
+- Simulação contra o banco real antes de gravar; depois da gravação, releitura pelo `loadLob` e `listFlows` do repositório: 48 locais, 50 serviços, 606 blocos, 1.196 dependências, 1 linha de base, 1 medição com 15 lançamentos e os 2 fluxos (revisão 1).
+- Tela conferida no navegador com os dados reais do Atmos (`next dev` local com Supabase falso e as rotas `/api/lob` e `/api/lob/flows` respondidas pelo Playwright com o que foi lido do banco): Linha de Balanço em Mês e Trimestre, indicadores (50 serviços, 48 locais, término 26/04/2028, 7,4%), M1 e hoje desenhados, os dois atrasados contornados; visão Fluxos com a rede dos paralelos. Sem erro de console. **Não foi aberta no app logado.**
+- Typecheck, ESLint (nenhum aviso novo), Prettier, `npm test` (1.260 testes), `validate:migrations` e `build`.
+
+### Gráfico: serviços simultâneos no mesmo local em faixas (11/11/2026)
+
+A conferência achou que o gráfico desenhava um bloco por serviço na altura inteira da linha do local, sem tratar sobreposição. No Atmos, as três infras e os três acabamentos de cada pavimento têm as mesmas datas, e Grua, Cremalheiras e Elevadores dividem o local "Equipamentos": o último desenhado cobria os outros (cerca de 4 dos 21 serviços de cada pavimento escondidos, e o clique pegava o de cima). O usuário aprovou a correção proposta ("sim").
+
+- `lob-model.ts`: `assignLanes` agrupa os blocos visíveis de um local que se sobrepõem no tempo (fim exclusivo; bloco que começa no fim do outro não conta) e põe cada um na primeira faixa livre, pela ordem de início e depois do serviço (as infras saem sempre na mesma ordem em todos os pavimentos). Bloco sem sobreposição fica com a linha inteira, como antes. A linha cresce só quando precisa (`rowHeightFor`: faixas de no mínimo 12 px; 30 px com uma, 34 com duas, 47 com três); `LobRow` ganhou `height` e `lanes`, e as posições das linhas são acumuladas de cima para baixo. O fantasma da linha de base acompanha a faixa do bloco. Serviço escondido pela legenda e bloco fora do período não ocupam faixa.
+- `lob-chart.tsx`: faixa zebrada e rótulo do local usam a altura de cada linha; o nome do serviço numa faixa de menos de 16 px sai em 9 px, e abaixo de 10 px some (o bloco continua clicável, com a dica ao passar o mouse).
+- Manual da Claudia (`src/modules/agente/manual/longo-prazo.ts`) com uma frase sobre as faixas.
+- Testes em `tests/lob-model.test.ts` (4): sequência sem faixa, três simultâneos em três faixas, faixa reaproveitada em sobreposição em cadeia, linha que cresce sem os blocos se cobrirem e as demais com 30 px, serviço escondido sem faixa.
+- Conferido no navegador com os dados reais do Atmos em Trimestre e Semana: as três infras e os três acabamentos de cada pavimento um sobre o outro, Grua e as duas Cremalheiras em faixas próprias, fachada com Textura e Esquadrias separadas; clicar na faixa do meio do 2º pavimento seleciona "ALV - Infra hidráulica" (13/01 a 26/01). Sem erro de console. O gráfico do Atmos ficou mais alto (os pavimentos com 47 px).
+
+### Pendências
+
+- Abrir a aba 1 do Atmos logado e conferir.
+- Repetir a importação para as outras obras quando houver o XML do Prevision (o script serve para qualquer obra com a Linha de Balanço vazia); um botão "Importar do Prevision" na tela ainda depende de modelo de UX.
+- Feriados: o calendário da Linha de Balanço não tem feriados; quando tiver, as durações dos 189 blocos voltam a bater com as do Prevision.

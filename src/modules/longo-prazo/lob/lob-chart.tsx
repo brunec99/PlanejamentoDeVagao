@@ -127,14 +127,14 @@ function useStable<T>(value: T, equals: (a: T, b: T) => boolean): T {
 
 /** Fundo com faixas alternadas por local, grade dos meses e régua das segundas-feiras. */
 const Axes = memo(function Axes({ layout }: { layout: LobLayout }) {
-  const { left, top, innerW, innerH, rows, rowHeight } = layout;
+  const { left, top, innerW, innerH, rows } = layout;
   const bottomY = top + innerH;
   return (
     <g aria-hidden="true">
       <rect x={left} y={top} width={innerW} height={innerH} fill={CHART.surfaceMuted} />
       {rows.map(r =>
         r.index % 2 === 0 ? (
-          <rect key={`z${r.local.id}`} x={left} y={r.y} width={innerW} height={rowHeight} fill={CHART.surfaceAlt} />
+          <rect key={`z${r.local.id}`} x={left} y={r.y} width={innerW} height={r.height} fill={CHART.surfaceAlt} />
         ) : null,
       )}
       {rows.map(r => (
@@ -228,7 +228,7 @@ const Ghosts = memo(function Ghosts({ ghosts }: { ghosts: LobLayout['ghosts'] })
 /** Coluna fixa dos locais. É um segundo <svg> em `position: sticky`, por cima do gráfico: ao rolar,
  * os blocos passam por baixo dela. */
 const LocalLabels = memo(function LocalLabels({ layout }: { layout: LobLayout }) {
-  const { left, top, innerH, rows, rowHeight, height } = layout;
+  const { left, top, innerH, rows, height } = layout;
   return (
     <svg
       className="sticky left-0 top-0 z-[1] block"
@@ -248,7 +248,7 @@ const LocalLabels = memo(function LocalLabels({ layout }: { layout: LobLayout })
           <text
             key={r.local.id}
             x={left - 8}
-            y={r.y + rowHeight / 2 + 3.5}
+            y={r.y + r.height / 2 + 3.5}
             textAnchor="end"
             fontSize={10.5}
             fontWeight={500}
@@ -300,7 +300,9 @@ const RowBlocks = memo(function RowBlocks({
         const late = isLate(a, measured, today);
         const selected = a.id === selectedId;
         const shifted = a.id === shiftId ? (shiftX ?? 0) : 0;
-        const label = b.w >= GEOMETRY.minLabelWidth ? clip(b.service.name, labelChars(b.w)) : '';
+        // Faixa fina (serviços simultâneos no local): letra menor; abaixo de 10 px, só o bloco.
+        const fontSize = b.h >= 16 ? 10.5 : 9;
+        const label = b.w >= GEOMETRY.minLabelWidth && b.h >= 10 ? clip(b.service.name, labelChars(b.w)) : '';
         const aria =
           `${b.service.name}, ${b.local.name}: ${formatDate(b.start)} a ${formatDate(b.finish)}, ${plural(a.durationDays, 'dia útil', 'dias úteis')}, ` +
           `previsto ${planned}%, medido ${percentText(measured)}` +
@@ -330,8 +332,8 @@ const RowBlocks = memo(function RowBlocks({
             {label && (
               <text
                 x={5}
-                y={b.h / 2 + 3.5}
-                fontSize={10.5}
+                y={b.h / 2 + fontSize / 3}
+                fontSize={fontSize}
                 fontWeight={600}
                 fill={inkOn(b.service.color, measured >= 50 ? 1 : 0.42)}
                 pointerEvents="none"
