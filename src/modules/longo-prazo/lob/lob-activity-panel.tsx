@@ -21,7 +21,7 @@ import { useConfirm } from '@/modules/layout/confirm';
 import { useToast } from '@/modules/layout/toast';
 import { formatDate, formatTimestamp } from '@/shared/format';
 
-/** Painel lateral "Atividade selecionada" da Linha de Balanço (modelo de 04/11/2026, tela 1): tudo o
+/** Painel "Atividade selecionada" (acima do gráfico desde 11/11/2026, a pedido do usuário; antes era lateral) da Linha de Balanço (modelo de 04/11/2026, tela 1): tudo o
  * que um bloco tem se edita aqui, campo a campo, e cada campo grava sozinho ao sair ou no Enter.
  * O servidor é a fonte: a tela mostra o que ele devolveu e, se recusar, o rascunho é descartado e
  * o motivo vai num aviso. Em consulta tudo fica desabilitado. */
@@ -117,6 +117,10 @@ const Swatch = ({ color }: { color: string }) => (
   <span aria-hidden className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: color }} />
 );
 const sectionTitle = 'mt-4 text-xs font-bold text-slate-700';
+/** Uma das colunas do painel (11/11/2026: o painel fica acima do gráfico, na largura toda). Três
+ * colunas quando o painel tem largura para isso (medida no próprio painel, não na janela: o menu lateral
+ * pode estar aberto), duas ou uma quando não tem. */
+const column = 'min-w-0 @2xl:[&>:first-child]:mt-3';
 
 export function LobActivityPanel({
   activity,
@@ -234,7 +238,7 @@ export function LobActivityPanel({
   };
 
   return (
-    <div className="text-sm">
+    <div className="@container text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="eyebrow">Atividade selecionada</p>
@@ -253,295 +257,309 @@ export function LobActivityPanel({
         </button>
       </div>
 
-      <dl className="mt-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-        <dt className="text-slate-500">Início</dt>
-        <dd className="m-0">
-          <CommitField
-            type="date"
-            value={activity.start}
-            disabled={disabled}
-            ariaLabel="Início do bloco"
-            className="field py-1.5"
-            onCommit={value => {
-              if (isLocalDate(value)) send({ type: 'update_activity', activityId: activity.id, start: value });
-            }}
-          />
-          <span className="mt-0.5 block text-xs text-slate-500">
-            {dateLabel(activity.start)}. Cai num dia útil; as sucessoras acompanham.
-          </span>
-        </dd>
-        <dt className="text-slate-500">Duração</dt>
-        <dd className="m-0 flex items-center gap-2">
-          <CommitField
-            type="number"
-            min={1}
-            max={LOB_LIMITS.durationDays}
-            value={String(activity.durationDays)}
-            disabled={disabled}
-            ariaLabel="Duração em dias úteis"
-            className="field w-20 py-1.5 text-right tabular-nums"
-            onCommit={value => {
-              const days = Number(value);
-              if (Number.isInteger(days) && days >= 1) send({ type: 'update_activity', activityId: activity.id, durationDays: days });
-            }}
-          />
-          <span className="text-xs text-slate-500">dias úteis</span>
-        </dd>
-        <dt className="text-slate-500">Término</dt>
-        <dd className="m-0 font-medium tabular-nums text-slate-900">{dateLabel(finish)}</dd>
-        <dt className="text-slate-500">Equipe</dt>
-        <dd className="m-0">
-          <CommitField
-            value={service?.team ?? ''}
-            disabled={disabled || !service}
-            placeholder="Equipe do serviço"
-            ariaLabel="Equipe do serviço"
-            className="field py-1.5"
-            onCommit={value => service && send({ type: 'update_service', serviceId: service.id, team: value.trim() || null })}
-          />
-        </dd>
-        <dt className="text-slate-500">Unidade</dt>
-        <dd className="m-0">
-          <CommitField
-            value={service?.unit ?? ''}
-            disabled={disabled || !service}
-            placeholder="%, m², apartamento…"
-            ariaLabel="Unidade de medição do serviço"
-            className="field py-1.5"
-            onCommit={value => service && send({ type: 'update_service', serviceId: service.id, unit: value.trim() || null })}
-          />
-        </dd>
-      </dl>
-      <p className="mt-1 text-[11px] text-slate-400">Equipe e unidade valem para o serviço inteiro, em todos os locais.</p>
-      {onCreatePending && service && (
-        <button
-          type="button"
-          data-tour="longo-lob-criar-pendencia"
-          className="button-ghost mt-2 px-2.5 py-1.5 text-xs"
-          onClick={() => onCreatePending(service.id)}
-          title={`Cria um card na Lista de pendência (aba 2) ligado ao serviço ${service.name}: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação`}
-        >
-          <ClipboardList size={14} aria-hidden /> Criar pendência do serviço
-        </button>
-      )}
-
-      <label htmlFor="lob-activity-notes" className={`${sectionTitle} block`}>
-        Observação
-      </label>
-      <CommitField
-        id="lob-activity-notes"
-        multiline
-        rows={2}
-        value={activity.notes ?? ''}
-        disabled={disabled}
-        placeholder="Anote o que importa para este bloco."
-        className="field mt-1 resize-y text-sm"
-        onCommit={value => send({ type: 'update_activity', activityId: activity.id, notes: value.trim() || null })}
-      />
-
-      <p className={sectionTitle}>Depois de</p>
-      <ul className="mt-1 space-y-1">
-        {!predecessors.length && <li className="text-xs text-slate-500">Sem predecessora: o bloco começa na data que tiver.</li>}
-        {predecessors.map(dep => {
-          const pred = data.activities.find(a => a.id === dep.predecessorId);
-          if (!pred) return null;
-          return (
-            <li key={dep.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
-              <Swatch color={colorOf(pred.serviceId)} />
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-left font-medium text-slate-700 hover:text-primary"
-                onClick={() => onSelect(pred.id)}
-                title="Ver a predecessora"
-              >
-                {label(pred)}
-              </button>
-              {dep.kind === 'crew' && <span className="shrink-0 text-slate-400">equipe segue</span>}
-              <span className="flex shrink-0 items-center gap-1 tabular-nums text-slate-500">
-                {dep.lagDays >= 0 ? '+' : ''}
-                <CommitField
-                  type="number"
-                  min={-LOB_LIMITS.lagDays}
-                  max={LOB_LIMITS.lagDays}
-                  value={String(dep.lagDays)}
-                  disabled={disabled}
-                  ariaLabel={`Espera depois de ${label(pred)}, em dias úteis`}
-                  className="field w-14 px-1.5 py-0.5 text-right text-xs tabular-nums"
-                  onCommit={value => {
-                    const lag = Number(value);
-                    if (Number.isInteger(lag)) send({ type: 'update_dependency', dependencyId: dep.id, lagDays: lag });
-                  }}
-                />
-                d
-              </span>
-              {!readOnly && (
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-slate-400 hover:text-danger disabled:opacity-50"
-                  aria-label={`Remover a dependência de ${label(pred)}`}
-                  disabled={busy}
-                  onClick={() => send({ type: 'remove_dependency', dependencyId: dep.id })}
-                >
-                  <X size={14} aria-hidden />
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {!readOnly && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <label htmlFor="lob-new-predecessor" className="sr-only">
-            Adicionar predecessora
-          </label>
-          <select
-            id="lob-new-predecessor"
-            className="field min-w-0 flex-1 py-1 text-xs"
-            value={newPredecessor}
-            disabled={disabled || !candidates.length}
-            onChange={event => setNewPredecessor(event.target.value)}
-          >
-            <option value="">{candidates.length ? 'adicionar predecessora…' : 'nenhum bloco disponível'}</option>
-            {candidates.map(a => (
-              <option key={a.id} value={a.id}>
-                {label(a)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            className="field w-16 px-1.5 py-1 text-right text-xs tabular-nums"
-            aria-label="Espera em dias úteis"
-            min={-LOB_LIMITS.lagDays}
-            max={LOB_LIMITS.lagDays}
-            value={newLag}
-            disabled={disabled}
-            onChange={event => setNewLag(event.target.value)}
-          />
-          <button type="button" className="button-ghost px-2 py-1 text-xs" disabled={disabled || !newPredecessor} onClick={addPredecessor}>
-            <Plus size={13} aria-hidden /> Ligar
-          </button>
-        </div>
-      )}
-
-      <p className={sectionTitle}>Sucessoras que acompanham ao arrastar</p>
-      <p className="mt-1 text-xs text-slate-600">
-        {successors.length ? (
-          <>
-            {successors.map((dep, index) => {
-              const succ = data.activities.find(a => a.id === dep.successorId);
-              return succ ? (
-                <span key={dep.id}>
-                  {index > 0 && ', '}
-                  <button type="button" className="font-medium text-slate-700 hover:text-primary" onClick={() => onSelect(succ.id)}>
-                    {label(succ)}
-                  </button>
-                </span>
-              ) : null;
-            })}{' '}
-            e tudo que vem depois: <b className="tabular-nums">{plural(followers.size, 'bloco', 'blocos')}</b>.
-          </>
-        ) : (
-          'Nenhuma: mover este bloco não arrasta outro.'
-        )}
-      </p>
-
-      {late ? (
-        <div className="callout callout-danger mt-4 text-xs leading-5">
-          <b>Atrasado {plural(delay, 'dia útil', 'dias úteis')}.</b> Previsto até hoje {planned}%, medido {measured}%
-          {lastItem?.delayCause && (
-            <>
-              . Motivo informado: <b>{lastItem.delayCause}</b>
-            </>
-          )}
-          .
-        </div>
-      ) : measured >= 100 ? (
-        <div className="callout callout-success mt-4 text-xs leading-5">Concluído: 100% medido.</div>
-      ) : (
-        <div className="callout callout-info mt-4 text-xs leading-5">
-          Previsto até hoje {planned}% · medido {measured}%{data.measurements.length ? '' : ' (ainda sem medição)'}.
-        </div>
-      )}
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {(
-          [
-            ['Início real', 'actualStart', activity.actualStart],
-            ['Término real', 'actualFinish', activity.actualFinish],
-          ] as const
-        ).map(([text, field, value]) => (
-          <div key={field}>
-            <label htmlFor={`lob-${field}`} className="text-xs font-semibold text-slate-600">
-              {text}
-            </label>
-            <div className="mt-0.5 flex items-center gap-1">
+      <div className="grid gap-x-8 @2xl:grid-cols-2 @4xl:grid-cols-3">
+        <div className={column}>
+          <dl className="mt-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+            <dt className="text-slate-500">Início</dt>
+            <dd className="m-0">
               <CommitField
-                id={`lob-${field}`}
                 type="date"
-                value={value ?? ''}
+                value={activity.start}
                 disabled={disabled}
-                className="field min-w-0 py-1 text-xs"
-                onCommit={next => {
-                  if (next === '' || isLocalDate(next)) send({ type: 'update_activity', activityId: activity.id, [field]: next || null });
+                ariaLabel="Início do bloco"
+                className="field py-1.5"
+                onCommit={value => {
+                  if (isLocalDate(value)) send({ type: 'update_activity', activityId: activity.id, start: value });
                 }}
               />
-              {value && !readOnly && (
-                <button
-                  type="button"
-                  className="rounded p-1 text-slate-400 hover:text-danger"
-                  aria-label={`Limpar ${text.toLowerCase()}`}
-                  disabled={busy}
-                  onClick={() => send({ type: 'update_activity', activityId: activity.id, [field]: null })}
-                >
-                  <X size={14} aria-hidden />
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="mt-1 text-[11px] text-slate-400">A medição preenche as datas reais; aqui elas podem ser corrigidas ou limpas.</p>
-
-      <p className={`${sectionTitle} flex items-center gap-1.5`}>
-        <Camera size={13} aria-hidden /> Fotos da medição
-        {photoRound && (
-          <span className="font-normal text-slate-500">
-            #{photoRound.number} · {formatDate(photoRound.date)} · {plural(photos.length, 'foto', 'fotos')}
-          </span>
-        )}
-      </p>
-      {photos.length ? (
-        <ul className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1.5">
-          {photos.map(photo => (
-            <li key={photo.id}>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                {dateLabel(activity.start)}. Cai num dia útil; as sucessoras acompanham.
+              </span>
+            </dd>
+            <dt className="text-slate-500">Duração</dt>
+            <dd className="m-0 flex items-center gap-2">
+              <CommitField
+                type="number"
+                min={1}
+                max={LOB_LIMITS.durationDays}
+                value={String(activity.durationDays)}
+                disabled={disabled}
+                ariaLabel="Duração em dias úteis"
+                className="field w-20 py-1.5 text-right tabular-nums"
+                onCommit={value => {
+                  const days = Number(value);
+                  if (Number.isInteger(days) && days >= 1) send({ type: 'update_activity', activityId: activity.id, durationDays: days });
+                }}
+              />
+              <span className="text-xs text-slate-500">dias úteis</span>
+            </dd>
+            <dt className="text-slate-500">Término</dt>
+            <dd className="m-0 font-medium tabular-nums text-slate-900">{dateLabel(finish)}</dd>
+            <dt className="text-slate-500">Equipe</dt>
+            <dd className="m-0">
+              <CommitField
+                value={service?.team ?? ''}
+                disabled={disabled || !service}
+                placeholder="Equipe do serviço"
+                ariaLabel="Equipe do serviço"
+                className="field py-1.5"
+                onCommit={value => service && send({ type: 'update_service', serviceId: service.id, team: value.trim() || null })}
+              />
+            </dd>
+            <dt className="text-slate-500">Unidade</dt>
+            <dd className="m-0">
+              <CommitField
+                value={service?.unit ?? ''}
+                disabled={disabled || !service}
+                placeholder="%, m², apartamento…"
+                ariaLabel="Unidade de medição do serviço"
+                className="field py-1.5"
+                onCommit={value => service && send({ type: 'update_service', serviceId: service.id, unit: value.trim() || null })}
+              />
+            </dd>
+          </dl>
+          <p className="mt-1 text-[11px] text-slate-400">Equipe e unidade valem para o serviço inteiro, em todos os locais.</p>
+          {onCreatePending && service && (
+            <button
+              type="button"
+              data-tour="longo-lob-criar-pendencia"
+              className="button-ghost mt-2 px-2.5 py-1.5 text-xs"
+              onClick={() => onCreatePending(service.id)}
+              title={`Cria um card na Lista de pendência (aba 2) ligado ao serviço ${service.name}: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação`}
+            >
+              <ClipboardList size={14} aria-hidden /> Criar pendência do serviço
+            </button>
+          )}
+        </div>
+        <div className={column}>
+          <p className={sectionTitle}>Depois de</p>
+          <ul className="mt-1 space-y-1">
+            {!predecessors.length && <li className="text-xs text-slate-500">Sem predecessora: o bloco começa na data que tiver.</li>}
+            {predecessors.map(dep => {
+              const pred = data.activities.find(a => a.id === dep.predecessorId);
+              if (!pred) return null;
+              return (
+                <li key={dep.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+                  <Swatch color={colorOf(pred.serviceId)} />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left font-medium text-slate-700 hover:text-primary"
+                    onClick={() => onSelect(pred.id)}
+                    title="Ver a predecessora"
+                  >
+                    {label(pred)}
+                  </button>
+                  {dep.kind === 'crew' && <span className="shrink-0 text-slate-400">equipe segue</span>}
+                  <span className="flex shrink-0 items-center gap-1 tabular-nums text-slate-500">
+                    {dep.lagDays >= 0 ? '+' : ''}
+                    <CommitField
+                      type="number"
+                      min={-LOB_LIMITS.lagDays}
+                      max={LOB_LIMITS.lagDays}
+                      value={String(dep.lagDays)}
+                      disabled={disabled}
+                      ariaLabel={`Espera depois de ${label(pred)}, em dias úteis`}
+                      className="field w-14 px-1.5 py-0.5 text-right text-xs tabular-nums"
+                      onCommit={value => {
+                        const lag = Number(value);
+                        if (Number.isInteger(lag)) send({ type: 'update_dependency', dependencyId: dep.id, lagDays: lag });
+                      }}
+                    />
+                    d
+                  </span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      className="rounded p-0.5 text-slate-400 hover:text-danger disabled:opacity-50"
+                      aria-label={`Remover a dependência de ${label(pred)}`}
+                      disabled={busy}
+                      onClick={() => send({ type: 'remove_dependency', dependencyId: dep.id })}
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {!readOnly && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <label htmlFor="lob-new-predecessor" className="sr-only">
+                Adicionar predecessora
+              </label>
+              <select
+                id="lob-new-predecessor"
+                className="field min-w-0 flex-1 py-1 text-xs"
+                value={newPredecessor}
+                disabled={disabled || !candidates.length}
+                onChange={event => setNewPredecessor(event.target.value)}
+              >
+                <option value="">{candidates.length ? 'adicionar predecessora…' : 'nenhum bloco disponível'}</option>
+                {candidates.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {label(a)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                className="field w-16 px-1.5 py-1 text-right text-xs tabular-nums"
+                aria-label="Espera em dias úteis"
+                min={-LOB_LIMITS.lagDays}
+                max={LOB_LIMITS.lagDays}
+                value={newLag}
+                disabled={disabled}
+                onChange={event => setNewLag(event.target.value)}
+              />
               <button
                 type="button"
-                className="block aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                onClick={() => setViewing(photo)}
-                aria-label={`Abrir foto de ${formatTimestamp(photo.createdAt)}`}
+                className="button-ghost px-2 py-1 text-xs"
+                disabled={disabled || !newPredecessor}
+                onClick={addPredecessor}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- miniatura assinada do Storage */}
-                <img src={photo.thumbUrl ?? photo.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                <Plus size={13} aria-hidden /> Ligar
               </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-xs text-slate-500">Nenhuma foto deste bloco ainda. As fotos entram pela medição.</p>
-      )}
-      {viewing && (
-        <PhotoLightbox photo={viewing} label={`${title} · ${formatTimestamp(viewing.createdAt)}`} onClose={() => setViewing(undefined)} />
-      )}
+            </div>
+          )}
 
-      {!readOnly && (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-          <button type="button" className="button-ghost px-2.5 py-1.5 text-xs hover:text-danger" disabled={busy} onClick={remove}>
-            <Trash2 size={14} aria-hidden /> Excluir bloco
-          </button>
-          {local && <span className="self-center text-[11px] text-slate-400">Local: {local.name}</span>}
+          <p className={sectionTitle}>Sucessoras que acompanham ao arrastar</p>
+          <p className="mt-1 text-xs text-slate-600">
+            {successors.length ? (
+              <>
+                {successors.map((dep, index) => {
+                  const succ = data.activities.find(a => a.id === dep.successorId);
+                  return succ ? (
+                    <span key={dep.id}>
+                      {index > 0 && ', '}
+                      <button type="button" className="font-medium text-slate-700 hover:text-primary" onClick={() => onSelect(succ.id)}>
+                        {label(succ)}
+                      </button>
+                    </span>
+                  ) : null;
+                })}{' '}
+                e tudo que vem depois: <b className="tabular-nums">{plural(followers.size, 'bloco', 'blocos')}</b>.
+              </>
+            ) : (
+              'Nenhuma: mover este bloco não arrasta outro.'
+            )}
+          </p>
+          <label htmlFor="lob-activity-notes" className={`${sectionTitle} block`}>
+            Observação
+          </label>
+          <CommitField
+            id="lob-activity-notes"
+            multiline
+            rows={2}
+            value={activity.notes ?? ''}
+            disabled={disabled}
+            placeholder="Anote o que importa para este bloco."
+            className="field mt-1 resize-y text-sm"
+            onCommit={value => send({ type: 'update_activity', activityId: activity.id, notes: value.trim() || null })}
+          />
         </div>
-      )}
+        <div className={column}>
+          {late ? (
+            <div className="callout callout-danger mt-4 text-xs leading-5">
+              <b>Atrasado {plural(delay, 'dia útil', 'dias úteis')}.</b> Previsto até hoje {planned}%, medido {measured}%
+              {lastItem?.delayCause && (
+                <>
+                  . Motivo informado: <b>{lastItem.delayCause}</b>
+                </>
+              )}
+              .
+            </div>
+          ) : measured >= 100 ? (
+            <div className="callout callout-success mt-4 text-xs leading-5">Concluído: 100% medido.</div>
+          ) : (
+            <div className="callout callout-info mt-4 text-xs leading-5">
+              Previsto até hoje {planned}% · medido {measured}%{data.measurements.length ? '' : ' (ainda sem medição)'}.
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(
+              [
+                ['Início real', 'actualStart', activity.actualStart],
+                ['Término real', 'actualFinish', activity.actualFinish],
+              ] as const
+            ).map(([text, field, value]) => (
+              <div key={field}>
+                <label htmlFor={`lob-${field}`} className="text-xs font-semibold text-slate-600">
+                  {text}
+                </label>
+                <div className="mt-0.5 flex items-center gap-1">
+                  <CommitField
+                    id={`lob-${field}`}
+                    type="date"
+                    value={value ?? ''}
+                    disabled={disabled}
+                    className="field min-w-0 py-1 text-xs"
+                    onCommit={next => {
+                      if (next === '' || isLocalDate(next))
+                        send({ type: 'update_activity', activityId: activity.id, [field]: next || null });
+                    }}
+                  />
+                  {value && !readOnly && (
+                    <button
+                      type="button"
+                      className="rounded p-1 text-slate-400 hover:text-danger"
+                      aria-label={`Limpar ${text.toLowerCase()}`}
+                      disabled={busy}
+                      onClick={() => send({ type: 'update_activity', activityId: activity.id, [field]: null })}
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">A medição preenche as datas reais; aqui elas podem ser corrigidas ou limpas.</p>
+          <p className={`${sectionTitle} flex items-center gap-1.5`}>
+            <Camera size={13} aria-hidden /> Fotos da medição
+            {photoRound && (
+              <span className="font-normal text-slate-500">
+                #{photoRound.number} · {formatDate(photoRound.date)} · {plural(photos.length, 'foto', 'fotos')}
+              </span>
+            )}
+          </p>
+          {photos.length ? (
+            <ul className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1.5">
+              {photos.map(photo => (
+                <li key={photo.id}>
+                  <button
+                    type="button"
+                    className="block aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                    onClick={() => setViewing(photo)}
+                    aria-label={`Abrir foto de ${formatTimestamp(photo.createdAt)}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- miniatura assinada do Storage */}
+                    <img src={photo.thumbUrl ?? photo.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">Nenhuma foto deste bloco ainda. As fotos entram pela medição.</p>
+          )}
+          {viewing && (
+            <PhotoLightbox
+              photo={viewing}
+              label={`${title} · ${formatTimestamp(viewing.createdAt)}`}
+              onClose={() => setViewing(undefined)}
+            />
+          )}
+
+          {!readOnly && (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+              <button type="button" className="button-ghost px-2.5 py-1.5 text-xs hover:text-danger" disabled={busy} onClick={remove}>
+                <Trash2 size={14} aria-hidden /> Excluir bloco
+              </button>
+              {local && <span className="self-center text-[11px] text-slate-400">Local: {local.name}</span>}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

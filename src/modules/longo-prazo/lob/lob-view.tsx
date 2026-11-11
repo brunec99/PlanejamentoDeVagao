@@ -35,7 +35,7 @@ import { LobLaunchDialog } from './lob-launch-dialog';
 import { LobBaselinesPanel } from './lob-baselines-panel';
 
 /** Visão "Linha de Balanço" da aba 1 (modelo aprovado em 04/11/2026, tela 1): barra de ferramentas,
- * quatro indicadores, gráfico (ou tabela) com legenda e o painel lateral da atividade selecionada.
+ * quatro indicadores, o painel da atividade selecionada e, abaixo dele, o gráfico (ou tabela) com legenda.
  * Os dados vêm de `useLob`; toda alteração é um comando ao servidor, que devolve a obra inteira já
  * recalculada (cascata de sucessoras incluída). "Desfazer" guarda, por comando, as datas que ele
  * mudou e as reenvia; vale na sessão (regra 16). */
@@ -773,94 +773,91 @@ function LobViewInner({ workId }: { workId: string }) {
         />
       </div>
 
-      {/* Gráfico (ou tabela) e painel lateral */}
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="panel p-4" data-tour="longo-lob-grafico">
-          {!data.activities.length ? (
-            <p className="py-12 text-center text-sm text-slate-500">
-              A Linha de Balanço desta obra ainda não tem blocos.
-              {!readOnly && ' Use "Lançar fluxo" para criar os blocos a partir de um fluxo da empresa, ou importe o plano do Planejador.'}
-            </p>
-          ) : showTable ? (
-            <LobTable
-              data={data}
-              percents={percents}
-              today={today}
-              hiddenServiceIds={hiddenServiceIds}
-              visibleLocalIds={localFilter}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          ) : (
-            <LobChart
-              data={data}
-              today={today}
-              percents={percents}
-              measurementDates={measurementDates}
-              baseline={baseline}
-              hiddenServiceIds={hiddenServiceIds}
-              visibleLocalIds={localFilter}
-              range={range}
-              zoom={zoom}
-              selectedId={selectedId}
-              readOnly={readOnly || busy}
-              onSelect={setSelectedId}
-              onMove={move}
-              scrollToTodayToken={todayToken}
-            />
-          )}
-          {services.length > 0 && (
-            <div data-tour="longo-lob-legenda" className="mt-3 border-t border-slate-100 pt-3">
-              <LobLegend services={services} hidden={hiddenServiceIds} onToggle={toggleService} />
-            </div>
-          )}
-        </div>
-        <aside className="panel p-4" data-tour="longo-lob-painel" aria-label="Atividade selecionada">
-          {selected ? (
-            <LobActivityPanel
-              key={selected.id}
-              activity={selected}
-              data={data}
-              percents={percents}
-              today={today}
-              readOnly={readOnly}
-              onExecute={run}
-              onClose={() => setSelectedId(undefined)}
-              onSelect={setSelectedId}
-              onCreatePending={canPend ? createPending : undefined}
-            />
-          ) : data.activities.length ? (
-            <div className="text-sm text-slate-500">
-              <p className="eyebrow">Atividade selecionada</p>
-              <p className="mt-2">Clique num bloco para ver detalhes: datas, duração, dependências, equipe, situação e fotos da medição.</p>
+      {/* Atividade selecionada: acima do gráfico, para não tomar a lateral dele (11/11/2026) */}
+      <aside className="panel p-4" data-tour="longo-lob-painel" aria-label="Atividade selecionada">
+        {selected ? (
+          <LobActivityPanel
+            key={selected.id}
+            activity={selected}
+            data={data}
+            percents={percents}
+            today={today}
+            readOnly={readOnly}
+            onExecute={run}
+            onClose={() => setSelectedId(undefined)}
+            onSelect={setSelectedId}
+            onCreatePending={canPend ? createPending : undefined}
+          />
+        ) : data.activities.length ? (
+          <div className="text-sm text-slate-500">
+            <p className="eyebrow">Atividade selecionada</p>
+            <p className="mt-2">Clique num bloco para ver detalhes: datas, duração, dependências, equipe, situação e fotos da medição.</p>
+            {!readOnly && (
+              <p className="mt-2 text-xs">Arraste um bloco para mudar a data; as sucessoras acompanham. H leva até hoje; Ctrl+Z desfaz.</p>
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">
+            <p className="eyebrow">Começar</p>
+            <p className="mt-2">Nenhum bloco ainda. Cadastre os locais e lance um fluxo da empresa, ou traga o plano do Planejador.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
               {!readOnly && (
-                <p className="mt-2 text-xs">
-                  Arraste um bloco para mudar a data; as sucessoras acompanham. H leva até hoje; Ctrl+Z desfaz.
-                </p>
+                <button type="button" className="button" disabled={busy} onClick={() => openLaunch()}>
+                  <Plus size={16} aria-hidden /> Lançar fluxo
+                </button>
+              )}
+              <button type="button" className="button-ghost" onClick={() => setPanel('locals')}>
+                <Building2 size={15} aria-hidden /> Locais da obra
+              </button>
+              {!readOnly && (
+                <button type="button" className="button-ghost" disabled={busy} onClick={importPlanner}>
+                  <Upload size={15} aria-hidden /> Importar do Planejador
+                </button>
               )}
             </div>
-          ) : (
-            <div className="text-sm text-slate-600">
-              <p className="eyebrow">Começar</p>
-              <p className="mt-2">Nenhum bloco ainda. Cadastre os locais e lance um fluxo da empresa, ou traga o plano do Planejador.</p>
-              <div className="mt-3 flex flex-col gap-2">
-                {!readOnly && (
-                  <button type="button" className="button" disabled={busy} onClick={() => openLaunch()}>
-                    <Plus size={16} aria-hidden /> Lançar fluxo
-                  </button>
-                )}
-                <button type="button" className="button-ghost" onClick={() => setPanel('locals')}>
-                  <Building2 size={15} aria-hidden /> Locais da obra
-                </button>
-                {!readOnly && (
-                  <button type="button" className="button-ghost" disabled={busy} onClick={importPlanner}>
-                    <Upload size={15} aria-hidden /> Importar do Planejador
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </aside>
+          </div>
+        )}
+      </aside>
+      {/* Gráfico (ou tabela), na largura toda */}
+      <div className="panel p-4" data-tour="longo-lob-grafico">
+        {!data.activities.length ? (
+          <p className="py-12 text-center text-sm text-slate-500">
+            A Linha de Balanço desta obra ainda não tem blocos.
+            {!readOnly && ' Use "Lançar fluxo" para criar os blocos a partir de um fluxo da empresa, ou importe o plano do Planejador.'}
+          </p>
+        ) : showTable ? (
+          <LobTable
+            data={data}
+            percents={percents}
+            today={today}
+            hiddenServiceIds={hiddenServiceIds}
+            visibleLocalIds={localFilter}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        ) : (
+          <LobChart
+            data={data}
+            today={today}
+            percents={percents}
+            measurementDates={measurementDates}
+            baseline={baseline}
+            hiddenServiceIds={hiddenServiceIds}
+            visibleLocalIds={localFilter}
+            range={range}
+            zoom={zoom}
+            selectedId={selectedId}
+            readOnly={readOnly || busy}
+            onSelect={setSelectedId}
+            onMove={move}
+            scrollToTodayToken={todayToken}
+          />
+        )}
+        {services.length > 0 && (
+          <div data-tour="longo-lob-legenda" className="mt-3 border-t border-slate-100 pt-3">
+            <LobLegend services={services} hidden={hiddenServiceIds} onToggle={toggleService} />
+          </div>
+        )}
       </div>
 
       {panel === 'locals' && (

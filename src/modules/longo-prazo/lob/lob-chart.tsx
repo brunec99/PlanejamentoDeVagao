@@ -573,6 +573,9 @@ export function LobChart(props: LobChartProps) {
     if (block) {
       if (!drag.moved) {
         focusNextRef.current = drag.id;
+        // O painel da atividade abre acima do gráfico e o empurra para baixo antes de o `click` chegar:
+        // o clique cairia fora do bloco e desfaria a seleção. Quem selecionou foi este soltar.
+        justDraggedRef.current = true;
         onSelect(drag.id);
       } else {
         justDraggedRef.current = true;
