@@ -7,17 +7,36 @@
  * link do e-mail de pendência saía apontando para lá. Os desvios do proxy (`src/proxy.ts`) não sofrem
  * disso, porque o Next os devolve como caminho relativo.
  *
- * O endereço certo está no cabeçalho `Host`, que o proxy da frente (Vercel, túnel da Cloudflare) repassa
- * como o navegador mandou e usa para rotear a requisição até aqui; o protocolo vem de `x-forwarded-proto`.
- * `x-forwarded-host` fica de fora: é um cabeçalho que quem chama pode escrever à vontade.
- * Sem `Host` válido, vale o `fallback` (a origem que o Next informou). Função pura. */
+ * De onde vem o endereço, em ordem:
+ * 1. `configured`, o endereço oficial da instalação (variável `PUBLIC_SITE_URL`). Com ele nenhum cabeçalho
+ *    é lido: é o recomendado fora da Vercel, porque o link do e-mail sai do sistema e não deve depender
+ *    do que a requisição diz.
+ * 2. O cabeçalho `Host`, que o proxy da frente (Vercel, túnel da Cloudflare) repassa como o navegador
+ *    mandou e usa para rotear a requisição até aqui; o protocolo vem de `x-forwarded-proto`.
+ *    `x-forwarded-host` fica de fora: é um cabeçalho que quem chama pode escrever à vontade.
+ * 3. O `fallback` (a origem que o Next informou), quando não há `Host` válido.
+ * Função pura: quem chama passa a variável de ambiente. */
 
 export type HeaderReader = { get(name: string): string | null };
 
 // Nome de máquina ou IP, com porta opcional. Nada de barra, arroba ou espaço: o valor vira origem de URL.
 const HOST = /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|\[[0-9a-f:]+\])(?::\d{1,5})?$/i;
 
-export function publicOrigin(headers: HeaderReader, fallback: string): string {
+/** Origem (`https://site`) de um endereço configurado; `null` se estiver vazio ou não for http(s). */
+function configuredOrigin(value: string | undefined): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+export function publicOrigin(headers: HeaderReader, fallback: string, configured?: string): string {
+  const fixed = configuredOrigin(configured);
+  if (fixed) return fixed;
   const host = headers.get('host')?.trim() ?? '';
   if (!HOST.test(host)) return fallback;
   const forwarded = headers.get('x-forwarded-proto')?.split(',')[0].trim().toLowerCase();

@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     await sendNotifications(mutation.notifications, {
       workId,
       // O link do e-mail precisa do endereço público: fora da Vercel, `request.nextUrl.origin` é o interno.
-      origin: publicOrigin(request.headers, request.nextUrl.origin),
+      origin: publicOrigin(request.headers, request.nextUrl.origin, process.env.PUBLIC_SITE_URL),
       now: ctx.now,
       actorId: profile.id,
     });

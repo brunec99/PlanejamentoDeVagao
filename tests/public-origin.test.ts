@@ -45,3 +45,15 @@ test('protocolo que não é http nem https é ignorado', () => {
   const headers = new Headers({ host: 'obra360-teste.example.com', 'x-forwarded-proto': 'javascript' });
   assert.equal(publicOrigin(headers, INTERNAL), 'https://obra360-teste.example.com');
 });
+
+test('com o endereço oficial configurado, nenhum cabeçalho é lido', () => {
+  const headers = new Headers({ host: 'outro.example', 'x-forwarded-proto': 'http' });
+  assert.equal(publicOrigin(headers, INTERNAL, 'https://obra360-teste.example.com'), 'https://obra360-teste.example.com');
+  assert.equal(publicOrigin(new Headers(), INTERNAL, ' https://obra360-teste.example.com/obras?x=1 '), 'https://obra360-teste.example.com');
+});
+
+test('endereço oficial vazio ou inválido é ignorado e vale o Host', () => {
+  const headers = new Headers({ host: 'obra360-teste.example.com', 'x-forwarded-proto': 'https' });
+  for (const configured of [undefined, '', '   ', 'obra360-teste.example.com', 'javascript:alert(1)', 'ftp://outro.example'])
+    assert.equal(publicOrigin(headers, INTERNAL, configured), 'https://obra360-teste.example.com', String(configured));
+});

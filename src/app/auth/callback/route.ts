@@ -13,7 +13,7 @@ const NOT_REGISTERED = 'Seu e-mail ainda não foi cadastrado no Obra 360. Peça 
  * `request.nextUrl` aponta para onde o servidor escuta, e o navegador não chega lá. O caminho entra por
  * `pathname`, que nunca troca o domínio, mesmo que o valor comece com `//`. */
 function siteUrl(request: NextRequest, pathname: string) {
-  const url = new URL(publicOrigin(request.headers, request.nextUrl.origin));
+  const url = new URL(publicOrigin(request.headers, request.nextUrl.origin, process.env.PUBLIC_SITE_URL));
   url.pathname = pathname;
   return url;
 }
