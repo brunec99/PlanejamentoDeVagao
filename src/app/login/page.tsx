@@ -2,7 +2,6 @@ import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { CalendarRange, ChartGantt, ClipboardCheck, TrainFront } from 'lucide-react';
 import { cookies } from 'next/headers';
-import { signInWithGoogle } from './actions';
 import { AccessRequest } from './access-request';
 import { NOT_REGISTERED_REASON } from '@/application/access-request';
 import { ACCESS_REQUEST_COOKIE, readIdentity } from '@/infrastructure/auth/access-request-token';
@@ -122,7 +121,8 @@ export default async function LoginPage({
 
             {notRegistered && <AccessRequest verified={verified} />}
 
-            <form action={signInWithGoogle} aria-labelledby="login-title">
+            {/* Formulário comum (GET), e não ação de servidor: ver o porquê em `google/route.ts`. */}
+            <form action="/login/google" method="get" aria-labelledby="login-title">
               <input type="hidden" name="redirect" value={params.redirect ?? '/obras'} />
               <button
                 type="submit"
