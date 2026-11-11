@@ -20,6 +20,7 @@ import {
   resolveSourceForCreate,
 } from '@/infrastructure/repositories/supabase/pending-repository';
 import { enqueuePendingEmail, pendingEmail } from '@/infrastructure/email/takt-outbox';
+import { publicOrigin } from '@/infrastructure/public-origin';
 import { commandContext } from '@/infrastructure/clock';
 import { logRouteError } from '@/infrastructure/log';
 
@@ -108,7 +109,13 @@ export async function POST(request: NextRequest) {
     // Defesa extra: o planejador só enxerga a obra carregada, mas a gravação não pode sair dela.
     if (mutation.workId !== workId) return responseError('Você não tem acesso a esta obra.', 403);
     await applyMutation(mutation);
-    await sendNotifications(mutation.notifications, { workId, origin: request.nextUrl.origin, now: ctx.now, actorId: profile.id });
+    await sendNotifications(mutation.notifications, {
+      workId,
+      // O link do e-mail precisa do endereço público: fora da Vercel, `request.nextUrl.origin` é o interno.
+      origin: publicOrigin(request.headers, request.nextUrl.origin, process.env.PUBLIC_SITE_URL),
+      now: ctx.now,
+      actorId: profile.id,
+    });
     const fresh = await loadPending(workId);
     return NextResponse.json({ available: true, people, admin, actorId: profile.id, ...fresh } satisfies PendingResponse, { headers });
   } catch (error) {

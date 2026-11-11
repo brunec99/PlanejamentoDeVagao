@@ -4,14 +4,22 @@ import { getServiceClient } from '@/infrastructure/repositories/supabase/client'
 import { BOOTSTRAP_ADMIN_EMAIL } from '@/application/module-access';
 import { ACCESS_DOMAINS_LABEL, NOT_REGISTERED_REASON, isAllowedEmail } from '@/application/access-request';
 import { ACCESS_REQUEST_COOKIE, signIdentity } from '@/infrastructure/auth/access-request-token';
+import { publicOrigin } from '@/infrastructure/public-origin';
 
 export const runtime = 'nodejs';
 const NOT_REGISTERED = 'Seu e-mail ainda não foi cadastrado no Obra 360. Peça o cadastro a um administrador.';
 
+/** Endereço de uma página do próprio sistema, no endereço público (ver `publicOrigin`): fora da Vercel,
+ * `request.nextUrl` aponta para onde o servidor escuta, e o navegador não chega lá. O caminho entra por
+ * `pathname`, que nunca troca o domínio, mesmo que o valor comece com `//`. */
+function siteUrl(request: NextRequest, pathname: string) {
+  const url = new URL(publicOrigin(request.headers, request.nextUrl.origin, process.env.PUBLIC_SITE_URL));
+  url.pathname = pathname;
+  return url;
+}
+
 function loginError(request: NextRequest, message: string, reason?: string) {
-  const url = request.nextUrl.clone();
-  url.pathname = '/login';
-  url.search = '';
+  const url = siteUrl(request, '/login');
   url.searchParams.set('error', message);
   // O motivo deixa a tela de login oferecer "Solicitar acesso" a quem não tem cadastro.
   if (reason) url.searchParams.set('motivo', reason);
@@ -88,8 +96,5 @@ export async function GET(request: NextRequest) {
     if (insertError) return loginError(request, 'Não foi possível provisionar seu acesso. Contate um administrador.');
   }
 
-  const url = request.nextUrl.clone();
-  url.pathname = redirectTo.startsWith('/') ? redirectTo : '/obras';
-  url.search = '';
-  return NextResponse.redirect(url);
+  return NextResponse.redirect(siteUrl(request, redirectTo.startsWith('/') ? redirectTo : '/obras'));
 }

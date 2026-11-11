@@ -32,7 +32,7 @@ export interface PendingEmail {
   payload: PendingEmailPayload;
 }
 
-/** Endereço do card na aba 2. `origin` é a origem da requisição (`request.nextUrl.origin`). */
+/** Endereço do card na aba 2. `origin` é o endereço público do sistema (`publicOrigin`, em `../public-origin`). */
 export const pendingCardLink = (origin: string, workId: string, cardId: string) =>
   `${origin}/obras/${encodeURIComponent(workId)}/vagoes?visao=pendencias&card=${cardId}`;
 
