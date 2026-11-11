@@ -6,6 +6,20 @@ test('a tela de login abre com o acesso pelo Google', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Continuar com o Google/ })).toBeVisible();
 });
 
+test('o botão do Google é um formulário comum, e o início do login manda para o Supabase', async ({ page, request }) => {
+  await page.goto('/login?redirect=%2Fobras%2Fabc');
+  const form = page.locator('form', { has: page.getByRole('button', { name: /Continuar com o Google/ }) });
+  await expect(form).toHaveAttribute('action', '/login/google');
+  await expect(form).toHaveAttribute('method', 'get');
+  const response = await request.get('/login/google?redirect=%2Fobras%2Fabc', { maxRedirects: 0 });
+  expect(response.status()).toBe(307);
+  const location = new URL(response.headers()['location']);
+  expect(location.pathname).toBe('/auth/v1/authorize');
+  expect(location.searchParams.get('provider')).toBe('google');
+  // A volta do Google usa o endereço pelo qual o navegador chegou, não o endereço interno do servidor.
+  expect(location.searchParams.get('redirect_to')).toBe('http://127.0.0.1:3100/auth/callback?redirect=%2Fobras%2Fabc');
+});
+
 test('uma rota protegida sem sessão volta para o login', async ({ page }) => {
   await page.goto('/obras');
   await expect(page).toHaveURL(/\/login\?redirect=%2Fobras/);

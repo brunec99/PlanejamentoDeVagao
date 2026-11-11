@@ -1,30 +1,12 @@
 'use server';
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
 import { validateAccessRequest } from '@/application/access-request';
 import { ACCESS_REQUEST_COOKIE, readIdentity } from '@/infrastructure/auth/access-request-token';
 
-async function origin() {
-  const h = await headers();
-  return h.get('origin') ?? `${h.get('x-forwarded-proto') ?? 'https'}://${h.get('host')}`;
-}
-
-export async function signInWithGoogle(formData: FormData) {
-  const redirectTo = String(formData.get('redirect') ?? '/obras');
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${await origin()}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
-      // "*" mostra só contas de empresa (Google Workspace): ATR e Takt. O domínio é conferido no retorno.
-      queryParams: { hd: '*', prompt: 'select_account' },
-    },
-  });
-  if (error || !data.url) redirect(`/login?error=${encodeURIComponent('Não foi possível iniciar o login com Google.')}`);
-  redirect(data.url);
-}
+// O início do login com o Google não é ação de servidor: é o endereço `/login/google` (ver `google/route.ts`).
 
 export async function signOut() {
   const supabase = await createServerSupabase();
