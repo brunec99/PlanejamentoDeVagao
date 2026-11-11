@@ -9,6 +9,7 @@ import { LongTermPlanner } from '@/modules/longo-prazo/planner/long-term-planner
 import { LobView } from '@/modules/longo-prazo/lob/lob-view';
 import { FlowsView } from '@/modules/longo-prazo/lob/flows-view';
 import { MeasurementsView } from '@/modules/longo-prazo/lob/measurements-view';
+import { CostsView } from '@/modules/longo-prazo/lob/costs-view';
 import { LegalizationView } from '@/modules/longo-prazo/legalizacao/legalization-view';
 import { TabHeader } from '@/modules/layout/tab-header';
 import { Callout } from '@/modules/planejamento/ui';
@@ -20,11 +21,14 @@ export const metadata = { title: 'Cronograma de longo prazo' };
  * "Vagões e restrições": em 10/11/2026 o quadro de restrições foi para a aba 2, "Lista de pendência")
  * continua, e o Planejador (fluxograma) fica por último até a Linha de Balanço assumir "Gerar
  * vagões". O endereço guarda a visão em `?visao=`. O Gantt de legalização (04/11/2026, segundo modelo
- * aprovado, regra 1) entra depois de Medições: os 12 meses até a entrega, no cronograma do Project. */
+ * aprovado, regra 1) entra depois de Medições: os 12 meses até a entrega, no cronograma do Project.
+ * Custos (11/11/2026, com o IDP ponderado por custo) vem logo depois de Medições: o orçamento
+ * apropriado por pacote de serviço, que dá o peso de cada serviço. */
 const VIEWS = [
   { id: 'lob', label: 'Linha de Balanço' },
   { id: 'fluxos', label: 'Fluxos de serviços' },
   { id: 'medicoes', label: 'Medições' },
+  { id: 'custos', label: 'Custos' },
   { id: 'legalizacao', label: 'Gantt de legalização' },
   { id: 'prevision', label: 'Vagões' },
   { id: 'planejador', label: 'Planejador' },
@@ -34,6 +38,8 @@ const DESCRIPTIONS: Record<View, string> = {
   lob: 'Linha de Balanço da obra: cada bloco é um serviço num local, com o que já foi medido. Arraste para reprogramar; as sucessoras acompanham.',
   fluxos: 'Fluxos de serviços: a sequência padrão da empresa, com duração por local e dependências, pronta para lançar em qualquer obra.',
   medicoes: 'Medições: o acumulado realizado de cada serviço em cada local, com foto do que avançou.',
+  custos:
+    'Custos: o orçamento apropriado em cada pacote de serviço, que dá o peso de cada serviço no avanço físico e no IDP (real ÷ planejado).',
   legalizacao:
     'Gantt de legalização: os 12 meses até a entrega, com o caminho crítico da obra e os documentos de cada órgão até as chaves.',
   prevision: 'As atividades dos vagões em Linha de Balanço, só para leitura, com a curva de avanço e as linhas de base da obra.',
@@ -67,6 +73,12 @@ export default async function Page({
       <p>
         <strong>Medições</strong> são rodadas com data: o acumulado realizado de cada bloco, com foto obrigatória de cada avanço. Elas
         preenchem os blocos, apontam os atrasos e alimentam o avanço físico.
+      </p>
+      <p>
+        <strong>Custos</strong> é a apropriação do orçamento em cada pacote de serviço: digite um valor por pacote ou cole as linhas do
+        orçamento e aponte cada uma a um pacote. Com todos os pacotes que têm blocos custeados, o avanço físico e o <strong>IDP</strong> (%
+        físico real ÷ % físico planejado, na última medição fechada) passam a pesar cada serviço pelo custo; antes disso, pesam pela
+        duração. Quem só consulta vê o peso em %, sem os valores em reais.
       </p>
       <p>
         <strong>Gantt de legalização</strong> é o planejamento dos 12 meses até a entrega: o caminho crítico da obra e a legalização por
@@ -119,6 +131,7 @@ export default async function Page({
       {view === 'lob' && <LobView workId={obraId} />}
       {view === 'fluxos' && <FlowsView workId={obraId} />}
       {view === 'medicoes' && <MeasurementsView workId={obraId} />}
+      {view === 'custos' && <CostsView workId={obraId} />}
       {view === 'legalizacao' && <LegalizationView workId={obraId} />}
       {view === 'planejador' && <LongTermPlanner workId={obraId} />}
       {view === 'prevision' && (

@@ -15,6 +15,7 @@ import {
   lobPhotoPaths,
   type LobActivity,
   type LobCommand,
+  type LobCostItem,
   type LobData,
   type LobDependency,
   type LobDependencyKind,
@@ -35,6 +36,7 @@ const I1 = '33333333-3333-4333-8333-000000000001';
 const I2 = '33333333-3333-4333-8333-000000000002';
 const NEW_ITEM = '33333333-3333-4333-8333-000000000099';
 const PHOTO = (n: number) => `44444444-4444-4444-8444-${String(n).padStart(12, '0')}`;
+const COST = (n: number) => `55555555-5555-4555-8555-${String(n).padStart(12, '0')}`;
 
 let seq = 0;
 const ctx = (over: Partial<LobContext> = {}): LobContext => ({
@@ -150,6 +152,7 @@ function fixture(): LobData {
     measurements: [measurement(M1, 1, '2026-10-16')],
     items: [item(I1, M1, 'a11', 50)],
     photos: [photo(1, I1, M1, 'a11')],
+    costs: [],
   };
 }
 /** A obra com a medição #2 aberta em 04/11, ainda sem lançamentos. */
@@ -169,6 +172,7 @@ const empty = (): LobData => ({
   measurements: [],
   items: [],
   photos: [],
+  costs: [],
 });
 
 const run = (d: LobData, c: LobCommand, extras: LobExtras = {}, over: Partial<LobContext> = {}) => planLobCommand(d, c, ctx(over), extras);
@@ -184,6 +188,7 @@ const TABLES: readonly LobTable[] = [
   'measurements',
   'items',
   'photos',
+  'costs',
 ];
 const touched = (m: LobMutation) =>
   TABLES.flatMap(t => [...m.insert[t].map(() => `+${t}`), ...m.update[t].map(() => `~${t}`), ...m.delete[t].map(() => `-${t}`)]).sort();
@@ -506,6 +511,7 @@ test('lobCommandTarget devolve a tabela certa para cada comando com id e a obra 
     [launchFlow(), { workId: W }],
     [{ type: 'import_planner', workId: W }, { workId: W }],
     [{ type: 'create_baseline', workId: W, name: 'x' }, { workId: W }],
+    [{ type: 'save_costs', workId: W, upsert: [], remove: [COST(1)] }, { workId: W }],
   ];
   for (const [command, expected] of cases) assert.deepEqual(lobCommandTarget(command), expected, command.type);
   // Comando sem workId acha a obra pelo registro; registro inexistente é recusado.
@@ -1365,4 +1371,236 @@ test('delete_measurement desfaz as datas reais que vieram dela e mantém as digi
     run(fixture(), { type: 'delete_measurement', measurementId: M1 }).update.activities.find(a => a.id === 'a11'),
     undefined,
   );
+});
+
+// ----- Apropriação de custos (11/11/2026) -----
+
+const cost = (n: number, serviceId: string | undefined, amount: number, over: Partial<LobCostItem> = {}): LobCostItem => ({
+  id: COST(n),
+  workId: W,
+  serviceId,
+  description: `Item ${n}`,
+  amount,
+  orderIndex: n,
+  createdBy: 'u0',
+  ...stamp,
+  ...over,
+});
+/** A obra com três itens: dois na Estrutura (um com código) e um não apropriado. */
+function withCosts(): LobData {
+  const d = fixture();
+  d.costs = [cost(1, 's1', 1000, { code: '01.01' }), cost(2, 's1', 250.5), cost(3, undefined, 80)];
+  return d;
+}
+const saveCosts = (upsert: Extract<LobCommand, { type: 'save_costs' }>['upsert'], remove: string[] = []): LobCommand => ({
+  type: 'save_costs',
+  workId: W,
+  upsert,
+  remove,
+});
+const parseCosts = (upsert: unknown, remove: unknown = []) => parseLobCommand({ type: 'save_costs', workId: W, upsert, remove });
+const costInput = (n: number, over: Record<string, unknown> = {}) => ({
+  id: COST(n),
+  serviceId: 's1',
+  description: `Item ${n}`,
+  amount: 10,
+  ...over,
+});
+
+test('parse save_costs: listas obrigatórias, não as duas vazias, obra e limite por gravação', () => {
+  assert.throws(() => parseLobCommand({ type: 'save_costs', upsert: [costInput(1)], remove: [] }), { message: 'Obra não informada.' });
+  assert.throws(() => parseCosts(undefined), { message: 'Lista de itens de custo inválida.' });
+  assert.throws(() => parseCosts([], 'x'), { message: 'Lista de itens de custo inválida.' });
+  assert.throws(() => parseCosts([], []), { message: 'Nenhum item de custo para salvar.' });
+  const many = Array.from({ length: LOB_LIMITS.costBatch + 1 }, (_, i) => costInput(i + 1));
+  assert.throws(() => parseCosts(many), { message: `Salve no máximo ${LOB_LIMITS.costBatch} itens de custo por vez.` });
+  assert.throws(
+    () =>
+      parseCosts(
+        [],
+        many.map(c => c.id),
+      ),
+    { message: `Salve no máximo ${LOB_LIMITS.costBatch} itens de custo por vez.` },
+  );
+  // Só exclusão vale.
+  assert.deepEqual(parseCosts([], [COST(1)]), { type: 'save_costs', workId: W, upsert: [], remove: [COST(1)] });
+});
+
+test('parse save_costs: id UUID, descrição limpa e obrigatória, código até o limite, pacote string ou nulo', () => {
+  assert.throws(() => parseCosts([costInput(1, { id: undefined })]), { message: 'Item de custo sem identificador.' });
+  assert.throws(() => parseCosts([costInput(1, { id: 'item-1' })]), { message: 'Identificador do item de custo inválido.' });
+  assert.throws(() => parseCosts([], ['item-1']), { message: 'Identificador do item de custo inválido.' });
+  assert.throws(() => parseCosts([costInput(1, { description: '   ' })]), { message: 'O item 1: informe a descrição do item de custo.' });
+  assert.throws(() => parseCosts([costInput(1, { description: '', code: '02.03' })]), {
+    message: 'O item 02.03: informe a descrição do item de custo.',
+  });
+  assert.throws(() => parseCosts([costInput(1, { description: 'x'.repeat(LOB_LIMITS.costDescription + 1) })]), {
+    message: new RegExp(`a descrição passa de ${LOB_LIMITS.costDescription} caracteres`),
+  });
+  assert.throws(() => parseCosts([costInput(1, { code: '9'.repeat(LOB_LIMITS.costCode + 1) })]), {
+    message: `"Item 1": o código passa de ${LOB_LIMITS.costCode} caracteres.`,
+  });
+  assert.throws(() => parseCosts([costInput(1, { code: 12 })]), { message: '"Item 1": código inválido.' });
+  assert.throws(() => parseCosts([costInput(1, { serviceId: 7 })]), { message: '"Item 1": pacote inválido.' });
+  const parsed = parseCosts([
+    costInput(1, { description: '  Concreto   usinado\tfck 30 ', code: ' 03.01 ' }),
+    costInput(2, { serviceId: null, code: '' }),
+    costInput(3, { serviceId: '' }),
+    costInput(4, { serviceId: undefined, code: null }),
+  ]) as Extract<LobCommand, { type: 'save_costs' }>;
+  assert.deepEqual(parsed.upsert, [
+    { id: COST(1), serviceId: 's1', code: '03.01', description: 'Concreto usinado fck 30', amount: 10 },
+    { id: COST(2), serviceId: null, code: null, description: 'Item 2', amount: 10 },
+    { id: COST(3), serviceId: null, code: null, description: 'Item 3', amount: 10 },
+    { id: COST(4), serviceId: null, code: null, description: 'Item 4', amount: 10 },
+  ]);
+});
+
+test('parse save_costs: valor número finito, nem negativo nem acima do teto, arredondado a centavos', () => {
+  for (const amount of [Number.NaN, Number.POSITIVE_INFINITY, '1.234,56', null, undefined])
+    assert.throws(
+      () => parseCosts([costInput(1, { amount })]),
+      { message: '"Item 1": valor inválido. Informe o valor em reais.' },
+      String(amount),
+    );
+  assert.throws(() => parseCosts([costInput(1, { amount: -0.01 })]), { message: '"Item 1": o valor não pode ser negativo.' });
+  assert.throws(() => parseCosts([costInput(1, { amount: LOB_LIMITS.maxCostAmount + 1 })]), {
+    message: '"Item 1": o valor passa do teto de R$ 1 trilhão por item.',
+  });
+  const amounts = (values: number[]) =>
+    (parseCosts(values.map((amount, i) => costInput(i + 1, { amount }))) as Extract<LobCommand, { type: 'save_costs' }>).upsert.map(
+      c => c.amount,
+    );
+  assert.deepEqual(amounts([1.005, 10.004, 1234.565, 0, 0.001, LOB_LIMITS.maxCostAmount]), [
+    1.01,
+    10,
+    1234.57,
+    0,
+    0,
+    LOB_LIMITS.maxCostAmount,
+  ]);
+  assert.ok(Object.is(amounts([0.001])[0], 0), 'nada de −0 nem 0,001 gravado');
+});
+
+test('parse save_costs: id repetido ou presente em upsert e remove é recusado', () => {
+  assert.throws(() => parseCosts([costInput(1), costInput(1, { amount: 20 })]), {
+    message: 'Um item de custo aparece duas vezes na gravação. Recarregue a página.',
+  });
+  assert.throws(() => parseCosts([costInput(1)], [COST(1)]), {
+    message: 'Um item de custo não pode ser salvo e excluído na mesma gravação. Recarregue a página.',
+  });
+  assert.throws(() => parseCosts([], [COST(1), COST(1)]), {
+    message: 'Um item de custo aparece duas vezes entre os excluídos. Recarregue a página.',
+  });
+});
+
+test('save_costs insere itens novos na ordem recebida depois do maior orderIndex, com o ator e o carimbo', () => {
+  const m = run(
+    withCosts(),
+    saveCosts([
+      { id: COST(10), serviceId: 's2', code: '04.01', description: 'Bloco cerâmico', amount: 5000 },
+      { id: COST(11), serviceId: null, description: 'Administração local', amount: 0 },
+    ]),
+  );
+  assert.deepEqual(touched(m), ['+costs', '+costs']);
+  assert.equal(m.workId, W);
+  assert.deepEqual(m.insert.costs, [
+    {
+      id: COST(10),
+      workId: W,
+      serviceId: 's2',
+      code: '04.01',
+      description: 'Bloco cerâmico',
+      amount: 5000,
+      orderIndex: 4,
+      createdBy: 'u1',
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+    {
+      id: COST(11),
+      workId: W,
+      serviceId: undefined,
+      code: undefined,
+      description: 'Administração local',
+      amount: 0,
+      orderIndex: 5,
+      createdBy: 'u1',
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+  ]);
+  assert.deepEqual(m.summary, { saved: 2, removed: 0 });
+  // Obra sem itens começa do zero.
+  assert.equal(run(fixture(), saveCosts([costInput(1)])).insert.costs[0].orderIndex, 0);
+});
+
+test('save_costs atualiza só o que mudou, preservando autor, criação e ordem', () => {
+  const m = run(
+    withCosts(),
+    saveCosts([
+      // Sem mudança (o código vazio e o ausente são o mesmo): não vira escrita.
+      { id: COST(1), serviceId: 's1', code: '01.01', description: 'Item 1', amount: 1000 },
+      { id: COST(3), serviceId: null, code: null, description: 'Item 3', amount: 80 },
+      // Muda o pacote: apropria o item que estava solto.
+      { id: COST(2), serviceId: 's2', description: 'Item 2', amount: 250.5 },
+    ]),
+  );
+  assert.deepEqual(touched(m), ['~costs']);
+  assert.deepEqual(m.update.costs[0], { ...cost(2, 's2', 250.5), code: undefined, updatedAt: NOW });
+  assert.equal(m.update.costs[0].createdBy, 'u0');
+  assert.equal(m.update.costs[0].createdAt, OLD);
+  assert.equal(m.update.costs[0].orderIndex, 2);
+  assert.deepEqual(m.summary, { saved: 1, removed: 0 });
+  // Cada campo conta: valor, descrição, código e tirar o pacote.
+  const one = (input: Extract<LobCommand, { type: 'save_costs' }>['upsert'][number]) => run(withCosts(), saveCosts([input])).update.costs;
+  assert.equal(one({ id: COST(1), serviceId: 's1', code: '01.01', description: 'Item 1', amount: 1000.01 })[0].amount, 1000.01);
+  assert.equal(one({ id: COST(1), serviceId: 's1', code: '01.01', description: 'Item um', amount: 1000 })[0].description, 'Item um');
+  assert.equal(one({ id: COST(1), serviceId: 's1', code: null, description: 'Item 1', amount: 1000 })[0].code, undefined);
+  assert.equal(one({ id: COST(1), serviceId: null, code: '01.01', description: 'Item 1', amount: 1000 })[0].serviceId, undefined);
+  // Nada mudou: gravação vazia, sem erro.
+  const idle = run(withCosts(), saveCosts([{ id: COST(2), serviceId: 's1', description: 'Item 2', amount: 250.5 }]));
+  assert.deepEqual(touched(idle), []);
+  assert.deepEqual(idle.summary, { saved: 0, removed: 0 });
+});
+
+test('save_costs remove itens da obra e recusa id que não é dela', () => {
+  const m = run(withCosts(), saveCosts([], [COST(1), COST(3)]));
+  assert.deepEqual(m.delete.costs, [COST(1), COST(3)]);
+  assert.deepEqual(touched(m), ['-costs', '-costs']);
+  assert.deepEqual(m.summary, { saved: 0, removed: 2 });
+  rejects(withCosts(), saveCosts([], [COST(9)]), 'Item de custo não encontrado. Recarregue a página.');
+  // Inserir e remover juntos: um novo, um a menos.
+  const mixed = run(withCosts(), saveCosts([costInput(7)], [COST(2)]));
+  assert.deepEqual(touched(mixed), ['+costs', '-costs']);
+  assert.deepEqual(mixed.summary, { saved: 1, removed: 1 });
+});
+
+test('save_costs: pacote inexistente ou de outra obra é recusado', () => {
+  rejects(withCosts(), saveCosts([costInput(7, { serviceId: 's9' })]), 'Pacote não encontrado. Recarregue a página.');
+  // O pacote de outra obra não está entre os serviços carregados desta obra.
+  const other = withCosts();
+  other.services.push({ ...other.services[0], id: 's-outra', workId: 'obra-2' });
+  const data = { ...other, services: other.services.filter(s => s.workId === W) };
+  rejects(data, saveCosts([costInput(7, { serviceId: 's-outra' })]), 'Pacote não encontrado. Recarregue a página.');
+  rejects(
+    withCosts(),
+    saveCosts([costInput(1, { serviceId: 's9', description: 'Item 1', amount: 1000 })]),
+    'Pacote não encontrado. Recarregue a página.',
+  );
+});
+
+test('save_costs respeita o limite de itens por obra, contando os removidos', () => {
+  const d = fixture();
+  d.costs = Array.from({ length: LOB_LIMITS.costItems - 1 }, (_, i) => cost(i + 1, 's1', 1));
+  const ok = run(d, saveCosts([costInput(LOB_LIMITS.costItems)]));
+  assert.equal(ok.insert.costs.length, 1);
+  rejects(
+    d,
+    saveCosts([costInput(LOB_LIMITS.costItems), costInput(LOB_LIMITS.costItems + 1)]),
+    `A obra aceita no máximo ${LOB_LIMITS.costItems} itens de custo; com esta gravação ficaria com ${LOB_LIMITS.costItems + 1}.`,
+  );
+  // Com um removido, os dois novos cabem.
+  const swap = run(d, saveCosts([costInput(LOB_LIMITS.costItems), costInput(LOB_LIMITS.costItems + 1)], [COST(1)]));
+  assert.deepEqual(swap.summary, { saved: 2, removed: 1 });
 });

@@ -1,13 +1,26 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { lobPhotoPaths, type LobCommand, type LobData, type LobResponse, type ServiceFlow, type ServiceFlowDocument } from '@/domain/lob';
+import {
+  lobPhotoPaths,
+  type LobCommand,
+  type LobCostAccess,
+  type LobData,
+  type LobResponse,
+  type ServiceFlow,
+  type ServiceFlowDocument,
+} from '@/domain/lob';
 
 /** Cliente das visões Linha de Balanço, Fluxos e Medições (aba 1). Os dados vivem fora do snapshot
  * do planejamento: GET /api/lob, POST /api/lob/commands, /api/lob/flows e, para as fotos,
  * POST /api/lob/upload-url seguido do envio direto ao Storage (como na Terminalidade). */
 
+/** `costAccess` (11/11/2026, apropriação de custos): `full` = valores em reais; `masked` = perfil de
+ * consulta, que recebe só a porcentagem de cada item; `unavailable` = migração 0044 não aplicada. */
 export type LobState =
-  { status: 'loading' } | { status: 'error'; message: string } | { status: 'unavailable' } | { status: 'ready'; data: LobData };
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'unavailable' }
+  | { status: 'ready'; data: LobData; costAccess: LobCostAccess };
 
 export class LobApiError extends Error {
   constructor(
@@ -114,7 +127,12 @@ export function useLob(workId: string) {
     if (!response.available) setState({ status: 'unavailable' });
     else {
       const { locals, services, activities, dependencies, baselines, launches, measurements, items, photos } = response;
-      setState({ status: 'ready', data: { locals, services, activities, dependencies, baselines, launches, measurements, items, photos } });
+      const costs = response.costs ?? [];
+      setState({
+        status: 'ready',
+        data: { locals, services, activities, dependencies, baselines, launches, measurements, items, photos, costs },
+        costAccess: response.costAccess ?? 'unavailable',
+      });
     }
   }, []);
   const reload = useCallback(async () => {

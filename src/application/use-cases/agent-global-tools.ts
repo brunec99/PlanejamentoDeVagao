@@ -16,6 +16,15 @@ import {
   type LobData,
   type LobMeasurementItem,
 } from '../../domain/lob';
+import {
+  formatIdp,
+  IDP_TONE_LABEL,
+  idpTone,
+  lobPerformance,
+  servicePerformance,
+  weightingLabel,
+  type LobPerformance,
+} from '../../domain/lob-performance';
 import { leadTimeDeadline } from '../../domain/rules';
 import { addDays, startOfWeek } from '../../domain/validation';
 import { weekNumberFrom } from '../../domain/week-numbering';
@@ -294,7 +303,7 @@ const VAGOES_SPEC: AgentToolSpec = {
 const LOB_SPEC: AgentToolSpec = {
   name: 'consultar_lob',
   description:
-    'Linha de Balanço da obra (aba 1, visão padrão "Linha de Balanço": blocos por serviço × local, medidos em rodadas): avanço físico medido × previsto para hoje da obra e de cada serviço, blocos atrasados com o atraso em dias úteis e o motivo informado na medição, e a última medição fechada. Para o plano do Planejador (serviço por pavimentos), use listar_servicos_macro.',
+    'Linha de Balanço da obra (aba 1, visão padrão "Linha de Balanço": blocos por serviço × local, medidos em rodadas): avanço físico medido × previsto para hoje da obra e de cada serviço, o IDP (índice de desempenho de prazo = % físico real ÷ % físico planejado na última medição fechada, contra a linha de base manual mais recente ou o cronograma atual; 1,00 ou mais em dia, 0,90 a 0,99 atenção, abaixo de 0,90 atrasado) da obra e de cada serviço, blocos atrasados com o atraso em dias úteis e o motivo informado na medição, e a última medição fechada. Avanço, previsto e IDP vêm no mesmo peso, dito no texto: por custo quando todos os pacotes de serviço com blocos têm custo apropriado, senão pela duração (valores em reais não saem desta ferramenta). Para o plano do Planejador (serviço por pavimentos), use listar_servicos_macro.',
   input_schema: { type: 'object', properties: { obra: OBRA_INPUT }, additionalProperties: false },
 };
 
@@ -592,13 +601,39 @@ function delayCauses(lob: LobData, today: string): Map<string, string> {
   return causes;
 }
 
-/** A Linha de Balanço em texto: avanço medido × previsto da obra e de cada serviço, blocos atrasados e medições. Puro. */
+const pct1 = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+/** A linha do IDP (11/11/2026, modelo "IDP na Linha de Balanço"): o número na medição fechada mais recente
+ * (regra 3), a conta, a referência (regra 4) e o peso (regras 6 e 7); sem número nos casos da regra 11.
+ * Nunca diz valor em reais. */
+export function idpLine(performance: LobPerformance): string {
+  const { weights, point, baseline } = performance;
+  const reference = baseline ? `contra a linha de base "${baseline.name}"` : 'contra o cronograma atual';
+  const weight =
+    weights.fallback === 'missing'
+      ? `; faltam custos em ${weights.missingServiceIds.length} de ${plural(weights.servicesWithBlocks.length, 'pacote', 'pacotes')}, então o peso é a duração.`
+      : weights.fallback === 'zero'
+        ? '; os custos apropriados somam zero, então o peso é a duração.'
+        : `, ${weightingLabel(weights.mode)}.`;
+  if (!point) return `IDP (desempenho de prazo): — (sem medição fechada)${weight}`;
+  const at = `IDP (desempenho de prazo) na medição nº ${point.number} de ${dmy(point.date)}`;
+  if (point.idp === undefined) return `${at}: — (nada previsto até a data, ${reference})${weight}`;
+  return `${at}: ${formatIdp(point.idp)} — ${IDP_TONE_LABEL[idpTone(point.idp)]} (real ${pct1(point.real)} ÷ planejado ${pct1(point.planned)}, ${reference})${weight}`;
+}
+
+/** A Linha de Balanço em texto: avanço medido × previsto da obra e de cada serviço, IDP, blocos atrasados e
+ * medições. Avanço, previsto e IDP no peso vigente da aba (regra 7 do IDP, 11/11/2026). Puro. */
 export function lobReport(lob: LobData, work: AgentWorkRef, today: string): string {
-  const { activities } = lob;
+  // A carga do servidor pode vir sem `costs` (antes da migração 0044): sem custo, o peso é a duração.
+  const data: LobData = { ...lob, costs: lob.costs ?? [] };
+  const { activities } = data;
   if (!activities.length) return `${workPrefix(work)} A Linha de Balanço não tem blocos lançados.`;
+  const performance = lobPerformance(data);
+  const weight = performance.weights.weight;
   const measured = measuredPercents(lob.measurements, lob.items, today);
-  const physical = physicalProgress(activities, measured) ?? 0;
-  const planned = plannedProgress(activities, today) ?? 0;
+  const physical = physicalProgress(activities, measured, weight) ?? 0;
+  const planned = plannedProgress(activities, today, weight) ?? 0;
+  const idpOf = new Map(servicePerformance(data, performance).map(row => [row.serviceId, row.idp]));
   const span = lobSpan(activities)!;
   const closed = closedMeasurements(lob.measurements).filter(m => m.date <= today);
   const last = closed.at(-1);
@@ -610,7 +645,8 @@ export function lobReport(lob: LobData, work: AgentWorkRef, today: string): stri
   const gap = Math.round(physical) - Math.round(planned);
   const lines = [
     `${workPrefix(work)} Linha de Balanço: ${plural(services.length, 'serviço', 'serviços')}, ${plural(lob.locals.length, 'local', 'locais')}, ${plural(activities.length, 'bloco', 'blocos')}; cronograma de ${dmy(span.start)} a ${dmy(span.finish)}.`,
-    `Avanço físico medido: ${pct(physical)}; previsto para hoje: ${pct(planned)} (${gap === 0 ? 'em linha com o previsto' : `${Math.abs(gap)} pontos ${gap < 0 ? 'abaixo' : 'acima'} do previsto`}).`,
+    `Avanço físico medido: ${pct(physical)}; previsto para hoje: ${pct(planned)} (${gap === 0 ? 'em linha com o previsto' : `${Math.abs(gap)} pontos ${gap < 0 ? 'abaixo' : 'acima'} do previsto`}); ${weightingLabel(performance.weights.mode)}.`,
+    idpLine(performance),
     last
       ? `Última medição fechada: nº ${last.number}, de ${dmy(last.date)}.`
       : 'Nenhuma medição fechada: o medido de todos os blocos é zero.',
@@ -619,13 +655,14 @@ export function lobReport(lob: LobData, work: AgentWorkRef, today: string): stri
     lines.push(`Medição nº ${open.number} aberta (em preenchimento), com data ${dmy(open.date)}: os valores dela ainda não contam.`);
   lines.push(`Blocos atrasados (previsto para hoje ao menos 10 pontos acima do medido): ${lateBlocks.length} de ${activities.length}.`);
 
-  lines.push('', 'serviço | equipe | locais | período | previsto hoje | medido | situação');
+  lines.push('', 'serviço | equipe | locais | período | previsto hoje | medido | IDP na última medição | situação');
   for (const service of services) {
     const blocks = activities.filter(a => a.serviceId === service.id);
     if (!blocks.length) {
-      lines.push(`${service.name} | ${service.team || '-'} | 0 | - | - | - | sem blocos`);
+      lines.push(`${service.name} | ${service.team || '-'} | 0 | - | - | - | - | sem blocos`);
       continue;
     }
+    const serviceIdp = idpOf.get(service.id);
     const serviceSpan = lobSpan(blocks)!;
     const p = plannedProgress(blocks, today) ?? 0;
     const m = physicalProgress(blocks, measured) ?? 0;
@@ -640,7 +677,7 @@ export function lobReport(lob: LobData, work: AgentWorkRef, today: string): stri
             ? 'a iniciar'
             : 'em dia';
     lines.push(
-      `${service.name} | ${service.team || '-'} | ${blocks.length} | ${dmy(serviceSpan.start)}–${dmy(serviceSpan.finish)} | ${pct(p)} | ${pct(m)} | ${situation}`,
+      `${service.name} | ${service.team || '-'} | ${blocks.length} | ${dmy(serviceSpan.start)}–${dmy(serviceSpan.finish)} | ${pct(p)} | ${pct(m)} | ${serviceIdp !== undefined ? formatIdp(serviceIdp) : '-'} | ${situation}`,
     );
   }
 

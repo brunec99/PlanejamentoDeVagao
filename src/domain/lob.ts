@@ -128,6 +128,20 @@ export interface LobMeasurementItem extends Stamped {
   delayCause?: string;
   createdBy: LobId;
 }
+/** Item de custo apropriado (11/11/2026, IDP ponderado por custo): uma linha do orçamento da obra
+ * ligada a um pacote de serviço. O custo do pacote é a soma dos itens dele; item sem pacote fica
+ * "não apropriado" e não entra no peso. Um pacote com um item só é o caso de quem digita o custo
+ * direto na linha do pacote. Valores em reais, com duas casas. */
+export interface LobCostItem extends Stamped {
+  workId: LobId;
+  serviceId?: LobId;
+  /** Código do item no orçamento, quando houver. */
+  code?: string;
+  description: string;
+  amount: number;
+  orderIndex: number;
+  createdBy: LobId;
+}
 export interface LobPhoto {
   id: LobId;
   itemId: LobId;
@@ -155,6 +169,8 @@ export interface LobData {
   measurements: LobMeasurement[];
   items: LobMeasurementItem[];
   photos: LobPhoto[];
+  /** Itens de custo apropriados (migração 0044). Vazio antes da migração ou sem custo cadastrado. */
+  costs: LobCostItem[];
 }
 export const emptyLobData = (): LobData => ({
   locals: [],
@@ -166,9 +182,14 @@ export const emptyLobData = (): LobData => ({
   measurements: [],
   items: [],
   photos: [],
+  costs: [],
 });
+/** Acesso aos custos na resposta: `full` = valores em reais; `masked` = perfil de consulta, que recebe
+ * cada item como porcentagem do total (regra 9 do modelo do IDP: o peso continua o mesmo, o valor em
+ * reais nunca sai do servidor); `unavailable` = migração 0044 ainda não aplicada. */
+export type LobCostAccess = 'full' | 'masked' | 'unavailable';
 /** Resposta de GET /api/lob. `available: false` = migração 0038 ainda não aplicada. */
-export type LobResponse = ({ available: true } & LobData) | { available: false };
+export type LobResponse = ({ available: true; costAccess?: LobCostAccess } & LobData) | { available: false };
 
 // ─── Fluxos de serviços (o macrofluxo do Prevision) ─────────────────────────────
 
@@ -219,6 +240,13 @@ export const LOB_LIMITS = {
   futureMonths: 12,
   /** Previsto até hoje menos medido, em pontos percentuais, a partir do qual o bloco conta como atrasado. */
   lateThreshold: 10,
+  /** Itens de custo por obra e por gravação (apropriação de custos, 11/11/2026). */
+  costItems: 5000,
+  costBatch: 3000,
+  costDescription: 200,
+  costCode: 40,
+  /** Teto de um item de custo, em reais (um trilhão): barra valor colado com lixo. */
+  maxCostAmount: 1_000_000_000_000,
 } as const;
 export const DELAY_CAUSES: readonly string[] = NON_FULFILLMENT_CAUSES.filter(c => c !== 'Causa não informada');
 
@@ -663,22 +691,30 @@ export function measuredPercents(measurements: LobMeasurement[], items: LobMeasu
   }
   return result;
 }
-/** Avanço físico da obra (regra 18): média dos blocos ponderada pela duração de cada um. */
-export function physicalProgress(activities: LobActivity[], percents: Record<LobId, number>): number | undefined {
+/** Avanço físico da obra (regra 18): média dos blocos ponderada pela duração de cada um ou, com
+ * `weights` (peso por bloco, de `lobWeights` em `lob-performance.ts`), pelo peso informado; bloco
+ * fora do mapa pesa zero. */
+export function physicalProgress(
+  activities: LobActivity[],
+  percents: Record<LobId, number>,
+  weights?: ReadonlyMap<LobId, number>,
+): number | undefined {
   let weight = 0,
     done = 0;
   for (const a of activities) {
-    weight += a.durationDays;
-    done += a.durationDays * (percents[a.id] ?? 0);
+    const w = weights ? (weights.get(a.id) ?? 0) : a.durationDays;
+    weight += w;
+    done += w * (percents[a.id] ?? 0);
   }
   return weight ? done / weight : undefined;
 }
-export function plannedProgress(activities: LobActivity[], date: LocalDate): number | undefined {
+export function plannedProgress(activities: LobActivity[], date: LocalDate, weights?: ReadonlyMap<LobId, number>): number | undefined {
   let weight = 0,
     done = 0;
   for (const a of activities) {
-    weight += a.durationDays;
-    done += a.durationDays * plannedPercent(a, date);
+    const w = weights ? (weights.get(a.id) ?? 0) : a.durationDays;
+    weight += w;
+    done += w * plannedPercent(a, date);
   }
   return weight ? done / weight : undefined;
 }
@@ -903,4 +939,15 @@ export type LobCommand =
       height?: number;
       bytes?: number;
     }
-  | { type: 'delete_photo'; photoId: LobId };
+  | { type: 'delete_photo'; photoId: LobId }
+  /** Apropriação de custos (11/11/2026): grava de uma vez os itens novos ou alterados e remove os
+   * excluídos. O `id` do item novo vem do navegador (UUID), como o `itemId` da medição. */
+  | { type: 'save_costs'; workId: LobId; upsert: LobCostInput[]; remove: LobId[] };
+/** Um item de custo como a tela manda: `serviceId` nulo = não apropriado; `amount` em reais. */
+export interface LobCostInput {
+  id: LobId;
+  serviceId: LobId | null;
+  code?: string | null;
+  description: string;
+  amount: number;
+}

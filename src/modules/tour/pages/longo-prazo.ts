@@ -1,10 +1,10 @@
 import type { TourStep } from '../tours';
 
-/** Tour da aba 1. A tela tem seis visões (`?visao=`): os passos das visões fechadas são pulados
+/** Tour da aba 1. A tela tem várias visões (`?visao=`): os passos das visões fechadas são pulados
  * sozinhos, porque os alvos delas não estão na tela. Os passos seguem a ordem visual: primeiro o comum
- * a todas, depois Linha de Balanço, Fluxos de serviços e Medições (04/11/2026), o Gantt de legalização
- * (04/11/2026), o Planejador e, por fim, "Vagões" (o quadro de restrições saiu daqui em 10/11/2026: virou a "Lista de
- * pendência" da aba 2). */
+ * a todas, depois Linha de Balanço, Custos (11/11/2026, o peso do IDP), Fluxos de serviços e Medições
+ * (04/11/2026), o Gantt de legalização (04/11/2026), o Planejador e, por fim, "Vagões" (o quadro de
+ * restrições saiu daqui em 10/11/2026: virou a "Lista de pendência" da aba 2). */
 export const steps: TourStep[] = [
   {
     title: 'Aba 1 · Cronograma de longo prazo',
@@ -35,7 +35,12 @@ export const steps: TourStep[] = [
   {
     target: 'longo-lob-indicadores',
     title: 'Indicadores da obra',
-    body: 'Serviços e blocos lançados, locais, término previsto (com a diferença para a linha de base escolhida) e avanço físico pelas medições salvas, com o previsto até hoje e quantos blocos estão atrasados.',
+    body: 'Serviços e blocos lançados, locais, término previsto (com a diferença para a linha de base escolhida) e avanço físico pelas medições salvas, com o previsto até hoje, quantos blocos estão atrasados e o peso que vale (por custo ou por duração).',
+  },
+  {
+    target: 'longo-lob-idp',
+    title: 'IDP · desempenho de prazo',
+    body: 'Avanço real ÷ planejado na última medição fechada (a aberta não conta), contra a linha de base escolhida no filtro; sem escolha, a manual mais recente; sem nenhuma, o cronograma atual. 1,00 ou mais é verde (em dia), de 0,90 a 0,99 amarelo (atenção) e abaixo de 0,90 vermelho (atrasado). Enquanto faltar custo em algum pacote com blocos, tudo pesa pela duração e o cartão diz quantos faltam.',
   },
   {
     target: 'longo-lob-filtros',
@@ -88,6 +93,11 @@ export const steps: TourStep[] = [
     body: 'Guarde uma foto das datas, compare com o atual ou restaure. Antes de cada lançamento de fluxo o sistema grava uma automaticamente.',
   },
   {
+    target: 'longo-lob-custos',
+    title: 'Custos',
+    body: 'Abre a visão Custos, onde o custo de cada pacote de serviço é apropriado. O selo mostra quantos pacotes com blocos já têm custo: com todos, o avanço físico, o previsto, as Medições e o IDP passam juntos a pesar pelo custo.',
+  },
+  {
     target: 'longo-lob-lancar',
     title: 'Lançar fluxo',
     body: 'Escolha um fluxo de serviços, os locais, a data de início, o sentido e o ritmo. A prévia mostra quantos blocos entram e quais já existiam e são mantidos.',
@@ -96,6 +106,33 @@ export const steps: TourStep[] = [
     target: 'longo-lob-mais',
     title: 'Mais ações',
     body: 'Locais da obra (cadastrar, renomear e reordenar), Importar do Planejador (converte o plano antigo em blocos, com a Linha de Balanço vazia) e Exportar CSV.',
+  },
+
+  // ─── Custos (11/11/2026) ──────────────────────────────────────────────────────
+  {
+    target: 'longo-custos-resumo',
+    title: 'Resumo dos custos',
+    body: 'Quantos pacotes com blocos já têm custo, o total apropriado e o peso que vale na aba. Enquanto algum pacote com blocos estiver sem custo, o avanço físico, as Medições e o IDP seguem pesados pela duração.',
+  },
+  {
+    target: 'longo-custos-pacotes',
+    title: 'Custo por pacote de serviço',
+    body: 'Uma linha por pacote: o custo (digitado direto na linha ou somado dos itens apropriados a ele), a fatia no peso da obra e o IDP do pacote na última medição fechada. O custo do pacote se reparte entre os blocos dele pela duração, e um valor zero conta como informado. O perfil de consulta vê as porcentagens, não os valores.',
+  },
+  {
+    target: 'longo-custos-itens',
+    title: 'Itens do orçamento',
+    body: 'Os itens do orçamento da obra, cada um ligado a um pacote. Para um custo direto, basta um item só no pacote.',
+  },
+  {
+    target: 'longo-custos-colar',
+    title: 'Colar do orçamento',
+    body: 'Cole as linhas copiadas do Excel (código, descrição e valor). Uma célula com o nome de um pacote já apropria o item a ele; linhas sem valor, como o cabeçalho, ficam de fora com o motivo.',
+  },
+  {
+    target: 'longo-custos-nao-apropriados',
+    title: 'Não apropriados',
+    body: 'Itens ainda sem pacote. Eles não entram no peso: aproprie cada um a um pacote ou deixe de fora o que não é serviço da Linha de Balanço.',
   },
 
   // ─── Fluxos de serviços ───────────────────────────────────────────────────────
@@ -135,6 +172,11 @@ export const steps: TourStep[] = [
     target: 'longo-medicoes-rodadas',
     title: 'Rodadas',
     body: 'A medição em aberto e as salvas, com blocos, fotos e autor. Só a última pode ser corrigida ou excluída. Embaixo, o avanço físico da obra.',
+  },
+  {
+    target: 'longo-medicoes-idp',
+    title: 'IDP por medição',
+    body: 'Real ÷ planejado na data de cada medição salva, da mais nova para a mais antiga, com a cor da faixa. O planejado vem da linha de base manual mais recente (sem ela, do cronograma atual) e o peso é o mesmo do avanço físico. A medição aberta não entra.',
   },
   {
     target: 'longo-medicoes-abas',

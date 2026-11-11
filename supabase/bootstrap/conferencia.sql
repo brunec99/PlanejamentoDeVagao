@@ -60,7 +60,12 @@ tabelas(ordem, nome, grupo) as (
     (226, 'lob_photos', 'Linha de Balanço (0038)'),
     (227, 'safety_types', 'Segurança do trabalho (0040)'),
     (228, 'safety_items', 'Segurança do trabalho (0040)'),
-    (229, 'safety_photos', 'Segurança do trabalho (0040)')
+    (229, 'safety_photos', 'Segurança do trabalho (0040)'),
+    (230, 'pending_cards', 'Lista de pendência (0043)'),
+    (231, 'pending_checklists', 'Lista de pendência (0043)'),
+    (232, 'pending_checklist_items', 'Lista de pendência (0043)'),
+    (233, 'pending_messages', 'Lista de pendência (0043)'),
+    (234, 'lob_cost_items', 'Apropriação de custos (0044)')
 ),
 colunas(ordem, tabela, coluna, migracao) as (
   values

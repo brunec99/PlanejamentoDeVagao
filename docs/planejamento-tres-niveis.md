@@ -1164,3 +1164,119 @@ A conferência achou que o gráfico desenhava um bloco por serviço na altura in
 - Abrir a aba 1 do Atmos logado e conferir.
 - Repetir a importação para as outras obras quando houver o XML do Prevision (o script serve para qualquer obra com a Linha de Balanço vazia); um botão "Importar do Prevision" na tela ainda depende de modelo de UX.
 - Feriados: o calendário da Linha de Balanço não tem feriados; quando tiver, as durações dos 189 blocos voltam a bater com as do Prevision.
+
+## Longo prazo: IDP ponderado por custo e tela Custos (11/11/2026)
+
+**Pedido do usuário** (11/11/2026): "vamos adicionar ao indicador o índice de desempenho de prazo. O IDP é calculado pela % física real / % física planejada; o ideal é colocarmos uma ponderação de custo". O modelo de UX ([IDP na Linha de Balanço](https://claude.ai/artifact/383wHAi9Twf5o3sMVpa7X9), com os dados reais do Atmos e 12 regras numeradas) foi aprovado com **uma mudança**: "a única questão é criar uma tela para apropriar custos em cada pacote de serviço". O cadastro dos custos deixou de ser um painel lateral da Linha de Balanço e virou a visão **Custos** da aba 1 (`?visao=custos`).
+
+Por que na Linha de Balanço: em produção, `long_term_plans` (o Planejador, que os dashboards leem) está vazia; só o Atmos tem longo prazo, e na Linha de Balanço.
+
+### Regras aprovadas (numeração do modelo)
+
+1. **Fórmula.** IDP = % físico real ÷ % físico planejado, na mesma data, com os mesmos blocos e o mesmo peso, com duas casas ("0,94"). Pesado por custo, é o índice do valor agregado (valor agregado ÷ valor planejado).
+2. **Onde aparece.** Quinto cartão nos Indicadores da Linha de Balanço, quadro "IDP por medição" nas Medições, coluna por pacote na tela Custos e linha no relatório da Claudia (`consultar_lob`).
+3. **Data.** A data é a da última medição fechada; a medição aberta não conta. O cartão "Avanço físico" continua com o "previsto até hoje".
+4. **Planejado.** Vem da linha de base escolhida no seletor da Linha de Balanço. Sem escolha, vem da manual mais recente. Sem linha de base manual, vem do cronograma atual. Bloco criado depois da linha de base usa as datas atuais. Medições, Custos e a Claudia não têm seletor: usam a regra sem escolha.
+5. **Custo por pacote.** O custo do pacote de serviço é a soma dos itens apropriados a ele, em R$. Ele se reparte entre os blocos do pacote pela duração.
+6. **Pacote sem custo.** Enquanto algum pacote com blocos estiver sem item de custo, tudo segue pesado pela duração e as telas dizem quantos faltam. Item de valor zero conta como informado. Se todos têm custo e a soma é zero, também fica a duração.
+7. **Um peso só.** Com os custos completos, o avanço físico, o previsto até hoje, o quadro das Medições e o IDP passam juntos para o peso por custo. Cada cartão diz qual peso vale.
+8. **Cadastro.** Tela própria, por mudança do usuário (era um painel na barra). Edita quem já pode alterar a Linha de Balanço.
+9. **Sigilo.** O perfil de consulta recebe cada item como porcentagem do total de todos os itens (`maskCosts`). O valor em reais não sai do servidor, e o peso e o IDP saem iguais.
+10. **Faixas.** IDP de 1,00 ou mais é verde ("em dia"); de 0,90 a 0,99, amarelo ("atenção"); abaixo de 0,90, vermelho ("atrasado"). A cor segue o número mostrado: 0,996 aparece como 1,00 e fica verde.
+11. **Sem número.** Sem medição fechada, mostra "—" e "sem medição". Sem nada previsto até a data, mostra "—" e "nada previsto até a data". Sem blocos, mostra "—" e "sem blocos ainda".
+12. **Dashboards.** O Dashboard da obra (aba 0) e o Dashboard geral ficam para a próxima etapa. Eles continuam lendo o Planejador antigo.
+
+### A tela Custos
+
+- **Modelo de dados.** Cada pacote recebe **itens de custo** (linhas do orçamento: código opcional, descrição e valor) e o custo do pacote é a soma deles; item sem pacote fica "não apropriado" e não entra no peso. Assim cabem os dois jeitos de trabalhar: quem tem um valor por pacote digita direto na linha do pacote (vira um item "Custo do pacote"), e quem tem o orçamento detalhado cola as linhas e aponta cada uma a um pacote.
+- **Quatro cartões.** "Custo apropriado" mostra a soma dos pacotes com blocos e, à parte, o valor em pacotes sem blocos. Depois vêm "Pacotes com custo" (N de M, com o peso vigente), "Não apropriado" (soma e quantidade) e "IDP". Todos são calculados sobre o rascunho, com "(não salvo)" enquanto houver alteração pendente.
+- **Pacotes de serviço.** Uma tabela na ordem da obra mostra blocos, dias úteis, itens, custo, peso, real, planejado e IDP de cada pacote.
+  - O custo se edita na própria linha quando o pacote tem até um item. Com dois ou mais, a linha mostra a soma.
+  - Colar uma coluna do Excel num campo de custo preenche aquele pacote e os seguintes. Pacote com vários itens é pulado junto com o valor da linha dele, para não desalinhar.
+  - Pacote sem blocos aparece apagado: o custo dele não entra no IDP.
+  - Pacote com blocos e sem custo fica com o campo em âmbar.
+- **Itens do pacote.** O painel permite editar código, descrição e valor, "Mover para" outro pacote ou "Não apropriado", excluir e adicionar itens. Ele fica ao lado da tabela a partir de 1536 px e embaixo dela nas telas menores.
+- **Não apropriados.** Seleção em lote com "Apropriar N selecionados em [pacote]" e "Excluir selecionados".
+- **Colar do orçamento.** Lê as linhas coladas do Excel (tabulação; ponto e vírgula quando não há tabulação), mostra uma prévia e joga as linhas no rascunho, acrescentando ou substituindo os itens atuais. Como cada linha é lida:
+  - o valor é a última célula numérica;
+  - célula com o nome de um pacote (sem acento e sem diferença de caixa) aponta o pacote;
+  - célula curta com cara de código, antes da descrição, vira o código;
+  - a descrição é o texto mais longo, e uma linha só com pacote e valor usa o nome do pacote como descrição;
+  - linhas de total, sem valor, com valor negativo ou sem descrição são ignoradas, com o motivo.
+- **Rascunho.** Tudo fica local até "Salvar", que manda um único comando `save_costs` (`upsert` + `remove`). Há "Descartar" com confirmação e aviso ao sair da página ou trocar de visão com alterações pendentes.
+- **Valores.** `parseMoney` aceita "R$ 1.234,56", "1234,56" e "1.500" (mil e quinhentos). Campo inválido fica vermelho e não entra no rascunho. Item novo exige descrição.
+- **Perfil de consulta.** Vê a tela sem campos, com "x,x% do total".
+- **Sem a migração 0044.** Avisa e mostra tudo só para leitura, pesado pela duração.
+
+### Outras telas
+
+- **Linha de Balanço** (`lob-view.tsx`):
+  - O cartão "IDP · desempenho de prazo" mostra a conta, a referência e o peso, por exemplo "73,3% ÷ 95,0% em 06/11 (medição nº 2) · contra a linha de base “X” · peso por custo".
+  - Com custos faltando, aparece em vermelho "Faltam custos em N de M pacotes." e o link "Apropriar custos" ("Ver custos" para quem só consulta).
+  - O cartão "Avanço físico" segue o peso vigente.
+  - Na barra entrou o botão "Custos", com o selo pacotes com custo / pacotes com blocos.
+  - A opção vazia do seletor de linha de base diz qual linha de base o IDP usa ("nenhuma no gráfico (IDP: “X”)").
+  - Sem a 0044, a nota do cartão diz que a apropriação ainda não foi ativada, em vez do aviso de custos faltando.
+- **Medições:** o quadro do avanço físico segue o peso vigente. O quadro novo "IDP por medição" lista as medições da mais nova para a mais antiga. Duas medições fechadas no mesmo dia dão dois pontos.
+- **Claudia:**
+  - `consultar_lob` traz a linha do IDP (com a referência, o peso e quantos pacotes faltam) e a coluna "IDP na última medição" por serviço.
+  - O relatório nunca escreve valores em reais. Ela recebe a `LobData` completa, mas só o administrador a usa.
+  - O roteiro (`chat.ts`) e o manual (seção `longo-prazo-idp-custos`) foram atualizados. Para caber no limite do índice, foram encurtados 12 resumos de seções do longo prazo.
+- **Tour:** passos novos para o cartão do IDP, o botão "Custos", o quadro das Medições e os cinco blocos da tela Custos.
+
+### Arquitetura
+
+- **Domínio:**
+  - `src/domain/lob-performance.ts` reúne `parseMoney`, `serviceCosts`, `lobWeights`, `performanceBaseline`, `plannedPercents`, `lobPerformance`, `weightedProgress`, `servicePerformance`, `idpTone` e `maskCosts`.
+  - `src/domain/lob.ts` ganhou `LobCostItem`, `LobData.costs`, `LobCostAccess`, o comando `save_costs` e os limites (5.000 itens por obra, 3.000 por gravação).
+  - `physicalProgress`/`plannedProgress` aceitam um peso por bloco. Sem ele, continuam pela duração.
+- **Servidor:**
+  - `loadLobWithCosts` devolve `{ data, costsAvailable }` e tolera a falta da 0044. Sem as tabelas da 0038, continua lançando `LobUnavailableError`.
+  - `loadLob` também tolera a falta da 0044 e devolve `costs: []`.
+  - `LobCostsUnavailableError` responde 503, e o `save_costs` sem a tabela é recusado antes de planejar.
+  - Os itens de custo são inseridos e atualizados em lotes de 500 (atualização por `upsert`). As exclusões de todas as tabelas da Linha de Balanço vão em blocos de 100 ids, para a URL não estourar.
+  - `GET /api/lob` devolve `costAccess` (`full`, `masked` para consulta, `unavailable`).
+- **Migração `0044_lob_costs.sql`:**
+  - Cria a tabela `lob_cost_items` com:
+    - `work_id` com `on delete cascade`, então o `delete_work` da 0037 leva os itens;
+    - `service_id` com `on delete set null`, então excluir o pacote deixa o item não apropriado;
+    - `amount numeric(16,2)` maior ou igual a zero e descrição obrigatória;
+    - RLS sem política e grant para `service_role`.
+  - Fica fora do snapshot, não reescreve `commit_planning` e pode ser rodada de novo.
+  - A tela Configurações → Banco de dados ganhou a sondagem da 0044.
+- **Pacote SQL completo:** `supabase/bootstrap/obra360-schema.sql` foi regenerado e agora inclui também a 0043, que tinha ficado de fora. `scripts/validate-bootstrap-sql.mjs` passou a esperar 60 tabelas, e `supabase/bootstrap/conferencia.sql` ganhou as tabelas da 0043 e da 0044.
+
+### Conferência com o Atmos (leitura de produção, 11/11/2026)
+
+Medição M1 de 11/11 contra a linha de base "Prevision — Atmos.xml (11/11/2026)":
+
+- **Peso por duração** (como fica até haver custos): real 7,45% ÷ planejado 7,42% = 1,00.
+- **Custos de exemplo do modelo** (R$ 64,47 mi, só para conferir a conta): 21,2% ÷ 21,3% = 1,00, verde. Por pacote:
+  - estrutura 0,99;
+  - grua 1,02;
+  - alvenaria 1,06;
+  - piso do subsolo 0,88.
+
+Nenhum custo foi gravado.
+
+### Validação (11/11/2026)
+
+- `npm run typecheck`, `lint` (nenhum aviso novo), `format:check`, `npm test` (1.313 testes), `validate:migrations`, `build` e `test:e2e` (10) passaram. `scripts/validate-bootstrap-sql.mjs` passou com 44 migrações, 37 de 37 sondagens e 87 de 87 itens.
+- Testes novos ou ampliados:
+  - `tests/lob-performance.test.ts` (15, uma obra pequena com as contas à mão);
+  - `tests/lob-costs-model.test.ts` (11);
+  - `tests/lob-commands.test.ts` (9 de `save_costs`);
+  - `tests/delete-work.test.ts` (itens de custo com e sem pacote; excluir pacote deixa o item sem pacote; checks da 0044);
+  - `tests/agent-global-tools.test.ts` (4 do IDP no relatório).
+- Navegador sem banco (Supabase falso + Playwright respondendo `/api/*`), a 390, 1100, 1440 e 1680 px:
+  - na tela Custos: digitar, colar uma coluna, importar, apropriar em lote, mover, salvar com um único `save_costs`, confirmação ao sair, perfil de consulta e 0044 ausente;
+  - na Linha de Balanço e nas Medições: custos faltando, completos, sem custo e sem medição.
+- **Não validado:** uso logado com dados reais, a primeira gravação de custos no banco e a troca manual do seletor de linha de base.
+
+### Pendências
+
+- **Migração 0044 aplicada no `takt-hub` em 11/11/2026**, a pedido do usuário, por conexão direta ao banco numa transação. Conferidos: as 10 colunas, as chaves (obra em cascata, pacote com `set null`), RLS ligada, 3 índices, o grant para `service_role` e a leitura REST (200 com a chave de serviço, 401 anônima). Tabela vazia.
+- Publicado pelo `main` a pedido do usuário (mesmo dia); conferir no ar o workflow "Imagem" e a tela logada.
+- Cadastrar os custos do Atmos. O Obra Prima conectado ao Claude é de outra empresa e não tem as obras da ATR, então a fonte é a planilha do orçamento, colada na tela.
+- Próxima etapa (regra 12): levar o avanço físico e o IDP da Linha de Balanço para o Dashboard da obra e o Dashboard geral.
+- Depois: IDC (desempenho de custo, precisa do custo realizado), curva S físico-financeira e importação do orçamento.

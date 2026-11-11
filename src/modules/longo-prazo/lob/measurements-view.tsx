@@ -1,17 +1,18 @@
 'use client';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Plus, RefreshCw } from 'lucide-react';
+import { editableMeasurement, openMeasurement, type LobData, type LobMeasurement, type LocalDate } from '@/domain/lob';
 import {
-  editableMeasurement,
-  measuredPercents,
-  openMeasurement,
-  physicalProgress,
-  plannedProgress,
-  type LobData,
-  type LobMeasurement,
-  type LocalDate,
-} from '@/domain/lob';
+  formatIdp,
+  IDP_TONE_LABEL,
+  idpTone,
+  lobPerformance,
+  weightedProgress,
+  weightingLabel,
+  type IdpTone,
+  type LobPerformance,
+} from '@/domain/lob-performance';
 import { HelpNote } from '@/modules/layout/help-note';
 import { useToast } from '@/modules/layout/toast';
 import { usePlanning } from '@/modules/planejamento/planning-provider';
@@ -21,6 +22,7 @@ import { formatDate, workPath } from '@/shared/format';
 import { useLob } from './lob-api';
 import { buildSheet, formatPercent, MeasurementSheet, Pill } from './measurement-sheet';
 import type { LobExecute } from './measurement-photos';
+import { idpReference, IdpWeightNote } from './lob-view';
 
 /** Visão "Medições" da aba 1 (modelo de 04/11/2026, tela 4): à esquerda as rodadas da obra e o
  * avanço físico; à direita a medição selecionada (`MeasurementSheet`). Os dados vêm de `useLob`,
@@ -87,6 +89,76 @@ function downloadCsv(fileName: string, rows: (string | number)[][]) {
   link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── IDP por medição ────────────────────────────────────────────────────────────
+
+const IDP_PILL_TONE: Record<IdpTone, 'ok' | 'warn' | 'late'> = { good: 'ok', warn: 'warn', bad: 'late' };
+/** "21,2%": uma casa fixa, como no cartão do IDP da Linha de Balanço. */
+const oneDecimal = (value: number) => `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+/** Quadro "IDP por medição" (11/11/2026, modelo "IDP na Linha de Balanço"): uma linha por medição fechada,
+ * da mais nova para a mais antiga, com real ÷ planejado e o IDP na cor da faixa (regra 10). O planejado
+ * segue a regra 4 sem escolha (a linha de base manual mais recente ou o cronograma atual): o seletor de
+ * linha de base é da visão Linha de Balanço. Lista compacta, para caber na coluna de 17rem. */
+function IdpSeries({
+  performance,
+  costsHref,
+  readOnly,
+  costsUnavailable,
+}: {
+  performance: LobPerformance;
+  costsHref: string;
+  readOnly: boolean;
+  costsUnavailable: boolean;
+}) {
+  const points = [...performance.series].reverse();
+  return (
+    <section data-tour="longo-medicoes-idp" aria-labelledby="lob-idp-series" className="panel p-4">
+      <p id="lob-idp-series" className="text-xs font-bold text-slate-700">
+        IDP por medição
+      </p>
+      <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+        Real ÷ planejado {idpReference(performance)} · {weightingLabel(performance.weights.mode)}. A medição aberta não entra.
+      </p>
+      {performance.weights.fallback && (
+        <p className="text-[11px] leading-4 text-slate-500">
+          <IdpWeightNote performance={performance} costsHref={costsHref} readOnly={readOnly} costsUnavailable={costsUnavailable} />
+        </p>
+      )}
+      {!points.length ? (
+        <p className="mt-2 text-xs text-slate-500">
+          <b className="text-slate-700">—</b> {performance.status === 'no-blocks' ? 'sem blocos ainda' : 'sem medição'}
+        </p>
+      ) : (
+        <ol className="custom-scrollbar mt-2 max-h-72 divide-y divide-slate-100 overflow-y-auto">
+          {points.map(point => {
+            const tone = point.idp !== undefined ? idpTone(point.idp) : undefined;
+            return (
+              <li key={point.measurementId} className="py-1.5">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-800">Medição nº {point.number}</span>
+                  {tone && point.idp !== undefined ? (
+                    <Pill tone={IDP_PILL_TONE[tone]}>
+                      {formatIdp(point.idp)} · {IDP_TONE_LABEL[tone]}
+                    </Pill>
+                  ) : (
+                    <b className="text-sm text-slate-500">—</b>
+                  )}
+                </span>
+                <span className="block text-[11px] text-slate-500 tabular-nums">
+                  {formatDate(point.date)} ·{' '}
+                  {point.idp !== undefined
+                    ? `real ${oneDecimal(point.real)} ÷ plan. ${oneDecimal(point.planned)}`
+                    : 'nada previsto até a data'}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+  );
 }
 
 // ─── Nova medição ───────────────────────────────────────────────────────────────
@@ -224,6 +296,11 @@ export function MeasurementsView({ workId }: { workId: string }) {
         a rodada. <strong>Só a última medição pode ser corrigida ou excluída</strong>; as anteriores ficam só para consulta. Consulta vê
         medições e fotos e não mede; planejador, gestor e admin medem, no computador ou no celular com a câmera.
       </p>
+      <p>
+        O quadro <strong>IDP por medição</strong> divide o avanço real pelo planejado na data de cada medição salva, contra a linha de base
+        manual mais recente (sem ela, o cronograma atual), no mesmo peso do avanço físico: por custo quando todos os pacotes têm custo,
+        senão pela duração.
+      </p>
     </HelpNote>
   );
 
@@ -239,6 +316,11 @@ export function MeasurementsView({ workId }: { workId: string }) {
         .pop()
     : undefined;
   const hasBlocks = !!data?.activities.length;
+  // IDP e peso da aba (11/11/2026, regra 7): o quadro do avanço físico e o do IDP usam o mesmo peso.
+  // Memorizados: o IDP refaz o acumulado de cada medição fechada.
+  const performance = useMemo(() => (data ? lobPerformance(data) : undefined), [data]);
+  const weights = performance?.weights;
+  const progress = useMemo(() => (data && weights ? weightedProgress(data, today, weights) : undefined), [data, today, weights]);
   const newBlocked = readOnly
     ? 'Perfil de consulta: não mede.'
     : !hasBlocks
@@ -315,7 +397,7 @@ export function MeasurementsView({ workId }: { workId: string }) {
         </div>
       </>
     );
-  if (state.status === 'unavailable' || !data)
+  if (state.status === 'unavailable' || !data || !performance)
     return (
       <>
         {header}
@@ -325,10 +407,11 @@ export function MeasurementsView({ workId }: { workId: string }) {
       </>
     );
 
-  // Avanço físico da obra (regra 18): média ponderada pela duração, só com medições fechadas.
-  const percents = measuredPercents(data.measurements, data.items);
-  const physical = physicalProgress(data.activities, percents);
-  const planned = plannedProgress(data.activities, today);
+  // Avanço físico da obra (regra 18), só com medições fechadas; desde 11/11/2026 no peso da aba (custo
+  // com todos os pacotes custeados, senão duração), o mesmo do IDP.
+  const physical = progress?.physical;
+  const planned = progress?.planned;
+  const costsHref = `${workPath(workId, 'longo-prazo')}?visao=custos`;
   const deviation = physical !== undefined && planned !== undefined ? physical - planned : undefined;
 
   return (
@@ -424,7 +507,14 @@ export function MeasurementsView({ workId }: { workId: string }) {
                 </>
               )}
             </p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{weightingLabel(performance.weights.mode)}</p>
           </div>
+          <IdpSeries
+            performance={performance}
+            costsHref={costsHref}
+            readOnly={readOnly}
+            costsUnavailable={state.status === 'ready' && state.costAccess === 'unavailable'}
+          />
         </aside>
 
         {selected ? (

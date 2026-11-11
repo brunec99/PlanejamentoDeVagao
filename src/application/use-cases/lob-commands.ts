@@ -20,6 +20,7 @@ import {
   type LobActivity,
   type LobBaseline,
   type LobCommand,
+  type LobCostItem,
   type LobData,
   type LobDependency,
   type LobLaunch,
@@ -52,6 +53,7 @@ export const LOB_TABLES: readonly LobTable[] = [
   'measurements',
   'items',
   'photos',
+  'costs',
 ];
 
 export interface LobRowSet {
@@ -64,6 +66,7 @@ export interface LobRowSet {
   measurements: LobMeasurement[];
   items: LobMeasurementItem[];
   photos: LobPhoto[];
+  costs: LobCostItem[];
 }
 /** O que um comando grava. O repositório apaga (filhos antes), insere (pais antes), atualiza e,
  * por último, remove os arquivos do bucket. */
@@ -116,6 +119,7 @@ export const LOB_COMMAND_TYPES = [
   'delete_measurement',
   'add_photo',
   'delete_photo',
+  'save_costs',
 ] as const satisfies readonly LobCommand['type'][];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -173,6 +177,61 @@ function parseRhythm(value: unknown): LobRhythm {
   return { kind: 'continuous' };
 }
 const parseDirection = (value: unknown): LobDirection => (value === 'top_down' ? 'top_down' : 'bottom_up');
+
+/** Texto colado do orçamento: sem espaços nas pontas nem repetidos; o limite vale depois de limpar. */
+const cleanText = (value: unknown) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
+/** Arredonda a centavos pela notação decimal (1.005 → 1.01), que `Math.round(x * 100)` erra. */
+function toCents(value: number) {
+  const rounded = Math.round(Number(`${value}e2`));
+  return (Number.isFinite(rounded) ? rounded : Math.round(value * 100)) / 100 || 0;
+}
+
+/** Itens de `save_costs` (11/11/2026, apropriação de custos): só forma e tipos; pacote, existência
+ * e limite por obra ficam no planejador. O valor chega em número (a tela converte com `parseMoney`). */
+function parseCosts(c: Record<string, unknown>): Pick<Extract<LobCommand, { type: 'save_costs' }>, 'upsert' | 'remove'> {
+  if (!Array.isArray(c.upsert) || !Array.isArray(c.remove)) fail('Lista de itens de custo inválida.');
+  const rawUpsert = c.upsert as unknown[];
+  const rawRemove = c.remove as unknown[];
+  if (!rawUpsert.length && !rawRemove.length) fail('Nenhum item de custo para salvar.');
+  if (rawUpsert.length > LOB_LIMITS.costBatch || rawRemove.length > LOB_LIMITS.costBatch)
+    fail(`Salve no máximo ${LOB_LIMITS.costBatch} itens de custo por vez.`);
+  const costId = (value: unknown) => {
+    const id = requiredId(value, 'Item de custo sem identificador.');
+    if (!UUID.test(id)) fail('Identificador do item de custo inválido.');
+    return id;
+  };
+  const saved = new Set<string>();
+  const upsert = rawUpsert.map((raw, index) => {
+    const i = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const id = costId(i.id);
+    if (saved.has(id)) fail('Um item de custo aparece duas vezes na gravação. Recarregue a página.');
+    saved.add(id);
+    const description = cleanText(i.description);
+    const code = cleanText(i.code);
+    // Nas mensagens, o item pelo que a pessoa vê na tela: a descrição, o código ou a posição.
+    const label = description ? `"${description.slice(0, 60)}"` : code ? `O item ${code}` : `O item ${index + 1}`;
+    if (i.code !== undefined && i.code !== null && typeof i.code !== 'string') fail(`${label}: código inválido.`);
+    if (code.length > LOB_LIMITS.costCode) fail(`${label}: o código passa de ${LOB_LIMITS.costCode} caracteres.`);
+    if (!description) fail(`${label}: informe a descrição do item de custo.`);
+    if (description.length > LOB_LIMITS.costDescription) fail(`${label}: a descrição passa de ${LOB_LIMITS.costDescription} caracteres.`);
+    const serviceId = i.serviceId === undefined || i.serviceId === null || i.serviceId === '' ? null : i.serviceId;
+    if (serviceId !== null && typeof serviceId !== 'string') fail(`${label}: pacote inválido.`);
+    if (typeof i.amount !== 'number' || !Number.isFinite(i.amount)) fail(`${label}: valor inválido. Informe o valor em reais.`);
+    if ((i.amount as number) < 0) fail(`${label}: o valor não pode ser negativo.`);
+    const amount = toCents(i.amount as number);
+    if (amount > LOB_LIMITS.maxCostAmount) fail(`${label}: o valor passa do teto de R$ 1 trilhão por item.`);
+    return { id, serviceId: serviceId as string | null, code: code || null, description, amount };
+  });
+  const removed = new Set<string>();
+  const remove = rawRemove.map(value => {
+    const id = costId(value);
+    if (saved.has(id)) fail('Um item de custo não pode ser salvo e excluído na mesma gravação. Recarregue a página.');
+    if (removed.has(id)) fail('Um item de custo aparece duas vezes entre os excluídos. Recarregue a página.');
+    removed.add(id);
+    return id;
+  });
+  return { upsert, remove };
+}
 
 /** Confere forma e tipos de um comando vindo do navegador. Regras de negócio ficam no planejador. */
 export function parseLobCommand(input: unknown): LobCommand {
@@ -356,6 +415,8 @@ export function parseLobCommand(input: unknown): LobCommand {
     }
     case 'delete_photo':
       return { type, photoId: requiredId(c.photoId, 'Foto não informada.') };
+    case 'save_costs':
+      return { type, workId: workId(), ...parseCosts(c) };
   }
   return fail('Comando desconhecido.');
 }
@@ -388,6 +449,7 @@ export function lobCommandTarget(command: LobCommand): LobTarget {
       return { table: 'items', id: command.itemId };
     case 'delete_photo':
       return { table: 'photos', id: command.photoId };
+    // Os demais, inclusive `save_costs`, levam a obra no próprio comando.
     default:
       return { workId: command.workId };
   }
@@ -405,6 +467,7 @@ const emptySet = (): LobRowSet => ({
   measurements: [],
   items: [],
   photos: [],
+  costs: [],
 });
 const emptyMutation = (workId: string): LobMutation => ({
   workId,
@@ -420,6 +483,7 @@ const emptyMutation = (workId: string): LobMutation => ({
     measurements: [],
     items: [],
     photos: [],
+    costs: [],
   },
   removeFiles: [],
 });
@@ -973,6 +1037,42 @@ export function planLobCommand(data: LobData, command: LobCommand, context: LobC
         fail('Esta é a única foto de um avanço numa medição já salva. Envie outra foto antes de excluir esta.');
       mutation.delete.photos.push(photo.id);
       mutation.removeFiles.push(photo.storagePath, photo.thumbPath);
+      return mutation;
+    }
+    // ─── Apropriação de custos ────────────────────────────────────────────────
+    case 'save_costs': {
+      const services = new Set(data.services.map(s => s.id));
+      const existing = byId(data.costs);
+      let orderIndex = data.costs.reduce((max, c) => Math.max(max, c.orderIndex), -1) + 1;
+      for (const input of command.upsert) {
+        if (input.serviceId !== null && !services.has(input.serviceId)) fail('Pacote não encontrado. Recarregue a página.');
+        const fields = {
+          serviceId: input.serviceId ?? undefined,
+          code: input.code || undefined,
+          description: input.description,
+          amount: input.amount,
+        };
+        const current = existing.get(input.id);
+        if (!current) {
+          mutation.insert.costs.push({ id: input.id, workId, ...fields, orderIndex: orderIndex++, createdBy: context.actorId, ...stamp });
+          continue;
+        }
+        // A tela pode mandar a grade inteira: item igual ao gravado não vira escrita.
+        const same =
+          (current.serviceId ?? undefined) === fields.serviceId &&
+          (current.code || undefined) === fields.code &&
+          current.description === fields.description &&
+          current.amount === fields.amount;
+        if (!same) mutation.update.costs.push({ ...current, ...fields, updatedAt: now });
+      }
+      for (const id of command.remove) {
+        if (!existing.has(id)) fail('Item de custo não encontrado. Recarregue a página.');
+        mutation.delete.costs.push(id);
+      }
+      const total = data.costs.length + mutation.insert.costs.length - mutation.delete.costs.length;
+      if (total > LOB_LIMITS.costItems)
+        fail(`A obra aceita no máximo ${LOB_LIMITS.costItems} itens de custo; com esta gravação ficaria com ${total}.`);
+      mutation.summary = { saved: mutation.insert.costs.length + mutation.update.costs.length, removed: mutation.delete.costs.length };
       return mutation;
     }
   }

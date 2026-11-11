@@ -184,8 +184,20 @@ function lobData(): LobData {
       { id: 'i3', ...base, measurementId: 'm2', activityId: 'b2', value: 90, previousValue: 20, createdBy: 'u1' },
     ],
     photos: [],
+    costs: [],
   };
 }
+/** Custo apropriado aos dois pacotes (Pintura vale o dobro da Alvenaria), em valores que não podem vazar no texto. */
+const fullCosts = (): LobData['costs'] => {
+  const base = { ...stamp, workId: 'w1', createdBy: 'u1' };
+  return [
+    { id: 'c1', ...base, serviceId: 'S1', description: 'Alvenaria de vedação', amount: 1_234_567.89, orderIndex: 0 },
+    { id: 'c2', ...base, serviceId: 'S2', code: '05.01', description: 'Pintura interna', amount: 2_000_000, orderIndex: 1 },
+    { id: 'c3', ...base, serviceId: 'S2', code: '05.02', description: 'Pintura externa', amount: 469_135.78, orderIndex: 2 },
+    // Não apropriado: fica fora do peso.
+    { id: 'c4', ...base, description: 'Administração local', amount: 999_999.99, orderIndex: 3 },
+  ];
+};
 
 // ─── Carregador falso, com registro das chamadas ────────────────────────────────
 
@@ -524,14 +536,16 @@ test('consultar_lob: avanço medido × previsto, serviços em ordem, blocos atra
   assert.deepEqual(out.workIds, ['w1']);
   assert.deepEqual(out.result.split('\n'), [
     'Obra Residencial Horizonte (OB1). Linha de Balanço: 2 serviços, 2 locais, 3 blocos; cronograma de 05/10/2026 a 06/11/2026.',
-    'Avanço físico medido: 48%; previsto para hoje: 68% (20 pontos abaixo do previsto).',
+    'Avanço físico medido: 48%; previsto para hoje: 68% (20 pontos abaixo do previsto); peso por duração.',
+    // Em 23/10: real (10×100 + 10×20) ÷ 25 = 48; planejado (10×100 + 10×50) ÷ 25 = 60.
+    'IDP (desempenho de prazo) na medição nº 1 de 23/10/2026: 0,80 — atrasado (real 48,0% ÷ planejado 60,0%, contra o cronograma atual); faltam custos em 2 de 2 pacotes, então o peso é a duração.',
     'Última medição fechada: nº 1, de 23/10/2026.',
     'Medição nº 2 aberta (em preenchimento), com data 30/10/2026: os valores dela ainda não contam.',
     'Blocos atrasados (previsto para hoje ao menos 10 pontos acima do medido): 1 de 3.',
     '',
-    'serviço | equipe | locais | período | previsto hoje | medido | situação',
-    'Alvenaria | Alfa | 2 | 05/10/2026–30/10/2026 | 85% | 60% | atrasado: 1 de 2 blocos, até 5 dias úteis',
-    'Pintura | - | 1 | 02/11/2026–06/11/2026 | 0% | 0% | a iniciar',
+    'serviço | equipe | locais | período | previsto hoje | medido | IDP na última medição | situação',
+    'Alvenaria | Alfa | 2 | 05/10/2026–30/10/2026 | 85% | 60% | 0,80 | atrasado: 1 de 2 blocos, até 5 dias úteis',
+    'Pintura | - | 1 | 02/11/2026–06/11/2026 | 0% | 0% | - | a iniciar',
     '',
     'Blocos mais atrasados (1 de 1):',
     '- Alvenaria · 1º pavimento | previsto 70% | medido 20% | atraso de 5 dias úteis | motivo: Falta de Material',
@@ -545,6 +559,107 @@ test('consultar_lob: avanço medido × previsto, serviços em ordem, blocos atra
     gctx({ loader: fakeLoader({ lob: async () => ({ ...lobData(), activities: [] }) }).loader }),
   );
   assert.equal(empty.result, 'Obra Residencial Horizonte (OB1). A Linha de Balanço não tem blocos lançados.');
+});
+
+const lobWith = async (lob: LobData) =>
+  (await runGlobalTool('consultar_lob', {}, gctx({ loader: fakeLoader({ lob: async () => lob }).loader }))).result.split('\n');
+
+test('consultar_lob: com todos os pacotes custeados, avanço, previsto e IDP passam ao peso por custo, sem valor em reais', async () => {
+  const lines = await lobWith({ ...lobData(), costs: fullCosts() });
+  // Peso por bloco: Alvenaria 1.234.567,89 em dois blocos de 10 dias; Pintura 2.469.135,78 num bloco só (o dobro).
+  // Hoje: medido (½×100 + ½×20) ÷ 3 = 20%; previsto (½×100 + ½×70) ÷ 3 = 28,3%. Em 23/10: 20% ÷ 25% = 0,80.
+  assert.equal(lines[1], 'Avanço físico medido: 20%; previsto para hoje: 28% (8 pontos abaixo do previsto); peso por custo.');
+  assert.equal(
+    lines[2],
+    'IDP (desempenho de prazo) na medição nº 1 de 23/10/2026: 0,80 — atrasado (real 20,0% ÷ planejado 25,0%, contra o cronograma atual), peso por custo.',
+  );
+  // Dentro do pacote o peso é a duração nos dois modos: o IDP por serviço não muda.
+  assert.ok(lines.includes('Alvenaria | Alfa | 2 | 05/10/2026–30/10/2026 | 85% | 60% | 0,80 | atrasado: 1 de 2 blocos, até 5 dias úteis'));
+  const text = lines.join('\n');
+  for (const leak of ['R$', '1.234.567', '1234567', '2.469.135', '999.999', 'Administração local'])
+    assert.ok(!text.includes(leak), `vazou "${leak}"`);
+});
+
+test('consultar_lob: o IDP segue a linha de base manual mais recente e diz o nome dela; custo zero volta à duração', async () => {
+  const base = { ...stamp, workId: 'w1', createdBy: 'u1' };
+  const snapshot = (b2Start: string) =>
+    lobData().activities.map(a => ({
+      activityId: a.id,
+      serviceId: a.serviceId,
+      localId: a.localId,
+      start: a.id === 'b2' ? b2Start : a.start,
+      durationDays: a.durationDays,
+    }));
+  const lob: LobData = {
+    ...lobData(),
+    baselines: [
+      // A automática nunca é a referência sem escolha; entre as manuais, vale a mais recente.
+      {
+        ...base,
+        id: 'bl0',
+        name: 'Antes do lançamento 01/10/2026',
+        automatic: true,
+        createdAt: '2026-10-20T12:00:00Z',
+        snapshot: snapshot('2026-10-19'),
+      },
+      {
+        ...base,
+        id: 'bl1',
+        name: 'Aprovada em setembro',
+        automatic: false,
+        createdAt: '2026-09-01T12:00:00Z',
+        snapshot: snapshot('2026-10-19'),
+      },
+      // Na mais recente, o 1º pavimento só começava em 26/10: em 23/10 o planejado é (10×100) ÷ 25 = 40%.
+      {
+        ...base,
+        id: 'bl2',
+        name: 'Prevision — Atmos.xml',
+        automatic: false,
+        createdAt: '2026-10-01T12:00:00Z',
+        snapshot: snapshot('2026-10-26'),
+      },
+    ],
+    costs: fullCosts().map(item => ({ ...item, amount: 0 })),
+  };
+  const lines = await lobWith(lob);
+  assert.equal(
+    lines[2],
+    'IDP (desempenho de prazo) na medição nº 1 de 23/10/2026: 1,20 — em dia (real 48,0% ÷ planejado 40,0%, contra a linha de base "Prevision — Atmos.xml"); os custos apropriados somam zero, então o peso é a duração.',
+  );
+  assert.equal(lines[1], 'Avanço físico medido: 48%; previsto para hoje: 68% (20 pontos abaixo do previsto); peso por duração.');
+});
+
+test('consultar_lob: sem medição fechada ou sem nada previsto até a data, o IDP fica sem número', async () => {
+  const open = lobData().measurements.filter(m => m.status === 'open');
+  const noClosed = await lobWith({ ...lobData(), measurements: open });
+  assert.equal(
+    noClosed[2],
+    'IDP (desempenho de prazo): — (sem medição fechada); faltam custos em 2 de 2 pacotes, então o peso é a duração.',
+  );
+  assert.equal(noClosed[3], 'Nenhuma medição fechada: o medido de todos os blocos é zero.');
+  assert.ok(
+    noClosed.includes('Alvenaria | Alfa | 2 | 05/10/2026–30/10/2026 | 85% | 0% | - | atrasado: 2 de 2 blocos, até 10 dias úteis'),
+    noClosed.join('\n'),
+  );
+  // Medição fechada antes do primeiro bloco começar: nada previsto até a data.
+  const early = await lobWith({
+    ...lobData(),
+    measurements: [{ ...lobData().measurements[0], date: '2026-10-02' }],
+    items: [],
+    costs: fullCosts(),
+  });
+  assert.equal(
+    early[2],
+    'IDP (desempenho de prazo) na medição nº 1 de 02/10/2026: — (nada previsto até a data, contra o cronograma atual), peso por custo.',
+  );
+});
+
+test('consultar_lob: carga sem `costs` (antes da migração 0044) vale como sem custo', async () => {
+  const withoutCosts: Partial<LobData> = lobData();
+  delete withoutCosts.costs;
+  const lines = await lobWith(withoutCosts as LobData);
+  assert.ok(lines[2].endsWith('; faltam custos em 2 de 2 pacotes, então o peso é a duração.'), lines[2]);
 });
 
 test('consultar_configuracoes_obra: situação, semana 1 e atual, local, equipes e locais de baixo para cima', async () => {

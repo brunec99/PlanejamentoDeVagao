@@ -8,14 +8,15 @@ import {
   type LobExtras,
   type LobMutation,
 } from '@/application/use-cases/lob-commands';
-import type { LobCommand } from '@/domain/lob';
+import type { LobCommand, LobCostAccess } from '@/domain/lob';
 import type { LongTermPlanDocument } from '@/domain/long-term-plan';
 import {
   applyLobMutation,
   findWorkIdForEntity,
   getFlow,
-  loadLob,
+  loadLobWithCosts,
   LobConflictError,
+  LobCostsUnavailableError,
   LobUnavailableError,
   photoFilesExist,
   withSignedUrls,
@@ -36,7 +37,8 @@ async function loadPlannerDocument(workId: string): Promise<LongTermPlanDocument
 }
 
 /** Um comando por requisição: descobre a obra, confere o acesso, aplica as regras
- * (`planLobCommand`) sobre os dados atuais, grava e devolve a obra já atualizada. */
+ * (`planLobCommand`) sobre os dados atuais, grava e devolve a obra já atualizada. Consulta não chega
+ * aqui, então os custos voltam sempre em reais (`costAccess: 'full'`), ou `'unavailable'` sem a 0044. */
 export async function POST(request: Request) {
   const gate = await requireModuleAccess('longo-prazo');
   if (gate.error) return gate.error;
@@ -62,7 +64,9 @@ export async function POST(request: Request) {
     if (command.type === 'launch_flow') extras.flow = (await getFlow(command.flowId)) ?? undefined;
     if (command.type === 'import_planner') extras.plannerDocument = await loadPlannerDocument(workId);
 
-    const current = await loadLob(workId);
+    const { data: current, costsAvailable } = await loadLobWithCosts(workId);
+    // Sem a tabela, todo item pareceria novo: recusa antes de planejar.
+    if (command.type === 'save_costs' && !costsAvailable) return responseError(new LobCostsUnavailableError().message, 503);
     let mutation: LobMutation;
     try {
       mutation = planLobCommand(current, command, commandContext(profile.id), extras);
@@ -76,11 +80,13 @@ export async function POST(request: Request) {
       if (!photo || !(await photoFilesExist(photo))) return responseError('Envie a foto antes de registrá-la.', 400);
     }
     await applyLobMutation(mutation);
-    const fresh = await withSignedUrls(await loadLob(workId));
+    const reloaded = await loadLobWithCosts(workId);
+    const fresh = await withSignedUrls(reloaded.data);
+    const costAccess: LobCostAccess = reloaded.costsAvailable ? 'full' : 'unavailable';
     const extra = mutation.summary ?? {};
-    return NextResponse.json({ available: true, ...fresh, ...extra }, { headers });
+    return NextResponse.json({ available: true, ...fresh, ...extra, costAccess }, { headers });
   } catch (error) {
-    if (error instanceof LobUnavailableError) return responseError(error.message, 503);
+    if (error instanceof LobUnavailableError || error instanceof LobCostsUnavailableError) return responseError(error.message, 503);
     if (error instanceof LobConflictError) return responseError(error.message, 409);
     logRouteError('POST /api/lob/commands', error, { actorId: profile.id, type: command.type });
     return responseError('Não foi possível gravar a alteração. Tente novamente.', 502);

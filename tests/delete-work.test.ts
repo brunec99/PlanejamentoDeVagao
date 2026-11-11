@@ -166,6 +166,9 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
     storage_path: `${w}/${p}-mitem/foto.jpg`,
     thumb_path: `${w}/${p}-mitem/foto-thumb.jpg`,
   });
+  // 0044: itens de custo (um apropriado ao pacote, um solto) saem pela cascata de work_id.
+  await insert('lob_cost_items', { id: `${p}-cost1`, work_id: w, service_id: `${p}-lsvc`, description: 'Concreto', amount: 1500.5 });
+  await insert('lob_cost_items', { id: `${p}-cost2`, work_id: w, service_id: null, description: 'Administração', amount: 0 });
   // 0040: a segurança do trabalho cai com a obra pelo `on delete cascade` de work_id (delete_work não as cita).
   await insert('safety_items', { id: `${p}-sst`, work_id: w, type_id: 'sst-tipo-01', consequence: 'Morte', probability: 'Possível' });
   await insert('safety_photos', {
@@ -260,6 +263,7 @@ test('delete_work apaga a obra e tudo o que é dela, sem tocar a outra obra', as
       if (table === 'history_events' || table === 'agent_usage') continue;
       assert.equal(count, 0, `${table} ainda tem linha da obra excluída`);
     }
+    assert.deepEqual([before.lob_cost_items, after.lob_cost_items], [2, 0], 'os itens de custo (0044) saem com a obra');
     assert.equal(after.agent_usage, 1, 'o custo da IA continua contando no mês');
     assert.equal(after.history_events, 1, 'o histórico da obra fica');
     assert.deepEqual(await footprint('keep', kept), keptBefore, 'a outra obra fica como estava');
@@ -281,6 +285,36 @@ test('delete_work apaga a obra e tudo o que é dela, sem tocar a outra obra', as
     // A exceção da linha de base vale só para a obra excluída e só dentro da transação.
     await assert.rejects(db.query("delete from plan_tasks where id='keep-ft1'"), /imutável/);
     await assert.rejects(db.query("update medium_term_plans set name='Outro nome' where id='keep-frozen'"), /imutável/);
+  } finally {
+    await db.close();
+  }
+});
+
+test('0044: excluir o pacote deixa o item de custo não apropriado; valor negativo e descrição vazia são recusados', async () => {
+  const { db, gone, kept, footprint } = await setup();
+  try {
+    assert.equal((await footprint('del', gone)).lob_cost_items, 2);
+    // Um pacote sem blocos, para poder ser excluído (blocos seguram o pacote pela chave da 0038).
+    await db.query("insert into lob_services (id, work_id, name, color) values ('del-lsvc2', $1, 'Pintura', '#000000')", [gone]);
+    await db.query("update lob_cost_items set service_id = 'del-lsvc2' where id = 'del-cost1'");
+    await db.query("delete from lob_services where id = 'del-lsvc2'");
+    const row = (
+      await db.query<{ service_id: string | null; amount: string }>("select service_id, amount from lob_cost_items where id = 'del-cost1'")
+    ).rows[0];
+    assert.equal(row.service_id, null, 'o item fica, sem pacote');
+    assert.equal(Number(row.amount), 1500.5);
+    const add = (id: string, description: string, amount: number) =>
+      db.query("insert into lob_cost_items (id, work_id, description, amount, created_by) values ($1, $2, $3, $4, 'x')", [
+        id,
+        kept,
+        description,
+        amount,
+      ]);
+    await assert.rejects(add('keep-neg', 'Item', -1), /check/);
+    await assert.rejects(add('keep-blank', '   ', 1), /check/);
+    await add('keep-cents', 'Item', 10.005);
+    const cents = (await db.query<{ amount: string }>("select amount from lob_cost_items where id = 'keep-cents'")).rows[0];
+    assert.equal(Number(cents.amount), 10.01, 'numeric(16,2) guarda centavos');
   } finally {
     await db.close();
   }

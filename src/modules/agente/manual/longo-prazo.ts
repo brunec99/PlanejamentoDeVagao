@@ -4,13 +4,12 @@ import type { ManualSection } from './types';
  * cadastro de serviços, o gráfico, linhas de base e medições, a geração de vagões e a curva de avanço
  * (o módulo de restrições saiu em 10/11/2026: virou a Lista de pendência da aba 2). Escrito a partir do código dos componentes; quando o
  * tour ou a documentação divergiam, valeu o código. Em 04/11/2026 entraram a Linha de Balanço, os
- * fluxos de serviços, as medições e o Gantt de legalização. */
+ * fluxos de serviços, as medições e o Gantt de legalização; em 11/11/2026, o IDP e a visão Custos. */
 export const sections: ManualSection[] = [
   {
     id: 'longo-prazo-visao-geral',
     title: 'Aba 1 · Cronograma de longo prazo: as duas visões, quem edita e como o plano é salvo',
-    summary:
-      'O que a aba 1 mostra, as visões Planejador e Vagões, permissões, salvamento automático, trava de revisão, exportar e importar.',
+    summary: 'As visões da aba 1, permissões, salvamento automático do Planejador, trava de revisão, exportar e importar.',
     keywords: [
       'longo prazo',
       'cronograma de longo prazo',
@@ -63,8 +62,7 @@ O plano é salvo sozinho cerca de um segundo depois de cada alteração; não h�
   {
     id: 'longo-prazo-planejador-servico',
     title: 'Planejador: cadastrar um serviço (pavimentos, duração, ritmo, predecessoras, equipes, unidade)',
-    summary:
-      'Campos do cadastro de serviço, como predecessoras e ritmo definem as datas, Recalcular, duplicar, excluir e os erros de validação.',
+    summary: 'Cadastro de serviço do Planejador: predecessoras, ritmo, datas, Recalcular, duplicar, excluir e erros de validação.',
     keywords: [
       'novo serviço',
       'editar serviço',
@@ -117,7 +115,7 @@ Ao editar, as predecessoras só empurram as datas para a frente. "Recalcular" pu
     id: 'longo-prazo-planejador-grafico',
     title: 'Planejador: fluxograma, Linha de Balanço, indicadores, resumo, alocação de equipes e pavimentos',
     summary:
-      'Fluxograma e Linha de Balanço do plano (arrastar, zoom, ocultar), indicadores, Resumo dos serviços, Alocação de equipes e painel Pavimentos.',
+      'Fluxograma e Linha de Balanço do Planejador (arrastar, zoom, ocultar), indicadores, Resumo, Alocação de equipes e Pavimentos.',
     keywords: [
       'fluxograma',
       'linha de balanço',
@@ -164,7 +162,7 @@ Aparece quando algum serviço tem equipe: pico diário de pessoas por equipe em 
   {
     id: 'longo-prazo-planejador-linhas-base-medicoes',
     title: 'Planejador: linhas de base do plano e medições físicas',
-    summary: 'Salvar, comparar, restaurar e excluir fotos do plano; registrar medições acumuladas por serviço e entender o avanço físico.',
+    summary: 'Fotos do plano (salvar, comparar, restaurar, excluir) e medições acumuladas por serviço no Planejador.',
     keywords: [
       'linha de base',
       'linhas de base do plano',
@@ -214,8 +212,7 @@ O "Avanço físico" dos indicadores é a média dos serviços com unidade, ponde
   {
     id: 'longo-prazo-gerar-vagoes',
     title: 'Gerar vagões a partir do plano de longo prazo',
-    summary:
-      'O que "Gerar vagões" faz, a prévia do que muda, por que vagões liberados nunca mudam, a situação dos vagões e as mensagens do diálogo.',
+    summary: '"Gerar vagões": a prévia, por que vagões liberados nunca mudam, a situação dos vagões e as mensagens do diálogo.',
     keywords: [
       'gerar vagões',
       'gerar os vagões de novo',
@@ -298,8 +295,7 @@ O card da Lista de pendência não trava vagão. A **restrição impeditiva do v
   {
     id: 'longo-prazo-curva-avanco-linhas-base',
     title: 'Visão Vagões: curva de avanço acumulado e linhas de base da obra',
-    summary:
-      'Como ler a curva planejado × executado (de onde vem cada linha, desvio, atraso em dias) e como definir linhas de base dos vagões.',
+    summary: 'Curva planejado × executado (origem das linhas, desvio, atraso em dias) e linhas de base dos vagões.',
     keywords: [
       'curva de avanço',
       'curva s',
@@ -341,7 +337,7 @@ No fim da visão. Uma linha de base é uma fotografia imutável do cronograma do
     id: 'longo-prazo-linha-de-balanco',
     title: 'Linha de Balanço: blocos por serviço e local, arrastar, atrasos, filtros, linhas de base e locais',
     summary:
-      'A visão padrão da aba 1 (estilo Prevision): blocos, arrastar e desfazer, filtros e zoom, atrasos, painel do bloco, locais, linhas de base e importar do Planejador.',
+      'Visão padrão (estilo Prevision): blocos, arrastar, desfazer, filtros, atrasos, indicadores, painel do bloco, locais, linhas de base, importar do Planejador.',
     keywords: [
       'linha de balanço',
       'linha de balanco',
@@ -376,7 +372,7 @@ A visão "Linha de Balanço" é o cronograma de longo prazo da obra no estilo do
 Passe o mouse sobre um bloco para ver serviço, local, início e término, duração em dias úteis, equipe, previsto até hoje e medido. Clique para selecionar: o painel "Atividade selecionada", acima do gráfico, abre com os detalhes.
 
 ## Indicadores
-No alto: Serviços (com quantos lançamentos e blocos), Locais, Término previsto (e a diferença em dias para a linha de base escolhida no filtro) e Avanço físico (média dos blocos ponderada pela duração de cada um, com o previsto até hoje e quantos blocos estão atrasados).
+No alto: Serviços (com quantos lançamentos e blocos), Locais, Término previsto (e a diferença em dias para a linha de base escolhida no filtro), Avanço físico (média dos blocos no peso que vale na aba, por duração ou por custo, com o previsto até hoje e quantos blocos estão atrasados) e "IDP · desempenho de prazo" (real ÷ planejado na última medição fechada; veja a seção "IDP e custos").
 
 ## Arrastar, desfazer e teclado
 - Arraste um bloco para a direita ou para a esquerda para mudar a data de início. As sucessoras (os blocos que dependem dele, inclusive o mesmo serviço no local seguinte) acompanham. Um bloco nunca entra antes do fim das predecessoras mais a espera: puxar para trás só vai até essa folga.
@@ -400,13 +396,14 @@ Início e duração (em dias úteis) editáveis, término calculado, equipe e un
 - No menu "⋯": "Locais da obra" (cadastrar em lote, um nome por linha, renomear, reordenar com as setas e excluir; "Usar os locais dos vagões" traz os locais já importados do Prevision em ordem de altura; um local com blocos não pode ser excluído; é a mesma lista da seção "Locais da obra" das Configurações da obra e da coluna Local do curto prazo), "Importar do Planejador" (converte o plano do Planejador em blocos: cada pavimento vira um local e cada serviço × pavimento um bloco; só funciona com a Linha de Balanço ainda sem blocos) e "Exportar CSV".
 - "Salvar linha de base" abre a gaveta de linhas de base: criar com nome, "Comparar" (sobrepõe no gráfico), "Restaurar" (volta as datas dos blocos para as da foto) e "Excluir". Antes de cada lançamento de fluxo o sistema grava sozinho a linha de base "Antes do lançamento <data>".
 - "Nova medição" leva à visão "Medições".
+- "Custos" leva à visão Custos, com o selo de quantos pacotes com blocos já têm custo (por exemplo, "38/50").
 - A tela avisa quando o banco ainda não tem a migração da Linha de Balanço ("indisponível"): avise o administrador.`,
   },
   {
     id: 'longo-prazo-fluxos-de-servicos',
     title: 'Fluxos de serviços: criar o molde da empresa com serviços, duração por local, equipe, unidade e predecessoras',
     summary:
-      'A visão "Fluxos de serviços" (o macrofluxo): lista, editor com rede automática e tabela, dias úteis, predecessoras com espera, salvamento, duplicar, excluir e travas.',
+      'O macrofluxo da empresa: lista, editor com rede e tabela, dias úteis, predecessoras com espera, salvamento, duplicar, excluir e travas.',
     keywords: [
       'fluxo de serviços',
       'fluxos',
@@ -457,7 +454,7 @@ Planejador, gestor e admin criam, editam e lançam fluxos; o perfil de consulta 
     id: 'longo-prazo-lancar-fluxo',
     title: 'Lançar um fluxo na Linha de Balanço: locais, data de início, sentido, ritmo e a prévia',
     summary:
-      'O diálogo "Lançar fluxo": fluxo e locais, início, sentido (base → topo ou topo → base), ritmo (contínuo, takt, todos juntos), prévia, blocos mantidos e base automática.',
+      'Diálogo "Lançar fluxo": locais, início, sentido, ritmo (contínuo, takt, todos juntos), prévia, blocos mantidos e linha de base automática.',
     keywords: [
       'lançar fluxo',
       'lançar na linha de balanço',
@@ -502,7 +499,7 @@ Para cada serviço, em ordem de precedência, e cada local, no sentido escolhido
     id: 'longo-prazo-medicoes-fotograficas',
     title: 'Medições: rodadas com data, realizado acumulado por bloco, foto obrigatória no avanço, motivo do atraso e datas reais',
     summary:
-      'A visão "Medições" da aba 1: nova medição, atuais e futuras, previsto e anterior, realizado acumulado, fotos obrigatórias, motivo, salvar, última editável e celular.',
+      'Visão Medições: nova medição, atuais e futuras, realizado acumulado, fotos obrigatórias, motivo, salvar, última editável, celular e IDP.',
     keywords: [
       'medição',
       'medições',
@@ -557,7 +554,7 @@ Um bloco atrasado (previsto acima do medido) pede o motivo do atraso, escolhido 
 ## Salvar, corrigir e excluir
 - "Salvar rascunho" guarda os valores lançados sem fechar; "Salvar medição #N" fecha a rodada e ela passa para a lista com data, blocos, fotos e autor.
 - Só a última medição pode ser alterada ou excluída (valores, fotos, motivos); as anteriores ficam só para consulta. Excluir uma medição apaga os lançamentos e as fotos dela.
-- O cartão "Avanço físico da obra" mostra o acumulado da obra pelas medições salvas, o previsto até hoje e o desvio.
+- O cartão "Avanço físico da obra" mostra o acumulado da obra pelas medições salvas, o previsto até hoje, o desvio e o peso que vale (por duração ou por custo). Abaixo dele, "IDP por medição" lista o IDP de cada medição salva (veja a seção "IDP e custos").
 
 ## No celular
 A mesma rodada aberta no computador aparece no celular: um local por vez, escolhido na faixa de cima; cada bloco é um cartão com previsto, anterior, o valor grande com "−" e "+" (de 5 em 5), os atalhos, "Tirar foto" e "Galeria". Avanço sem foto fica destacado e não deixa salvar. Sem sinal ainda não funciona: é preciso conexão para lançar e enviar fotos.
@@ -566,10 +563,66 @@ A mesma rodada aberta no computador aparece no celular: um local por vez, escolh
 Planejador, gestor e admin medem; o perfil de consulta vê as medições e as fotos, mas não lança.`,
   },
   {
+    id: 'longo-prazo-idp-custos',
+    title: 'IDP (desempenho de prazo) e a visão Custos: peso por custo, apropriação por pacote e faixas de cor',
+    summary: 'IDP (real ÷ planejado): data, linha de base, faixas, peso por custo ou duração e a visão Custos.',
+    keywords: [
+      'idp',
+      'índice de desempenho de prazo',
+      'desempenho de prazo',
+      'spi',
+      'peso por custo',
+      'peso por duração',
+      'custos',
+      'apropriar custos',
+      'apropriação de custos',
+      'custo do pacote',
+      'pacote de serviço',
+      'orçamento',
+      'colar do orçamento',
+      'não apropriados',
+      'valor agregado',
+      'em dia atenção atrasado',
+    ],
+    screen: 'longo-prazo',
+    body: `## O que é o IDP
+O IDP (índice de desempenho de prazo) mede se a obra anda no ritmo planejado: é o avanço físico real dividido pelo avanço físico planejado, na mesma data, com os mesmos blocos e o mesmo peso. Aparece com duas casas ("0,94") no quinto cartão dos indicadores da Linha de Balanço ("IDP · desempenho de prazo"), no quadro "IDP por medição" da visão Medições e por pacote na visão Custos. A assistente também informa o IDP quando consulta a Linha de Balanço.
+
+## A data e o planejado
+- A data é a da última medição fechada; a medição em aberto não conta. O cartão "Avanço físico" continua mostrando o "previsto até hoje", que é outra comparação.
+- O planejado sai da linha de base escolhida no seletor "Linha de base" da Linha de Balanço; sem escolha, da linha de base manual mais recente (as automáticas, gravadas antes de um lançamento, só valem se escolhidas); sem linha de base manual, do cronograma atual. Um bloco criado depois da linha de base usa as datas atuais. O cartão diz contra o que comparou ("contra a linha de base …" ou "contra o cronograma atual").
+
+## Faixas de cor
+- 1,00 ou mais: verde, "em dia".
+- De 0,90 a 0,99: amarelo, "atenção".
+- Abaixo de 0,90: vermelho, "atrasado".
+A cor sai do número mostrado, com duas casas.
+
+## Sem número
+- Sem medição fechada: o cartão mostra "—" e "sem medição".
+- Nada previsto até a data da medição (a medição é anterior ao primeiro bloco do planejado): "—" e "nada previsto até a data".
+
+## Peso por custo ou por duração
+- Há um peso só na aba. Enquanto algum pacote de serviço com blocos estiver sem custo, tudo segue pesado pela duração dos blocos, e o cartão diz "Faltam custos em N de M pacotes", com o link "Apropriar custos" ("Ver custos" no perfil de consulta).
+- Com o custo de todos os pacotes com blocos apropriado, o avanço físico, o previsto até hoje, o quadro das Medições e o IDP passam juntos para o peso por custo. Cada cartão diz qual peso vale ("peso por custo" ou "peso por duração").
+- O custo de um pacote se reparte entre os blocos dele pela duração. Um valor zero conta como informado; se todos os custos somarem zero, o peso volta à duração e o cartão avisa.
+- Com o peso por custo, o IDP é o mesmo índice do valor agregado (valor agregado ÷ valor planejado).
+
+## A visão Custos
+Aberta pelo botão "Custos" da Linha de Balanço (o selo mostra quantos pacotes com blocos já têm custo, por exemplo "38/50"):
+- **Resumo**: pacotes com custo, total apropriado e o peso que vale.
+- **Pacotes**: uma linha por pacote de serviço, com o custo (digitado direto na linha do pacote ou somado dos itens do orçamento apropriados a ele), a fatia de cada pacote no peso da obra e o IDP do pacote.
+- **Itens e "Colar do orçamento"**: cole as linhas copiadas do Excel (código, descrição e valor); uma célula com o nome do pacote já apropria o item, e linhas sem valor, como o cabeçalho, ficam de fora com o motivo.
+- **Não apropriados**: itens sem pacote. Eles não entram no peso.
+- Planejador, gestor e admin apropriam. O perfil de consulta vê a visão com as porcentagens de cada item e pacote, nunca os valores em reais; o peso e o IDP saem iguais.
+
+## Fora desta etapa
+Os Dashboards (aba 0 e o geral) ainda não mostram o IDP.`,
+  },
+  {
     id: 'longo-prazo-gantt-legalizacao',
     title: 'Gantt de legalização: os 12 meses até a entrega, com o caminho crítico da obra e a legalização por órgão',
-    summary:
-      'A visão "Gantt de legalização" da aba 1: criar pela entrega, modelo ATR, resumo do topo, caminho crítico, alterar entrega e trazer da Linha de Balanço.',
+    summary: 'Gantt de legalização: criar pela entrega, modelo ATR, resumo, caminho crítico, alterar entrega e trazer da Linha de Balanço.',
     keywords: [
       'gantt de legalização',
       'legalização',

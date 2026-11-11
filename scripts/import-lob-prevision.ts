@@ -81,6 +81,7 @@ const EMPTY = (): Record<LobTable, never[]> => ({
   measurements: [],
   items: [],
   photos: [],
+  costs: [],
 });
 
 function report(result: PrevisionImport, workName: string) {

@@ -1,6 +1,7 @@
 import type {
   LobActivity,
   LobBaseline,
+  LobCostItem,
   LobData,
   LobDependency,
   LobLaunch,
@@ -16,19 +17,30 @@ import type { LobMutation, LobTable } from '../../../application/use-cases/lob-c
 import { logRouteError } from '../../log';
 import { getServiceClient } from './client';
 
-/** Leitura e gravação da Linha de Balanço e dos fluxos (migração 0038). Fora do snapshot: cada
- * tabela é lida filtrada pela obra e cada comando grava só o que mudou, na ordem que mantém o banco
- * coerente sem transação (como a Terminalidade). */
+/** Leitura e gravação da Linha de Balanço e dos fluxos (migração 0038) e dos itens de custo
+ * (migração 0044). Fora do snapshot: cada tabela é lida filtrada pela obra e cada comando grava só o
+ * que mudou, na ordem que mantém o banco coerente sem transação (como a Terminalidade). */
 
 export const LOB_BUCKET = 'medicoes';
 const PAGE = 1000;
 const SIGNED_URL_SECONDS = 60 * 60;
 const SIGN_BATCH = 200;
+/** Ids por `delete ... in (...)`: a lista vai na URL, e mil UUIDs passam do limite do gateway. */
+const DELETE_BATCH = 100;
+/** Linhas por requisição ao gravar itens de custo (a tela cola centenas de linhas do orçamento). */
+const COST_BATCH = 500;
 
 export class LobUnavailableError extends Error {
   constructor() {
     super('Aplique a migração 0038_lob.sql no Supabase para usar a Linha de Balanço e as medições.');
     this.name = 'LobUnavailableError';
+  }
+}
+/** Itens de custo sem a 0044 (11/11/2026): a leitura segue com `costs: []`; só a gravação recusa. */
+export class LobCostsUnavailableError extends Error {
+  constructor() {
+    super('Aplique a migração 0044_lob_costs.sql no Supabase para apropriar custos.');
+    this.name = 'LobCostsUnavailableError';
   }
 }
 export class LobConflictError extends Error {
@@ -39,9 +51,9 @@ export class LobConflictError extends Error {
 }
 const missingTable = (code?: string) => code === '42P01' || code === 'PGRST205';
 type DbError = { code?: string; message: string } | null;
-function check(error: DbError, action: string) {
+function check(error: DbError, action: string, table?: LobTable) {
   if (!error) return;
-  if (missingTable(error.code)) throw new LobUnavailableError();
+  if (missingTable(error.code)) throw table === 'costs' ? new LobCostsUnavailableError() : new LobUnavailableError();
   if (error.code === '23505' || error.code === '23503') throw new LobConflictError();
   throw new Error(`Falha ao ${action}: ${error.message}`);
 }
@@ -56,6 +68,7 @@ const TABLE_NAMES: Record<LobTable, string> = {
   measurements: 'lob_measurements',
   items: 'lob_measurement_items',
   photos: 'lob_photos',
+  costs: 'lob_cost_items',
 };
 
 // ----- Linhas (snake_case) e conversões -----
@@ -156,6 +169,18 @@ export const lobFromRow: { [T in LobTable]: (r: Row) => LobData[T][number] } = {
     bytes: opt(r.bytes as number | null),
     createdBy: s(r.created_by),
     createdAt: s(r.created_at),
+  }),
+  costs: r => ({
+    id: s(r.id),
+    workId: s(r.work_id),
+    serviceId: opt(r.service_id as string | null),
+    code: opt(r.code as string | null),
+    description: s(r.description),
+    // numeric chega como texto pelo PostgREST ("1234.50").
+    amount: n(r.amount),
+    orderIndex: n(r.order_index),
+    createdBy: s(r.created_by),
+    ...stamps(r),
   }),
 };
 
@@ -262,6 +287,18 @@ export const lobToRow = {
     created_by: p.createdBy,
     created_at: p.createdAt,
   }),
+  costs: (c: LobCostItem): Row => ({
+    id: c.id,
+    work_id: c.workId,
+    service_id: nul(c.serviceId),
+    code: nul(c.code),
+    description: c.description,
+    amount: c.amount,
+    order_index: c.orderIndex,
+    created_by: c.createdBy,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  }),
 };
 
 const ORDER: Record<LobTable, string[]> = {
@@ -274,6 +311,7 @@ const ORDER: Record<LobTable, string[]> = {
   measurements: ['measured_on', 'number'],
   items: ['created_at', 'id'],
   photos: ['created_at', 'id'],
+  costs: ['order_index', 'id'],
 };
 
 async function fetchWorkRows(table: LobTable, workId: string): Promise<Row[]> {
@@ -282,23 +320,40 @@ async function fetchWorkRows(table: LobTable, workId: string): Promise<Row[]> {
     let query = getServiceClient().from(TABLE_NAMES[table]).select('*').eq('work_id', workId);
     for (const column of ORDER[table]) query = query.order(column);
     const { data, error } = await query.range(from, from + PAGE - 1);
-    check(error, `ler ${TABLE_NAMES[table]}`);
+    check(error, `ler ${TABLE_NAMES[table]}`, table);
     all.push(...((data ?? []) as Row[]));
     if (!data || data.length < PAGE) return all;
   }
 }
 
-/** Tudo de uma obra, sem URLs de foto. */
-export async function loadLob(workId: string): Promise<LobData> {
-  const rows = await Promise.all(LOB_TABLE_LIST.map(table => fetchWorkRows(table, workId)));
-  const data = {} as LobData;
+/** Itens de custo da obra, ou `null` sem a migração 0044 (a Linha de Balanço não depende deles). */
+async function fetchCosts(workId: string): Promise<LobCostItem[] | null> {
+  try {
+    return (await fetchWorkRows('costs', workId)).map(lobFromRow.costs);
+  } catch (error) {
+    if (error instanceof LobCostsUnavailableError) return null;
+    throw error;
+  }
+}
+
+/** Tudo de uma obra, sem URLs de foto, e se a tabela de custos existe (11/11/2026): sem as tabelas
+ * da 0038 lança `LobUnavailableError`, como antes; sem a 0044 devolve `costs: []` e
+ * `costsAvailable: false`, para a rota responder `costAccess: 'unavailable'`. */
+export async function loadLobWithCosts(workId: string): Promise<{ data: LobData; costsAvailable: boolean }> {
+  const [rows, costs] = await Promise.all([Promise.all(LOB_TABLE_LIST.map(table => fetchWorkRows(table, workId))), fetchCosts(workId)]);
+  const data = { costs: costs ?? [] } as LobData;
   LOB_TABLE_LIST.forEach((table, index) => {
     const convert = lobFromRow[table] as (r: Row) => unknown;
     (data as unknown as Record<LobTable, unknown[]>)[table] = rows[index].map(convert);
   });
-  return data;
+  return { data, costsAvailable: costs !== null };
 }
-const LOB_TABLE_LIST: LobTable[] = [
+/** Tudo de uma obra, sem URLs de foto; `costs: []` sem a migração 0044. */
+export async function loadLob(workId: string): Promise<LobData> {
+  return (await loadLobWithCosts(workId)).data;
+}
+/** As tabelas da 0038; os custos (0044) são lidos à parte, tolerando a tabela ausente. */
+const LOB_TABLE_LIST: Exclude<LobTable, 'costs'>[] = [
   'locals',
   'services',
   'activities',
@@ -312,7 +367,7 @@ const LOB_TABLE_LIST: LobTable[] = [
 
 export async function findWorkIdForEntity(table: LobTable, id: string): Promise<string | null> {
   const { data, error } = await getServiceClient().from(TABLE_NAMES[table]).select('work_id').eq('id', id).maybeSingle();
-  check(error, `ler ${TABLE_NAMES[table]}`);
+  check(error, `ler ${TABLE_NAMES[table]}`, table);
   return (data as { work_id: string } | null)?.work_id ?? null;
 }
 
@@ -353,12 +408,14 @@ const DELETE_ORDER: LobTable[] = [
   'activities',
   'baselines',
   'launches',
+  'costs',
   'services',
   'locals',
 ];
 const INSERT_ORDER: LobTable[] = [
   'locals',
   'services',
+  'costs',
   'launches',
   'activities',
   'dependencies',
@@ -369,22 +426,39 @@ const INSERT_ORDER: LobTable[] = [
 ];
 type AnyRecord = { id: string };
 const toRow = (table: LobTable, record: AnyRecord) => (lobToRow[table] as unknown as (r: AnyRecord) => Row)(record);
+const chunks = <T>(list: T[], size: number) =>
+  Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
 
 export async function applyLobMutation(mutation: LobMutation): Promise<void> {
   const client = getServiceClient();
   for (const table of DELETE_ORDER) {
-    const ids = mutation.delete[table];
-    if (!ids.length) continue;
-    const { error } = await client.from(TABLE_NAMES[table]).delete().in('id', ids).eq('work_id', mutation.workId);
-    check(error, `apagar de ${TABLE_NAMES[table]}`);
+    for (const ids of chunks(mutation.delete[table], DELETE_BATCH)) {
+      const { error } = await client.from(TABLE_NAMES[table]).delete().in('id', ids).eq('work_id', mutation.workId);
+      check(error, `apagar de ${TABLE_NAMES[table]}`, table);
+    }
   }
   for (const table of INSERT_ORDER) {
     const records = mutation.insert[table] as AnyRecord[];
     if (!records.length) continue;
-    const { error } = await client.from(TABLE_NAMES[table]).insert(records.map(r => toRow(table, r)));
-    check(error, `gravar em ${TABLE_NAMES[table]}`);
+    // Custos em blocos (até 3000 por gravação); as demais tabelas seguem numa requisição só.
+    for (const batch of table === 'costs' ? chunks(records, COST_BATCH) : [records]) {
+      const { error } = await client.from(TABLE_NAMES[table]).insert(batch.map(r => toRow(table, r)));
+      check(error, `gravar em ${TABLE_NAMES[table]}`, table);
+    }
+  }
+  // Custos alterados: upsert em blocos, em vez de um update por linha (centenas de linhas coladas).
+  // Só vêm ids lidos desta obra pelo planejador, então o `onConflict` sempre cai em linha da obra. Ao
+  // contrário do update por linha, item apagado por outra pessoa no meio volta (o upsert o recria):
+  // aceitável para uma linha de orçamento, que a pessoa exclui de novo.
+  for (const batch of chunks(mutation.update.costs, COST_BATCH)) {
+    const { error } = await client.from(TABLE_NAMES.costs).upsert(
+      batch.map(r => toRow('costs', r)),
+      { onConflict: 'id' },
+    );
+    check(error, `atualizar ${TABLE_NAMES.costs}`, 'costs');
   }
   for (const table of INSERT_ORDER) {
+    if (table === 'costs') continue;
     const records = mutation.update[table] as AnyRecord[];
     if (!records.length) continue;
     const results = await Promise.all(
@@ -396,7 +470,7 @@ export async function applyLobMutation(mutation: LobMutation): Promise<void> {
       }),
     );
     for (const { data, error } of results) {
-      check(error, `atualizar ${TABLE_NAMES[table]}`);
+      check(error, `atualizar ${TABLE_NAMES[table]}`, table);
       if (!data?.length) throw new LobConflictError();
     }
   }

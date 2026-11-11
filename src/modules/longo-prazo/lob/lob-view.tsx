@@ -2,7 +2,20 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Building2, ChevronDown, Download, Flag, MoreHorizontal, Plus, Ruler, Table2, TriangleAlert, Undo2, Upload } from 'lucide-react';
+import {
+  Building2,
+  ChevronDown,
+  Coins,
+  Download,
+  Flag,
+  MoreHorizontal,
+  Plus,
+  Ruler,
+  Table2,
+  TriangleAlert,
+  Undo2,
+  Upload,
+} from 'lucide-react';
 import {
   activityFinish,
   closedMeasurements,
@@ -10,13 +23,22 @@ import {
   isLate,
   lobSpan,
   measuredPercents,
-  physicalProgress,
   plannedPercent,
-  plannedProgress,
   type LobActivity,
   type LobCommand,
   type LocalDate,
 } from '@/domain/lob';
+import {
+  formatIdp,
+  IDP_TONE_LABEL,
+  idpTone,
+  lobPerformance,
+  performanceBaseline,
+  weightedProgress,
+  weightingLabel,
+  type IdpTone,
+  type LobPerformance,
+} from '@/domain/lob-performance';
 import { addDays, daysBetween, isLocalDate } from '@/domain/long-term-plan';
 import { useDeveloper, useModules, usePlanning } from '@/modules/planejamento/planning-provider';
 import { hasSectionAccess } from '@/application/module-access';
@@ -33,9 +55,11 @@ import { LobActivityPanel } from './lob-activity-panel';
 import { LobLocalsPanel } from './lob-locals-panel';
 import { LobLaunchDialog } from './lob-launch-dialog';
 import { LobBaselinesPanel } from './lob-baselines-panel';
+import { Pill } from './measurement-sheet';
 
 /** Visão "Linha de Balanço" da aba 1 (modelo aprovado em 04/11/2026, tela 1): barra de ferramentas,
- * quatro indicadores, o painel da atividade selecionada e, abaixo dele, o gráfico (ou tabela) com legenda.
+ * cinco indicadores (o quinto, o IDP, desde 11/11/2026), o painel da atividade selecionada e, abaixo dele,
+ * o gráfico (ou tabela) com legenda.
  * Os dados vêm de `useLob`; toda alteração é um comando ao servidor, que devolve a obra inteira já
  * recalculada (cascata de sucessoras incluída). "Desfazer" guarda, por comando, as datas que ele
  * mudou e as reenvia; vale na sessão (regra 16). */
@@ -52,6 +76,8 @@ const ZOOMS: { id: LobZoom; label: string }[] = [
 ];
 
 const pct = (value: number) => `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+/** "11/11". */
+const dayMonth = (date: LocalDate) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const errorMessage = (error: unknown) => (error instanceof Error && error.message ? error.message : 'Falha na comunicação com o servidor.');
 /** Atalho de teclado só vale fora de campos de texto. */
@@ -239,6 +265,106 @@ function LateDialog({
   );
 }
 
+// ─── IDP ─────────────────────────────────────────────────────────────────────────
+
+const IDP_CARD_TONE: Record<IdpTone, 'success' | 'warning' | 'danger'> = { good: 'success', warn: 'warning', bad: 'danger' };
+const IDP_PILL_TONE: Record<IdpTone, 'ok' | 'warn' | 'late'> = { good: 'ok', warn: 'warn', bad: 'late' };
+
+/** De onde sai o planejado do IDP (regra 4): a linha de base escolhida, a manual mais recente ou o cronograma atual. */
+export const idpReference = (performance: LobPerformance) =>
+  performance.baseline ? `contra a linha de base “${performance.baseline.name}”` : 'contra o cronograma atual';
+
+/** A linha da regra 6 (falta custo em algum pacote com blocos) ou do custo somando zero, com o caminho
+ * até a visão Custos. Nada quando o peso já é o custo. Sem a migração 0044 (`costsUnavailable`) não há
+ * onde apropriar: em vez do aviso em vermelho, diz que a apropriação ainda não foi ativada. */
+export function IdpWeightNote({
+  performance,
+  costsHref,
+  readOnly,
+  costsUnavailable = false,
+}: {
+  performance: LobPerformance;
+  costsHref: string;
+  readOnly: boolean;
+  costsUnavailable?: boolean;
+}) {
+  const { fallback, missingServiceIds, servicesWithBlocks } = performance.weights;
+  if (fallback && costsUnavailable)
+    return <span className="mt-1 block">A apropriação de custos ainda não foi ativada no banco: peso por duração.</span>;
+  if (fallback === 'missing')
+    return (
+      <span className="mt-1 block font-semibold text-danger">
+        Faltam custos em {missingServiceIds.length} de {plural(servicesWithBlocks.length, 'pacote', 'pacotes')}.{' '}
+        <Link className="text-link font-semibold" href={costsHref}>
+          {readOnly ? 'Ver custos' : 'Apropriar custos'}
+        </Link>
+      </span>
+    );
+  if (fallback === 'zero') return <span className="mt-1 block">Os custos apropriados somam zero: peso por duração.</span>;
+  return null;
+}
+
+/** Quinto indicador (11/11/2026, modelo "IDP na Linha de Balanço"): real ÷ planejado na última medição
+ * fechada, na cor da faixa (regra 10), com a conta, a referência e o peso na dica (regras 1, 3, 4 e 7);
+ * sem número nos casos da regra 11. */
+function IdpCard({
+  performance,
+  costsHref,
+  readOnly,
+  costsUnavailable,
+}: {
+  performance: LobPerformance;
+  costsHref: string;
+  readOnly: boolean;
+  costsUnavailable: boolean;
+}) {
+  const { status, point, weights } = performance;
+  const weight = weightingLabel(weights.mode);
+  const note = <IdpWeightNote performance={performance} costsHref={costsHref} readOnly={readOnly} costsUnavailable={costsUnavailable} />;
+  if (status === 'ok' && point?.idp !== undefined) {
+    const tone = idpTone(point.idp);
+    return (
+      <StatCard
+        label="IDP · desempenho de prazo"
+        tone={IDP_CARD_TONE[tone]}
+        value={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {formatIdp(point.idp)}
+            <Pill tone={IDP_PILL_TONE[tone]}>{IDP_TONE_LABEL[tone]}</Pill>
+          </span>
+        }
+        hint={
+          <>
+            <span className="block tabular-nums">
+              {pct(point.real)} ÷ {pct(point.planned)} em {dayMonth(point.date)} (medição nº {point.number}) · {idpReference(performance)} ·{' '}
+              {weight}
+            </span>
+            {note}
+          </>
+        }
+      />
+    );
+  }
+  const reason =
+    status === 'no-blocks'
+      ? 'sem blocos ainda'
+      : status === 'no-measurement'
+        ? `sem medição · ${weight}`
+        : `nada previsto até a data${point ? ` (medição nº ${point.number}, ${dayMonth(point.date)})` : ''} · ${idpReference(performance)} · ${weight}`;
+  return (
+    <StatCard
+      label="IDP · desempenho de prazo"
+      value="—"
+      hint={
+        <>
+          <span className="block">{reason}</span>
+          {status !== 'no-blocks' && note}
+        </>
+      }
+    />
+  );
+}
+
 // ─── A visão ─────────────────────────────────────────────────────────────────────
 
 function LobViewInner({ workId }: { workId: string }) {
@@ -287,6 +413,12 @@ function LobViewInner({ workId }: { workId: string }) {
     () => (data ? data.activities.filter(a => isLate(a, percents[a.id], today)) : []),
     [data, percents, today],
   );
+  // IDP e peso da aba (11/11/2026): o cartão do IDP segue a linha de base do seletor (vazio = regra 4) e
+  // o "Avanço físico" usa o mesmo peso (regra 7). Memorizados: a obra chega a 600 blocos e o IDP refaz
+  // o acumulado de cada medição fechada.
+  const performance = useMemo(() => (data ? lobPerformance(data, { baselineId: baselineId || undefined }) : undefined), [data, baselineId]);
+  const weights = performance?.weights;
+  const progress = useMemo(() => (data && weights ? weightedProgress(data, today, weights) : undefined), [data, today, weights]);
   const range = useMemo(() => {
     if (period === '3m') return { start: today, end: addDays(today, 91) };
     if (period === '6m') return { start: today, end: addDays(today, 182) };
@@ -380,7 +512,7 @@ function LobViewInner({ workId }: { workId: string }) {
         <code className="text-xs">supabase/migrations/0038_lob.sql</code>) e recarregue a página.
       </Callout>
     );
-  if (!data || context.state === 'loading') return <LoadState />;
+  if (!data || !performance || context.state === 'loading') return <LoadState />;
 
   // ─── Derivados da obra carregada ──────────────────────────────────────────
   const services = [...data.services].sort((a, b) => a.orderIndex - b.orderIndex);
@@ -399,17 +531,22 @@ function LobViewInner({ workId }: { workId: string }) {
   };
   const span = lobSpan(data.activities);
   const baseline = data.baselines.find(b => b.id === baselineId);
+  /** A linha de base que o IDP usa quando o seletor está vazio (regra 4), para o rótulo da opção vazia. */
+  const defaultIdpBaseline = performanceBaseline(data.baselines);
   const baselineFinish = baseline?.snapshot.reduce<LocalDate | undefined>((max, e) => {
     const f = activityFinish(e);
     return !max || f > max ? f : max;
   }, undefined);
   const finishDelta = span && baselineFinish ? daysBetween(baselineFinish, span.finish) : undefined;
-  const physical = physicalProgress(data.activities, percents);
-  const planned = plannedProgress(data.activities, today);
+  const physical = progress?.physical;
+  const planned = progress?.planned;
+  const weightLabel = weightingLabel(performance.weights.mode);
+  const withCost = performance.weights.servicesWithBlocks.length - performance.weights.missingServiceIds.length;
   const behind = physical !== undefined && planned !== undefined && physical < planned - 0.05;
   const visibleServices = services.filter(s => !hiddenServiceIds.has(s.id)).length;
   const visibleLocals = localFilter ? locals.filter(l => localFilter.has(l.id)).length : locals.length;
   const base = workPath(workId, 'longo-prazo');
+  const costsHref = `${base}?visao=custos`;
 
   const toggleService = (id: string) =>
     setHiddenServiceIds(current => {
@@ -575,7 +712,10 @@ function LobViewInner({ workId }: { workId: string }) {
           Linha de base
         </label>
         <select id="lob-baseline" className="field w-auto py-2" value={baselineId} onChange={event => setBaselineId(event.target.value)}>
-          <option value="">Linha de base: nenhuma</option>
+          {/* Vazio = nada no gráfico; o IDP cai na regra 4 (manual mais recente) e diz qual usa na dica. */}
+          <option value="">
+            {defaultIdpBaseline ? `Linha de base: nenhuma no gráfico (IDP: “${defaultIdpBaseline.name}”)` : 'Linha de base: nenhuma'}
+          </option>
           {[...data.baselines]
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
             .map(b => (
@@ -648,6 +788,26 @@ function LobViewInner({ workId }: { workId: string }) {
           <Flag size={15} aria-hidden /> {readOnly ? 'Linhas de base' : 'Salvar linha de base'}
           {data.baselines.length > 0 && <span className="badge-muted px-2 py-0">{data.baselines.length}</span>}
         </button>
+        {/* Custos por pacote (11/11/2026): o selo diz quantos pacotes com blocos já têm custo (regra 6). */}
+        <Link
+          data-tour="longo-lob-custos"
+          href={costsHref}
+          className="button-ghost"
+          title={
+            performance.weights.servicesWithBlocks.length
+              ? `${withCost} de ${plural(performance.weights.servicesWithBlocks.length, 'pacote com blocos tem', 'pacotes com blocos têm')} custo apropriado`
+              : 'Custos por pacote de serviço: o peso do IDP'
+          }
+        >
+          <Coins size={15} aria-hidden /> Custos
+          {performance.weights.servicesWithBlocks.length > 0 && (
+            <span
+              className={`badge-muted px-2 py-0 tabular-nums ${performance.weights.fallback === 'missing' ? 'border-warning-ring bg-warning-soft text-warning' : ''}`}
+            >
+              {withCost}/{performance.weights.servicesWithBlocks.length}
+            </span>
+          )}
+        </Link>
         <Link data-tour="longo-lob-nova-medicao" href={`${base}?visao=medicoes`} className="button-secondary">
           <Ruler size={15} aria-hidden /> Nova medição
         </Link>
@@ -713,6 +873,11 @@ function LobViewInner({ workId }: { workId: string }) {
             <strong>Lançar fluxo</strong> cria os blocos a partir de um fluxo da empresa nos locais marcados; antes de cada lançamento numa
             obra que já tem blocos, uma linha de base automática guarda o cronograma.
           </p>
+          <p>
+            O <strong>IDP</strong> (desempenho de prazo) é o avanço real ÷ o planejado na última medição fechada, contra a linha de base
+            escolhida (sem escolha, a manual mais recente): 1,00 ou mais está em dia, abaixo de 0,90 atrasado. Com o custo de todos os
+            pacotes apropriado em <strong>Custos</strong>, ele e o avanço físico passam a pesar pelo custo; até lá, pela duração.
+          </p>
         </HelpNote>
       </div>
 
@@ -729,7 +894,7 @@ function LobViewInner({ workId }: { workId: string }) {
       )}
 
       {/* Indicadores */}
-      <div data-tour="longo-lob-indicadores" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="longo-lob-indicadores" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="Serviços"
           value={data.services.length}
@@ -763,14 +928,25 @@ function LobViewInner({ workId }: { workId: string }) {
           value={physical !== undefined ? pct(physical) : '—'}
           hint={
             planned !== undefined ? (
-              <span className={behind ? 'font-semibold text-danger' : undefined}>
-                Previsto até hoje {pct(planned)} · {plural(lateActivities.length, 'bloco atrasado', 'blocos atrasados')}
-              </span>
+              <>
+                <span className={behind ? 'font-semibold text-danger' : undefined}>
+                  Previsto até hoje {pct(planned)} · {plural(lateActivities.length, 'bloco atrasado', 'blocos atrasados')}
+                </span>{' '}
+                · {weightLabel}
+              </>
             ) : (
               'sem blocos ainda'
             )
           }
         />
+        <div data-tour="longo-lob-idp" className="grid">
+          <IdpCard
+            performance={performance}
+            costsHref={costsHref}
+            readOnly={readOnly}
+            costsUnavailable={state.status === 'ready' && state.costAccess === 'unavailable'}
+          />
+        </div>
       </div>
 
       {/* Atividade selecionada: acima do gráfico, para não tomar a lateral dele (11/11/2026) */}

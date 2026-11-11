@@ -274,6 +274,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A lista de pendência da aba 2 responde "indisponível"; os vagões e as demais abas seguem normais.',
     critical: false,
   },
+  {
+    migration: '0044_lob_costs',
+    label: 'Apropriação de custos por pacote de serviço (peso do IDP na Linha de Balanço)',
+    probe: { kind: 'table', table: 'lob_cost_items' },
+    effect: 'A visão Custos da aba 1 pede a migração e não grava; o avanço físico e o IDP da Linha de Balanço seguem pesados pela duração.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };
