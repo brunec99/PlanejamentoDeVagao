@@ -82,6 +82,14 @@ Ainda assim, a configuração certa no Supabase (**Authentication → URL Config
 
 O desvio foi validado localmente com um código falso. O login completo com Google precisa ser confirmado pelo usuário no navegador.
 
+## "Entro com o Google e cai numa página que não abre" (11/11/2026)
+
+Apareceu quando o sistema saiu da Vercel para o servidor da ATR (10/11/2026). O login concluía, mas a última etapa (`/auth/callback`) mandava o navegador para `https://0.0.0.0:3000/obras`, que não existe: aparecia a página de erro do navegador, e abrir o endereço do sistema de novo funcionava, porque a sessão já estava gravada.
+
+A causa: fora da Vercel, o Next monta `request.nextUrl` com o endereço em que o servidor escuta, não com o endereço que a pessoa digitou. O retorno do login era o único redirecionamento absoluto montado a partir dele. Agora ele usa o endereço público da requisição (`publicOrigin`, em `src/infrastructure/public-origin.ts`), e o link do e-mail de pendência também, que saía com o mesmo endereço interno.
+
+**Por que algumas pessoas caíram no Takt Hub.** Quem apertava "voltar" na página de erro repetia a volta do Google com um código que já tinha sido usado. O Supabase recusa (`OAuth state not found or expired`) e, como nesse erro ele não sabe mais de qual sistema o login partiu, devolve a pessoa para o **Site URL** do projeto, que é o do Takt Hub. O desvio não leva dado de um sistema para o outro: é o destino padrão de erro de um login dividido entre os dois. O que a pessoa vê ao chegar lá depende das permissões do próprio Takt Hub. Com a correção acima a página de erro deixa de aparecer; o desvio para o Takt Hub ainda pode acontecer em qualquer login repetido ou expirado, enquanto os sistemas dividirem o mesmo projeto.
+
 ## Acesso local sem login, temporário (25/09/2026)
 
 A pedido do usuário, para facilitar testes, o sistema pode pular o login do Google **apenas localmente**. Com `DEV_AUTH_BYPASS_PROFILE_ID=<id do perfil>` no `.env.local`, o `next dev` entra direto com aquele perfil: o middleware deixa passar e o `getRouteProfile` devolve o perfil indicado (`src/infrastructure/auth/dev-bypass.ts`). Há duas travas. A variável só vale com `NODE_ENV=development` e é ignorada sempre que `VERCEL` estiver definida, então **o site publicado continua exigindo o Google**, mesmo que alguém configure a variável lá. Remover produção do login foi descartado: exporia dados reais e apagaria o registro de quem alterou o quê.
