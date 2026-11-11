@@ -9,7 +9,7 @@ Entregue em 10/11/2026. A aba 2 passou a se chamar **Planejamento de vagão e li
 | Código do Obra 360 (quadro, API, botões do médio e do longo prazo) | Commit `3382814`, enviado ao `main` em 10/11/2026; CI e a imagem Docker (`imagem.yml`, ghcr.io) verdes. O sistema não está mais na Vercel: o servidor da ATR busca a imagem nova sozinho (o status "Deployment was blocked" da Vercel nesses commits não significa nada) |
 | Migração `0043_pending_board.sql` (este repositório) | **Aplicada no takt-hub em 10/11/2026** (4 tabelas, RLS e grants conferidos; leitura REST com a chave de serviço respondeu 200) |
 | Migração `20261110090000_obra360_pendencia_email.sql` (repositório do Takt Hub) | **Aplicada no takt-hub em 10/11/2026** (`obra360.pendencia` nos dois CHECKs da fila) |
-| Modelo de e-mail `obra360.pendencia` na Edge Function `email-dispatch` (Takt Hub) | Commit `137ce34` no takt-hub. **Edge Function não publicada**: a CLI do Supabase pede login (`npx supabase login`), que só o dono da conta faz |
+| Modelo de e-mail `obra360.pendencia` na Edge Function `email-dispatch` (Takt Hub) | Commit `137ce34` no takt-hub. **Edge Function publicada em 10/11/2026** (`npx supabase functions deploy email-dispatch --no-verify-jwt`, com o login do dono da conta). Falta um e-mail real de ponta a ponta |
 | Uso real logado | Não feito |
 
 Sem a 0043 a visão mostra "indisponível" e o resto do sistema segue normal. Sem a parte do Takt Hub o quadro funciona inteiro e só o e-mail não sai (a falha fica no log do servidor, o comando não é recusado).
@@ -75,8 +75,8 @@ No Takt Hub (`~/Applications/App-Takt`): `supabase/migrations/20261110090000_obr
 
 1. ~~Aplicar a `0043_pending_board.sql` no takt-hub.~~ Feito em 10/11/2026.
 2. ~~Aplicar a `20261110090000_obra360_pendencia_email.sql` no takt-hub.~~ Feito em 10/11/2026.
-3. Publicar a Edge Function `email-dispatch` do Takt Hub (sem isso a linha da fila falha com `modelo_desconhecido`).
-4. Publicar o Obra 360.
+3. ~~Publicar a Edge Function `email-dispatch` do Takt Hub (sem isso a linha da fila falha com `modelo_desconhecido`).~~ Feito em 10/11/2026.
+4. ~~Publicar o Obra 360.~~ Feito em 10/11/2026 pelo `main` (imagem do servidor da ATR).
 
 O código novo sem a 0043 não quebra nada (a visão fica indisponível). A cópia mensal que grava o elo não depende de migração.
 
@@ -96,7 +96,7 @@ O código novo sem a 0043 não quebra nada (a visão fica indisponível). A cóp
 
 ## Pendências
 
-- Publicar a Edge Function do Takt Hub e o código do Obra 360 (acima). Enquanto a função não for publicada, **não publicar o Obra 360 não é necessário**, mas todo e-mail enfileirado falha com `modelo_desconhecido` e não é reenviado.
+- Conferir um e-mail real de menção de ponta a ponta (marcar alguém com @ num card e ver a mensagem chegar): a função e as migrações estão no ar, mas o envio real não foi testado.
 - Liberar o módulo para as pessoas (decisão do usuário: depois).
 - O Dashboard da obra ainda mostra "Restrições por coluna" com as três colunas antigas, e o comando `move_restriction` ficou sem tela.
 - O botão "Gerar restrição" do curto prazo (só desenvolvedor) continua criando restrição de vagão, não card.
