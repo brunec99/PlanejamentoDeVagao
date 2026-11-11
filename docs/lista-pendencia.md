@@ -29,7 +29,7 @@ Quadro Kanban no estilo Trello/Pipefy com as pendências que precisam estar reso
 
 ## As três formas de criar
 
-1. **Na aba 2**, "+ Nova pendência": digita-se a data de término e o tempo de execução.
+1. **Na aba 2**, "+ Nova pendência": digita-se a data de término e o tempo de execução. Desde 10/11/2026 (pedido do usuário no mesmo dia), o campo **"Ligar a"** permite, em vez da data manual, prender o card a uma **tarefa do médio prazo** ou a um **serviço do longo prazo**, escolhidos numa lista com o início de cada um (busca pelo nome acima de 8 itens). O card nasce igual ao das formas 2 e 3 (mesma origem, mesma entrega viva). Tarefas oferecidas: as do plano vivo mais recente do médio prazo (o mensal de maior mês, sem linha de base nem legalização), na ordem do cronograma; tarefa-resumo aparece desabilitada, para manter a regra do botão do médio prazo. Serviços oferecidos: os que têm bloco lançado na Linha de Balanço, por início. A lista vem de `GET /api/pendencias/origens` (`pendingSourceOptions`), só leitura, mesma porta do quadro; a ligação é conferida de novo no `create_card`.
 2. **No médio prazo**, botão "Criar pendência" na barra do cronograma (age na linha selecionada) e no rodapé de "Informações da tarefa". Desabilitado, com o motivo na dica, em tarefa-resumo, em linha de base, em tarefa ainda não salva e com edição em andamento. Não aparece no Gantt de legalização.
 3. **No longo prazo**, botão "Criar pendência do serviço" no painel do bloco selecionado da Linha de Balanço. A origem é o **serviço** do bloco, e o início é o menor início entre os blocos do serviço.
 
@@ -86,6 +86,8 @@ O código novo sem a 0043 não quebra nada (a visão fica indisponível). A cóp
 - Testes novos: `tests/pending-board.test.ts`, `tests/pending-commands.test.ts`, `tests/pending-view.test.ts`; ajustados `tests/delete-work.test.ts` (as tabelas novas caem com a obra), `tests/module-access.test.ts`, `tests/plan-monthly.test.ts` (o elo da cópia).
 - Tela aberta no navegador com `next dev`, Supabase falso e API simulada pelas regras reais (`planPendingCommand`), em 1500 px e 400 px: quadro, arrastar entre colunas, motivo ao pausar, card aberto, menção com `@`, envio de mensagem e "Nova pendência", sem erro de página.
 - No Takt Hub: `tsc` e os testes do modelo de e-mail passaram.
+
+- **Ligar a tarefa ou serviço na aba 2 (10/11/2026):** a sequência do CI passou de novo (1.251 testes; teste novo de `pendingSourceOptions` em `tests/pending-commands.test.ts`). Formulário percorrido no navegador com API simulada pelas regras reais, em 1300 px e 400 px: alternar "Ligar a", buscar, escolher tarefa, erro ao enviar sem escolher, criar e ver o card com a origem "Médio prazo" e a entrega na véspera útil. A rota `/api/pendencias/origens` não rodou contra o banco real.
 
 ## Não verificado
 

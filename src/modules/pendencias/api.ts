@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PendingCommand, PendingData, PendingPerson, PendingResponse } from '@/domain/pending-board';
+import type { PendingCommand, PendingData, PendingPerson, PendingResponse, PendingSourceOptions } from '@/domain/pending-board';
 
 /** Cliente da lista de pendência (aba 2, 10/11/2026). Mesmo desenho das abas 5 e 6: leitura e gravação
  * próprias, fora do snapshot do planejamento — GET /api/pendencias e POST /api/pendencias/commands, que
@@ -36,6 +36,11 @@ async function readJson(res: Response) {
 
 export async function fetchPending(workId: string): Promise<PendingResponse> {
   return readJson(await fetch(`/api/pendencias?workId=${encodeURIComponent(workId)}`, { cache: 'no-store' }));
+}
+
+/** Tarefas do médio prazo e serviços do longo prazo a que uma pendência nova pode ser ligada. */
+export async function fetchPendingSources(workId: string): Promise<PendingSourceOptions> {
+  return readJson(await fetch(`/api/pendencias/origens?workId=${encodeURIComponent(workId)}`, { cache: 'no-store' }));
 }
 
 /** Executa um comando e devolve a lista da obra já atualizada. */

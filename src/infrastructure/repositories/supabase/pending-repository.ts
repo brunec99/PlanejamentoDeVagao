@@ -7,6 +7,7 @@ import type {
   PendingPerson,
 } from '../../../domain/pending-board';
 import {
+  linkablePlan,
   resolvePendingSources,
   type PendingMutation,
   type PendingSourcePlan,
@@ -266,22 +267,53 @@ type TaskRow = {
 };
 const TASK_COLUMNS = 'id, plan_id, name, planned_start, order_index, level, schedule_meta';
 
-/** Planos e tarefas do médio prazo que a resolução precisa: os planos da obra, e as tarefas dos planos
- * vivos que contêm alguma tarefa pedida e dos meses seguintes a eles (para onde a cópia mensal as leva). */
-async function loadPlanSources(workId: string, taskIds: string[]): Promise<Pick<PendingSourceRows, 'plans' | 'tasks'>> {
-  if (!taskIds.length) return { plans: [], tasks: [] };
-  const client = getServiceClient();
-  const plansResult = await client
+/** Planos do médio prazo da obra, só com o que a resolução usa. */
+async function fetchPlans(workId: string): Promise<PendingSourcePlan[]> {
+  const { data, error } = await getServiceClient()
     .from('medium_term_plans')
     .select('id, month, baseline_of, frozen_at, schedule_meta')
     .eq('work_id', workId);
-  checkSource(plansResult.error, 'ler medium_term_plans');
-  const plans: PendingSourcePlan[] = ((plansResult.data ?? []) as PlanRow[]).map(r => ({
+  checkSource(error, 'ler medium_term_plans');
+  return ((data ?? []) as PlanRow[]).map(r => ({
     id: r.id,
     month: r.month,
     baseline: Boolean(r.baseline_of || r.frozen_at),
     legalization: r.schedule_meta?.kind === 'legalizacao',
   }));
+}
+
+/** Todas as tarefas de um plano, na ordem do cronograma. */
+async function fetchPlanTasks(planId: string): Promise<PendingSourceTask[]> {
+  const rows: TaskRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await getServiceClient()
+      .from('plan_tasks')
+      .select(TASK_COLUMNS)
+      .eq('plan_id', planId)
+      .order('order_index')
+      .order('id')
+      .range(from, from + PAGE - 1);
+    checkSource(error, 'ler plan_tasks');
+    rows.push(...((data ?? []) as TaskRow[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows.map(r => ({
+    id: r.id,
+    planId: r.plan_id,
+    name: r.name,
+    plannedStart: r.planned_start,
+    order: r.order_index,
+    level: r.level ?? 0,
+    ...optional('sourceTaskId', r.schedule_meta?.sourceTaskId),
+  }));
+}
+
+/** Planos e tarefas do médio prazo que a resolução precisa: os planos da obra, e as tarefas dos planos
+ * vivos que contêm alguma tarefa pedida e dos meses seguintes a eles (para onde a cópia mensal as leva). */
+async function loadPlanSources(workId: string, taskIds: string[]): Promise<Pick<PendingSourceRows, 'plans' | 'tasks'>> {
+  if (!taskIds.length) return { plans: [], tasks: [] };
+  const client = getServiceClient();
+  const plans = await fetchPlans(workId);
   const live = new Map(plans.filter(p => !p.baseline).map(p => [p.id, p]));
   if (!live.size) return { plans, tasks: [] };
 
@@ -295,34 +327,20 @@ async function loadPlanSources(workId: string, taskIds: string[]): Promise<Pick<
   if (!holders.size) return { plans, tasks: [] };
   const firstMonth = [...holders].map(id => live.get(id)!.month).sort()[0];
   const wanted = [...live.values()].filter(p => holders.has(p.id) || (!p.legalization && p.month > firstMonth)).map(p => p.id);
+  return { plans, tasks: (await Promise.all(wanted.map(fetchPlanTasks))).flat() };
+}
 
-  const perPlan = await Promise.all(
-    wanted.map(async planId => {
-      const rows: TaskRow[] = [];
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await client
-          .from('plan_tasks')
-          .select(TASK_COLUMNS)
-          .eq('plan_id', planId)
-          .order('order_index')
-          .order('id')
-          .range(from, from + PAGE - 1);
-        checkSource(error, 'ler plan_tasks');
-        rows.push(...((data ?? []) as TaskRow[]));
-        if (!data || data.length < PAGE) return rows;
-      }
-    }),
-  );
-  const tasks: PendingSourceTask[] = perPlan.flat().map(r => ({
-    id: r.id,
-    planId: r.plan_id,
-    name: r.name,
-    plannedStart: r.planned_start,
-    order: r.order_index,
-    level: r.level ?? 0,
-    ...optional('sourceTaskId', r.schedule_meta?.sourceTaskId),
-  }));
-  return { plans, tasks };
+/** Início de cada bloco da Linha de Balanço: de todos os serviços da obra ou só dos pedidos. */
+async function fetchServiceStarts(workId: string, serviceIds?: string[]): Promise<PendingSourceRows['serviceStarts']> {
+  const starts: PendingSourceRows['serviceStarts'] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = getServiceClient().from('lob_activities').select('service_id, start_on').eq('work_id', workId);
+    if (serviceIds) query = query.in('service_id', serviceIds);
+    const { data, error } = await query.order('id').range(from, from + PAGE - 1);
+    checkSource(error, 'ler lob_activities');
+    for (const r of (data ?? []) as { service_id: string; start_on: string }[]) starts.push({ serviceId: r.service_id, start: r.start_on });
+    if (!data || data.length < PAGE) return starts;
+  }
 }
 
 /** Serviços da Linha de Balanço pedidos (só os da obra) e o início de cada bloco deles. */
@@ -335,21 +353,35 @@ async function loadServiceSources(workId: string, serviceIds: string[]): Promise
     const found = await client.from('lob_services').select('id, name').eq('work_id', workId).in('id', batch);
     checkSource(found.error, 'ler lob_services');
     services.push(...((found.data ?? []) as { id: string; name: string }[]));
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await client
-        .from('lob_activities')
-        .select('service_id, start_on')
-        .eq('work_id', workId)
-        .in('service_id', batch)
-        .order('id')
-        .range(from, from + PAGE - 1);
-      checkSource(error, 'ler lob_activities');
-      for (const r of (data ?? []) as { service_id: string; start_on: string }[])
-        serviceStarts.push({ serviceId: r.service_id, start: r.start_on });
-      if (!data || data.length < PAGE) break;
-    }
+    serviceStarts.push(...(await fetchServiceStarts(workId, batch)));
   }
   return { services, serviceStarts };
+}
+
+/** O que `pendingSourceOptions` precisa para o formulário "Nova pendência" da aba 2 (10/11/2026): as
+ * tarefas do plano vivo mais recente do médio prazo e todos os serviços da Linha de Balanço da obra. */
+export async function loadSourceOptions(workId: string): Promise<PendingSourceRows> {
+  const loadTasks = async () => {
+    const plans = await fetchPlans(workId);
+    const plan = linkablePlan(plans);
+    return { plans, tasks: plan ? await fetchPlanTasks(plan.id) : [] };
+  };
+  const loadServices = async () => {
+    const services: PendingSourceRows['services'] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await getServiceClient()
+        .from('lob_services')
+        .select('id, name')
+        .eq('work_id', workId)
+        .order('id')
+        .range(from, from + PAGE - 1);
+      checkSource(error, 'ler lob_services');
+      services.push(...((data ?? []) as { id: string; name: string }[]));
+      if (!data || data.length < PAGE) return services;
+    }
+  };
+  const [plans, services, serviceStarts] = await Promise.all([loadTasks(), loadServices(), fetchServiceStarts(workId)]);
+  return { ...plans, services, serviceStarts };
 }
 
 /** Lê do banco o que `resolvePendingSources` precisa para estes cards. */

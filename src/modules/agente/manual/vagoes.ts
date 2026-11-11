@@ -390,7 +390,7 @@ Cards em "Concluído" e "Cancelado" não têm sinal de prazo.
 
 ## As três formas de criar um card
 
-1. **"+ Nova pendência"**, no próprio quadro: card manual. Você informa o título, a data de entrega, o tempo de execução e o responsável.
+1. **"+ Nova pendência"**, no próprio quadro. Em "Ligar a" você escolhe: "Sem ligação" (card manual: título, data de término, tempo de execução e responsável), "Tarefa do médio prazo" ou "Serviço do longo prazo". Nas duas últimas você escolhe a tarefa ou o serviço numa lista (com busca pelo nome quando a lista é longa) e o card nasce igual ao criado pelos botões abaixo: a entrega vem da tarefa ou do serviço e só o lead time é digitado. A lista de tarefas é a do cronograma vivo mais recente do médio prazo; tarefa-resumo aparece, mas não pode ser escolhida. A lista de serviços traz os que já têm bloco lançado na Linha de Balanço.
 2. **Numa tarefa do médio prazo** (aba 3): selecione a tarefa e use "Criar pendência" na barra de ferramentas do cronograma, ou o mesmo botão no rodapé de "Informações da tarefa".
 3. **Num serviço do longo prazo** (aba 1, visão "Linha de Balanço"): clique num bloco do serviço e use "Criar pendência do serviço" no painel do bloco.
 

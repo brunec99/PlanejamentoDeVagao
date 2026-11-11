@@ -121,6 +121,28 @@ export interface PendingResponse extends PendingData {
   actorId: string;
 }
 
+/** Tarefa do médio prazo ou serviço do longo prazo a que uma pendência criada na aba 2 pode ser ligada
+ * (10/11/2026). `start` é o início atual; a entrega do card é a véspera útil dele. */
+export interface PendingSourceOption {
+  id: string;
+  label: string;
+  start: LocalDate;
+  /** Só nas tarefas: nível na estrutura do cronograma (0 = raiz), para o recuo na lista. */
+  level?: number;
+  /** Só nas tarefas: é tarefa-resumo. Aparece na lista para dar a estrutura, mas não pode ser escolhida,
+   * como no botão "Criar pendência" do médio prazo. */
+  summary?: boolean;
+}
+/** Resposta do GET /api/pendencias/origens. */
+export interface PendingSourceOptions {
+  /** Mês (AAAA-MM) do plano vivo mais recente do médio prazo, de onde vêm as tarefas. */
+  planMonth?: string;
+  /** Na ordem do cronograma. */
+  tasks: PendingSourceOption[];
+  /** Serviços da Linha de Balanço que já têm bloco lançado, por início. */
+  services: PendingSourceOption[];
+}
+
 export const PENDING_LIMITS = {
   title: 160,
   description: 4000,

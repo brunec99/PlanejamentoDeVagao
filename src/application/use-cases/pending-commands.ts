@@ -12,6 +12,7 @@ import {
   type PendingData,
   type PendingMessage,
   type PendingPerson,
+  type PendingSourceOptions,
   type PendingStatus,
 } from '../../domain/pending-board';
 
@@ -600,4 +601,40 @@ export function resolvePendingSources(cards: readonly PendingCard[], sources: Pe
     if (!found) return { ...stored, sourceMissing: true };
     return { ...stored, dueDate: dueDateFromStart(found.start), sourceStart: found.start, sourceLabel: found.label };
   });
+}
+
+/** Plano do médio prazo oferecido ao ligar uma pendência à mão na aba 2: o mensal vivo mais recente (o
+ * mesmo "plano vivo" da tela do médio prazo). Linha de base e Gantt de legalização ficam de fora. */
+export function linkablePlan(plans: readonly PendingSourcePlan[]): PendingSourcePlan | undefined {
+  return plans.filter(p => !p.baseline && !p.legalization).sort((a, b) => b.month.localeCompare(a.month) || b.id.localeCompare(a.id))[0];
+}
+
+/** O que o formulário "Nova pendência" da aba 2 oferece para ligar o card: as tarefas do plano vivo mais
+ * recente, na ordem do cronograma e com o início efetivo (as tarefas-resumo vêm marcadas: dão a estrutura,
+ * mas não são escolhidas), e os
+ * serviços da Linha de Balanço que já têm bloco lançado, com o menor início entre os locais. São os
+ * mesmos inícios que `resolvePendingSources` usa, para a data do formulário bater com a do card. */
+export function pendingSourceOptions(sources: PendingSourceRows): PendingSourceOptions {
+  const plan = linkablePlan(sources.plans);
+  const own = plan ? sources.tasks.filter(t => t.planId === plan.id) : [];
+  const index = indexPlan(own);
+  const ordered = own.slice().sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const tasks = ordered.map((t, at) => ({
+    id: t.id,
+    label: t.name,
+    start: index.start.get(t.id) ?? t.plannedStart,
+    level: Math.max(0, t.level),
+    // Resumo = tem linha mais funda logo abaixo (mesma leitura de `indexPlan`).
+    ...(ordered[at + 1] !== undefined && ordered[at + 1].level > t.level ? { summary: true } : {}),
+  }));
+  const firstStart = new Map<string, string>();
+  for (const { serviceId, start } of sources.serviceStarts) {
+    const known = firstStart.get(serviceId);
+    if (!known || start < known) firstStart.set(serviceId, start);
+  }
+  const services = sources.services
+    .filter(s => firstStart.has(s.id))
+    .map(s => ({ id: s.id, label: s.name, start: firstStart.get(s.id)! }))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.label.localeCompare(b.label, 'pt-BR') || a.id.localeCompare(b.id));
+  return { ...(plan ? { planMonth: plan.month } : {}), tasks, services };
 }

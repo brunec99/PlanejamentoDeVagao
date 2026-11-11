@@ -70,7 +70,7 @@ export const steps: TourStep[] = [
   {
     target: 'pendencias-nova',
     title: 'Nova pendência',
-    body: 'Cria um card manual: título, data de entrega, tempo de execução em dias úteis e responsável. Os cards também nascem de uma tarefa do médio prazo ("Criar pendência" no cronograma) e de um serviço da Linha de Balanço do longo prazo; nesses, a entrega é o dia útil anterior ao início e acompanha a reprogramação.',
+    body: 'Cria um card: título, data de término, tempo de execução em dias úteis e responsável. Em "Ligar a" dá para prender o card a uma tarefa do médio prazo ou a um serviço do longo prazo, escolhidos numa lista. Os cards também nascem de uma tarefa do médio prazo ("Criar pendência" no cronograma) e de um serviço da Linha de Balanço do longo prazo; nesses, a entrega é o dia útil anterior ao início e acompanha a reprogramação.',
   },
   {
     target: 'pendencias-filtros',

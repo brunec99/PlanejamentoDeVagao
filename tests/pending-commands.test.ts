@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parsePendingCommand,
   pendingCommandTarget,
+  pendingSourceOptions,
   planPendingCommand,
   resolvePendingSources,
   type PendingContext,
@@ -647,4 +648,43 @@ test('e-mail de atribuição: sem texto, chave com o instante, mensagem curta se
   );
   const payload = pendingEmail(short.notifications[0], { workId: WORK, workName: 'Tauá', origin: 'http://x', now: NOW }).payload;
   assert.deepEqual([payload.texto, 'truncado' in payload], ['veja', false]);
+});
+
+test('origens para ligar à mão: tarefas do plano vivo mais recente, na ordem, e serviços com bloco lançado', () => {
+  const rows = sources({
+    plans: [plan('p10', '2026-10'), plan('p11', '2026-11'), plan('base', '2026-12', { baseline: true })],
+    tasks: [
+      task('o1', 'p10', 'Alvenaria (outubro)', '2026-10-05', 1),
+      task('n2', 'p11', 'Alvenaria', '2026-11-23', 2, 1),
+      task('n1', 'p11', 'Torre A', '2026-12-01', 1, 0),
+      task('n3', 'p11', 'Pintura', '2026-11-16', 3, 1),
+      task('b1', 'base', 'Alvenaria (base)', '2026-11-02', 1),
+    ],
+    services: [
+      { id: 's1', name: 'Reboco' },
+      { id: 's2', name: 'Contrapiso' },
+      { id: 's3', name: 'Sem bloco' },
+    ],
+    serviceStarts: [
+      { serviceId: 's1', start: '2026-12-14' },
+      { serviceId: 's1', start: '2026-12-07' },
+      { serviceId: 's2', start: '2026-11-30' },
+    ],
+  });
+  const options = pendingSourceOptions(rows);
+  assert.equal(options.planMonth, '2026-11');
+  // O resumo "Torre A" vem marcado (não é escolhido) e mostra o menor início das folhas abaixo.
+  assert.deepEqual(options.tasks, [
+    { id: 'n1', label: 'Torre A', start: '2026-11-16', level: 0, summary: true },
+    { id: 'n2', label: 'Alvenaria', start: '2026-11-23', level: 1 },
+    { id: 'n3', label: 'Pintura', start: '2026-11-16', level: 1 },
+  ]);
+  assert.deepEqual(options.services, [
+    { id: 's2', label: 'Contrapiso', start: '2026-11-30' },
+    { id: 's1', label: 'Reboco', start: '2026-12-07' },
+  ]);
+  // A data oferecida é a mesma que o card recebe depois de criado.
+  assert.equal(resolvePendingSources([linkedCard('n1')], rows)[0].sourceStart, '2026-11-16');
+  // Obra sem plano vivo nem Linha de Balanço: listas vazias, sem mês.
+  assert.deepEqual(pendingSourceOptions(sources({})), { tasks: [], services: [] });
 });
