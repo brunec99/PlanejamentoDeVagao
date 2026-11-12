@@ -15,6 +15,18 @@ import { portfolioPath, printPortfolioPath, type PortfolioParams } from './param
 import type { PortfolioReady, PortfolioRow, PortfolioWork } from './types';
 import { usePortfolio } from './use-portfolio-data';
 import { PORTFOLIO_STYLE } from './portfolio-styles';
+import { WeeklySummaryButton } from '../weekly/send-button';
+import {
+  CardOwnersList,
+  ChecklistRows,
+  HeadcountRows,
+  IdpRows,
+  LegalizationRows,
+  ProductionRows,
+  RestrictionRows,
+  SERVICES_NOTE,
+  ServicesTable,
+} from './extras-charts';
 import {
   CausesPareto,
   ComparisonTable,
@@ -48,7 +60,12 @@ import {
  * Nada aqui se edita. No celular, uma coluna e a tabela rolando de lado com a obra fixa (regra 16).
  * Segurança do trabalho (aba 6, modelo aprovado em 06/11/2026): a chave no seletor "Quadros", o sétimo cartão
  * (regra 8, os sete numa linha no computador) e o quadro em largura total depois dos demais módulos (regra 7),
- * que avisa no subtítulo quando há empreiteiro escolhido (regra 10: a vistoria não registra empresa). */
+ * que avisa no subtítulo quando há empreiteiro escolhido (regra 10: a vistoria não registra empresa).
+ * Quadros de 12/11/2026 (modelo "Dashboards completos e resumo semanal"): Linha de Balanço e legalização e Quadro
+ * de Restrições entram junto dos demais módulos de prazo; histograma e produtividade lado a lado ("Controles de
+ * obra"); o checklist de equipamentos depois da segurança. Até nove cartões, em duas linhas. Esses quadros não
+ * seguem o recorte de empreiteiro, e o subtítulo de cada um diz isso. O botão do resumo semanal por e-mail fica ao
+ * lado de "Gerar PDF" (ele mesmo se esconde para quem não é admin). */
 
 const HELP = (
   <>
@@ -70,6 +87,12 @@ const HELP = (
       <strong>Segurança do trabalho (aba 3.1).</strong> Feitos contam pela data do apontamento e finalizados pela data de correção; o
       histórico importado da planilha conta igual. Em aberto e abertos há mais de 7 dias são o retrato no sábado final (no período em
       andamento, os dias contam até hoje). A vistoria não registra a empresa, então o quadro não tem recorte de empreiteiro.
+    </p>
+    <p>
+      <strong>Controles de obra e SST.</strong> O efetivo médio é por dia útil lançado, e “dias lançados” conta os dias úteis do período
+      (segunda a sexta, fora feriado nacional, até ontem) com lançamento no histograma e na produtividade: 90% ou mais em verde, 70% a 89%
+      em âmbar, abaixo em vermelho. Cards vencidos e o IDP da Linha de Balanço são o retrato no fim do período; os checklists vencidos são
+      sempre os de hoje. Esses quadros mostram a obra inteira, mesmo com empreiteiro escolhido.
     </p>
     <p>
       <strong>Só as obras liberadas para você</strong>, as mesmas da lista de obras, e só os módulos que você pode abrir. Obra que só começa
@@ -242,7 +265,15 @@ function Ready({
   const lastWeek = period.weeks.at(-1);
 
   const totals = data.totals;
-  const lowerBoards = (['longo-prazo', 'vagoes', 'medio-prazo', 'terminalidade'] as const).filter(m => boards[m].kind !== 'hidden');
+  const lowerBoards = (['longo-prazo', 'balanco', 'vagoes', 'medio-prazo', 'restricoes', 'terminalidade'] as const).filter(
+    m => boards[m].kind !== 'hidden',
+  );
+  const controlBoards = (['histograma', 'produtividade'] as const).filter(m => boards[m].kind !== 'hidden');
+  const extrasShown = (['balanco', 'restricoes', 'histograma', 'produtividade', 'checklist'] as const).some(
+    m => boards[m].kind !== 'hidden',
+  );
+  // Regra 3 do modelo de 12/11/2026: empreiteiro não recorta os quadros novos; cada um avisa no subtítulo.
+  const whole = params.companies ? ' · obra inteira, sem recorte de empreiteiro' : '';
   const earlyWorks = data.rows.some(row => row.short?.early && row.short.current.percent !== undefined);
   const safetyShown = boards.seguranca.kind !== 'hidden';
 
@@ -272,10 +303,13 @@ function Ready({
             </div>
           </div>
         </div>
-        <button type="button" className="button" data-tour="geral-pdf" onClick={generate}>
-          <FileDown size={16} aria-hidden />
-          Gerar PDF
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <WeeklySummaryButton />
+          <button type="button" className="button" data-tour="geral-pdf" onClick={generate}>
+            <FileDown size={16} aria-hidden />
+            Gerar PDF
+          </button>
+        </div>
       </header>
 
       <div
@@ -356,7 +390,8 @@ function Ready({
                 · Recorte: {plural(params.companies.size, 'empreiteiro', 'empreiteiros')} ({[...params.companies].join(', ')})
                 {state.withoutCompany.length > 0 &&
                   `; não ${state.withoutCompany.length === 1 ? 'aparece' : 'aparecem'} em ${state.withoutCompany.map(work => work.name).join(', ')}`}
-                ; longo prazo, PPC geral{safetyShown ? ' e segurança do trabalho' : ''} consideram a obra inteira
+                ; longo prazo, PPC geral{safetyShown ? ', segurança do trabalho' : ''}
+                {extrasShown ? ' e os quadros de balanço, restrições, histograma, produtividade e checklist' : ''} consideram a obra inteira
               </>
             )}
             {data.notStarted.length > 0 &&
@@ -374,10 +409,11 @@ function Ready({
         </p>
       )}
       {data.kpis.length > 0 && (
-        // Até sete cartões (regra 8): com sete, `k7` os põe numa linha quando a área do conteúdo é larga (consulta
-        // de contêiner em `.pf-kpis`), quatro por linha abaixo disso e dois no celular.
+        // Até nove cartões (regra 9 do modelo de 12/11/2026): com sete, `k7` os põe numa linha quando a área do
+        // conteúdo é larga (consulta de contêiner em `.pf-kpis`); com oito ou nove, `k9` faz duas linhas (cinco por
+        // linha); quatro ou três por linha abaixo disso e dois no celular.
         <div className="pf-kpis">
-          <div data-tour="geral-cartoes" className={`dsh-kpis${data.kpis.length >= 7 ? ' k7' : ''}`}>
+          <div data-tour="geral-cartoes" className={`dsh-kpis${data.kpis.length >= 8 ? ' k9' : data.kpis.length === 7 ? ' k7' : ''}`}>
             <KpiCards kpis={data.kpis} />
           </div>
         </div>
@@ -488,6 +524,30 @@ function Ready({
                 </div>
               </Board>
             )}
+            {boards.balanco.kind !== 'hidden' && (
+              <Board
+                module="balanco"
+                subtitle={`em ${end} · ${plural(totals.balance.withIdp, 'obra com IDP', 'obras com IDP')}${whole}`}
+                board={boards.balanco}
+              >
+                <div className="dsh-mod-b">
+                  <div className="dsh-blk">
+                    <h5>IDP da Linha de Balanço: real × planejado</h5>
+                    <p className="dsh-d">
+                      Na última medição fechada até o sábado final, contra a linha de base. IDP de 1,00 ou mais em dia, de 0,90 a 0,99
+                      atenção, abaixo atrasado. Sem valores em reais.
+                    </p>
+                    <IdpRows rows={data.rows} />
+                  </div>
+                  <div className="dsh-blk">
+                    <h5>Gantt de legalização</h5>
+                    <p className="dsh-d">Marcos concluídos, tarefas atrasadas em {end} e o próximo marco de cada obra.</p>
+                    <LegalizationRows rows={data.rows} />
+                    <NoDataNote module="balanco" data={data} />
+                  </div>
+                </div>
+              </Board>
+            )}
             {boards.vagoes.kind !== 'hidden' && (
               <Board module="vagoes" title="Vagões e restrições" subtitle={`em ${end}`} board={boards.vagoes}>
                 <div className="dsh-mod-b">
@@ -514,6 +574,31 @@ function Ready({
                 </div>
               </Board>
             )}
+            {boards.restricoes.kind !== 'hidden' && (
+              <Board
+                module="restricoes"
+                subtitle={`${totals.restrictions.open} em aberto · ${totals.restrictions.overdue} ${
+                  totals.restrictions.overdue === 1 ? 'vencido' : 'vencidos'
+                }${whole}`}
+                board={boards.restricoes}
+              >
+                <div className="dsh-mod-b">
+                  <div className="dsh-blk">
+                    <h5>Cards em aberto por coluna</h5>
+                    <p className="dsh-d">
+                      Retrato em {end} (ou hoje, no período em andamento). Vencido = passou da entrega sem concluir; pausado conta como
+                      aberto. Embaixo, concluídos e criados no período.
+                    </p>
+                    <RestrictionRows rows={data.rows} total={totals.restrictions} />
+                    <NoDataNote module="restricoes" data={data} />
+                  </div>
+                  <div className="dsh-blk">
+                    <h5>Responsáveis com mais cards vencidos, somando as obras</h5>
+                    <CardOwnersList owners={data.cardOwners} />
+                  </div>
+                </div>
+              </Board>
+            )}
             {boards.terminalidade.kind !== 'hidden' && (
               <Board
                 module="terminalidade"
@@ -533,6 +618,55 @@ function Ready({
                   <div className="dsh-blk">
                     <h5>Responsáveis terceiros com mais pendências em aberto, somando as obras</h5>
                     <ResponsiblesList responsibles={data.responsibles} />
+                  </div>
+                </div>
+              </Board>
+            )}
+          </div>
+        )}
+
+        {controlBoards.length > 0 && (
+          <div data-tour="geral-controles" className="pf-mods-2">
+            {boards.histograma.kind !== 'hidden' && (
+              <Board
+                module="histograma"
+                title="Histograma de mão de obra"
+                subtitle={`${period.label} · ${Math.round(totals.headcount.dailyAverage)} por dia útil${whole}`}
+                board={boards.histograma}
+              >
+                <div className="dsh-mod-b">
+                  <div className="dsh-blk">
+                    <h5>Efetivo médio por obra</h5>
+                    <p className="dsh-d">
+                      Média de pessoas por dia útil lançado no período, próprio × empreiteiros. À direita, os dias úteis com lançamento
+                      sobre os esperados; embaixo, os dias que faltaram.
+                    </p>
+                    <HeadcountRows rows={data.rows} total={totals.headcount} />
+                    <NoDataNote module="histograma" data={data} />
+                  </div>
+                </div>
+              </Board>
+            )}
+            {boards.produtividade.kind !== 'hidden' && (
+              <Board
+                module="produtividade"
+                title="Controle de produtividade"
+                subtitle={`${period.label} · ${totals.production.measuredShare === undefined ? '—' : pct(totals.production.measuredShare * 100)} medido${whole}`}
+                board={boards.produtividade}
+              >
+                <div className="dsh-mod-b">
+                  <div className="dsh-blk">
+                    <h5>Lançamentos com produção medida × a medir</h5>
+                    <p className="dsh-d">
+                      Lançamentos e homens-dia (Hd) do período. À direita, os dias úteis com lançamento sobre os esperados.
+                    </p>
+                    <ProductionRows rows={data.rows} total={totals.production} />
+                    <NoDataNote module="produtividade" data={data} />
+                  </div>
+                  <div className="dsh-blk">
+                    <h5>Serviços medidos em mais de uma obra</h5>
+                    <p className="dsh-d">Produção por homem-dia de cada obra no período. {SERVICES_NOTE}</p>
+                    <ServicesTable services={data.services} />
                   </div>
                 </div>
               </Board>
@@ -577,6 +711,28 @@ function Ready({
                     <NoDataNote module="seguranca" data={data} />
                   </div>
                 )}
+              </div>
+            </Board>
+          </div>
+        )}
+
+        {boards.checklist.kind !== 'hidden' && (
+          <div data-tour="geral-checklist">
+            <Board
+              module="checklist"
+              subtitle={`hoje: ${totals.checklist.pending} ${totals.checklist.pending === 1 ? 'vencido' : 'vencidos'} de ${totals.checklist.due}${whole}`}
+              board={boards.checklist}
+            >
+              <div className="dsh-mod-b">
+                <div className="dsh-blk">
+                  <h5>Checklists de hoje e não conformidades do período</h5>
+                  <p className="dsh-d">
+                    Em dia × vencidos são os de hoje (diário de hoje, semanal desta semana, mensal deste mês), como na aba 3.2. Inspeções e
+                    itens não conformes são os do período.
+                  </p>
+                  <ChecklistRows rows={data.rows} total={totals.checklist} />
+                  <NoDataNote module="checklist" data={data} />
+                </div>
               </div>
             </Board>
           </div>

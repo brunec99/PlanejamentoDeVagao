@@ -186,6 +186,58 @@ function RoleSelect({ user, self }: { user: User; self: boolean }) {
   );
 }
 
+/** Chave "Resumo semanal" (12/11/2026, regra 18 do modelo "Dashboards completos e resumo semanal"): só nas linhas
+ * de admin. Quem a tem ligada recebe, todo sábado às 08:00, o e-mail com o placar da semana (planejamento,
+ * histograma e produtividade por obra). Fica em `profiles.weekly_summary` (migração 0050), fora do
+ * `commit_planning`, e por isso grava pela rota própria e recarrega a lista, como a marca de TST. Sem a
+ * migração aplicada, a rota responde pedindo a 0050 e nada muda. */
+function WeeklySummaryToggle({ user }: { user: User }) {
+  const c = usePlanning();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const enabled = user.weeklySummary === true;
+  const change = async (next: boolean) => {
+    if (busy || c.state !== 'ready') return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/dashboard/resumo-semanal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, enabled: next }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body as { error?: string }).error ?? 'Não foi possível salvar.');
+      await c.refresh();
+      toast({
+        title: next ? `${user.name} passa a receber o resumo semanal.` : `${user.name} deixa de receber o resumo semanal.`,
+        description: next ? 'O e-mail sai todo sábado, às 08:00, com a semana que acabou.' : undefined,
+        tone: 'success',
+      });
+    } catch (cause) {
+      toast({ title: 'Não foi possível salvar.', description: cause instanceof Error ? cause.message : undefined, tone: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <label
+      data-tour="config-user-weekly"
+      className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-slate-500"
+      title="Recebe por e-mail, todo sábado às 08:00, o resumo da semana: quais obras cumpriram o planejamento, o histograma e a produtividade."
+    >
+      <input
+        type="checkbox"
+        className={CHECKBOX}
+        checked={enabled}
+        disabled={busy}
+        onChange={e => void change(e.target.checked)}
+        aria-label={`${user.name} recebe o resumo semanal por e-mail`}
+      />
+      Resumo semanal
+    </label>
+  );
+}
+
 function DeleteUserButton({ user, onDone }: { user: User; onDone: () => void }) {
   const confirm = useConfirm();
   const { toast } = useToast();
@@ -706,6 +758,7 @@ export function UsersTable({
                   </th>
                   <td className={cell}>
                     <RoleSelect user={user} self={self} />
+                    {user.role === 'admin' && <WeeklySummaryToggle user={user} />}
                   </td>
                   {view === 'obras'
                     ? columns.map(work => (

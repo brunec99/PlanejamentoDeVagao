@@ -75,7 +75,8 @@ test('toda tela do sistema tem ao menos uma seção do manual, e o índice lista
   // O índice vai no prompt do sistema a cada pergunta (em cache): tem de continuar pequeno. O teto subiu de
   // 14000 para 14500 em 11/11/2026, com as abas 7 (Histograma) e 8 (Produtividade).
   // 14500 para 15000 em 12/11/2026: a tela do Quadro de Restrições (1.4) e o número antigo de cada aba nos resumos.
-  assert.ok(index.length <= 15000, `índice grande demais: ${index.length} caracteres`);
+  // 15000 para 15500 em 12/11/2026 (tarde): a seção do resumo semanal por e-mail e os quadros novos dos dashboards.
+  assert.ok(index.length <= 15500, `índice grande demais: ${index.length} caracteres`);
 });
 
 test('busca pelo id exato e pelo id dentro da frase devolve só aquela seção', () => {

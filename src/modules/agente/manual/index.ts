@@ -4,6 +4,7 @@ import { sections as geral } from './geral';
 import { sections as acessoConfiguracoes } from './acesso-configuracoes';
 import { sections as dashboard } from './dashboard';
 import { sections as dashboardGeral } from './dashboard-geral';
+import { sections as resumoSemanal } from './resumo-semanal';
 import { sections as longoPrazo } from './longo-prazo';
 import { sections as vagoes } from './vagoes';
 import { sections as medioPrazo } from './medio-prazo';
@@ -28,6 +29,7 @@ export const MANUAL_SECTIONS: readonly ManualSection[] = [
   ...acessoConfiguracoes,
   ...dashboard,
   ...dashboardGeral,
+  ...resumoSemanal,
   ...longoPrazo,
   ...vagoes,
   ...medioPrazo,

@@ -12,6 +12,7 @@ import { weekOptions } from '@/modules/curto-prazo/sheet-view';
 import {
   companyKey,
   DASHBOARD_MODULES,
+  EXTRA_MODULES,
   floorKey,
   moduleShown,
   referenceOf,
@@ -35,12 +36,31 @@ import {
   terminalitySummary,
   type TerminalityPanelData,
 } from './terminality-panel';
+import type { PortfolioSafety } from './portfolio/types';
+import { headcountSummary, restrictionsSummary, safetySummary, type BalancePanelData } from './extras/extras-summary';
+import { dashboardExtrasPath } from './extras/blocks';
+import { buildLegalizationBlock } from './extras/legalization';
+import type {
+  ChecklistBlock,
+  DashboardExtrasResponse,
+  ExtrasCell,
+  HeadcountBlock,
+  ProductionBlock,
+  RestrictionsBlock,
+  WorkExtras,
+} from './extras/types';
 
 /** Os dados da aba 0, os mesmos na tela e no PDF (regra 12 do modelo): o planejamento que a obra já
  * carrega (vagões, plano do mês, compromissos, restrições), mais as rotas que já existem (plano de longo
  * prazo, terminalidade, ranking das obras). Cada quadro tem o próprio estado: aparece quando o dado dele
  * chega, e uma falha deixa só ele como indisponível. Quem não pode abrir um módulo não vê o quadro dele
- * (a rota responderia 403 de qualquer forma). Nenhuma migração, nenhuma tabela nova. */
+ * (a rota responderia 403 de qualquer forma). Nenhuma migração, nenhuma tabela nova.
+ *
+ * 12/11/2026 (modelo "Dashboards completos e resumo semanal"): seis quadros novos. Cinco chegam já calculados
+ * de `GET /api/dashboard/extras`, numa leitura só por período (`de` = segunda-feira inicial, `ate` = sábado
+ * final): Quadro de Restrições, histograma, produtividade, segurança e checklist, mais o IDP da Linha de
+ * Balanço. A legalização sai do planejamento já carregado (`buildLegalizationBlock`). O acesso de cada quadro
+ * segue a seção de `module-access` (`section`), que no `balanco` é a do longo prazo. */
 
 type Fetched<T> = { status: 'loading' } | { status: 'error'; message: string } | { status: 'absent' } | { status: 'ready'; data: T };
 
@@ -84,6 +104,28 @@ const parseTerminality = (body: unknown): Fetched<TerminalityData> => {
   const response = body as TerminalityResponse;
   return response && response.available ? { status: 'ready', data: response } : { status: 'absent' };
 };
+/** A obra pedida na resposta dos quadros novos; sem ela, nada (todos os quadros ficam sem dado). */
+const parseExtras =
+  (workId: string) =>
+  (body: unknown): Fetched<WorkExtras> => {
+    const works = (body as Partial<DashboardExtrasResponse> | null)?.works;
+    const own = Array.isArray(works) ? (works.find(w => w.workId === workId) ?? works[0]) : undefined;
+    return own ? { status: 'ready', data: own } : { status: 'absent' };
+  };
+/** Uma célula da leitura dos quadros novos como estado de quadro: célula ausente (sem o módulo), sem dado ou
+ * migração ausente = quadro ausente; erro deixa só ele indisponível. */
+function fromCell<T>(
+  enabled: boolean,
+  fetched: Fetched<WorkExtras>,
+  pick: (extras: WorkExtras) => ExtrasCell<T> | undefined,
+): PanelState<T> {
+  if (!enabled) return { status: 'absent' };
+  if (fetched.status !== 'ready') return fetched;
+  const cell = pick(fetched.data);
+  if (!cell || cell.kind === 'absent' || cell.kind === 'unavailable') return { status: 'absent' };
+  if (cell.kind === 'error') return { status: 'error', message: cell.message };
+  return { status: 'ready', data: cell.data };
+}
 const parseRanking = (body: unknown): Fetched<ClosingRankingResponse> => {
   const response = body as ClosingRankingResponse;
   return response && typeof response.available === 'boolean' ? { status: 'ready', data: response } : { status: 'absent' };
@@ -106,7 +148,28 @@ export interface DashboardPanels {
   medium: PanelState<MediumTermPanelData>;
   short: PanelState<ShortTermPanelData>;
   terminality: PanelState<TerminalityPanelData>;
+  /** Quadros de 12/11/2026. */
+  balance: PanelState<BalancePanelData>;
+  restrictions: PanelState<RestrictionsBlock>;
+  headcount: PanelState<HeadcountBlock>;
+  production: PanelState<ProductionBlock>;
+  safety: PanelState<PortfolioSafety>;
+  checklist: PanelState<ChecklistBlock>;
 }
+/** Os quadros na ordem da tela, a de `DASHBOARD_MODULES` (a ordem do menu). */
+export const PANEL_ORDER: (keyof DashboardPanels)[] = [
+  'longTerm',
+  'balance',
+  'wagons',
+  'medium',
+  'short',
+  'restrictions',
+  'terminality',
+  'headcount',
+  'production',
+  'safety',
+  'checklist',
+];
 export interface DashboardReady {
   work: Work;
   actorName: string;
@@ -136,12 +199,18 @@ export type DashboardState =
   | { status: 'missing' }
   | ({ status: 'ready' } & DashboardReady);
 
-const PANEL_MODULE: Record<keyof DashboardPanels, DashboardModule> = {
+export const PANEL_MODULE: Record<keyof DashboardPanels, DashboardModule> = {
   longTerm: 'longo-prazo',
+  balance: 'balanco',
   wagons: 'vagoes',
   medium: 'medio-prazo',
   short: 'curto-prazo',
+  restrictions: 'restricoes',
   terminality: 'terminalidade',
+  headcount: 'histograma',
+  production: 'produtividade',
+  safety: 'seguranca',
+  checklist: 'checklist',
 };
 
 /** Junta opções de seletor vindas de mais de um módulo, somando as contagens de grafias equivalentes. */
@@ -159,6 +228,21 @@ function mergeOptions(lists: { value: string; count: number }[][], key: (value: 
   );
 }
 
+/** O quadro "Linha de Balanço e legalização": pronto quando o IDP ou a legalização tem dado. A legalização vem
+ * do planejamento já carregado, então não espera a leitura do IDP; uma falha do IDP só derruba o quadro quando
+ * a obra também não tem legalização. */
+function balanceState(
+  enabled: boolean,
+  lob: PanelState<NonNullable<BalancePanelData['lob']>>,
+  legalization: BalancePanelData['legalization'],
+): PanelState<BalancePanelData> {
+  if (!enabled) return { status: 'absent' };
+  if (lob.status === 'ready') return { status: 'ready', data: { lob: lob.data, ...(legalization ? { legalization } : {}) } };
+  if (lob.status === 'loading') return lob;
+  if (legalization) return { status: 'ready', data: { legalization } };
+  return lob;
+}
+
 export function useDashboard(input: DashboardInput): DashboardState {
   const { workId } = input;
   const context = usePlanning();
@@ -167,7 +251,7 @@ export function useDashboard(input: DashboardInput): DashboardState {
   const { state: settings, weekOneStart } = useWorkSettings(workId);
   const access = useMemo(
     () =>
-      Object.fromEntries(DASHBOARD_MODULES.map(m => [m.id, hasSectionAccess(m.id, { developer, modules })])) as Record<
+      Object.fromEntries(DASHBOARD_MODULES.map(m => [m.id, hasSectionAccess(m.section, { developer, modules })])) as Record<
         DashboardModule,
         boolean
       >,
@@ -229,6 +313,13 @@ export function useDashboard(input: DashboardInput): DashboardState {
     ready && shown('curto-prazo') && commitments.length > 0,
     parseRanking,
   );
+  // Quadros novos: uma leitura por período. A segurança só é pedida quando o quadro dela entra.
+  const extrasWanted = EXTRA_MODULES.some(module => shown(module));
+  const extrasUrl = ref
+    ? dashboardExtrasPath({ start: ref.period.start, end: ref.weekEnd }, { workId, safety: shown('seguranca') })
+    : undefined;
+  const parseWorkExtras = useMemo(() => parseExtras(workId), [workId]);
+  const extras = useFetched(extrasUrl, ready && extrasWanted, parseWorkExtras);
 
   const filters = useMemo<DashboardFilters>(
     () => ({
@@ -267,10 +358,22 @@ export function useDashboard(input: DashboardInput): DashboardState {
         ),
       ),
       terminality: fromFetched(shown('terminalidade'), terminality, source => buildTerminalityPanel(source, ref, filters)),
+      balance: balanceState(
+        shown('balanco'),
+        fromCell(true, extras, e => e.lob),
+        shown('balanco')
+          ? buildLegalizationBlock(data, workId, { start: ref.period.start, end: ref.weekEnd, today: ref.today })
+          : undefined,
+      ),
+      restrictions: fromCell(shown('restricoes'), extras, e => e.restrictions),
+      headcount: fromCell(shown('histograma'), extras, e => e.headcount),
+      production: fromCell(shown('produtividade'), extras, e => e.production),
+      safety: fromCell(shown('seguranca'), extras, e => e.safety),
+      checklist: fromCell(shown('checklist'), extras, e => e.checklist),
     };
     // `shown` depende de `access`, `allowed` e `input.modules`, todos já nas dependências via `filters`/`access`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planning, data, work, ref, filters, access, allowed, longTerm, terminality, ranking, commitments, teams, workId]);
+  }, [planning, data, work, ref, filters, access, allowed, longTerm, terminality, ranking, extras, commitments, teams, workId]);
 
   const summary = useMemo(() => {
     if (!panels || !ref) return { kpis: [], sentence: [] };
@@ -284,6 +387,9 @@ export function useDashboard(input: DashboardInput): DashboardState {
     }
     if (panels.medium.status === 'ready') parts.medio = mediumTermSummary(panels.medium.data, ref);
     if (panels.terminality.status === 'ready') parts.terminalidade = terminalitySummary(panels.terminality.data, ref);
+    if (panels.headcount.status === 'ready') parts.efetivo = headcountSummary(panels.headcount.data, ref);
+    if (panels.restrictions.status === 'ready') parts.cards = restrictionsSummary(panels.restrictions.data);
+    if (panels.safety.status === 'ready') parts.seguranca = safetySummary(panels.safety.data, ref);
     return composeSummary(parts);
   }, [panels, ref]);
 

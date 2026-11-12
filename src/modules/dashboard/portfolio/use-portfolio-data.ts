@@ -11,8 +11,11 @@ import { buildWagonsPanel } from '../wagons-panel';
 import { buildMediumTermPanel } from '../medium-term-panel';
 import { buildShortTermPanel, shortTermCompanies } from '../short-term-panel';
 import { terminalityCompanies } from '../terminality-panel';
+import { buildLegalizationBlock } from '../extras/legalization';
+import type { DashboardExtrasResponse } from '../extras/types';
 import { aggregatePortfolio } from './aggregate';
 import { extractRow, type PortfolioSource } from './extract';
+import { EXTRA_ROUTE_MODULES, extraSources, extrasUrl, HIDDEN_EXTRAS, type ExtraSources } from './extras';
 import {
   byName,
   fromBuilder,
@@ -34,6 +37,11 @@ import type { PortfolioInput, PortfolioRow, PortfolioSourcesResponse, PortfolioS
  * leitura só de `GET /api/dashboard/obras` para todas as obras de uma vez. Para cada obra escolhida, os construtores da aba 0 rodam com a data de
  * referência do período (sem recorte de empreiteiro nem de pavimento, que ficam só na aba 0), e `extract.ts` e
  * `aggregate.ts` fazem o resto.
+ *
+ * Quadros de 12/11/2026 (modelo "Dashboards completos e resumo semanal"): Linha de Balanço, Quadro de Restrições,
+ * histograma, produtividade e checklist chegam já calculados para o período de `GET /api/dashboard/extras?de=&ate=`
+ * (uma leitura por período, para todas as obras); a legalização sai do planejamento já carregado. Sem recorte de
+ * empreiteiro: esses quadros mostram sempre a obra inteira.
  *
  * Semana 1 de cada obra no geral = a primeira semana com linha no curto prazo. As configurações de cada obra
  * (`useWorkSettings`) não são lidas aqui: seriam uma chamada por obra, e a semana 1 só numera as semanas
@@ -84,6 +92,13 @@ const parseSources = (body: unknown): Fetched<PortfolioSourcesResponse> => {
     : { status: 'error', message: 'Resposta inesperada do servidor.' };
 };
 
+const parseExtras = (body: unknown): Fetched<DashboardExtrasResponse> => {
+  const response = body as DashboardExtrasResponse;
+  return response && Array.isArray(response.works)
+    ? { status: 'ready', data: response }
+    : { status: 'error', message: 'Resposta inesperada do servidor.' };
+};
+
 const listText = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} e ${items.at(-1)}`);
 
 export function usePortfolio(input: PortfolioInput): PortfolioState {
@@ -92,7 +107,7 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
   const modules = useModules();
   const access = useMemo(
     () =>
-      Object.fromEntries(PORTFOLIO_MODULES.map(m => [m.id, hasSectionAccess(m.id, { developer, modules })])) as Record<
+      Object.fromEntries(PORTFOLIO_MODULES.map(m => [m.id, hasSectionAccess(m.section, { developer, modules })])) as Record<
         PortfolioModule,
         boolean
       >,
@@ -169,6 +184,10 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
 
   const remoteShown = REMOTE_MODULES.some(module => shown.has(module));
   const sources = useFetched(SOURCES_URL, ready && remoteShown, parseSources);
+  // Os quadros de 12/11/2026: uma leitura por período, já calculada no servidor.
+  const extrasShown = EXTRA_ROUTE_MODULES.some(module => shown.has(module));
+  const hasWeeks = !!period && period.weeks.length > 0;
+  const extras = useFetched(period ? extrasUrl(period) : '', ready && extrasShown && hasWeeks, parseExtras);
 
   // Empreiteiros do seletor, somando as obras escolhidas: as linhas do curto prazo (coluna Empresa), as equipes e,
   // quando a rota responde, os responsáveis terceiros da terminalidade. Com recorte, a obra onde nenhum dos
@@ -261,6 +280,26 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
     return map;
   }, [sources, included, refs, shown, companies, today]);
 
+  // Linha de Balanço, restrições, histograma, produtividade e checklist: da rota dos quadros novos; a legalização,
+  // do planejamento.
+  const extra = useMemo(() => {
+    const map = new Map<string, ExtraSources>();
+    if (!period) return map;
+    const entries = new Map((extras.status === 'ready' ? extras.data.works : []).map(entry => [entry.workId, entry]));
+    for (const work of included) {
+      const inPeriod = refs.has(work.id);
+      const legalization =
+        data && inPeriod && shown.has('balanco')
+          ? buildLegalizationBlock(data, work.id, { start: period.start, end: period.end, today })
+          : undefined;
+      map.set(
+        work.id,
+        extraSources({ state: extras, entry: entries.get(work.id), inPeriod, shown, ...(legalization ? { legalization } : {}) }),
+      );
+    }
+    return map;
+  }, [extras, included, refs, shown, period, data, today]);
+
   const rows = useMemo<PortfolioRow[] | undefined>(() => {
     if (!period) return undefined;
     return included.map(work => {
@@ -272,6 +311,7 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
         safety: { status: 'absent' },
         reasons: {},
       };
+      const fromExtra = extra.get(work.id) ?? HIDDEN_EXTRAS;
       return extractRow(
         {
           work,
@@ -284,12 +324,17 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
           longTerm: fromRemote.longTerm,
           terminality: fromRemote.terminality,
           safety: fromRemote.safety,
-          reasons: fromRemote.reasons,
+          balance: fromExtra.balance,
+          restrictions: fromExtra.restrictions,
+          headcount: fromExtra.headcount,
+          production: fromExtra.production,
+          checklist: fromExtra.checklist,
+          reasons: { ...fromRemote.reasons, ...fromExtra.reasons },
         },
         period,
       );
     });
-  }, [period, included, lines, local, remote]);
+  }, [period, included, lines, local, remote, extra]);
 
   const portfolio = useMemo(() => {
     if (!period || !rows) return undefined;
@@ -307,14 +352,17 @@ export function usePortfolio(input: PortfolioInput): PortfolioState {
   if (!ready || !periodContext || !portfolio) return { status: 'loading' };
 
   const remoteModules = REMOTE_MODULES.filter(module => shown.has(module));
-  const loading = sources.status === 'loading' ? remoteModules : [];
-  const unavailable =
-    sources.status === 'error'
-      ? remoteModules.map(module => ({ module, message: sources.message }))
-      : remoteModules.flatMap(module => {
-          const failed = portfolio.rows.filter(row => row.status[module].kind === 'error').map(row => row.work.name);
-          return failed.length ? [{ module, message: `Não foi possível carregar em ${listText(failed)}.` }] : [];
-        });
+  const extraModules = EXTRA_ROUTE_MODULES.filter(module => shown.has(module));
+  const loading = [...(sources.status === 'loading' ? remoteModules : []), ...(extras.status === 'loading' ? extraModules : [])];
+  const failedIn = (list: PortfolioModule[]) =>
+    list.flatMap(module => {
+      const failed = portfolio.rows.filter(row => row.status[module].kind === 'error').map(row => row.work.name);
+      return failed.length ? [{ module, message: `Não foi possível carregar em ${listText(failed)}.` }] : [];
+    });
+  const unavailable = [
+    ...(sources.status === 'error' ? remoteModules.map(module => ({ module, message: sources.message })) : failedIn(remoteModules)),
+    ...(extras.status === 'error' ? extraModules.map(module => ({ module, message: extras.message })) : failedIn(extraModules)),
+  ];
   return {
     status: 'ready',
     data: portfolio,

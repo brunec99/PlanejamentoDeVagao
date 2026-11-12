@@ -103,6 +103,42 @@ export async function loadHeadcount(workId: string): Promise<HeadcountData> {
   return { entries: rows.map(headcountFromRow) };
 }
 
+/** Dashboards (12/11/2026): só as linhas de `from` a `to` e o último dia lançado até `to` (`null` = a obra não
+ * tem efetivo até lá), sem trazer a obra inteira. */
+export async function loadHeadcountRange(
+  workId: string,
+  from: string,
+  to: string,
+): Promise<{ entries: HeadcountEntry[]; lastDay: string | null }> {
+  const db = getServiceClient();
+  const last = await db
+    .from(TABLE)
+    .select('worked_on')
+    .eq('work_id', workId)
+    .lte('worked_on', to)
+    .order('worked_on', { ascending: false })
+    .limit(1);
+  check(last.error, 'ler o histograma');
+  const lastDay = ((last.data ?? []) as { worked_on: string }[])[0]?.worked_on ?? null;
+  if (!lastDay || lastDay < from) return { entries: [], lastDay };
+  const rows: Row[] = [];
+  for (let at = 0; ; at += PAGE) {
+    const { data, error } = await db
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq('work_id', workId)
+      .gte('worked_on', from)
+      .lte('worked_on', to)
+      .order('worked_on')
+      .order('id')
+      .range(at, at + PAGE - 1);
+    check(error, 'ler o histograma');
+    rows.push(...((data ?? []) as Row[]));
+    if ((data ?? []).length < PAGE) break;
+  }
+  return { entries: rows.map(headcountFromRow), lastDay };
+}
+
 /** A obra de uma linha, ou null se ela não existe: a rota confere o acesso antes de gravar. */
 export async function findHeadcountWorkId(entryId: string): Promise<string | null> {
   const { data, error } = await getServiceClient().from(TABLE).select('work_id').eq('id', entryId).maybeSingle();

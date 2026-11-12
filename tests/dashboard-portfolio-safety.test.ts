@@ -195,11 +195,11 @@ test('o cartão de segurança e o trecho da frase (regra 8), com os mesmos núme
   assert.match(text(clean.sentence), /fecha o período com 0 apontamentos em aberto \(2 a menos que no início\)\.$/);
 });
 
-test('quadro escondido: sem cartão nem frase de segurança; o topo vai até sete cartões', () => {
+test('quadro escondido: sem cartão nem frase de segurança; o topo vai até nove cartões', () => {
   const hidden = aggregatePortfolio({ period: october, rows: rows(), shown: new Set<PortfolioModule>(['terminalidade']) });
   assert.ok(!hidden.kpis.some(k => k.module === 'seguranca'));
   assert.doesNotMatch(text(hidden.sentence), /segurança/);
-  assert.equal(KPIS_SHOWN, 7);
+  assert.equal(KPIS_SHOWN, 9);
 });
 
 test('tipos com mais apontamentos no período, somando as obras pelo id (regra 7)', () => {
@@ -220,10 +220,17 @@ test('tipos com mais apontamentos no período, somando as obras pelo id (regra 7
 
 // ─── quadros, URL e rota ────────────────────────────────────────────────────────────────────────────────
 
-test('a segurança é o 6º quadro do geral; a aba 0 continua com os cinco (regra 2)', () => {
-  assert.deepEqual(moduleInfo('seguranca'), { id: 'seguranca', number: '3.1', label: 'Segurança do trabalho' });
-  assert.equal(DASHBOARD_MODULES.length, 5);
-  assert.ok(!DASHBOARD_MODULES.some(m => (m.id as string) === 'seguranca'));
+// 12/11/2026 (modelo "Dashboards completos e resumo semanal"): a aba 0 e o geral passaram a ter os mesmos onze quadros.
+test('a segurança é um dos onze quadros, do geral e da aba 0 (regra 2 de 06/11, regra 1 de 12/11)', () => {
+  assert.deepEqual(moduleInfo('seguranca'), {
+    id: 'seguranca',
+    number: '3.1',
+    label: 'Segurança do trabalho',
+    section: 'seguranca',
+    path: 'seguranca',
+  });
+  assert.equal(DASHBOARD_MODULES.length, 11);
+  assert.ok(DASHBOARD_MODULES.some(m => m.id === 'seguranca'));
   assert.deepEqual([...(parsePortfolioParams({ quadros: 'seguranca,curto-prazo,xyz' }).modules ?? [])], ['seguranca', 'curto-prazo']);
 });
 

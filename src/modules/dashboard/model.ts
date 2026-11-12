@@ -14,28 +14,51 @@ import { parsePeriodParams, periodSearchEntries, weekPeriod, type DashboardPerio
 
 export type { Segment };
 
-export type DashboardModule = 'longo-prazo' | 'vagoes' | 'medio-prazo' | 'curto-prazo' | 'terminalidade';
-/** Os quadros do Dashboard geral: os da aba 0 mais a segurança do trabalho (aba 6, modelo aprovado em
- * 06/11/2026, regra 2: só no geral nesta etapa; a aba 0 continua com os cinco de `DASHBOARD_MODULES`). */
-export type PortfolioModule = DashboardModule | 'seguranca';
+/** Desde 12/11/2026 (modelo "Dashboards completos e resumo semanal") a aba 0 e o Dashboard geral têm os mesmos
+ * onze quadros: os cinco de 04/11 e os seis novos (`balanco` = IDP da Linha de Balanço e Gantt de legalização). */
+export type DashboardModule =
+  | 'longo-prazo'
+  | 'balanco'
+  | 'vagoes'
+  | 'medio-prazo'
+  | 'curto-prazo'
+  | 'restricoes'
+  | 'terminalidade'
+  | 'histograma'
+  | 'produtividade'
+  | 'seguranca'
+  | 'checklist';
+/** Os quadros do Dashboard geral: os mesmos da aba 0 (até 12/11/2026 o geral tinha a segurança a mais). */
+export type PortfolioModule = DashboardModule;
 export interface DashboardModuleInfo<M extends PortfolioModule = DashboardModule> {
   id: M;
-  /** O número da aba de origem, que o cartão e o quadro mostram ("aba 4"). */
   /** O código da tela no menu ("1.3"), desde 12/11/2026; os vagões abrem pelo longo prazo e levam o dele. */
   number: string;
   label: string;
+  /** A seção de `module-access` que libera o quadro (`balanco` segue o longo prazo). */
+  section: string;
+  /** O caminho da tela de origem dentro da obra ("histograma" em `/obras/{id}/histograma`). */
+  path: string;
 }
+/** Na ordem do menu (regra 1 do modelo de 12/11/2026); os vagões ficam junto do longo prazo. */
 export const DASHBOARD_MODULES: readonly DashboardModuleInfo[] = [
-  { id: 'longo-prazo', number: '1.1', label: 'Longo prazo' },
-  { id: 'vagoes', number: '1.1', label: 'Vagões' },
-  { id: 'medio-prazo', number: '1.2', label: 'Médio prazo' },
-  { id: 'curto-prazo', number: '1.3', label: 'Curto prazo' },
-  { id: 'terminalidade', number: '2.1', label: 'Terminalidade' },
+  { id: 'longo-prazo', number: '1.1', label: 'Longo prazo', section: 'longo-prazo', path: 'longo-prazo' },
+  { id: 'balanco', number: '1.1', label: 'Linha de Balanço e legalização', section: 'longo-prazo', path: 'longo-prazo' },
+  { id: 'vagoes', number: '1.1', label: 'Vagões', section: 'vagoes', path: 'vagoes' },
+  { id: 'medio-prazo', number: '1.2', label: 'Médio prazo', section: 'medio-prazo', path: 'medio-prazo' },
+  { id: 'curto-prazo', number: '1.3', label: 'Curto prazo', section: 'curto-prazo', path: 'curto-prazo' },
+  { id: 'restricoes', number: '1.4', label: 'Quadro de Restrições', section: 'restricoes', path: 'restricoes' },
+  { id: 'terminalidade', number: '2.1', label: 'Terminalidade', section: 'terminalidade', path: 'terminalidade' },
+  { id: 'histograma', number: '2.2', label: 'Histograma', section: 'histograma', path: 'histograma' },
+  { id: 'produtividade', number: '2.3', label: 'Produtividade', section: 'produtividade', path: 'produtividade' },
+  { id: 'seguranca', number: '3.1', label: 'Segurança do trabalho', section: 'seguranca', path: 'seguranca' },
+  { id: 'checklist', number: '3.2', label: 'Checklist de equipamentos', section: 'checklist', path: 'checklist' },
 ];
-export const PORTFOLIO_MODULES: readonly DashboardModuleInfo<PortfolioModule>[] = [
-  ...DASHBOARD_MODULES,
-  { id: 'seguranca', number: '3.1', label: 'Segurança do trabalho' },
-];
+export const PORTFOLIO_MODULES: readonly DashboardModuleInfo<PortfolioModule>[] = DASHBOARD_MODULES;
+/** Os seis quadros de 12/11/2026, que leem `GET /api/dashboard/extras` (e, no `balanco`, o planejamento). */
+export const EXTRA_MODULES = ['balanco', 'restricoes', 'histograma', 'produtividade', 'seguranca', 'checklist'] as const;
+export type ExtraModule = (typeof EXTRA_MODULES)[number];
+export const isExtraModule = (value: unknown): value is ExtraModule => EXTRA_MODULES.includes(value as ExtraModule);
 export const isDashboardModule = (value: unknown): value is DashboardModule =>
   typeof value === 'string' && DASHBOARD_MODULES.some(m => m.id === value);
 export const isPortfolioModule = (value: unknown): value is PortfolioModule =>

@@ -493,3 +493,87 @@ Feita em 06/11/2026, antes do commit:
 - **Tempo da rota:** a rota ganhou mais uma leitura, paginada, de `safety_items` de todas as obras (3.261 apontamentos em 05/11/2026, crescendo); medir pelo `Server-Timing` junto com as outras fases.
 - **Divergência com o texto do modelo:** a linha embaixo do quadro, no modelo, dizia "Sem apontamentos de segurança no período"; o código considera sem dado só a obra sem nenhum apontamento até o sábado final (obra com histórico e sem apontamento no período aparece com o fluxo zerado).
 - **Cor do número nos cartões:** se o usuário quiser o número do cartão em vermelho/verde (e não só a etiqueta), ajustar a regra `.dsh-stat .v` de `styles.ts`, que vale também para a aba 0.
+
+---
+
+# Dashboards com todos os módulos (12/11/2026)
+
+Quarta parte do documento. Em 12/11/2026 o usuário pediu que a aba 0 de cada obra e o Dashboard geral mostrassem "tudo o que existe hoje de dados sendo gerados", e um e-mail semanal aos sábados. O modelo "Dashboards completos e resumo semanal" foi publicado com 20 regras e aprovado sem mudança no mesmo dia. As regras 1 a 11 (dashboards) estão aqui; as regras 12 a 20 (e-mail) estão em [Resumo semanal por e-mail](resumo-semanal.md).
+
+**Estado em 12/11/2026:** implementado, CI inteiro verde na máquina e enviado ao `main` no mesmo dia, a pedido do usuário. Nenhuma migração para os dashboards (a 0050 é só do resumo semanal e foi aplicada em 12/11/2026).
+
+## O que entrou
+
+Seis quadros novos, os mesmos nas duas telas (o geral já tinha a segurança), na ordem do menu:
+
+| Módulo (`DashboardModule`) | Menu | Conteúdo | Tempo |
+| --- | --- | --- | --- |
+| `balanco` | 1.1 | IDP da Linha de Balanço (última medição fechada até o fim do período, peso por custo ou duração, nunca em reais) e Gantt de legalização (marcos, atrasadas, próximo marco, entrega prevista × contratual) | retrato |
+| `restricoes` | 1.4 | Cards em aberto (a fazer, fazendo, pausado), vencidos, começo atrasado, concluídos/criados no período, por responsável | retrato + fluxo |
+| `histograma` | 2.2 | Efetivo médio por dia útil lançado, pico, parcela de empreiteiros, dias lançados sobre dias úteis, série e maiores equipes | fluxo |
+| `produtividade` | 2.3 | Lançamentos, homens-dia, parcela com produção medida, dias lançados, serviços com mais homens-dia e a produção por homem-dia | fluxo |
+| `seguranca` | 3.1 | O bloco que o geral já tinha, agora também na aba 0 | fluxo + retrato |
+| `checklist` | 3.2 | Equipamentos ativos, checklists em dia e vencidos **hoje**, inspeções e não conformidades do período | hoje + fluxo |
+
+`DASHBOARD_MODULES` tem agora onze módulos, cada um com `section` (o módulo de `module-access` que libera o quadro; `balanco` segue `longo-prazo`) e `path` (a tela de origem). `PortfolioModule` passou a ser igual a `DashboardModule`. O acesso é sempre por `section`, nunca por `id`.
+
+## Regras aprovadas (1 a 11)
+
+1. Entram os seis quadros nas duas telas, na ordem do menu.
+2. Cada quadro só para quem tem o módulo; módulo sem dado na obra não ocupa espaço.
+3. Mesmas escalas e período: fluxo somado no período, retrato no sábado final.
+4. Histograma com as contas da aba 2.2; no geral o efetivo das obras é somado.
+5. Produtividade; no geral, o índice só é comparado em "Serviços medidos em mais de uma obra", pareando nome (sem acento) e unidade.
+6. Quadro de Restrições: vencido = passou da entrega sem concluir; pausado conta como aberto.
+7. IDP e legalização num quadro próprio, sem reais; o quadro de longo prazo (medido × planejado) não mudou.
+8. Checklist: "vencido" é o da aba 3.2.
+9. Até nove cartões no topo: entram "Efetivo médio", "Cards vencidos" e, na aba 0, "Segurança em aberto"; a frase ganha a oração do efetivo.
+10. PDF com a folha "Controles de obra e SST".
+11. Sem migração.
+
+## Arquitetura
+
+| Peça | Arquivo |
+| --- | --- |
+| Contrato dos blocos e da rota (só tipos) | `src/modules/dashboard/extras/types.ts` |
+| Cálculo puro de cada bloco e `dashboardExtrasPath` | `src/modules/dashboard/extras/blocks.ts` |
+| Legalização a partir do planejamento carregado (cliente e servidor) | `src/modules/dashboard/extras/legalization.ts` |
+| Feriados nacionais e dias úteis | `src/domain/holidays.ts` |
+| Leitor (`readDashboardExtras`) | `src/infrastructure/repositories/supabase/dashboard-extras.ts` |
+| Rota `GET /api/dashboard/extras?de=&ate=[&obra=][&seguranca=1]` | `src/app/api/dashboard/extras/route.ts` |
+| Aba 0: quadros (tela e papel), cartões e orações | `src/modules/dashboard/extras/panels.tsx`, `extras-summary.ts`; integração em `use-dashboard-data.ts`, `summary.ts`, `dashboard-overview.tsx`, `dashboard-print.tsx` |
+| Geral: extração, totais e quadros comparativos | `src/modules/dashboard/portfolio/extras.ts`, `extras-charts.tsx`; integração em `types.ts`, `extract.ts`, `aggregate.ts`, `use-portfolio-data.ts`, `compose.ts`, `portfolio-text.ts`, `portfolio-overview.tsx`, `portfolio-print.tsx` |
+| Claudia geral (panorama com os módulos novos) | `src/infrastructure/agent/global-data.ts` |
+| Testes | `tests/holidays.test.ts`, `dashboard-extras-blocks`, `dashboard-extras-route`, `dashboard-legalization`, `dashboard-extras-panels`, `dashboard-portfolio-extras` |
+
+**Os blocos vêm calculados do servidor**, para o intervalo pedido: uma obra de dois anos passa de dez mil linhas de efetivo, que não precisam ir ao navegador. A aba 0 pede a própria obra (com `seguranca=1`); o geral pede todas as liberadas e continua lendo a segurança em `GET /api/dashboard/obras`. Célula ausente = pessoa sem o módulo; `absent` = obra sem dado; `unavailable` = migração do módulo ausente; `error` = só aquele quadro indisponível. A legalização é calculada no navegador com o planejamento já carregado.
+
+## Regras de cálculo que não são óbvias
+
+- **Dias lançados:** dias úteis são segunda a sexta, fora feriado nacional (1/1, Sexta-feira Santa, 21/4, 1/5, 7/9, 12/10, 2/11, 15/11, 20/11 e 25/12; Carnaval e Corpus Christi não são feriados nacionais e contam como dia útil). Os dias esperados vão até o menor entre o fim do período e a **véspera de hoje**: o dia de hoje ainda pode ser lançado. Faixas: 90% ou mais verde, 70% a 89% âmbar, abaixo vermelho.
+- **Obra que parou de lançar:** se já lançou alguma vez e não tem nada no período, o quadro aparece com zeros e todas as faltas. Só a obra que nunca lançou fica sem o quadro.
+- **Quadro de Restrições:** o retrato é no menor entre o fim do período e hoje. O card fechado depois dessa data conta como aberto, em "fazendo", porque a coluna em que estava não se reconstrói. Vencido e começo atrasado são excludentes.
+- **IDP:** só medições fechadas com data até o fim do período; obra com blocos e sem medição mostra o aviso, sem número.
+- **Legalização:** o avanço é sempre o atual (o cronograma não guarda histórico de percentual).
+- **Checklist:** o quadro de vencidos é o de hoje em qualquer período.
+- **Recortes:** os quadros novos não seguem o filtro de empreiteiro nem o de pavimento, e dizem isso quando há recorte.
+- **Estado da obra no geral:** cards vencidos e dias lançados abaixo de 70% contam como "Atenção", não "Crítico" (senão toda obra que não lança produtividade ficaria vermelha).
+
+## Diferenças em relação ao modelo
+
+- O modelo falava em "sete quadros na aba 0 e seis no geral" contando IDP e legalização separados; os dois ficaram num quadro só, como o desenho do modelo mostrava: seis na aba 0, cinco novos no geral.
+- PDF: restrições e balanço saem numa **folha própria** nas duas telas (não cabiam na folha do longo prazo e vagões). No geral, as sete colunas novas do comparativo saem numa segunda tabela, na folha "Controles de obra e SST".
+- No papel, de sete a nove cartões saem numa linha só, mais estreitos; na tela, em duas linhas.
+
+## Validação (12/11/2026)
+
+- **CI inteiro na máquina:** tipos, lint (0 erros), Prettier, 1.420 testes, migrações no PostgreSQL isolado (com a 0050), build e e2e (10 de 10).
+- **No navegador, com dados simulados** (`next dev` sem banco, duas obras, rota extras respondida pelo Playwright com os construtores reais do histograma e da produtividade): aba 0, Dashboard geral e os dois PDFs abriram sem erro, no computador e a 400 px. Dois defeitos achados e corrigidos: um cartão do histograma cortava 13 px no PDF da aba 0, e os três quadros estreitos da folha "Controles de obra e SST" do geral cortavam os números (passaram a descer para a linha de baixo, classe `pf-narrow`).
+- **Não validado:** a rota `GET /api/dashboard/extras` e as três leituras novas contra o Supabase real (sessão, paginação, tempo com o volume de produção); as telas logadas em produção; o PDF salvo de fato pelo navegador; um aparelho real.
+
+## Pendências
+
+- Medir o tempo da rota extras em produção (`Server-Timing`): o Quadro de Restrições e a Linha de Balanço ainda carregam todos os cards e o `loadLob` inteiro por obra.
+- Conferir os números com as abas de origem numa obra real (histograma e produtividade têm histórico importado em seis obras).
+- "Responsáveis com mais cards vencidos" no geral usa os cinco com mais cards abertos de cada obra; pode deixar alguém de fora.
+- Meta de produtividade por serviço não existe; a tabela "Serviços medidos em mais de uma obra" não tem cor de bom ou ruim.

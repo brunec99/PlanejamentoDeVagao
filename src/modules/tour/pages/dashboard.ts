@@ -9,7 +9,7 @@ import type { TourStep } from '../tours';
 export const steps: TourStep[] = [
   {
     title: 'Aba 0 · Dashboard da obra',
-    body: 'Os cinco níveis da obra numa página só: curto prazo, longo prazo, vagões, médio prazo e terminalidade, no período escolhido (uma semana, um mês, um trimestre, um ano ou um intervalo). Só entram os módulos que você pode abrir e que têm dado nesta obra. Aqui nada se edita: cada quadro leva à aba de origem.',
+    body: 'A obra numa página só, em até onze quadros na ordem do menu: longo prazo, Linha de Balanço e legalização, vagões, médio prazo, curto prazo, Quadro de Restrições, terminalidade, histograma, produtividade, segurança e checklist de equipamentos, no período escolhido (uma semana, um mês, um trimestre, um ano ou um intervalo). Só entram os módulos que você pode abrir e que têm dado nesta obra. Aqui nada se edita: cada quadro leva à aba de origem.',
   },
   {
     target: 'tab-header',
@@ -64,7 +64,7 @@ export const steps: TourStep[] = [
   {
     target: 'dash-cartoes',
     title: 'Cartões',
-    body: 'Até seis indicadores, um por módulo presente: PPC da semana (ou do mês, do trimestre, do período), avanço físico, takt vencido, tarefas atrasadas, pendências abertas e restrições vencidas. Cada cartão diz de que aba vem, e o estado aparece em cor e em texto. Fora da escala semanal, o cartão diz se o número é o que aconteceu no período ou o retrato do sábado final.',
+    body: 'Até nove indicadores, em duas linhas, só dos módulos presentes: PPC da semana (ou do mês, do trimestre, do período), avanço físico, takt vencido, tarefas atrasadas, pendências abertas, restrições vencidas, efetivo médio (com os dias úteis lançados), cards vencidos do Quadro de Restrições e segurança em aberto. Cada cartão diz de que aba vem, e o estado aparece em cor e em texto. Fora da escala semanal, o cartão diz se o número é o que aconteceu no período ou o retrato do sábado final.',
   },
   {
     target: 'dash-quadro',
@@ -79,11 +79,11 @@ export const steps: TourStep[] = [
   {
     target: 'dash-pdf',
     title: 'Gerar PDF',
-    body: 'Abre a página de impressão numa aba nova, com a escala, o período e os filtros de agora, e chama o “Salvar como PDF” do navegador, como os PDFs das outras abas. A4 paisagem, com a escala e o período no cabeçalho: folha 1 com o resumo e o curto prazo, depois uma folha por módulo presente. O PDF sai pelo computador.',
+    body: 'Abre a página de impressão numa aba nova, com a escala, o período e os filtros de agora, e chama o “Salvar como PDF” do navegador, como os PDFs das outras abas. A4 paisagem, com a escala e o período no cabeçalho: folha 1 com o resumo e o curto prazo, depois uma folha por módulo presente (a última, “Controles de obra e SST”, traz o histograma, a produtividade, a segurança e o checklist). O PDF sai pelo computador.',
   },
   {
     target: 'dash-rodape',
     title: 'Nota final',
-    body: 'Lembra que o ranking das obras e o avanço físico consideram a obra inteira, sem recorte de empreiteiro ou pavimento, e que nesta aba nada se edita.',
+    body: 'Lembra que o ranking das obras, o avanço físico e os quadros 1.1 (Linha de Balanço e legalização), 1.4, 2.2, 2.3, 3.1 e 3.2 consideram a obra inteira, sem recorte de empreiteiro ou pavimento, e que nesta aba nada se edita.',
   },
 ];

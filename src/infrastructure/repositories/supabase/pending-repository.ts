@@ -424,6 +424,20 @@ export async function loadPending(workId: string): Promise<PendingData> {
   };
 }
 
+/** Dashboards (12/11/2026): só os cards da obra, com a data viva dos ligados ao médio e ao longo prazo, sem
+ * checklists, itens nem conversa. A falha na leitura das origens deixa a data gravada, como em `loadPending`. */
+export async function loadPendingCards(workId: string): Promise<PendingCard[]> {
+  let cards = ((await fetchRows('cards', workId)) as CardRow[]).map(pendingFromRow.cards);
+  if (cards.some(c => c.origin === 'medio_prazo' || c.origin === 'longo_prazo')) {
+    try {
+      cards = resolvePendingSources(cards, await loadPendingSources(workId, cards));
+    } catch (error) {
+      logRouteError('pending loadPendingCards (origens)', error, { workId });
+    }
+  }
+  return cards;
+}
+
 /** Início e nome atuais da tarefa do médio prazo ou do serviço da Linha de Balanço, para `create_card`.
  * `null` = não existe nesta obra (ou é de outra, ou o serviço ainda não tem bloco lançado). */
 export async function resolveSourceForCreate(

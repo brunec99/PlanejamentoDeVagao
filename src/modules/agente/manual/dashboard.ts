@@ -6,13 +6,14 @@ import type { ManualSection } from './types';
  * vem e por que pode diferir do que a aba de origem mostra hoje. Escalas de tempo (04/11/2026, modelo
  * "Dashboard geral e escalas de tempo"): a "Semana analisada" virou escala e período; o id
  * `dashboard-filtros-semana-analisada` ficou o mesmo, para não quebrar referências. O Dashboard geral e as
- * regras do período estão em `dashboard-geral.ts`. */
+ * regras do período estão em `dashboard-geral.ts`. 12/11/2026 (modelo "Dashboards completos e resumo semanal"):
+ * a aba passou a ter onze quadros; os seis novos estão na seção `dashboard-quadros-controles-sst`. */
 export const sections: ManualSection[] = [
   {
     id: 'dashboard-visao-geral',
     title: 'Dashboard da obra: o que é, quem vê, o resumo e os cartões',
     summary:
-      'A aba 0 junta curto, longo, médio prazo, vagões e terminalidade numa página só lida, com a frase de resumo e até seis cartões.',
+      'A aba 0 junta prazo, controles de obra e segurança numa página só lida, em até onze quadros, com a frase de resumo e até nove cartões.',
     keywords: [
       'dashboard',
       'dashboard da obra',
@@ -38,7 +39,7 @@ export const sections: ManualSection[] = [
     screen: 'dashboard',
     body: `## O que é a aba 0, Dashboard da obra
 
-É a primeira aba de toda obra (o chip 0 no topo da lista de abas) e a tela em que a obra abre quando você a escolhe na lista de obras. Ela reúne numa página só o que cinco módulos respondem: o curto prazo (aba 1.3), o longo prazo (aba 1.1), os vagões (o "Planejamento de vagão", que não tem número no menu e abre pelo botão "Planejamento de vagão" dentro da aba 1.1), o médio prazo (aba 1.2) e a terminalidade (aba 2.1). Os números são os do menu renumerado em 12/11/2026, com os grupos "1 · Prazo", "2 · Controles de obra" e "3 · SST"; antes eram, na ordem, as abas 4, 1, 2, 3 e 5, e a aba 0 continua sendo a 0. Nada aqui se edita: a aba lê o que as outras já guardam e, em cada quadro, o link "Abrir aba N →" leva à aba de origem, onde o dado se consulta no detalhe e se altera.
+É a primeira aba de toda obra (o chip 0 no topo da lista de abas) e a tela em que a obra abre quando você a escolhe na lista de obras. Desde 12/11/2026 ela tem até onze quadros (os seis novos estão na seção "Dashboard da obra: IDP, restrições, efetivo, produção e SST"). Os cinco primeiros reúnem o que cinco módulos respondem: o curto prazo (aba 1.3), o longo prazo (aba 1.1), os vagões (o "Planejamento de vagão", que não tem número no menu e abre pelo botão "Planejamento de vagão" dentro da aba 1.1), o médio prazo (aba 1.2) e a terminalidade (aba 2.1). Os números são os do menu renumerado em 12/11/2026, com os grupos "1 · Prazo", "2 · Controles de obra" e "3 · SST"; antes eram, na ordem, as abas 4, 1, 2, 3 e 5, e a aba 0 continua sendo a 0. Nada aqui se edita: a aba lê o que as outras já guardam e, em cada quadro, o link "Abrir aba N →" leva à aba de origem, onde o dado se consulta no detalhe e se altera.
 
 Tudo é contado no **período escolhido** (seção "Filtros: escala e período, empreiteiro, pavimento e quadros"): por padrão a semana atual, na escala semanal, mas pode ser uma semana antiga, um mês, um trimestre, um ano ou um intervalo de datas. Cada quadro conta só até o sábado da última semana do período e mostra a obra como estava naquele sábado.
 
@@ -68,7 +69,7 @@ Uma frase no topo diz o estado da obra no período escolhido, com os números ar
 
 ## Os cartões
 
-Até seis cartões, um por módulo presente na página; os módulos ausentes não deixam cartão vazio. Cada cartão diz, no rótulo, de que aba o número vem:
+Até nove cartões, em duas linhas, só dos módulos presentes na página; os módulos ausentes não deixam cartão vazio. Aos seis de antes somaram-se, em 12/11/2026, "Efetivo médio" (aba 2.2, com os dias úteis lançados), "Cards vencidos" (aba 1.4, do Quadro de Restrições) e "Segurança em aberto" (aba 3.1); a frase de resumo ganhou uma oração para o efetivo. Cada cartão diz, no rótulo, de que aba o número vem:
 
 - **PPC da semana** (aba 1.3, curto prazo): o cartão em destaque quando o curto prazo está presente. Compromissos cumpridos sobre assumidos na semana analisada; com linha sem Status, o cartão marca "em aberto". Nas outras escalas vira **PPC do mês**, do trimestre, do ano ou do período: cumpridos ÷ assumidos de todas as semanas apuradas do período, somando as linhas (semana apurada = todas as linhas com Status; a semana em aberto fica fora e é contada à parte). A dica mostra os compromissos e a comparação com o período anterior ("30 de 40 compromissos · ▲ 5 p.p. vs set/26"), e o período em andamento ganha a etiqueta "parcial · N de M semanas apuradas".
 - **Avanço físico** (aba 1.1, longo prazo): o percentual medido até a data, com o desvio em pontos percentuais contra o planejado na mesma data.
@@ -306,6 +307,59 @@ Lê a lista de pendências da obra até o sábado final do período: pendência 
 Os filtros "Empreiteiro" (Responsável terceiro) e "Pavimento" (Local) recortam tudo neste quadro.`,
   },
   {
+    id: 'dashboard-quadros-controles-sst',
+    title: 'Dashboard da obra: IDP, restrições, efetivo, produção e SST',
+    summary: 'IDP, cards vencidos, efetivo, dias lançados, produção, segurança e checklists.',
+    keywords: [
+      'quadros novos do dashboard',
+      'idp no dashboard',
+      'legalização no dashboard',
+      'cards vencidos',
+      'quadro de restrições no dashboard',
+      'efetivo médio',
+      'dias lançados',
+      'histograma no dashboard',
+      'produtividade no dashboard',
+      'produção por homem-dia no dashboard',
+      'segurança no dashboard da obra',
+      'checklist no dashboard',
+      'checklists vencidos hoje',
+      'começo atrasado',
+    ],
+    screen: 'dashboard',
+    body: `## O que entrou em 12/11/2026
+
+A aba 0 ganhou seis quadros, na ordem do menu, cada um com o link "Abrir aba N →" para a tela de origem. Como os demais, só aparecem para quem tem o módulo liberado e quando a obra tem dado dele. Nenhum deles segue os filtros "Empreiteiro" e "Pavimento": mostram a obra inteira, e o quadro avisa quando há recorte.
+
+A regra do período é a mesma: o que é fluxo soma o período escolhido; o que é retrato vale no sábado final (ou hoje, se o período ainda não acabou).
+
+## Linha de Balanço e legalização (aba 1.1)
+
+- **IDP**: o índice de desempenho de prazo da última medição fechada até a data, avanço real ÷ planejado, ponderado por custo (sem custo cadastrado, por duração). 1,00 ou mais é "em dia"; de 0,90 a 0,99, "atenção"; abaixo, "atrasado". O quadro mostra também o real × planejado, a linha de base e a medição usada. Nunca mostra valores em reais.
+- **Gantt de legalização**: marcos concluídos sobre o total, tarefas atrasadas na data, a entrega prevista contra a contratual e o próximo marco.
+- Quem vê: quem tem o longo prazo. O quadro aparece se a obra tem Linha de Balanço **ou** Gantt de legalização.
+
+## Quadro de Restrições (aba 1.4)
+
+Retrato dos cards do Kanban na data: em aberto (A fazer, Fazendo e Pausado, porque o prazo não para na pausa), **vencidos** (passaram da entrega sem concluir), **começo atrasado** (ainda em A fazer depois do "começar até") e, somados no período, concluídos, criados e cancelados. Ao lado, os cinco responsáveis com mais cards em aberto.
+
+## Histograma (aba 2.2)
+
+Efetivo médio por dia útil lançado, pico, parcela de empreiteiros nos homens-dia e **dias lançados**: os dias úteis com lançamento sobre os dias úteis do período até ontem (segunda a sexta, sem feriado nacional; o dia de hoje ainda pode ser lançado e não conta como falta). 90% ou mais sai em verde, de 70% a 89% em âmbar, abaixo em vermelho, e o quadro lista os dias que faltaram. Mostra também o efetivo médio por semana (ou por mês, em períodos longos) e as cinco maiores equipes.
+
+## Produtividade (aba 2.3)
+
+Lançamentos e homens-dia do período, a parcela com produção medida (o resto está "a medir", que não é zero), os dias lançados (mesma regra do histograma) e os cinco serviços medidos com mais homens-dia, com a produção por homem-dia e a unidade.
+
+## Segurança do trabalho (aba 3.1)
+
+O mesmo quadro do Dashboard geral, para esta obra: apontamentos feitos e finalizados no período, tempo médio para resolver, em aberto no sábado final, abertos há mais de 7 dias, e os feitos por consequência e por tipo.
+
+## Checklist de equipamentos (aba 3.2)
+
+Equipamentos ativos, checklists em dia sobre os devidos **hoje** (o diário de hoje, o semanal desta semana e o mensal deste mês) e a lista dos vencidos. Os vencidos são sempre os de hoje, mesmo olhando um período antigo; inspeções e não conformidades são as do período.`,
+  },
+  {
     id: 'dashboard-pdf',
     title: 'Gerar o PDF do dashboard: aba nova, Salvar como PDF e as folhas',
     summary:
@@ -340,7 +394,7 @@ Os filtros "Empreiteiro" (Responsável terceiro) e "Pavimento" (Local) recortam 
 - **Papel**: A4 paisagem, cores fixas (é papel), cada seção numa folha.
 - **Cabeçalho**, igual ao do PDF do fechamento: os logos da ATR e da Takt, o título "DASHBOARD DA OBRA <NOME DA OBRA>", a escala e o período (no Semanal, a semana analisada) e a semana atual.
 - **Folha 1**: a frase de resumo, os cartões e o quadro do curto prazo (a série ou o PPC do período com as barras, a nota do ranking, o Pareto da obra e o histórico desde a semana 1). As causas da semana ou do período ficam só na tela.
-- **Depois, uma folha por módulo presente**: longo prazo e vagões juntos numa folha; médio prazo; terminalidade. Módulo sem dado, sem permissão ou desmarcado em "Quadros" não gera folha.
+- **Depois, uma folha por módulo presente**: longo prazo e vagões juntos numa folha; "Linha de Balanço, legalização e Quadro de Restrições"; médio prazo; terminalidade; e, por último, "Controles de obra e SST", com o histograma, a produtividade, a segurança e o checklist de equipamentos. Módulo sem dado, sem permissão ou desmarcado em "Quadros" não gera folha.
 - **Rodapé** de cada folha: a data de referência ("Dados até sáb dd/mm"), os filtros ativos, quem gerou e quando, e "Folha N de M".
 
 Um quadro cujo dado não chegou a tempo sai como "indisponível" naquela folha, e o resto do PDF sai normalmente; gere de novo em instantes.

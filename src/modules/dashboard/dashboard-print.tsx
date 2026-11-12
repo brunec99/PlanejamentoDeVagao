@@ -17,19 +17,25 @@ import {
   type KpiCard,
 } from './model';
 import { useDashboard, type DashboardReady } from './use-dashboard-data';
-import { KpiCards, Text } from './dashboard-overview';
+import { extrasContext, KpiCards, Text } from './dashboard-overview';
 import { LongTermPanel } from './panels/long-term';
 import { WagonsPanel } from './panels/wagons';
 import { MediumTermPanel } from './panels/medium-term';
 import { ShortTermPanel } from './panels/short-term';
 import { TerminalityPanel } from './panels/terminality';
+import { BalancePanel, ChecklistPanel, HeadcountPanel, ProductionPanel, RestrictionsPanel, SafetyPanel } from './extras/panels';
 
 /** O PDF da aba 0 (regra 11 do modelo aprovado): A4 paisagem, cabeçalho igual ao do painel do fechamento
  * (logos, nome da obra, semana analisada e atual; fora da escala semanal, a escala e o período — escalas de
  * tempo, 04/11/2026, regra 14). Folha 1: resumo e curto prazo; depois uma folha por
  * módulo presente: longo prazo e vagões juntos, médio prazo, terminalidade. Abre numa aba própria, fora do
  * layout do sistema, com os filtros na URL, e chama a impressão do navegador ("Salvar como PDF") quando os
- * quadros terminam de chegar, ou passado o limite de espera, saindo com o que houver. */
+ * quadros terminam de chegar, ou passado o limite de espera, saindo com o que houver.
+ *
+ * 12/11/2026 (modelo "Dashboards completos e resumo semanal", regra 10): duas folhas a mais, só quando há o que
+ * mostrar. "Linha de Balanço e Quadro de Restrições" vem logo depois da folha do longo prazo e dos vagões (os
+ * dois quadros não cabem naquela folha, de altura fixa, sem cortar nada); "Controles de obra e SST" (histograma,
+ * produtividade, segurança e checklist) fecha o PDF. A folha 1 leva até nove cartões numa linha só. */
 
 /** Espera máxima pelos quadros (plano de longo prazo, terminalidade, ranking) antes de imprimir assim mesmo. */
 const PANELS_TIMEOUT_MS = 10000;
@@ -80,7 +86,7 @@ function Foot({ dash, page, total, generated }: { dash: DashboardReady; page: nu
       <span>
         Todos os quadros contam até sáb {formatDate(dash.ref.weekEnd)}; nada depois{' '}
         {isWeekly(dash.ref) ? 'da semana analisada' : `do período (${dash.ref.period.label})`}. Ranking das obras e avanço físico consideram
-        a obra inteira. Gerado em {generated}
+        a obra inteira, assim como os quadros de 12/11/2026 (1.1 Linha de Balanço, 1.4, 2.2, 2.3, 3.1 e 3.2). Gerado em {generated}
         {dash.actorName ? ` por ${dash.actorName}` : ''}.
       </span>
       <span>
@@ -156,10 +162,18 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
   })
     .format(new Date())
     .replace(', ', ' às ');
+  const balance = panels.balance.status === 'ready' ? panels.balance.data : undefined;
+  const restrictions = panels.restrictions.status === 'ready' ? panels.restrictions.data : undefined;
+  const headcount = panels.headcount.status === 'ready' ? panels.headcount.data : undefined;
+  const production = panels.production.status === 'ready' ? panels.production.data : undefined;
+  const safety = panels.safety.status === 'ready' ? panels.safety.data : undefined;
+  const checklist = panels.checklist.status === 'ready' ? panels.checklist.data : undefined;
+  const ctx = extrasContext(dash);
   const filtersLine = filtersText(dash.filters);
   const unavailable = dash.unavailable.map(m => moduleInfo(m).label.toLowerCase());
 
-  // As folhas presentes, na ordem: resumo (+ curto prazo), longo prazo e vagões, médio prazo, terminalidade.
+  // As folhas presentes, na ordem: resumo (+ curto prazo), longo prazo e vagões, Linha de Balanço e Quadro de
+  // Restrições, médio prazo, terminalidade, controles de obra e SST.
   const sheets: ((page: number, total: number) => ReactNode)[] = [];
   sheets.push((page, total) => (
     <Sheet key="resumo">
@@ -169,7 +183,11 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
         {unavailable.length > 0 && ` Quadros indisponíveis no momento: ${unavailable.join(', ')}.`}
       </p>
       {summary.kpis.length > 0 && (
-        <div className={`dsh-kpis${summary.kpis.length <= 4 ? ' k4' : summary.kpis.length === 5 ? ' k5' : ''}`}>
+        <div
+          className={`dsh-kpis${summary.kpis.length <= 4 ? ' k4' : summary.kpis.length === 5 ? ' k5' : summary.kpis.length > 6 ? ' kw' : ''}`}
+          // Sete a nove cartões (12/11/2026) cabem numa linha só, mais estreitos, para o curto prazo manter a altura.
+          style={summary.kpis.length > 6 ? { gridTemplateColumns: `repeat(${summary.kpis.length}, minmax(0, 1fr))` } : undefined}
+        >
           <KpiCards kpis={summary.kpis} paper />
         </div>
       )}
@@ -233,6 +251,28 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
         <div className="dsh-row" style={{ gridTemplateColumns: longTerm && wagons ? '1.25fr 1fr 1fr' : wagons ? '1fr 1fr' : '1fr' }}>
           {longTerm && <LongTermPanel data={longTerm} variant="paper" workId={workId} />}
           {wagons && <WagonsPanel data={wagons} variant="paper" workId={workId} />}
+        </div>
+        <Foot dash={dash} page={page} total={total} generated={generated} />
+      </Sheet>
+    ));
+  }
+  if (balance || restrictions) {
+    sheets.push((page, total) => (
+      <Sheet key="balanco-restricoes">
+        <Head
+          dash={dash}
+          title={
+            balance && restrictions
+              ? 'LINHA DE BALANÇO, LEGALIZAÇÃO E QUADRO DE RESTRIÇÕES'
+              : balance
+                ? 'LINHA DE BALANÇO E LEGALIZAÇÃO'
+                : 'QUADRO DE RESTRIÇÕES'
+          }
+          filters={filtersLine}
+        />
+        <div className="dsh-row" style={{ gridTemplateColumns: balance && restrictions ? '1fr 1fr' : '1fr' }}>
+          {balance && <BalancePanel data={balance} variant="paper" ctx={ctx} />}
+          {restrictions && <RestrictionsPanel data={restrictions} variant="paper" ctx={ctx} />}
         </div>
         <Foot dash={dash} page={page} total={total} generated={generated} />
       </Sheet>
@@ -339,6 +379,29 @@ export function DashboardPrint({ workId, filters }: { workId: string; filters: P
         </div>
         <div className="dsh-row" style={{ gridTemplateColumns: '1.3fr 1fr 1fr' }}>
           <TerminalityPanel data={terminality} variant="paper" workId={workId} />
+        </div>
+        <Foot dash={dash} page={page} total={total} generated={generated} />
+      </Sheet>
+    ));
+  }
+  const controls = [headcount, production, safety, checklist].filter(Boolean).length;
+  if (controls) {
+    sheets.push((page, total) => (
+      <Sheet key="controles-sst">
+        <Head dash={dash} title="CONTROLES DE OBRA E SST" filters={filtersLine} />
+        <div
+          className="dsh-row"
+          // Um ou dois quadros dividem a folha em colunas; três ou quatro, em duas linhas de duas colunas.
+          style={
+            controls <= 2
+              ? { gridTemplateColumns: controls === 2 ? '1fr 1fr' : '1fr' }
+              : { gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)' }
+          }
+        >
+          {headcount && <HeadcountPanel data={headcount} variant="paper" ctx={ctx} />}
+          {production && <ProductionPanel data={production} variant="paper" ctx={ctx} />}
+          {safety && <SafetyPanel data={safety} variant="paper" ctx={ctx} />}
+          {checklist && <ChecklistPanel data={checklist} variant="paper" ctx={ctx} />}
         </div>
         <Foot dash={dash} page={page} total={total} generated={generated} />
       </Sheet>

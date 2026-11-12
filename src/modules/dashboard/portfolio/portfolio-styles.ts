@@ -18,7 +18,10 @@
  *   colunas a partir de 1100 px de quadro, duas a partir de 820 px com os tipos embaixo, uma abaixo disso),
  *   `.pf-sst` linhas por obra com a coluna do nome mais estreita, `.pf-rowx.total` a linha "Todas" e
  *   `.pf-sst-kpis` os seis números da folha do PDF. Consulta de contêiner, e não de tela, porque a largura do
- *   conteúdo depende da lateral aberta ou recolhida. */
+ *   conteúdo depende da lateral aberta ou recolhida.
+ * - Quadros de 12/11/2026: `.dsh-kpis.k9` oito ou nove cartões em duas linhas (cinco por linha na tela larga e
+ *   no papel, três na média, dois no celular); `table.pf-svc` "Serviços medidos em mais de uma obra" (o mapa de
+ *   calor sem a rampa de cor: `.strong` a melhor obra da linha, `.tot` a coluna "Todas"). */
 export const PORTFOLIO_STYLE = `
 .pf-mods-2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
 .pf-xscroll { overflow-x: auto; max-width: 100%; }
@@ -105,6 +108,18 @@ table.pf-heat { border-collapse: separate; border-spacing: 2px; font-size: 11.5p
   .dsh .dsh-kpis.k7 .dsh-stat .v { font-size: 22px; gap: 6px; }
 }
 
+/* Oito ou nove cartões (12/11/2026): duas linhas */
+.dsh .dsh-kpis.k9 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container (min-width: 520px) { .dsh .dsh-kpis.k9 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 1000px) { .dsh .dsh-kpis.k9 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* Quadros de 12/11/2026 */
+table.pf-svc td { background: #f5f8fb; color: #1b3348; min-width: 52px; }
+table.pf-svc td.none { background: none; }
+table.pf-svc td.tot { background: #eaf4fa; color: #0a364d; }
+table.pf-svc th.rowh { max-width: 220px; }
+.pf-rowx .dsh-tag { vertical-align: 1px; }
+
 /* Segurança do trabalho */
 .pf-sst-box { container-type: inline-size; }
 .pf-sst-cols { grid-template-columns: minmax(0, 1fr); }
@@ -149,11 +164,21 @@ table.pf-heat { border-collapse: separate; border-spacing: 2px; font-size: 11.5p
 .dsh-paper .pf-nodata { font-size: 9.5px; }
 .dsh-paper .pf-sst > .pf-rowx { grid-template-columns: 74px minmax(0, 1fr) auto; }
 .dsh-paper .pf-rowx.total { padding-top: 5px; }
+/* Folha "Controles de obra e SST" com dois ou três quadros lado a lado: os números descem para a linha de baixo, senão a coluna do gráfico some. */
+.dsh-paper .pf-narrow .pf-rowx { grid-template-columns: 92px minmax(0, 1fr); }
+.dsh-paper .pf-narrow .pf-rowx .meta { grid-column: 2; text-align: left; white-space: normal; }
+.dsh-paper .pf-narrow .pf-rowx .sub2 { grid-column: 2; }
 .dsh-paper .dsh-grid.pf-wrap .muted.txt { font-size: 9.5px; }
 .dsh-paper .dsh-kpis.k7 { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
 .dsh-paper .dsh-kpis.k7 .dsh-kpi { padding: 6px 8px 7px; }
 .dsh-paper .dsh-kpis.k7 .dsh-kpi .v { font-size: 20px; }
 .dsh-paper .dsh-kpis.k7 .dsh-kpi .l em { white-space: nowrap; }
+.dsh-paper .dsh-kpis.k9 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px 7px; }
+.dsh-paper .dsh-kpis.k9 .dsh-kpi { padding: 4px 8px 5px; }
+.dsh-paper .dsh-kpis.k9 .dsh-kpi .v { font-size: 17px; }
+.dsh-paper .dsh-kpis.k9 .dsh-kpi .h { font-size: 8.5px; line-height: 1.25; }
+.dsh-paper table.pf-svc td { min-width: 40px; }
+.dsh-paper .pf-rowx .dsh-tag { font-size: 8.5px; padding: 0 5px; }
 .dsh-paper .pf-sst-kpis .dsh-kpi .v.t-bad { color: #be123c; }
 .dsh-paper .pf-sst-kpis .dsh-kpi .v.t-good { color: #047857; }
 .dsh-paper .pf-sst-kpis .dsh-kpi .v .dl { font-size: 11px; font-weight: 700; }

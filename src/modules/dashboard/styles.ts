@@ -13,7 +13,9 @@
  * - `.dsh-stack` barra empilhada; `.dsh-legend` legenda com `i` como amostra de cor;
  * - `.dsh-callout` (+ `.alert`) aviso curto; `.dsh-tag` (+ `.good .warn .bad .neutral .here`) selo;
  *   `.t-good .t-warn .t-bad` cor do texto;
- * - `.dsh-wag` lista de vagões; `.dsh-marks` lista de marcos; `.dsh-donut` rosca com legenda. */
+ * - `.dsh-wag` lista de vagões; `.dsh-marks` lista de marcos; `.dsh-donut` rosca com legenda;
+ * - `.dsh-xp` painel de papel dos quadros de 12/11/2026 (`extras/panels.tsx`), com os blocos em `.dsh-xp-b`;
+ *   `.dsh-kpis.kw` os sete a nove cartões da folha 1 numa linha só. */
 export const DASHBOARD_STYLE = `
 .dsh, .dsh-paper { color: #0d1f2b; font-variant-numeric: tabular-nums; }
 .dsh-blk { min-width: 0; overflow: hidden; }
@@ -156,6 +158,19 @@ export const DASHBOARD_STYLE = `
 .dsh-paper .dsh-blk .dsh-d { font-size: 9.5px; }
 .dsh-paper .dsh-empty { font-size: 10px; }
 .dsh-paper .dsh-cols-2, .dsh-paper .dsh-cols-3, .dsh-paper .dsh-cols-21 { gap: 8px 12px; }
+.dsh-paper .dsh-kpis.kw { gap: 6px; }
+.dsh-paper .dsh-kpis.kw .dsh-kpi { padding: 6px 7px 7px; }
+.dsh-paper .dsh-kpis.kw .dsh-kpi .l { font-size: 7.5px; letter-spacing: .04em; }
+.dsh-paper .dsh-kpis.kw .dsh-kpi .v { font-size: 18px; white-space: normal; flex-wrap: wrap; gap: 2px 5px; }
+.dsh-paper .dsh-kpis.kw .dsh-kpi .h { font-size: 8.5px; }
+.dsh-paper .dsh-kpis.kw .dsh-tag { font-size: 8px; padding: 0 5px; }
+/* Quadros de 12/11/2026 no papel: um painel por quadro, com os blocos lado a lado. */
+.dsh-xp-b { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 14px; margin-top: 6px; min-height: 0; align-content: start; }
+.dsh-xp .dsh-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.dsh-xp .dsh-mini > div { border-radius: 6px; }
+.dsh-xp .dsh-hb { gap: 4px; }
+.dsh-xp .dsh-grid > div { padding: 2px 0; }
+.dsh-xp .dsh-callout { margin-top: 5px; padding: 4px 8px; }
 .dsh-foot { display: flex; justify-content: space-between; gap: 16px; font-size: 8.5px; color: #59738a; border-top: 1px solid #c4d3df; padding-top: 5px; flex: none; }
 .dsh-foot span:last-child { white-space: nowrap; }
 .dsh-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; font-family: system-ui, sans-serif; }

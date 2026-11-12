@@ -26,18 +26,34 @@ import {
   TerminalityRows,
   WagonRows,
   comparisonModules,
+  hasExtraColumns,
   moduleBoard,
   oneDecimal,
   safetyGrave,
   type ModuleBoard,
 } from './portfolio-charts';
+import {
+  CardOwnersList,
+  ChecklistRows,
+  HeadcountRows,
+  IdpRows,
+  LegalizationRows,
+  ProductionRows,
+  RestrictionRows,
+  ServicesTable,
+} from './extras-charts';
 
 /** O PDF do Dashboard geral (04/11/2026, regra 14 do modelo aprovado): A4 paisagem, no padrão do PDF da aba 0 e
  * do painel do fechamento (logos, faixa azul, rodapé). Cabeçalho "DASHBOARD GERAL DAS OBRAS" com a escala e o
  * período. Folha 1: frase, cartões (até sete, numa linha), comparativo (com as colunas de segurança) e PPC por
  * obra; folha 2: curto prazo (mapa de calor, causas, empreiteiros); folha 3: longo prazo e vagões; folha 4: médio
  * prazo e terminalidade; folha 5: segurança do trabalho (aba 6, modelo aprovado em 06/11/2026, regra 11: seis
- * números e os três blocos da tela). Saem só as folhas dos quadros presentes. Abre numa aba própria com escala,
+ * números e os três blocos da tela). Desde 12/11/2026 (modelo "Dashboards completos e resumo semanal", regra 10):
+ * a folha 1 leva até nove cartões em duas linhas e o comparativo só com as colunas de antes; "QUADRO DE RESTRIÇÕES
+ * E LINHA DE BALANÇO" sai numa folha própria depois da do longo prazo e vagões (os quatro quadros não cabem numa
+ * folha sem cortar); e a folha "CONTROLES DE OBRA E SST" traz a segunda tabela do comparativo (efetivo, dias
+ * lançados, produção medida, cards vencidos, IDP e checklists vencidos), os serviços medidos em mais de uma obra e
+ * os quadros de histograma, produtividade e checklist. Saem só as folhas dos quadros presentes. Abre numa aba própria com escala,
  * período, obras e quadros na URL (os mesmos parâmetros da tela) e chama a impressão do navegador quando os dados
  * chegam, ou passado o limite de espera. */
 
@@ -204,7 +220,7 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
     params.companies
       ? ` · Empreiteiros: ${[...params.companies].join(', ')}${
           ready.withoutCompany.length ? ` (não aparecem em ${ready.withoutCompany.map(work => work.name).join(', ')})` : ''
-        }; longo prazo, PPC geral${shown('seguranca') ? ' e segurança do trabalho' : ''} consideram a obra inteira`
+        }; longo prazo, PPC geral${shown('seguranca') ? ', segurança do trabalho' : ''} e os quadros de controles consideram a obra inteira`
       : ''
   }.${
     data.notStarted.length
@@ -215,7 +231,8 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
   const consolidated =
     shown('curto-prazo') && data.totals.short.percent !== undefined ? `consolidado ${pct(data.totals.short.percent)}` : undefined;
 
-  // As folhas presentes, na ordem: resumo; curto prazo; longo prazo e vagões; médio prazo e terminalidade; segurança.
+  // As folhas presentes, na ordem: resumo; curto prazo; longo prazo e vagões; restrições e balanço; médio prazo e
+  // terminalidade; controles de obra e SST; segurança.
   const sheets: { title: string; aside?: string; body: ReactNode }[] = [];
   sheets.push({
     title: 'RESUMO E COMPARATIVO DAS OBRAS',
@@ -226,7 +243,19 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
           {unavailable.length > 0 && ` Quadros indisponíveis no momento: ${unavailable.join(', ')}.`}
         </p>
         {data.kpis.length > 0 && (
-          <div className={`dsh-kpis${data.kpis.length <= 4 ? ' k4' : data.kpis.length === 5 ? ' k5' : data.kpis.length >= 7 ? ' k7' : ''}`}>
+          <div
+            className={`dsh-kpis${
+              data.kpis.length <= 4
+                ? ' k4'
+                : data.kpis.length === 5
+                  ? ' k5'
+                  : data.kpis.length >= 8
+                    ? ' k9'
+                    : data.kpis.length === 7
+                      ? ' k7'
+                      : ''
+            }`}
+          >
             <KpiCards kpis={data.kpis} paper />
           </div>
         )}
@@ -234,7 +263,7 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
           <div className="dsh-panel">
             <h3>Comparativo das obras</h3>
             {data.rows.length ? (
-              <ComparisonTable data={data} modules={columns} variant="paper" />
+              <ComparisonTable data={data} modules={columns} variant="paper" subset="base" />
             ) : (
               <p className="dsh-empty">Nenhuma obra no período.</p>
             )}
@@ -309,6 +338,45 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
       ),
     });
   }
+  if (shown('restricoes') || shown('balanco')) {
+    const both = shown('restricoes') && shown('balanco');
+    sheets.push({
+      title: both
+        ? 'QUADRO DE RESTRIÇÕES E LINHA DE BALANÇO'
+        : shown('restricoes')
+          ? 'QUADRO DE RESTRIÇÕES'
+          : 'LINHA DE BALANÇO E LEGALIZAÇÃO',
+      aside: `retrato em ${end}${params.companies ? ' · obra inteira, sem recorte de empreiteiro' : ''}`,
+      body: (
+        <div className="dsh-row" style={{ gridTemplateColumns: both ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr' }}>
+          {shown('balanco') && (
+            <div className="dsh-panel">
+              <h3>Linha de Balanço · IDP na última medição fechada</h3>
+              <p className="dsh-desc">Real × planejado pela linha de base. 1,00 ou mais em dia; 0,90 a 0,99 atenção; abaixo atrasado.</p>
+              <IdpRows rows={data.rows} />
+              <p className="dsh-desc" style={{ marginTop: 10, fontWeight: 700, color: '#1f2937' }}>
+                Gantt de legalização · marcos, atrasadas em {end} e próximo marco
+              </p>
+              <LegalizationRows rows={data.rows} />
+              <NoDataNote module="balanco" data={data} />
+            </div>
+          )}
+          {shown('restricoes') && (
+            <div className="dsh-panel">
+              <h3>Quadro de Restrições · cards em aberto por coluna</h3>
+              <p className="dsh-desc">Vencido = passou da entrega sem concluir; pausado conta como aberto. Embaixo, o fluxo do período.</p>
+              <RestrictionRows rows={data.rows} total={data.totals.restrictions} />
+              <NoDataNote module="restricoes" data={data} />
+              <p className="dsh-desc" style={{ marginTop: 10, fontWeight: 700, color: '#1f2937' }}>
+                Responsáveis com mais cards vencidos, somando as obras
+              </p>
+              <CardOwnersList owners={data.cardOwners} />
+            </div>
+          )}
+        </div>
+      ),
+    });
+  }
   if (shown('medio-prazo') || shown('terminalidade')) {
     const both = shown('medio-prazo') && shown('terminalidade');
     sheets.push({
@@ -339,6 +407,71 @@ function Sheets({ ready, params }: { ready: PortfolioReady; params: PortfolioPar
               <ResponsiblesList responsibles={data.responsibles} />
             </div>
           )}
+        </div>
+      ),
+    });
+  }
+  const controls = (['histograma', 'produtividade', 'checklist'] as const).filter(shown);
+  if (controls.length || hasExtraColumns(columns)) {
+    const table = hasExtraColumns(columns) && data.rows.length > 0;
+    const services = shown('produtividade');
+    sheets.push({
+      title: 'CONTROLES DE OBRA E SST',
+      aside: `fluxo no período · checklists de hoje${params.companies ? ' · obra inteira, sem recorte de empreiteiro' : ''}`,
+      body: (
+        <div
+          className="dsh-row"
+          style={{
+            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+            gridTemplateRows: table || services ? 'auto minmax(0, 1fr)' : undefined,
+          }}
+        >
+          {table && (
+            <div className="dsh-panel" style={{ gridColumn: services ? 'span 4' : '1 / -1' }}>
+              <h3>Comparativo das obras · controles, restrições e balanço</h3>
+              <p className="dsh-desc">
+                Dias lançados: dias úteis com lançamento sobre os esperados (90% ou mais em verde, 70% a 89% em âmbar, abaixo em vermelho).
+              </p>
+              <ComparisonTable data={data} modules={columns} variant="paper" subset="extras" />
+            </div>
+          )}
+          {services && (
+            <div className="dsh-panel" style={{ gridColumn: table ? 'span 2' : '1 / -1' }}>
+              <h3>Serviços medidos em mais de uma obra</h3>
+              <p className="dsh-desc">Produção por homem-dia no período; mesmo nome (sem acento) e mesma unidade.</p>
+              <ServicesTable services={data.services} />
+            </div>
+          )}
+          {controls.map(module => (
+            <div
+              key={module}
+              className={`dsh-panel${controls.length > 1 ? ' pf-narrow' : ''}`}
+              style={{ gridColumn: `span ${6 / controls.length}` }}
+            >
+              {module === 'histograma' && (
+                <>
+                  <h3>Histograma · efetivo médio por dia útil</h3>
+                  <p className="dsh-desc">Próprio × empreiteiros. À direita, dias lançados; embaixo, os dias que faltaram.</p>
+                  <HeadcountRows rows={data.rows} total={data.totals.headcount} />
+                </>
+              )}
+              {module === 'produtividade' && (
+                <>
+                  <h3>Produtividade · medido × a medir</h3>
+                  <p className="dsh-desc">Lançamentos e homens-dia (Hd) do período. À direita, dias lançados.</p>
+                  <ProductionRows rows={data.rows} total={data.totals.production} />
+                </>
+              )}
+              {module === 'checklist' && (
+                <>
+                  <h3>Checklist de equipamentos · hoje e no período</h3>
+                  <p className="dsh-desc">Em dia × vencidos hoje; inspeções e itens não conformes (NC) do período.</p>
+                  <ChecklistRows rows={data.rows} total={data.totals.checklist} />
+                </>
+              )}
+              <NoDataNote module={module} data={data} />
+            </div>
+          ))}
         </div>
       ),
     });

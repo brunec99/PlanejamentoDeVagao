@@ -1,6 +1,7 @@
 import { formatDate } from '@/shared/format';
 import { dayMonth, monthShort, pct, PORTFOLIO_MODULES, signedDays, signedPoints, type PortfolioModule } from '../model';
 import { scaleLabel } from '../period';
+import { checklistOnTime, coverageText, idpLabel, missingText } from './extras';
 import type { PortfolioData, PortfolioRow, PortfolioWork } from './types';
 
 /** O Dashboard geral em texto para a Claudia (08/11/2026, ferramenta `panorama_obras`): compacto, em pt-BR, com os
@@ -8,7 +9,10 @@ import type { PortfolioData, PortfolioRow, PortfolioWork } from './types';
  * Ordem: período, quadros, a frase e os cartões do topo; uma linha por obra com os números de cada quadro mostrado
  * ("sem dado" quando a obra não tem o módulo no período, "erro" quando a leitura falhou; quadro escondido não
  * aparece); depois as causas somando as obras (até 8, como o PDF), os empreiteiros em mais de uma obra (até 10),
- * os responsáveis terceiros e os tipos de apontamento de segurança (os que o geral calcula: até 6 cada).
+ * os responsáveis terceiros e os tipos de apontamento de segurança (os que o geral calcula: até 6 cada). Desde
+ * 12/11/2026, cada obra traz também Linha de Balanço e legalização (IDP, sem reais), Quadro de Restrições,
+ * histograma, produtividade e checklist, e o fim do texto lista os serviços medidos em mais de uma obra e os
+ * responsáveis com mais cards vencidos.
  *
  * Se o texto completo passar do limite, sai a versão curta (sem os detalhes secundários de cada quadro e com as
  * listas menores); se ainda passar, as últimas obras saem com o aviso de quantas ficaram de fora. Puro. */
@@ -29,6 +33,7 @@ export interface PortfolioTextExtras {
 const integer = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const int = (value: number) => integer.format(Math.round(value));
 const plural = (count: number, one: string, many: string) => `${int(count)} ${count === 1 ? one : many}`;
+const rate = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const label = (module: PortfolioModule) => PORTFOLIO_MODULES.find(m => m.id === module)!.label;
 const workName = (work: PortfolioWork) => (work.code ? `${work.name} (${work.code})` : work.name);
 const names = (works: readonly PortfolioWork[]) => works.map(workName).join(', ');
@@ -132,6 +137,72 @@ function safetyText(row: PortfolioRow, compact: boolean): string {
   return parts.join(', ');
 }
 
+function balanceText(row: PortfolioRow, compact: boolean): string {
+  const { lob, legalization } = row.balance!;
+  const parts: string[] = [];
+  if (lob) {
+    if (lob.idp === undefined) parts.push(lob.status === 'no-measurement' ? 'IDP — (sem medição fechada)' : 'IDP — (nada planejado)');
+    else {
+      const extra = lob.real !== undefined && lob.planned !== undefined ? `real × plan. ${pct(lob.real)} × ${pct(lob.planned)}` : '';
+      const when = !compact && lob.measurementDate ? `medição de ${formatDate(lob.measurementDate)}` : '';
+      const weight = compact ? '' : lob.weighting === 'cost' ? 'peso por custo' : 'peso por duração';
+      parts.push(
+        `IDP ${idpLabel(lob.idp).replace(' · ', ' (')})${[extra, when, weight]
+          .filter(Boolean)
+          .map(t => `, ${t}`)
+          .join('')}`,
+      );
+    }
+  }
+  if (legalization) {
+    const l = legalization;
+    parts.push(
+      `legalização ${l.milestones.done}/${l.milestones.total} marcos, ${int(l.late)} ${l.late === 1 ? 'atrasada' : 'atrasadas'}${
+        !compact && l.next ? `, próximo marco ${l.next.name} em ${formatDate(l.next.date)}` : ''
+      }`,
+    );
+  }
+  return parts.join('; ');
+}
+
+function restrictionsText(row: PortfolioRow, compact: boolean): string {
+  const r = row.restrictions!;
+  const parts = [`em aberto ${int(r.open)}`, `vencidos ${int(r.overdue)}`, `começo atrasado ${int(r.startOverdue)}`];
+  if (!compact) parts.push(`concluídos / criados no período ${int(r.doneInPeriod)} / ${int(r.createdInPeriod)}`);
+  return parts.join(', ');
+}
+
+function headcountText(row: PortfolioRow, compact: boolean): string {
+  const h = row.headcount!;
+  const parts = [`efetivo médio ${int(h.dailyAverage)} por dia útil`, `dias lançados ${coverageText(h.coverage)}`];
+  if (!compact) {
+    parts.push(`${pct(h.contractorShare * 100)} empreiteiros`, `pico ${int(h.peak)}${h.peakDay ? ` em ${dayMonth(h.peakDay)}` : ''}`);
+    if (h.coverage.missingCount) parts.push(missingText(h.coverage));
+  }
+  return parts.join(', ');
+}
+
+function productionText(row: PortfolioRow, compact: boolean): string {
+  const p = row.production!;
+  const parts = [
+    `dias lançados ${coverageText(p.coverage)}`,
+    `produção medida ${p.measuredShare === undefined ? '—' : pct(p.measuredShare * 100)}`,
+  ];
+  if (!compact) {
+    parts.push(`${int(p.entries)} lançamentos, ${int(p.manDays)} homens-dia`);
+    if (p.coverage.missingCount) parts.push(missingText(p.coverage));
+  }
+  return parts.join(', ');
+}
+
+function checklistText(row: PortfolioRow, compact: boolean): string {
+  const c = row.checklist!;
+  const parts = [`vencidos hoje ${int(c.pending)} de ${int(c.due)} (${int(checklistOnTime(c))} em dia)`];
+  if (!compact) parts.push(plural(c.equipment, 'equipamento', 'equipamentos'), `${int(c.runsInPeriod)} inspeções no período`);
+  parts.push(`não conformidades no período ${int(c.nonConformities)}`);
+  return parts.join(', ');
+}
+
 function moduleText(row: PortfolioRow, module: PortfolioModule, end: string, compact: boolean): string | undefined {
   const status = row.status[module];
   if (status.kind === 'hidden') return undefined;
@@ -151,7 +222,17 @@ function moduleText(row: PortfolioRow, module: PortfolioModule, end: string, com
               ? terminalityText(row, compact)
               : module === 'seguranca' && row.safety
                 ? safetyText(row, compact)
-                : undefined;
+                : module === 'balanco' && row.balance
+                  ? balanceText(row, compact)
+                  : module === 'restricoes' && row.restrictions
+                    ? restrictionsText(row, compact)
+                    : module === 'histograma' && row.headcount
+                      ? headcountText(row, compact)
+                      : module === 'produtividade' && row.production
+                        ? productionText(row, compact)
+                        : module === 'checklist' && row.checklist
+                          ? checklistText(row, compact)
+                          : undefined;
   return `${name}: ${body ?? 'sem dado'}`;
 }
 
@@ -244,6 +325,29 @@ function compose(data: PortfolioData & PortfolioTextExtras, compact: boolean, wo
     for (const row of data.safetyTypes.rows.slice(0, compact ? SHORT_LISTS : SAFETY_TYPES_SHOWN))
       out.push(
         `- ${row.label}: ${int(row.total)}${compact ? '' : ` (${row.byWork.map(cell => `${cell.work.code || cell.work.name} ${int(cell.count)}`).join(', ')})`}`,
+      );
+  }
+
+  if (shown.includes('produtividade') && data.services.rows.length) {
+    const byId = new Map(data.services.works.map(work => [work.id, work]));
+    out.push('');
+    out.push('Serviços medidos em mais de uma obra (produção por homem-dia no período; mesmo nome e mesma unidade):');
+    for (const row of data.services.rows.slice(0, compact ? SHORT_LISTS : undefined)) {
+      const works = Object.entries(row.byWork)
+        .map(([id, cell]) => `${byId.get(id)?.code || byId.get(id)?.name || id} ${rate(cell.perManDay)}`)
+        .join(', ');
+      out.push(`- ${row.name} (${row.unit}/Hd): ${rate(row.perManDay)} somando as obras${compact ? '' : `; ${works}`}`);
+    }
+  }
+
+  if (shown.includes('restricoes') && data.cardOwners.rows.length) {
+    out.push('');
+    out.push('Responsáveis com mais cards vencidos no Quadro de Restrições, somando as obras:');
+    for (const row of data.cardOwners.rows.slice(0, compact ? SHORT_LISTS : undefined))
+      out.push(
+        `- ${row.name}: ${int(row.overdue)} vencidos de ${int(row.open)} em aberto${
+          compact ? '' : ` (${row.byWork.map(cell => `${cell.work.code || cell.work.name} ${int(cell.overdue)}`).join(', ')})`
+        }`,
       );
   }
   return out.join('\n');

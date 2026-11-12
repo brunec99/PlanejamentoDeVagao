@@ -350,6 +350,9 @@ interface ProfileRow {
   /** Técnico de segurança do trabalho (migração 0040); ausente em banco sem ela. Gravado só pela rota
    * /api/seguranca/tst: o commit_planning não conhece a coluna e não a altera. */
   tst?: boolean | null;
+  /** Resumo semanal por e-mail (migração 0050); ausente em banco sem ela. Gravado só pela rota
+   * /api/dashboard/resumo-semanal: o commit_planning não conhece a coluna e não a altera. */
+  weekly_summary?: boolean | null;
 }
 
 export function rowsToPlanningData(rows: Rows): PlanningData {
@@ -615,6 +618,7 @@ export function rowsToPlanningData(rows: Rows): PlanningData {
       workIds: r.work_ids,
       modules: r.module_access ?? [],
       ...(r.tst ? { tst: true } : {}),
+      ...(r.weekly_summary ? { weeklySummary: true } : {}),
     })),
     history: rows.history_events.map((r): HistoryEvent => ({
       id: r.id,

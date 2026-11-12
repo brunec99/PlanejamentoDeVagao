@@ -2,6 +2,7 @@ import type { LocalDate } from '@/domain/entities';
 import type { LongTermPlanDocument } from '@/domain/long-term-plan';
 import type { SafetyItem, SafetyType } from '@/domain/safety';
 import type { TerminalityData } from '@/domain/terminality';
+import type { ChecklistBlock, HeadcountBlock, LegalizationBlock, LobBlock, ProductionBlock, RestrictionsBlock } from '../extras/types';
 import type { KpiCard, PortfolioModule, Segment, Tone } from '../model';
 import type { DashboardPeriod, PeriodContext, PeriodSelection } from '../period';
 import type { BucketPpc } from '../period-views';
@@ -111,6 +112,13 @@ export interface PortfolioSafety {
   byType: { key: string; label: string; count: number }[];
 }
 
+/** Linha de Balanço e legalização (1.1) de uma obra (12/11/2026, regra 7): o IDP vem da rota dos quadros novos
+ * e a legalização do planejamento já carregado; o quadro existe com qualquer um dos dois. */
+export interface PortfolioBalance {
+  lob?: LobBlock;
+  legalization?: LegalizationBlock;
+}
+
 /** Uma linha do comparativo (regra 10). Bloco ausente: ver `status` daquele módulo. */
 export interface PortfolioRow {
   work: PortfolioWork;
@@ -126,6 +134,13 @@ export interface PortfolioRow {
   medium?: PortfolioMedium;
   terminality?: PortfolioTerminality;
   safety?: PortfolioSafety;
+  /** Quadros de 12/11/2026 (modelo "Dashboards completos e resumo semanal"), já calculados para o período pela
+   * rota `GET /api/dashboard/extras`; os tipos são os do contrato `../extras/types`. */
+  balance?: PortfolioBalance;
+  restrictions?: RestrictionsBlock;
+  headcount?: HeadcountBlock;
+  production?: ProductionBlock;
+  checklist?: ChecklistBlock;
 }
 
 export interface PortfolioTotals {
@@ -167,6 +182,84 @@ export interface PortfolioTotals {
     /** Soma das obras, na ordem de `SAFETY_CONSEQUENCES`. */
     byConsequence: number[];
   };
+  /** Histograma (2.2): o efetivo médio das obras somado e os dias úteis lançados sobre os esperados. */
+  headcount: {
+    works: number;
+    /** Soma do efetivo médio por dia útil de cada obra. */
+    dailyAverage: number;
+    manDays: number;
+    /** Homens-dia de empreiteiro ÷ homens-dia, somando as obras (0–1); ausente sem homens-dia. */
+    contractorShare?: number;
+    launched: number;
+    expected: number;
+    /** Obras que lançaram em todos os dias úteis esperados (e tinham algum dia esperado). */
+    worksComplete: number;
+  };
+  /** Produtividade (2.3): a parcela medida é ponderada pelas linhas (Σ medidas ÷ Σ linhas). */
+  production: {
+    works: number;
+    entries: number;
+    measured: number;
+    manDays: number;
+    measuredShare?: number;
+    launched: number;
+    expected: number;
+    worksComplete: number;
+  };
+  /** Quadro de Restrições (1.4). */
+  restrictions: {
+    works: number;
+    open: number;
+    overdue: number;
+    /** Obras com algum card vencido. */
+    overdueWorks: number;
+    startOverdue: number;
+    doneInPeriod: number;
+    createdInPeriod: number;
+  };
+  /** Linha de Balanço e legalização (1.1): o IDP não se soma entre obras. */
+  balance: {
+    works: number;
+    /** Obras com IDP calculado e, delas, quantas abaixo de 1,00. */
+    withIdp: number;
+    behind: number;
+    worst?: { work: PortfolioWork; idp: number };
+    /** Obras com Gantt de legalização e as tarefas atrasadas somadas. */
+    legalizationWorks: number;
+    legalizationLate: number;
+  };
+  /** Checklist de equipamentos (3.2): devidos e vencidos são os de hoje. */
+  checklist: {
+    works: number;
+    equipment: number;
+    due: number;
+    pending: number;
+    /** Obras com algum checklist vencido. */
+    pendingWorks: number;
+    runsInPeriod: number;
+    runsWithNonConformity: number;
+    nonConformities: number;
+  };
+}
+
+/** "Serviços medidos em mais de uma obra" (regra 5): o mesmo serviço (nome sem acento nem caixa) na mesma
+ * unidade, com a produção por homem-dia de cada obra lado a lado. */
+export interface PortfolioServices {
+  /** As obras que aparecem em alguma linha, na ordem do comparativo. */
+  works: PortfolioWork[];
+  rows: {
+    key: string;
+    name: string;
+    unit: string;
+    /** Produção total ÷ homens-dia somando as obras. */
+    perManDay: number;
+    manDays: number;
+    byWork: Record<string, { perManDay: number; manDays: number; quantity: number }>;
+  }[];
+}
+/** Responsáveis com mais cards vencidos no Quadro de Restrições, somando as obras (nome sem acento nem caixa). */
+export interface PortfolioCardOwners {
+  rows: { name: string; overdue: number; open: number; byWork: { work: PortfolioWork; overdue: number; open: number }[] }[];
 }
 
 export interface PortfolioHeat {
@@ -214,7 +307,7 @@ export interface PortfolioData {
   /** Obras escolhidas que só começam depois do período (citadas na linha de escopo). */
   notStarted: PortfolioWork[];
   totals: PortfolioTotals;
-  /** Até 7 cartões (regra 13; o 7º, de segurança, desde 06/11/2026), já respeitando quadros escondidos e módulos sem acesso. */
+  /** Até 9 cartões (regra 13; o 7º, de segurança, desde 06/11/2026; efetivo e cards vencidos desde 12/11/2026), já respeitando quadros escondidos e módulos sem acesso. */
   kpis: KpiCard[];
   sentence: Segment[];
   heat: PortfolioHeat;
@@ -222,6 +315,8 @@ export interface PortfolioData {
   companies: PortfolioCompanies;
   responsibles: PortfolioResponsibles;
   safetyTypes: PortfolioSafetyTypes;
+  services: PortfolioServices;
+  cardOwners: PortfolioCardOwners;
   /** Por módulo, as obras do período sem dado dele ("Sem plano de longo prazo: …"). */
   noData: Record<PortfolioModule, PortfolioWork[]>;
 }
@@ -251,7 +346,7 @@ export interface PortfolioReady {
   companyOptions: { value: string; count: number }[];
   /** Com recorte de empreiteiro: as obras escolhidas onde nenhum dos empreiteiros aparece (saem das linhas). */
   withoutCompany: PortfolioWork[];
-  /** Módulos cuja leitura (rota do Dashboard geral) ainda não chegou ou falhou. */
+  /** Módulos cuja leitura (rotas do Dashboard geral) ainda não chegou ou falhou. */
   loading: PortfolioModule[];
   unavailable: { module: PortfolioModule; message: string }[];
 }

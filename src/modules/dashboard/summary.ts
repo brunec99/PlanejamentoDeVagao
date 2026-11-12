@@ -1,12 +1,19 @@
 import type { KpiCard, PanelSummary, Segment } from './model';
 
-/** O resumo do topo da aba 0 (regra 10 do modelo): uma frase e até seis cartões, só dos módulos presentes.
+/** O resumo do topo da aba 0 (regra 10 do modelo): uma frase e os cartões, só dos módulos presentes.
  * Cada quadro entrega a sua parte (`PanelSummary`); aqui só se ordena e se junta. A ordem dos cartões é a
  * do modelo aprovado (PPC, avanço físico, takt vencido, tarefas atrasadas, pendências abertas, restrições
- * vencidas); a da frase segue a leitura da obra (semana, avanço, frentes, plano do mês, terminalidade). */
-export type SummaryKey = 'curto' | 'longo' | 'takt' | 'medio' | 'terminalidade' | 'restricoes';
-const KPI_ORDER: SummaryKey[] = ['curto', 'longo', 'takt', 'medio', 'terminalidade', 'restricoes'];
-const SENTENCE_ORDER: SummaryKey[] = ['curto', 'longo', 'takt', 'restricoes', 'medio', 'terminalidade'];
+ * vencidas); a da frase segue a leitura da obra (semana, avanço, frentes, plano do mês, terminalidade).
+ *
+ * 12/11/2026 (modelo "Dashboards completos e resumo semanal", regra 9): até nove cartões, em duas linhas.
+ * Entram "Efetivo médio" (`efetivo`, aba 2.2), "Cards vencidos" (`cards`, aba 1.4) e "Segurança em aberto"
+ * (`seguranca`, aba 3.1), depois dos seis de antes; a frase ganha só a oração do efetivo, no fim.
+ * `restricoes` continua sendo o cartão das restrições dos vagões; o do Kanban é `cards`. */
+export type SummaryKey = 'curto' | 'longo' | 'takt' | 'medio' | 'terminalidade' | 'restricoes' | 'efetivo' | 'cards' | 'seguranca';
+const KPI_ORDER: SummaryKey[] = ['curto', 'longo', 'takt', 'medio', 'terminalidade', 'restricoes', 'efetivo', 'cards', 'seguranca'];
+const SENTENCE_ORDER: SummaryKey[] = ['curto', 'longo', 'takt', 'restricoes', 'medio', 'terminalidade', 'efetivo'];
+/** O máximo de cartões do topo. */
+export const MAX_KPIS = KPI_ORDER.length;
 
 export const EMPTY_SUMMARY = 'Nenhum módulo com dados nesta obra até a semana analisada.';
 

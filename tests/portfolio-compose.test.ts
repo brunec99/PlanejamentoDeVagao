@@ -299,11 +299,16 @@ test('sem período escolhido: Mensal no mês da semana apurada mais recente, com
   assert.equal(composed.totals.short.planned, 90);
   assert.equal(composed.totals.short.fulfilled, 61);
   // Todos os quadros: ninguém escondido, a Aurora sem longo prazo, sem vagões, sem médio prazo e sem terminalidade.
-  assert.deepEqual(composed.shown, ['longo-prazo', 'vagoes', 'medio-prazo', 'curto-prazo', 'terminalidade', 'seguranca']);
+  // Desde 12/11/2026 são onze quadros; os cinco novos ficam escondidos aqui porque o teste não passa `extras`.
+  assert.deepEqual(
+    composed.shown,
+    PORTFOLIO_MODULES.map(m => m.id),
+  );
+  assert.equal(composed.shown.length, 11);
   const aurora = composed.rows.find(row => row.work.id === 'obra-2')!;
   assert.deepEqual(
     PORTFOLIO_MODULES.map(m => aurora.status[m.id].kind),
-    ['absent', 'absent', 'absent', 'ready', 'absent', 'ready'],
+    ['absent', 'hidden', 'absent', 'absent', 'ready', 'hidden', 'absent', 'hidden', 'hidden', 'ready', 'hidden'],
   );
   assert.ok(horizonte.longTerm && horizonte.wagons && horizonte.medium && horizonte.terminality && horizonte.safety);
   assert.equal(horizonte.medium.late, 1);

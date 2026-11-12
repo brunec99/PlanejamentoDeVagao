@@ -70,6 +70,11 @@ interface Blocks {
   medium?: PortfolioMedium;
   terminality?: PortfolioTerminality;
   safety?: PortfolioSafety;
+  balance?: PortfolioRow['balance'];
+  restrictions?: PortfolioRow['restrictions'];
+  headcount?: PortfolioRow['headcount'];
+  production?: PortfolioRow['production'];
+  checklist?: PortfolioRow['checklist'];
 }
 /** Uma linha do comparativo montada à mão: o módulo presente fica `ready`, o ausente `absent`. */
 function row(w: PortfolioWork, blocks: Blocks): PortfolioRow {
@@ -82,11 +87,16 @@ function row(w: PortfolioWork, blocks: Blocks): PortfolioRow {
     stateLabel: label,
     status: {
       'longo-prazo': cell(blocks.longTerm),
+      balanco: cell(blocks.balance),
       vagoes: cell(blocks.wagons),
       'medio-prazo': cell(blocks.medium),
       'curto-prazo': cell(blocks.short),
+      restricoes: cell(blocks.restrictions),
       terminalidade: cell(blocks.terminality),
+      histograma: cell(blocks.headcount),
+      produtividade: cell(blocks.production),
       seguranca: cell(blocks.safety),
+      checklist: cell(blocks.checklist),
     },
   };
 }
@@ -691,8 +701,13 @@ test('extract: estado de cada módulo e o motivo do "—"', () => {
     vagoes: { kind: 'hidden' },
     'medio-prazo': { kind: 'error', message: 'Falhou.' },
     terminalidade: { kind: 'absent', reason: 'A terminalidade não está disponível neste ambiente.' },
-    // Sem `safety` na entrada (chamada antiga), a segurança fica escondida.
+    // Sem `safety` na entrada (chamada antiga), a segurança fica escondida; o mesmo vale para os quadros de 12/11/2026.
     seguranca: { kind: 'hidden' },
+    balanco: { kind: 'hidden' },
+    restricoes: { kind: 'hidden' },
+    histograma: { kind: 'hidden' },
+    produtividade: { kind: 'hidden' },
+    checklist: { kind: 'hidden' },
   });
   assert.equal(result.firstWeek, undefined);
   assert.equal(result.short, undefined);

@@ -18,6 +18,7 @@ import {
   floorKey,
   isWeekly,
   moduleInfo,
+  periodName,
   plural,
   printDashboardPath,
   weekNumberOf,
@@ -26,19 +27,32 @@ import {
   type PanelState,
   type Segment,
 } from './model';
-import { useDashboard, type DashboardPanels, type DashboardReady } from './use-dashboard-data';
+import { PANEL_MODULE, PANEL_ORDER, useDashboard, type DashboardPanels, type DashboardReady } from './use-dashboard-data';
 import { LongTermPanel } from './panels/long-term';
 import { WagonsPanel } from './panels/wagons';
 import { MediumTermPanel } from './panels/medium-term';
 import { ShortTermPanel } from './panels/short-term';
 import { TerminalityPanel } from './panels/terminality';
+import { coverageValue, idpView, periodIn } from './extras/extras-summary';
+import {
+  BalancePanel,
+  ChecklistPanel,
+  HeadcountPanel,
+  ProductionPanel,
+  RestrictionsPanel,
+  SafetyPanel,
+  type ExtrasPanelContext,
+} from './extras/panels';
 
 /** Aba 0, Dashboard da obra (04/11/2026, modelo aprovado): os cinco níveis numa página, até a semana
  * analisada, só com os módulos que a pessoa pode abrir e que têm dado nesta obra. Filtros no topo (escala e
  * período, empreiteiro, pavimento, quadros), a frase e os cartões do resumo, um quadro por módulo com o link
  * para a aba de origem, e "Gerar PDF", que abre a impressão com os mesmos filtros. Nada aqui se edita.
  * Escalas de tempo (04/11/2026, segundo modelo aprovado): "Semana analisada" virou escala (semanal, mensal,
- * trimestral, anual, personalizado) e período; a escala semanal mostra o que a aba mostrava antes. */
+ * trimestral, anual, personalizado) e período; a escala semanal mostra o que a aba mostrava antes.
+ * 12/11/2026 (modelo "Dashboards completos e resumo semanal"): onze quadros, na ordem do menu. Os seis novos
+ * (Linha de Balanço e legalização, Quadro de Restrições, histograma, produtividade, segurança e checklist)
+ * ficam em `extras/panels.tsx` e não seguem o recorte de empreiteiro nem de pavimento. */
 
 export function Text({ segments }: { segments: Segment[] }) {
   return (
@@ -72,14 +86,16 @@ export function KpiCards({ kpis, paper = false }: { kpis: KpiCard[]; paper?: boo
   );
 }
 
-const MODULE_ORDER: (keyof DashboardPanels)[] = ['longTerm', 'wagons', 'medium', 'short', 'terminality'];
-const MODULE_OF: Record<keyof DashboardPanels, DashboardModule> = {
-  longTerm: 'longo-prazo',
-  wagons: 'vagoes',
-  medium: 'medio-prazo',
-  short: 'curto-prazo',
-  terminality: 'terminalidade',
-};
+const MODULE_ORDER = PANEL_ORDER;
+const MODULE_OF = PANEL_MODULE;
+
+/** O que os quadros novos precisam saber do período e do recorte (que eles não seguem). */
+export const extrasContext = (dash: Pick<DashboardReady, 'ref' | 'filters'>): ExtrasPanelContext => ({
+  periodIn: periodIn(dash.ref),
+  periodOf: dash.ref.period.of,
+  end: dash.ref.weekEnd,
+  filtered: !!dash.filters.companies || !!dash.filters.floors,
+});
 
 /** A linha abaixo do título de cada quadro: de onde vem o dado e em que estado está. */
 function subtitleOf(key: keyof DashboardPanels, panels: DashboardPanels, dash: DashboardReady): string {
@@ -139,11 +155,62 @@ function subtitleOf(key: keyof DashboardPanels, panels: DashboardPanels, dash: D
       if (!d) return '';
       return `${plural(d.total, 'pendência registrada', 'pendências registradas')} até ${dayMonth(dash.ref.weekEnd)} · ${d.open} abertas${d.filtered ? ' · com recorte' : ''}`;
     }
+    case 'balance': {
+      const d = panels.balance.status === 'ready' ? panels.balance.data : undefined;
+      if (!d) return '';
+      const idp = d.lob ? idpView(d.lob) : undefined;
+      const parts = [
+        idp ? `IDP ${idp.value} (${idp.label})` : d.lob ? 'sem IDP até a data' : '',
+        d.legalization
+          ? `legalização: ${d.legalization.milestones.done} de ${plural(d.legalization.milestones.total, 'marco', 'marcos')}`
+          : '',
+      ].filter(Boolean);
+      return `em ${dayMonth(dash.ref.weekEnd)} · ${parts.join(' · ')}`;
+    }
+    case 'restrictions': {
+      const d = panels.restrictions.status === 'ready' ? panels.restrictions.data : undefined;
+      if (!d) return '';
+      return `em ${dayMonth(d.asOf)} · ${plural(d.open, 'card em aberto', 'cards em aberto')} · ${plural(d.overdue, 'vencido', 'vencidos')}`;
+    }
+    case 'headcount': {
+      const d = panels.headcount.status === 'ready' ? panels.headcount.data : undefined;
+      if (!d) return '';
+      return `${periodIn(dash.ref)} (${periodName(dash.ref)}) · ${plural(d.manDays, 'homem-dia', 'homens-dia')} · ${coverageValue(d.coverage)} dias úteis lançados`;
+    }
+    case 'production': {
+      const d = panels.production.status === 'ready' ? panels.production.data : undefined;
+      if (!d) return '';
+      return `${periodIn(dash.ref)} (${periodName(dash.ref)}) · ${plural(d.entries, 'lançamento', 'lançamentos')} · ${coverageValue(d.coverage)} dias úteis lançados`;
+    }
+    case 'safety': {
+      const d = panels.safety.status === 'ready' ? panels.safety.data : undefined;
+      if (!d) return '';
+      return `${periodIn(dash.ref)} (${periodName(dash.ref)}) · ${plural(d.opened, 'apontamento feito', 'apontamentos feitos')} · ${d.open} em aberto em ${dayMonth(dash.ref.weekEnd)}`;
+    }
+    case 'checklist': {
+      const d = panels.checklist.status === 'ready' ? panels.checklist.data : undefined;
+      if (!d) return '';
+      return `${plural(d.equipment, 'equipamento ativo', 'equipamentos ativos')} · vencidos de hoje · inspeções ${periodIn(dash.ref)}`;
+    }
   }
 }
 
-function panelBody(key: keyof DashboardPanels, panels: DashboardPanels, workId: string): ReactNode {
+function panelBody(key: keyof DashboardPanels, panels: DashboardPanels, workId: string, ctx: ExtrasPanelContext): ReactNode {
   switch (key) {
+    case 'balance':
+      return panels.balance.status === 'ready' ? <BalancePanel data={panels.balance.data} variant="screen" ctx={ctx} /> : null;
+    case 'restrictions':
+      return panels.restrictions.status === 'ready' ? (
+        <RestrictionsPanel data={panels.restrictions.data} variant="screen" ctx={ctx} />
+      ) : null;
+    case 'headcount':
+      return panels.headcount.status === 'ready' ? <HeadcountPanel data={panels.headcount.data} variant="screen" ctx={ctx} /> : null;
+    case 'production':
+      return panels.production.status === 'ready' ? <ProductionPanel data={panels.production.data} variant="screen" ctx={ctx} /> : null;
+    case 'safety':
+      return panels.safety.status === 'ready' ? <SafetyPanel data={panels.safety.data} variant="screen" ctx={ctx} /> : null;
+    case 'checklist':
+      return panels.checklist.status === 'ready' ? <ChecklistPanel data={panels.checklist.data} variant="screen" ctx={ctx} /> : null;
     case 'longTerm':
       return panels.longTerm.status === 'ready' ? <LongTermPanel data={panels.longTerm.data} variant="screen" workId={workId} /> : null;
     case 'wagons':
@@ -187,7 +254,7 @@ function ModuleCard({
         </h2>
         {/* O tour marca só o primeiro quadro; `TourMark` escreve o alvo literal que o teste dos tours procura. */}
         <TourMark tourId="dash-abrir-aba" when={first}>
-          <Link href={workPath(workId, module)}>Abrir aba {info.number} →</Link>
+          <Link href={workPath(workId, info.path)}>Abrir aba {info.number} →</Link>
         </TourMark>
       </div>
       {state.status === 'loading' && (
@@ -216,7 +283,9 @@ const HELP = (
     <p>
       <strong>No período e no sábado final.</strong> PPC, causas, pendências abertas e resolvidas e o avanço físico do período somam o que
       aconteceu dentro dele (o PPC soma as linhas das semanas apuradas, não faz média). Status dos vagões, restrições vencidas, tarefas
-      atrasadas e pendências em aberto são o retrato do sábado final.
+      atrasadas e pendências em aberto são o retrato do sábado final. Nos quadros de 12/11/2026 vale a mesma regra: efetivo, produtividade,
+      apontamentos de segurança, cards concluídos e inspeções de checklist somam o período; cards em aberto e vencidos, IDP e legalização
+      são o retrato da data. Os checklists vencidos são sempre os de hoje.
     </p>
     <p>
       <strong>Só o que existe nesta obra.</strong> Aparecem os módulos que você pode abrir e que têm dado na obra; os demais não ocupam
@@ -225,7 +294,12 @@ const HELP = (
     <p>
       <strong>Filtros.</strong> Empreiteiro vale no curto prazo (coluna Empresa), na terminalidade (Responsável terceiro), no médio prazo e
       nos vagões (empresa da equipe). Pavimento vale na terminalidade e no longo prazo. O ranking das obras e o avanço físico consideram
-      sempre a obra inteira.
+      sempre a obra inteira, e os quadros da Linha de Balanço e legalização, do Quadro de Restrições, do histograma, da produtividade, da
+      segurança e do checklist também: eles não seguem o recorte.
+    </p>
+    <p>
+      <strong>Dias lançados.</strong> No histograma e na produtividade, "dias lançados" compara os dias úteis com lançamento com os dias
+      úteis do período até ontem (segunda a sexta, sem feriado nacional): 90% ou mais em verde, de 70% a 89% em âmbar, abaixo em vermelho.
     </p>
     <p>
       <strong>Nada se edita aqui.</strong> Os números saem das abas de origem; "Abrir aba" leva até elas. "Gerar PDF" imprime a página com
@@ -294,7 +368,7 @@ export function DashboardOverview({
       <TabHeader
         workId={workId}
         section="dashboard"
-        description="Os cinco níveis da obra numa página, no período escolhido: só os módulos liberados e com dados nesta obra."
+        description="Prazo, controles de obra e segurança numa página, no período escolhido: só os módulos liberados e com dados nesta obra."
         helpTitle="Como funciona: dashboard da obra"
         help={HELP}
       >
@@ -430,7 +504,7 @@ export function DashboardOverview({
               first={index === 0}
               workId={workId}
             >
-              {panelBody(key, panels, workId)}
+              {panelBody(key, panels, workId, extrasContext(dash))}
             </ModuleCard>
           );
           // O primeiro quadro é o alvo do tour; o envoltório só existe nele.
@@ -450,8 +524,8 @@ export function DashboardOverview({
         )}
       </div>
       <p data-tour="dash-rodape" className="dsh-foot-note">
-        Ranking das obras e avanço físico consideram sempre a obra inteira; o recorte por empreiteiro e pavimento vale nos demais quadros.
-        Nada aqui se edita: os links levam à aba de origem.{' '}
+        Ranking das obras, avanço físico e os quadros 1.1 (Linha de Balanço e legalização), 1.4, 2.2, 2.3, 3.1 e 3.2 consideram sempre a
+        obra inteira; o recorte por empreiteiro e pavimento vale nos demais quadros. Nada aqui se edita: os links levam à aba de origem.{' '}
         {dash.unavailable.length > 0 && (
           <button type="button" className="text-link inline-flex items-center gap-1" onClick={() => window.location.reload()}>
             <RefreshCw size={12} aria-hidden /> Recarregar a página

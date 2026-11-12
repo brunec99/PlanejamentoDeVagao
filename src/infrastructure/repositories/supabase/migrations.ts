@@ -309,6 +309,14 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A aba 9 segue lendo, mas não grava inspeção nem equipamento, e o QR do operador não existe.',
     critical: false,
   },
+  {
+    migration: '0050_weekly_summary',
+    label: 'Resumo semanal por e-mail: chave "Receber o resumo semanal" dos admins',
+    probe: { kind: 'column', table: 'profiles', column: 'weekly_summary' },
+    effect:
+      'O resumo de sábado não é enviado a ninguém e a chave em Configurações → Usuários não grava; o envio avulso pelo botão segue funcionando.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

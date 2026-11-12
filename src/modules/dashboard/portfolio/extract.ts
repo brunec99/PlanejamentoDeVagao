@@ -7,7 +7,10 @@ import type { DashboardPeriod } from '../period';
 import { periodCompanies, periodDelta, type ShortTermPanelData } from '../short-term-panel';
 import type { TerminalityPanelData } from '../terminality-panel';
 import type { WagonsPanelData } from '../wagons-panel';
+import type { ChecklistBlock, HeadcountBlock, ProductionBlock, RestrictionsBlock } from '../extras/types';
+import { coveragePercent } from './extras';
 import type {
+  PortfolioBalance,
   PortfolioCellStatus,
   PortfolioLongTerm,
   PortfolioMedium,
@@ -44,6 +47,12 @@ export interface PortfolioWorkInput {
   /** Segurança do trabalho (06/11/2026): sem quadro na aba 0, o hook entrega o bloco pronto (`buildSafetyBlock`).
    * Ausente = escondido (chamadas antigas, testes). */
   safety?: PortfolioSource<PortfolioSafety>;
+  /** Quadros de 12/11/2026 (`extras.ts`): o hook entrega o bloco pronto da rota. Ausente = escondido. */
+  balance?: PortfolioSource<PortfolioBalance>;
+  restrictions?: PortfolioSource<RestrictionsBlock>;
+  headcount?: PortfolioSource<HeadcountBlock>;
+  production?: PortfolioSource<ProductionBlock>;
+  checklist?: PortfolioSource<ChecklistBlock>;
   /** O motivo do "—" de um módulo ausente, quando o hook sabe mais que o padrão (`ABSENT_REASON`). */
   reasons?: Partial<Record<PortfolioModule, string>>;
 }
@@ -51,11 +60,16 @@ export interface PortfolioWorkInput {
 /** O motivo padrão do "—" de cada módulo sem dado na obra, que a tela mostra ao passar o mouse. */
 export const ABSENT_REASON: Record<PortfolioModule, string> = {
   'longo-prazo': 'Sem plano de longo prazo nesta obra.',
+  balanco: 'Sem Linha de Balanço nem Gantt de legalização nesta obra.',
   vagoes: 'A obra não usa vagões.',
   'medio-prazo': 'Sem plano de médio prazo nesta obra.',
   'curto-prazo': 'Sem linha no curto prazo até o fim do período.',
+  restricoes: 'A obra não usa o Quadro de Restrições.',
   terminalidade: 'Sem pendências de terminalidade até o fim do período.',
+  histograma: 'A obra não usa o histograma.',
+  produtividade: 'A obra não usa o controle de produtividade.',
   seguranca: 'Sem apontamentos de segurança até o fim do período.',
+  checklist: 'A obra não tem equipamento no checklist.',
 };
 const NO_SHORT_LINE = 'Sem linha no curto prazo nesta obra.';
 
@@ -83,8 +97,17 @@ export function ppcTone(percent: number | undefined): WorkStateTone {
  * (70–79 conta como bom aqui), desvio do físico (`deviationTone`), restrições vencidas (crítico), takt vencido
  * e tarefas atrasadas (atenção). Módulo presente com zero conta como "em dia"; só os módulos presentes contam
  * (escondido ou sem dado não puxa o estado), e a terminalidade não tem faixa, então não entra. Sem nenhum
- * indicador: "Sem apuração". */
-export function workState(row: Pick<PortfolioRow, 'short' | 'longTerm' | 'wagons' | 'medium'>): { state: WorkStateTone; label: string } {
+ * indicador: "Sem apuração". Desde 12/11/2026 (regra 9 do modelo "Dashboards completos e resumo semanal") contam
+ * também, como atenção, os cards vencidos do Quadro de Restrições e os dias lançados abaixo de 70% no histograma
+ * e na produtividade (obra que não usa o módulo não é puxada por ele). */
+export const LOW_COVERAGE = 70;
+const lowCoverage = (block: { coverage: { expected: number; launched: number } }) => {
+  const percent = coveragePercent(block.coverage);
+  return percent !== undefined && Math.round(percent) < LOW_COVERAGE;
+};
+export function workState(
+  row: Pick<PortfolioRow, 'short' | 'longTerm' | 'wagons' | 'medium' | 'restrictions' | 'headcount' | 'production'>,
+): { state: WorkStateTone; label: string } {
   const tones: WorkStateTone[] = [];
   const ppc = row.short?.current.percent;
   if (ppc !== undefined) {
@@ -97,6 +120,9 @@ export function workState(row: Pick<PortfolioRow, 'short' | 'longTerm' | 'wagons
     tones.push(row.wagons.taktOverdue > 0 ? 'warn' : 'good');
   }
   if (row.medium) tones.push(row.medium.late > 0 ? 'warn' : 'good');
+  if (row.restrictions) tones.push(row.restrictions.overdue > 0 ? 'warn' : 'good');
+  if (row.headcount) tones.push(lowCoverage(row.headcount) ? 'warn' : 'good');
+  if (row.production) tones.push(lowCoverage(row.production) ? 'warn' : 'good');
   const state = tones.reduce<WorkStateTone>((worst, tone) => (RANK[tone] > RANK[worst] ? tone : worst), 'neutral');
   return { state, label: STATE_LABEL[state] };
 }
@@ -191,14 +217,25 @@ const readyData = <T>(source: PortfolioSource<T>): T | undefined => (source.stat
 export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): PortfolioRow {
   const reason = (module: PortfolioModule) =>
     input.reasons?.[module] ?? (module === 'curto-prazo' && !input.commitments.length ? NO_SHORT_LINE : ABSENT_REASON[module]);
-  const safetySource: PortfolioSource<PortfolioSafety> = input.safety ?? { status: 'hidden' };
+  const hidden = { status: 'hidden' } as const;
+  const safetySource: PortfolioSource<PortfolioSafety> = input.safety ?? hidden;
+  const balanceSource: PortfolioSource<PortfolioBalance> = input.balance ?? hidden;
+  const restrictionsSource: PortfolioSource<RestrictionsBlock> = input.restrictions ?? hidden;
+  const headcountSource: PortfolioSource<HeadcountBlock> = input.headcount ?? hidden;
+  const productionSource: PortfolioSource<ProductionBlock> = input.production ?? hidden;
+  const checklistSource: PortfolioSource<ChecklistBlock> = input.checklist ?? hidden;
   const status: Record<PortfolioModule, PortfolioCellStatus> = {
     'longo-prazo': cellOf(input.longTerm, reason('longo-prazo')),
+    balanco: cellOf(balanceSource, reason('balanco')),
     vagoes: cellOf(input.wagons, reason('vagoes')),
     'medio-prazo': cellOf(input.medium, reason('medio-prazo')),
     'curto-prazo': cellOf(input.short, reason('curto-prazo')),
+    restricoes: cellOf(restrictionsSource, reason('restricoes')),
     terminalidade: cellOf(input.terminality, reason('terminalidade')),
+    histograma: cellOf(headcountSource, reason('histograma')),
+    produtividade: cellOf(productionSource, reason('produtividade')),
     seguranca: cellOf(safetySource, reason('seguranca')),
+    checklist: cellOf(checklistSource, reason('checklist')),
   };
   const shortData = readyData(input.short);
   const longData = readyData(input.longTerm);
@@ -211,8 +248,13 @@ export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): 
   const medium = mediumData ? mediumOf(mediumData) : undefined;
   const terminality = terminalityData ? terminalityOf(terminalityData) : undefined;
   const safety = readyData(safetySource);
+  const balance = readyData(balanceSource);
+  const restrictions = readyData(restrictionsSource);
+  const headcount = readyData(headcountSource);
+  const production = readyData(productionSource);
+  const checklist = readyData(checklistSource);
   // Regra 9 da segurança: o estado da obra não muda (a segurança, como a terminalidade, não entra nele).
-  const { state, label } = workState({ short, longTerm, wagons, medium });
+  const { state, label } = workState({ short, longTerm, wagons, medium, restrictions, headcount, production });
   return {
     work: input.work,
     ...(input.firstWeek ? { firstWeek: input.firstWeek } : {}),
@@ -225,5 +267,10 @@ export function extractRow(input: PortfolioWorkInput, period: DashboardPeriod): 
     ...(medium ? { medium } : {}),
     ...(terminality ? { terminality } : {}),
     ...(safety ? { safety } : {}),
+    ...(balance ? { balance } : {}),
+    ...(restrictions ? { restrictions } : {}),
+    ...(headcount ? { headcount } : {}),
+    ...(production ? { production } : {}),
+    ...(checklist ? { checklist } : {}),
   };
 }

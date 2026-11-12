@@ -3,6 +3,7 @@ import { SAFETY_CONSEQUENCES } from '@/domain/safety';
 import { dayMonth, pct, PORTFOLIO_MODULES, signedPoints, type KpiCard, type PortfolioModule, type Segment } from '../model';
 import type { DashboardPeriod } from '../period';
 import type { BucketPpc } from '../period-views';
+import { cardOwnersOf, extraKpisOf, extraSentenceOf, extraTotalsOf, servicesOf } from './extras';
 import type {
   PortfolioCompanies,
   PortfolioData,
@@ -49,8 +50,9 @@ export const PPC_ALERT = 70;
 export const RESPONSIBLES_SHOWN = 6;
 /** Quantos tipos de apontamento de segurança o quadro mostra (regra 7 da segurança). */
 export const SAFETY_TYPES_SHOWN = 6;
-/** Até quantos cartões o topo mostra: seis do modelo original e o da segurança (regra 8 da segurança). */
-export const KPIS_SHOWN = 7;
+/** Até quantos cartões o topo mostra: seis do modelo original, o da segurança (regra 8 da segurança) e, desde
+ * 12/11/2026, "Efetivo médio" e "Cards vencidos" (regra 9 do modelo "Dashboards completos e resumo semanal"). */
+export const KPIS_SHOWN = 9;
 /** O Pareto marca as causas até somar este percentual (a convenção de `vitalCauses`). */
 const VITAL_SHARE = 80;
 
@@ -177,6 +179,7 @@ function totalsOf(rows: readonly PortfolioRow[]): PortfolioTotals {
         : {}),
       byConsequence: SAFETY_CONSEQUENCES.map((_, at) => sum(safety, item => item.byConsequence[at] ?? 0)),
     },
+    ...extraTotalsOf(rows),
   };
 }
 
@@ -472,6 +475,7 @@ function kpisOf(
       ...(t.open === 0 ? { tone: 'good' as const } : t.openOver7 > 0 ? { tone: 'bad' as const } : {}),
     });
   }
+  out.push(...extraKpisOf(totals, period, shown));
   const kpis = out.slice(0, KPIS_SHOWN);
   // Sem o curto prazo, o primeiro cartão que houver é o destaque (como no resumo da aba 0).
   if (kpis.length && !kpis.some(kpi => kpi.main)) kpis[0] = { ...kpis[0], main: true };
@@ -635,6 +639,7 @@ function sentenceOf(
     if (openOver7) out.push(say(', '), strong(`${int(openOver7)} há mais de 7 dias`));
     out.push(say('.'));
   }
+  out.push(...extraSentenceOf(totals, shown));
   return out;
 }
 
@@ -660,6 +665,8 @@ export function aggregatePortfolio({ period, rows, shown }: PortfolioAggregateIn
     companies: companiesOf(started),
     responsibles: responsiblesOf(started),
     safetyTypes: safetyTypesOf(started),
+    services: servicesOf(started),
+    cardOwners: cardOwnersOf(started),
     noData: noDataOf(started),
   };
 }

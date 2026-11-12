@@ -14,8 +14,9 @@ import { getServiceClient } from '../repositories/supabase/client';
 import { loadTerminality, TerminalityUnavailableError } from '../repositories/supabase/terminality-repository';
 import { loadSafety, SafetyUnavailableError } from '../repositories/supabase/safety-repository';
 import { loadLob, LobUnavailableError } from '../repositories/supabase/lob-repository';
+import { readDashboardExtras } from '../repositories/supabase/dashboard-extras';
 import { readPortfolioSources } from '../repositories/supabase/portfolio-sources';
-import { composePortfolio, portfolioText } from '../../modules/dashboard/portfolio/compose';
+import { composePortfolio, portfolioRange, portfolioText } from '../../modules/dashboard/portfolio/compose';
 
 /** Dados da Claudia geral (08/11/2026). Cada ferramenta pede só a obra e o módulo de que precisa, e o
  * carregador lê sob demanda, guardando o que já leu durante a pergunta (uma pergunta pode chamar
@@ -164,7 +165,15 @@ export function createAgentDataLoader(access: LoaderAccess): AgentDataLoader {
         readPortfolioSources({ workIds: ids, actorId: profile.id, developer, modules }),
       ]);
       const works = planning.data.works.filter(work => ids.includes(work.id));
-      const data = composePortfolio({ planning, works, sources, selection, today, developer, modules });
+      // Quadros de 12/11/2026 (Linha de Balanço, restrições, histograma, produtividade, checklist): os blocos já
+      // calculados para o intervalo do período, como `GET /api/dashboard/extras` entrega à página.
+      const range = portfolioRange({ planning, works, selection, today });
+      const extras = range
+        ? await readDashboardExtras({ workIds: ids, range, access: { developer, modules }, actorId: profile.id }).catch(() => ({
+            error: 'Não foi possível carregar os quadros de controles da obra.',
+          }))
+        : undefined;
+      const data = composePortfolio({ planning, works, sources, ...(extras ? { extras } : {}), selection, today, developer, modules });
       return portfolioText(data);
     },
   };

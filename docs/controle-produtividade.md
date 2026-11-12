@@ -85,5 +85,5 @@ e o número foi para a observação.
 
 - Aplicar a 0046 e importar o histórico.
 - Liberar o módulo para quem lança em cada obra.
-- Sem lista geral com filtros nem exportação em CSV; sem PDF; fora dos dashboards.
+- Sem lista geral com filtros nem exportação em CSV; sem PDF. Desde 12/11/2026 entra na aba 0 e no Dashboard geral (publicado em 12/11/2026); ver `docs/dashboard.md`.
 - Meta de produtividade por serviço (para comparar com o realizado) não existe ainda.

@@ -8,6 +8,8 @@ import { formatDate } from '@/shared/format';
 import { Legend } from '../charts';
 import { PORTFOLIO_MODULES, monthShort, pct, plural, signedDays, signedPoints, type PortfolioModule, type Tone } from '../model';
 import type { BucketPpc } from '../period-views';
+import { checklistOnTime, COVERAGE_LABEL, coveragePercent, coverageText, coverageTone, idpLabel, idpToneOf, missingText } from './extras';
+import type { WorkdayCoverage } from '../extras/types';
 import type {
   PortfolioCellStatus,
   PortfolioCompanies,
@@ -52,7 +54,7 @@ export const deviationTone = (delta: number): Tone => {
   return value >= 0 ? 'good' : value >= -10 ? 'warn' : 'bad';
 };
 const INK: Record<Tone, string> = { good: '#047857', warn: '#b45309', bad: '#be123c', neutral: '#1b3348', here: '#8a3f06' };
-const toneText = (tone: Tone) => (tone === 'good' ? 't-good' : tone === 'warn' ? 't-warn' : tone === 'bad' ? 't-bad' : '');
+export const toneText = (tone: Tone) => (tone === 'good' ? 't-good' : tone === 'warn' ? 't-warn' : tone === 'bad' ? 't-bad' : '');
 const int = (value: number) => Math.round(value).toLocaleString('pt-BR');
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 const dm = (date: string) => formatDate(date).slice(0, 5);
@@ -60,14 +62,14 @@ const dm = (date: string) => formatDate(date).slice(0, 5);
 export const oneDecimal = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** "—" com o motivo ao passar o mouse e, para leitor de tela, no próprio texto. */
-function Dash({ reason }: { reason: string }) {
+export function Dash({ reason }: { reason: string }) {
   return (
     <span className="t-mut" title={reason}>
       —<span className="sr-only"> ({reason})</span>
     </span>
   );
 }
-const statusReason = (status: PortfolioCellStatus | undefined, fallback: string) =>
+export const statusReason = (status: PortfolioCellStatus | undefined, fallback: string) =>
   status?.kind === 'absent'
     ? status.reason
     : status?.kind === 'error'
@@ -90,20 +92,30 @@ function Arrow({ delta, title }: { delta: number; title?: string }) {
 /** O dado de cada módulo numa linha do comparativo. */
 export const MODULE_FIELD: Record<PortfolioModule, (row: PortfolioRow) => unknown> = {
   'longo-prazo': row => row.longTerm,
+  balanco: row => row.balance,
   vagoes: row => row.wagons,
   'medio-prazo': row => row.medium,
   'curto-prazo': row => row.short,
+  restricoes: row => row.restrictions,
   terminalidade: row => row.terminality,
+  histograma: row => row.headcount,
+  produtividade: row => row.production,
   seguranca: row => row.safety,
+  checklist: row => row.checklist,
 };
 /** "Sem <dado>: obras…", embaixo de cada quadro. */
 export const NO_DATA_LABEL: Record<PortfolioModule, string> = {
   'longo-prazo': 'plano de longo prazo',
+  balanco: 'Linha de Balanço nem Gantt de legalização',
   vagoes: 'vagões',
   'medio-prazo': 'plano de médio prazo',
   'curto-prazo': 'linhas no curto prazo',
+  restricoes: 'cards no Quadro de Restrições',
   terminalidade: 'pendências de terminalidade',
+  histograma: 'lançamento no histograma',
+  produtividade: 'lançamento na produtividade',
   seguranca: 'apontamentos de segurança',
+  checklist: 'equipamento no checklist',
 };
 
 export type ModuleBoard = { kind: 'hidden' } | { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready' };
@@ -169,7 +181,14 @@ export type ColumnKey =
   | 'days'
   | 'sstOpen'
   | 'sstFlow'
-  | 'sstOver7';
+  | 'sstOver7'
+  | 'crew'
+  | 'crewDays'
+  | 'prodDays'
+  | 'prodMeasured'
+  | 'cards'
+  | 'idp'
+  | 'checklist';
 export interface ComparisonSort {
   column: ColumnKey;
   dir: 1 | -1;
@@ -197,6 +216,23 @@ interface Column {
 }
 
 const SAFETY_ABSENT = 'Sem apontamentos de segurança nesta obra.';
+const NOT_USED = 'A obra não usa o módulo.';
+/** "20/22" com a faixa (90% ou mais verde, 70% a 89% âmbar, abaixo vermelho) em cor e em texto. */
+function CoverageCell({ coverage, what }: { coverage: WorkdayCoverage; what: string }) {
+  const tone = coverageTone(coverage);
+  const percent = coveragePercent(coverage);
+  return (
+    <span
+      className={`dsh-tag ${tone}`}
+      title={`${what}: ${coverage.launched} de ${plural(coverage.expected, 'dia útil', 'dias úteis')}${
+        percent === undefined ? '' : ` (${pct(percent)})`
+      }\n${missingText(coverage, 8)}`}
+    >
+      {coverageText(coverage)}
+      <span className="sr-only"> ({COVERAGE_LABEL[tone]})</span>
+    </span>
+  );
+}
 const STATE_RANK: Record<Tone, number> = { neutral: 0, here: 0, good: 1, warn: 2, bad: 3 };
 const STATE_ICON: Record<Tone, string> = { good: '✓', warn: '▲', bad: '!', neutral: '●', here: '●' };
 
@@ -566,6 +602,211 @@ const COLUMNS: Column[] = [
       );
     },
   },
+  // Quadros de 12/11/2026 (modelo "Dashboards completos e resumo semanal"): efetivo e dias lançados do histograma,
+  // dias lançados e parcela medida da produtividade, cards vencidos, IDP e checklists vencidos.
+  {
+    key: 'crew',
+    group: 'Histograma',
+    label: 'Efetivo médio',
+    module: 'histograma',
+    sortValue: row => row.headcount?.dailyAverage,
+    cell: row => {
+      const h = row.headcount;
+      if (!h) return <Dash reason={statusReason(row.status.histograma, NOT_USED)} />;
+      return (
+        <>
+          <span
+            className="v"
+            title={`Média de pessoas por dia útil lançado no período\n${int(h.manDays)} homens-dia · pico de ${int(h.peak)}${
+              h.peakDay ? ` em ${dm(h.peakDay)}` : ''
+            }`}
+          >
+            {int(h.dailyAverage)}
+          </span>
+          <span className="s t-mut">{pct(h.contractorShare * 100)} empreit.</span>
+        </>
+      );
+    },
+    total: data => {
+      const t = data.totals.headcount;
+      if (!t.works) return '—';
+      return (
+        <span title={`Soma do efetivo médio de ${plural(t.works, 'obra', 'obras')}`}>
+          {int(t.dailyAverage)}
+          {t.contractorShare !== undefined && <span className="s t-mut">{pct(t.contractorShare * 100)} empreit.</span>}
+        </span>
+      );
+    },
+  },
+  {
+    key: 'crewDays',
+    group: 'Histograma',
+    label: 'Dias lançados',
+    module: 'histograma',
+    sortValue: row => (row.headcount ? (coveragePercent(row.headcount.coverage) ?? -1) : undefined),
+    cell: row =>
+      row.headcount ? (
+        <CoverageCell coverage={row.headcount.coverage} what="Histograma" />
+      ) : (
+        <Dash reason={statusReason(row.status.histograma, NOT_USED)} />
+      ),
+    total: data => (data.totals.headcount.works ? coverageText(data.totals.headcount) : '—'),
+  },
+  {
+    key: 'prodDays',
+    group: 'Produtividade',
+    label: 'Dias lançados',
+    module: 'produtividade',
+    sortValue: row => (row.production ? (coveragePercent(row.production.coverage) ?? -1) : undefined),
+    cell: row =>
+      row.production ? (
+        <CoverageCell coverage={row.production.coverage} what="Produtividade" />
+      ) : (
+        <Dash reason={statusReason(row.status.produtividade, NOT_USED)} />
+      ),
+    total: data => (data.totals.production.works ? coverageText(data.totals.production) : '—'),
+  },
+  {
+    key: 'prodMeasured',
+    group: 'Produtividade',
+    label: 'Prod. medida',
+    module: 'produtividade',
+    sortValue: row => (row.production ? (row.production.measuredShare ?? -1) : undefined),
+    cell: row => {
+      const p = row.production;
+      if (!p) return <Dash reason={statusReason(row.status.produtividade, NOT_USED)} />;
+      if (p.measuredShare === undefined) return <Dash reason="Nenhum lançamento no período." />;
+      return (
+        <span
+          title={`${int(p.measured)} de ${plural(p.entries, 'lançamento', 'lançamentos')} com produção medida · ${int(p.pending)} a medir`}
+        >
+          {pct(p.measuredShare * 100)}
+        </span>
+      );
+    },
+    total: data => {
+      const t = data.totals.production;
+      return t.works && t.measuredShare !== undefined ? (
+        <span title={`${int(t.measured)} de ${plural(t.entries, 'lançamento', 'lançamentos')}, somando as obras`}>
+          {pct(t.measuredShare * 100)}
+        </span>
+      ) : (
+        '—'
+      );
+    },
+  },
+  {
+    key: 'cards',
+    group: 'Restrições',
+    label: 'Cards vencidos',
+    module: 'restricoes',
+    sortValue: row => row.restrictions?.overdue,
+    cell: row => {
+      const r = row.restrictions;
+      if (!r) return <Dash reason={statusReason(row.status.restricoes, NOT_USED)} />;
+      return (
+        <>
+          <span
+            className={`v ${r.overdue ? 't-bad' : 't-good'}`}
+            title={`Cards em aberto com a entrega vencida em ${dm(r.asOf)}\n${int(r.startOverdue)} com o começo atrasado · ${int(
+              r.doneInPeriod,
+            )} concluídos no período`}
+          >
+            {int(r.overdue)}
+          </span>
+          <span className="s t-mut">de {int(r.open)} abertos</span>
+        </>
+      );
+    },
+    total: data => {
+      const t = data.totals.restrictions;
+      if (!t.works) return '—';
+      return (
+        <span className={t.overdue ? 't-bad' : 't-good'} title={`Em ${plural(t.overdueWorks, 'obra', 'obras')}`}>
+          {int(t.overdue)}
+          <span className="s t-mut">de {int(t.open)} abertos</span>
+        </span>
+      );
+    },
+  },
+  {
+    key: 'idp',
+    group: 'Linha de Balanço',
+    label: 'IDP',
+    module: 'balanco',
+    sortValue: row => (row.balance ? (row.balance.lob?.idp ?? -1) : undefined),
+    cell: row => {
+      const b = row.balance;
+      if (!b) return <Dash reason={statusReason(row.status.balanco, 'Sem Linha de Balanço nesta obra.')} />;
+      const lob = b.lob;
+      if (!lob || lob.idp === undefined)
+        return (
+          <Dash
+            reason={
+              !lob
+                ? 'Sem Linha de Balanço nesta obra (só o Gantt de legalização).'
+                : lob.status === 'no-measurement'
+                  ? 'Nenhuma medição fechada até o fim do período.'
+                  : 'Nada planejado até a data da medição.'
+            }
+          />
+        );
+      return (
+        <span
+          className={`dsh-tag ${idpToneOf(lob.idp)}`}
+          title={`IDP ${idpLabel(lob.idp)}${
+            lob.real !== undefined && lob.planned !== undefined ? `\nReal ${pct(lob.real)} × planejado ${pct(lob.planned)}` : ''
+          }${lob.measurementDate ? `\nMedição de ${formatDate(lob.measurementDate)}` : ''}\n${
+            lob.weighting === 'cost' ? 'Peso por custo' : 'Peso por duração'
+          }`}
+        >
+          {idpLabel(lob.idp).split(' · ')[0]}
+          <span className="sr-only"> ({idpLabel(lob.idp).split(' · ')[1]})</span>
+        </span>
+      );
+    },
+    total: () => (
+      <span className="t-mut" title="O IDP não se soma entre obras.">
+        —
+      </span>
+    ),
+  },
+  {
+    key: 'checklist',
+    group: 'Checklist',
+    label: 'Vencidos',
+    module: 'checklist',
+    sortValue: row => row.checklist?.pending,
+    cell: row => {
+      const c = row.checklist;
+      if (!c) return <Dash reason={statusReason(row.status.checklist, NOT_USED)} />;
+      return (
+        <>
+          <span
+            className={`v ${c.pending ? 't-bad' : 't-good'}`}
+            title={`Checklists devidos hoje sem inspeção: ${int(c.pending)} de ${int(c.due)}\n${int(checklistOnTime(c))} em dia · ${plural(
+              c.equipment,
+              'equipamento',
+              'equipamentos',
+            )}`}
+          >
+            {int(c.pending)}
+          </span>
+          <span className="s t-mut">de {int(c.due)} hoje</span>
+        </>
+      );
+    },
+    total: data => {
+      const t = data.totals.checklist;
+      if (!t.works) return '—';
+      return (
+        <span className={t.pending ? 't-bad' : 't-good'} title={`Em ${plural(t.pendingWorks, 'obra', 'obras')}`}>
+          {int(t.pending)}
+          <span className="s t-mut">de {int(t.due)} hoje</span>
+        </span>
+      );
+    },
+  },
 ];
 
 /** Ordena as linhas pela coluna escolhida; sem dado vai para o fim nos dois sentidos, empate pelo nome. No PPC do
@@ -584,15 +825,26 @@ export function sortRows(rows: readonly PortfolioRow[], sort: ComparisonSort): P
   });
 }
 
+/** As colunas de 12/11/2026 (histograma, produtividade, restrições, IDP e checklist): no PDF saem numa segunda
+ * tabela, porque as dezenove colunas não cabem numa folha. */
+const EXTRA_COLUMN_KEYS: ReadonlySet<ColumnKey> = new Set(['crew', 'crewDays', 'prodDays', 'prodMeasured', 'cards', 'idp', 'checklist']);
+export type ComparisonSubset = 'all' | 'base' | 'extras';
+/** A segunda tabela tem coluna? (Algum dos módulos novos com coluna no comparativo.) */
+export const hasExtraColumns = (modules: ReadonlySet<PortfolioModule>) =>
+  COLUMNS.some(column => EXTRA_COLUMN_KEYS.has(column.key) && column.module && modules.has(column.module));
+
 export function ComparisonTable({
   data,
   modules,
   variant,
+  subset = 'all',
   sort = DEFAULT_SORT,
   onSort,
   hrefOf,
   onOpen,
 }: {
+  /** `base`: as colunas de 04/11 e 06/11; `extras`: a obra e as colunas de 12/11; `all` (tela): todas. */
+  subset?: ComparisonSubset;
   data: PortfolioData;
   /** Os módulos com coluna: acessíveis, marcados e com dado em alguma obra. */
   modules: ReadonlySet<PortfolioModule>;
@@ -604,7 +856,12 @@ export function ComparisonTable({
   onOpen?: (row: PortfolioRow) => void;
 }) {
   const screen = variant === 'screen';
-  const columns = COLUMNS.filter(column => !column.module || modules.has(column.module));
+  const columns = COLUMNS.filter(
+    column =>
+      (!column.module || modules.has(column.module)) &&
+      (subset === 'all' ||
+        (subset === 'base' ? !EXTRA_COLUMN_KEYS.has(column.key) : column.key === 'obra' || EXTRA_COLUMN_KEYS.has(column.key))),
+  );
   const ctx: CellContext = { end: dm(data.period.end), eve: dm(addDays(data.period.start, -1)) };
   const rows = sortRows(data.rows, sort);
   const choose = (key: ColumnKey) =>
@@ -1070,7 +1327,7 @@ export function CompaniesHeat({ companies }: { companies: PortfolioCompanies }) 
 
 // ─── Linhas por obra dos demais módulos (regra 12) ─────────────────────────────────────────────────────
 
-function Name({ work, sub }: { work: PortfolioWork; sub?: string }) {
+export function Name({ work, sub }: { work: PortfolioWork; sub?: string }) {
   return (
     <span className="nm" title={work.name}>
       {work.name}

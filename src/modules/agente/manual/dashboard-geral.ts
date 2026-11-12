@@ -24,7 +24,7 @@ export const sections: ManualSection[] = [
     screen: 'dashboard-geral',
     body: `## O que é o Dashboard geral
 
-É uma página **fora das obras** que mostra as obras liberadas para você lado a lado, no período escolhido. Os quadros são os mesmos da aba 0 (Dashboard da obra), agora comparando as obras: curto prazo, longo prazo, vagões, médio prazo e terminalidade, mais a **segurança do trabalho** (aba 3.1), que desde 06/11/2026 existe só aqui. Responde a perguntas como "qual obra está cumprindo menos o que assume neste mês?", "quantas obras estão atrás no físico?", "qual empreiteiro vai mal em mais de uma obra?" e "quantos apontamentos de segurança estão abertos há mais de 7 dias?".
+É uma página **fora das obras** que mostra as obras liberadas para você lado a lado, no período escolhido. Os quadros são os mesmos da aba 0 (Dashboard da obra), agora comparando as obras: curto prazo, longo prazo, vagões, médio prazo, terminalidade e segurança do trabalho e, desde 12/11/2026, Linha de Balanço e legalização, Quadro de Restrições, histograma, produtividade e checklist de equipamentos (onze quadros, na ordem do menu). Responde a perguntas como "qual obra está cumprindo menos o que assume neste mês?", "quantas obras estão atrás no físico?", "qual empreiteiro vai mal em mais de uma obra?" e "quantos apontamentos de segurança estão abertos há mais de 7 dias?".
 
 Nada aqui se edita. Clicar numa obra da tabela abre a aba 0 dela **no mesmo período e na mesma escala**; de lá, "Abrir aba N →" leva à aba de origem, onde o dado se altera.
 
@@ -47,10 +47,10 @@ A lista de obras continua sendo a página inicial do sistema.
 1. O cabeçalho, com "Como funciona" (a explicação longa) e "Gerar PDF".
 2. Os filtros: **"Escala"** (Semanal, Mensal, Trimestral, Anual, Personalizado), **"Período"**, **"Obras"** (seletor múltiplo, todas marcadas ao abrir), **"Empreiteiro"** (desde 05/11/2026) e **"Quadros"** (quais módulos entram; a chave "Segurança" liga e desliga a segurança do trabalho).
 3. A linha de escopo: quantas obras estão no período, as semanas que ele cobre, o sábado até o qual tudo conta, "parcial" quando o período está em andamento, e as obras que só começaram depois do período.
-4. A frase de resumo e até sete cartões (seção "Comparativo das obras, frase e cartões do Dashboard geral").
+4. A frase de resumo e até nove cartões, em duas linhas (seção "Comparativo das obras, frase e cartões do Dashboard geral").
 5. O **Comparativo das obras**, uma linha por obra.
 6. O curto prazo comparado: PPC do período por obra, evolução do PPC (mapa de calor), causas somando as obras e empreiteiros em mais de uma obra.
-7. Os quadros do longo prazo, dos vagões, do médio prazo e da terminalidade e, por último, o quadro 6, **"Segurança do trabalho"**, comparando as obras.
+7. Os quadros do longo prazo, da Linha de Balanço e legalização, dos vagões, do médio prazo, do Quadro de Restrições e da terminalidade; depois o histograma e a produtividade, lado a lado; a **"Segurança do trabalho"**; e o checklist de equipamentos (seção "Controles de obra, restrições, balanço e checklist no Dashboard geral").
 8. A nota final: clicar numa obra abre a aba 0 dela no mesmo período; nada se edita.
 
 O filtro de **Pavimento** não existe aqui, de propósito: os nomes mudam de uma obra para outra. Para recortar por pavimento, abra a aba 0 da obra. O filtro de **Empreiteiro** existe desde 05/11/2026 (seção "Dúvidas comuns do Dashboard geral"); a segurança do trabalho não se recorta por empresa, porque a vistoria não registra a empresa responsável.
@@ -153,7 +153,7 @@ No topo, uma frase conta o período: o PPC das obras e a diferença para o perí
 
 ## Os cartões
 
-Até sete números consolidados (até seis antes da segurança do trabalho, em 06/11/2026; a aba 0 continua com até seis). Os dois cartões do curto prazo aparecem sempre que o quadro do curto prazo está visível (com "—" quando nenhuma obra tem semana apurada); os demais só aparecem quando alguma obra tem dado daquele módulo. Quadro desmarcado em "Quadros" ou módulo sem acesso não deixa cartão vazio; sem o curto prazo, o primeiro cartão que sobra vira o destaque. Cada cartão diz de que aba vem e quantas obras entram na conta (os números abaixo são os do menu renumerado em 12/11/2026; o Planejamento de vagão, antiga aba 2, não tem mais número e abre pela aba 1.1):
+Até nove números consolidados, em duas linhas (até seis antes da segurança do trabalho, em 06/11/2026, e até sete antes de 12/11/2026, quando entraram **Efetivo médio**, a soma do efetivo médio por dia útil das obras, com quantas lançaram todos os dias úteis, e **Cards vencidos**, do Quadro de Restrições, com quantas obras têm algum). Os dois cartões do curto prazo aparecem sempre que o quadro do curto prazo está visível (com "—" quando nenhuma obra tem semana apurada); os demais só aparecem quando alguma obra tem dado daquele módulo. Quadro desmarcado em "Quadros" ou módulo sem acesso não deixa cartão vazio; sem o curto prazo, o primeiro cartão que sobra vira o destaque. Cada cartão diz de que aba vem e quantas obras entram na conta (os números abaixo são os do menu renumerado em 12/11/2026; o Planejamento de vagão, antiga aba 2, não tem mais número e abre pela aba 1.1):
 
 - **PPC das obras** (aba 1.3): cumpridos ÷ assumidos de todas as obras no período, somando as linhas, com a seta contra o período anterior.
 - **Obras abaixo de 70%** (aba 1.3): quantas das obras com PPC no período ficaram abaixo da linha de alerta, e quais.
@@ -308,7 +308,7 @@ As fotos das pendências não são carregadas nesta página; elas ficam na aba 2
 
 ## Segurança do trabalho (aba 3.1)
 
-O quadro 6 compara a vistoria dos técnicos de segurança (TST) das obras. Existe desde 06/11/2026 e **só no Dashboard geral**: a aba 0 de cada obra ainda não tem este quadro. Desde 12/11/2026 aparece só para quem tem o módulo "Segurança do trabalho" liberado (antes, para todos com a obra), como a aba 3.1, e entra ou sai pela chave "Segurança" de "Quadros".
+O quadro 6 compara a vistoria dos técnicos de segurança (TST) das obras. Existe desde 06/11/2026 no Dashboard geral e, desde 12/11/2026, também na aba 0 de cada obra. Desde 12/11/2026 aparece só para quem tem o módulo "Segurança do trabalho" liberado (antes, para todos com a obra), como a aba 3.1, e entra ou sai pela chave "Segurança" de "Quadros".
 
 Que data conta:
 
@@ -328,15 +328,64 @@ Os três blocos:
 Embaixo, as obras sem nenhum apontamento até o fim do período. Com um empreiteiro escolhido no topo, o quadro continua mostrando a vistoria inteira das obras que ficam na tela e avisa "sem recorte de empreiteiro" no subtítulo: a vistoria não registra a empresa responsável. A segurança não muda o estado da obra. As fotos dos apontamentos não são carregadas aqui; ficam na aba 3.1.`,
   },
   {
-    id: 'dashboard-geral-pdf',
-    title: 'PDF do Dashboard geral: até cinco folhas no padrão do fechamento',
+    id: 'dashboard-geral-controles-e-sst',
+    title: 'Controles de obra, restrições, balanço e checklist no Dashboard geral',
     summary:
-      'Gerar PDF abre a impressão numa aba nova com escala, período, obras e quadros; A4 paisagem, até cinco folhas, rodapé com quem gerou.',
+      'Histograma, produtividade, Quadro de Restrições, IDP e legalização e checklist comparando as obras; dias lançados, cards vencidos e as cores.',
+    keywords: [
+      'efetivo médio das obras',
+      'dias lançados no histograma',
+      'dias lançados na produtividade',
+      'produção medida por obra',
+      'serviços medidos em mais de uma obra',
+      'cards vencidos por obra',
+      'idp por obra',
+      'legalização por obra',
+      'checklists vencidos por obra',
+      'qual obra não lançou o histograma',
+    ],
+    screen: 'dashboard-geral',
+    body: `## O que entrou em 12/11/2026
+
+Cinco quadros novos no Dashboard geral, além da segurança, que já existia: **Linha de Balanço e legalização** (1.1), **Quadro de Restrições** (1.4), **Histograma** (2.2), **Produtividade** (2.3) e **Checklist de equipamentos** (3.2). Cada um aparece para quem tem o módulo liberado (a Linha de Balanço e a legalização seguem o longo prazo) e pode ser ligado e desligado em "Quadros". Obra que não usa o módulo mostra "—" na tabela e é citada embaixo do quadro.
+
+Esses quadros **não seguem o filtro de Empreiteiro**: mostram sempre a obra inteira, e o subtítulo do quadro avisa quando há empreiteiro escolhido.
+
+## Colunas novas no Comparativo das obras
+
+- **Efetivo médio** (Histograma): a média de pessoas por dia útil lançado no período, com a parcela de empreiteiros embaixo. Na linha do consolidado, a soma do efetivo médio das obras.
+- **Dias lançados** (Histograma) e **Dias lançados** (Produtividade): dias úteis do período com lançamento sobre os dias úteis esperados, como "20/22". Dia útil é de segunda a sexta, fora feriado nacional; os dias esperados vão até ontem, porque o dia de hoje ainda pode ser lançado. **90% ou mais em verde, 70% a 89% em âmbar, abaixo em vermelho.** Passe o mouse para ver os dias que faltaram. No consolidado, a soma dos lançados sobre a soma dos esperados.
+- **Prod. medida**: lançamentos da produtividade com produção medida sobre os lançamentos do período. No consolidado, a soma das linhas medidas sobre a soma das linhas (a obra com mais lançamentos pesa mais).
+- **Cards vencidos** (Restrições): cards em aberto que passaram da entrega, com o total em aberto embaixo.
+- **IDP** (Linha de Balanço): o índice de desempenho de prazo na última medição fechada até o fim do período. 1,00 ou mais em dia (verde), de 0,90 a 0,99 atenção (âmbar), abaixo de 0,90 atrasado (vermelho). O IDP não se soma: o consolidado mostra "—".
+- **Vencidos** (Checklist): checklists devidos hoje e ainda sem inspeção, sobre os devidos hoje.
+
+## O que cada quadro mostra
+
+- **Linha de Balanço e legalização**: por obra, o real × planejado e o IDP, com a medição e a linha de base usadas e se o peso é por custo ou por duração; e o Gantt de legalização, com marcos concluídos, tarefas atrasadas e o próximo marco. Nenhum valor em reais aparece.
+- **Quadro de Restrições**: por obra, os cards em aberto por coluna (a fazer, fazendo, pausado), os vencidos, os de começo atrasado (ainda em "A fazer" depois do "começar até") e, embaixo, concluídos e criados no período. Ao lado, os responsáveis com mais cards vencidos somando as obras. O retrato é no fim do período, ou hoje quando o período está em andamento; pausado conta como aberto.
+- **Histograma de mão de obra**: o efetivo médio de cada obra em barras, próprio (ATR e Takt) × empreiteiros, o pico, os dias lançados e os dias que faltaram; a última linha soma as obras.
+- **Controle de produtividade**: por obra, lançamentos com produção medida × a medir, homens-dia e dias lançados; e **"Serviços medidos em mais de uma obra"**, com a produção por homem-dia de cada obra lado a lado. O serviço só pareia quando tem o mesmo nome (sem acento nem maiúscula) e a mesma unidade, porque o nome é digitado em cada obra; não há meta por serviço, então a tabela não pinta de bom ou ruim, só destaca a maior de cada linha.
+- **Checklist de equipamentos**: por obra, equipamentos ativos, checklists em dia × vencidos e os itens não conformes (NC). Em dia e vencidos são **sempre os de hoje** (diário de hoje, semanal desta semana, mensal deste mês), como na aba 3.2; o período muda só as inspeções e as não conformidades.
+
+## Cartões, frase e estado da obra
+
+Entraram os cartões **Efetivo médio** e **Cards vencidos**, e a frase do topo ganhou uma oração com o efetivo médio somado e os dias lançados. O **estado** da obra (Em dia, Atenção, Crítico) passou a considerar também, como atenção, cards vencidos no Quadro de Restrições e dias lançados abaixo de 70% no histograma ou na produtividade; obra que não usa o módulo não é puxada por ele.
+
+## Resumo semanal por e-mail
+
+Ao lado de "Gerar PDF", administradores veem o botão que envia o resumo semanal para o próprio e-mail na hora. O envio automático é o de sábado de manhã.`,
+  },
+  {
+    id: 'dashboard-geral-pdf',
+    title: 'PDF do Dashboard geral: até sete folhas no padrão do fechamento',
+    summary:
+      'Gerar PDF abre a impressão numa aba nova com escala, período, obras e quadros; A4 paisagem, até sete folhas, rodapé com quem gerou.',
     keywords: [
       'pdf do dashboard geral',
       'pdf das obras',
       'imprimir o comparativo',
-      'cinco folhas',
+      'sete folhas',
       'dashboard geral das obras',
       'folhas do pdf geral',
       'salvar o comparativo em pdf',
@@ -355,14 +404,16 @@ Embaixo, as obras sem nenhum apontamento até o fim do período. Com um empreite
 
 - **Papel**: A4 paisagem, no padrão do PDF do fechamento.
 - **Cabeçalho**: "DASHBOARD GERAL DAS OBRAS", com a escala e o período.
-- **Folha 1**: a frase de resumo, os cartões (até sete), o Comparativo das obras (com as três colunas de segurança) e o PPC do período por obra.
+- **Folha 1**: a frase de resumo, os cartões (até nove, em duas linhas), o Comparativo das obras (com as três colunas de segurança; as colunas de 12/11/2026 saem na folha de controles) e o PPC do período por obra.
 - **Folha 2, curto prazo**: a evolução do PPC (mapa de calor), as causas somando as obras e os empreiteiros em mais de uma obra.
 - **Folha 3, longo prazo e vagões**: medido × planejado por obra, avanço no período, prazo contra a linha de base, vagões por status e restrições vencidas.
-- **Folha 4, médio prazo e terminalidade**: tarefas por situação, atrasadas e variação contra a linha de base; pendências abertas × resolvidas e responsáveis terceiros.
-- **Folha 5, segurança do trabalho** (desde 06/11/2026, no fim): seis números (em aberto no sábado final, com a variação e quantos eram no início; abertos há mais de 7 dias e em quantas obras; feitos no período; finalizados no período; média de dias para resolver; graves, Morte + Severa, com a parte nos feitos) e os três blocos da tela (feitos × finalizados, risco por consequência e tipos com mais apontamentos). O rodapé cita as obras sem apontamentos.
+- **Quadro de Restrições e Linha de Balanço** (desde 12/11/2026, depois da folha 3): o IDP de cada obra com real × planejado, o Gantt de legalização (marcos, atrasadas, próximo marco), os cards em aberto por coluna com vencidos e começo atrasado, e os responsáveis com mais cards vencidos.
+- **Médio prazo e terminalidade**: tarefas por situação, atrasadas e variação contra a linha de base; pendências abertas × resolvidas e responsáveis terceiros.
+- **Controles de obra e SST** (desde 12/11/2026): a segunda tabela do comparativo (efetivo médio, dias lançados no histograma e na produtividade, produção medida, cards vencidos, IDP e checklists vencidos), os serviços medidos em mais de uma obra e os quadros de histograma, produtividade e checklist.
+- **Segurança do trabalho** (desde 06/11/2026, no fim): seis números (em aberto no sábado final, com a variação e quantos eram no início; abertos há mais de 7 dias e em quantas obras; feitos no período; finalizados no período; média de dias para resolver; graves, Morte + Severa, com a parte nos feitos) e os três blocos da tela (feitos × finalizados, risco por consequência e tipos com mais apontamentos). O rodapé cita as obras sem apontamentos.
 - **Rodapé** de cada folha: o período, as obras, quem gerou e quando, e "Folha N de M".
 
-Só saem as folhas dos quadros presentes: sem longo prazo nem vagões (por falta de acesso, de dado ou por escolha em "Quadros"), a folha 3 não sai; com a chave "Segurança" desmarcada, a folha 5 não sai. Um quadro cujo dado não chegou a tempo sai como indisponível, e o resto do PDF sai normalmente.
+Só saem as folhas dos quadros presentes: sem longo prazo nem vagões (por falta de acesso, de dado ou por escolha em "Quadros"), a folha 3 não sai; com a chave "Segurança" desmarcada, a folha da segurança não sai. Com tudo presente são sete folhas. Um quadro cujo dado não chegou a tempo sai como indisponível, e o resto do PDF sai normalmente.
 
 ## PDF da aba 0
 

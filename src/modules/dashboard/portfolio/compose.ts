@@ -9,8 +9,11 @@ import { buildWagonsPanel } from '../wagons-panel';
 import { buildMediumTermPanel } from '../medium-term-panel';
 import { buildShortTermPanel, shortTermCompanies } from '../short-term-panel';
 import { terminalityCompanies } from '../terminality-panel';
+import { buildLegalizationBlock } from '../extras/legalization';
+import type { DashboardExtrasResponse, ExtrasRange } from '../extras/types';
 import { aggregatePortfolio } from './aggregate';
 import { extractRow, type PortfolioSource } from './extract';
+import { EXTRA_ROUTE_MODULES, extraSources, type ExtrasState } from './extras';
 import {
   byName,
   fromBuilder,
@@ -42,7 +45,12 @@ export { portfolioText, PORTFOLIO_TEXT_LIMIT } from './portfolio-text';
  * Quadros (`shown`) como na tela: só os módulos que a pessoa pode abrir (`hasSectionAccess` sobre
  * `PORTFOLIO_MODULES`), restritos aos pedidos; nenhum pedido acessível volta a todos os acessíveis. A diferença
  * para o hook é só o que não existe no servidor: nada fica "carregando" (a leitura já terminou) e a resposta
- * ausente equivale ao 403 da tela (os quadros remotos somem). Puro: quem chama lê o planejamento e as fontes. */
+ * ausente equivale ao 403 da tela (os quadros remotos somem). Puro: quem chama lê o planejamento e as fontes.
+ *
+ * Quadros de 12/11/2026 (Linha de Balanço e legalização, Quadro de Restrições, histograma, produtividade e
+ * checklist): os blocos vêm de `readDashboardExtras`, que precisa do intervalo do período. Por isso quem chama
+ * resolve primeiro o período com `portfolioRange` (os mesmos passos 1 a 4), lê os quadros e passa a resposta em
+ * `extras`; sem ela, esses quadros somem, como os remotos. A legalização sai do planejamento. */
 
 export interface ComposePortfolioInput extends ModuleAccess {
   /** O planejamento (saída de `getPlanning`) com, pelo menos, as obras de `works`. */
@@ -52,6 +60,9 @@ export interface ComposePortfolioInput extends ModuleAccess {
   /** A resposta de `readPortfolioSources` (a mesma de `GET /api/dashboard/obras`). `{ error }`: a leitura falhou e
    * os quadros remotos ficam com erro, como na tela; ausente: sem leitura, os quadros remotos somem. */
   sources?: PortfolioSourcesResponse | { error: string };
+  /** A resposta de `readDashboardExtras` para o intervalo de `portfolioRange` (a mesma de
+   * `GET /api/dashboard/extras`). `{ error }`: a leitura falhou; ausente: os quadros de 12/11/2026 somem. */
+  extras?: DashboardExtrasResponse | { error: string };
   /** Escala e período; ausente = Mensal, no mês da semana apurada mais recente entre as obras (regra 6). */
   selection?: PeriodSelection;
   /** Hoje; padrão `planning.today`. */
@@ -77,21 +88,11 @@ type SourcesState = { status: 'absent' } | { status: 'error'; message: string } 
 
 const listText = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} e ${items.at(-1)}`);
 
-export function composePortfolio(input: ComposePortfolioInput): ComposedPortfolio {
-  const { planning } = input;
-  // Conjunto vazio = sem recorte, como na tela (a URL sem empreiteiro).
-  const companies = input.companies?.size ? input.companies : undefined;
-  const data = planning.data;
-  const today = input.today ?? planning.today;
+/** As obras em ordem de nome, as linhas do curto prazo de cada uma e o período (passos 1 a 4). */
+function resolveBase(input: Pick<ComposePortfolioInput, 'planning' | 'works' | 'selection' | 'today'>) {
+  const data = input.planning.data;
+  const today = input.today ?? input.planning.today;
   const currentWeek = startOfWeek(today);
-
-  // Acesso e quadros, como `access` e `shown` do hook.
-  const access = Object.fromEntries(
-    PORTFOLIO_MODULES.map(m => [m.id, hasSectionAccess(m.id, { developer: input.developer, modules: input.modules })]),
-  ) as Record<PortfolioModule, boolean>;
-  const picked = PORTFOLIO_MODULES.filter(m => access[m.id] && (!input.shown || input.shown.has(m.id))).map(m => m.id);
-  const shown = new Set(picked.length ? picked : PORTFOLIO_MODULES.filter(m => access[m.id]).map(m => m.id));
-
   // Regra 2: as obras na ordem do nome.
   const chosen: PortfolioWork[] = input.works.map(w => ({ id: w.id, name: w.name, code: w.code })).sort(byName);
 
@@ -113,6 +114,29 @@ export function composePortfolio(input: ComposePortfolioInput): ComposedPortfoli
   }
   const periodContext: PeriodContext = { currentWeek, since, anchorWeek: anchor ?? currentWeek };
   const period = resolvePeriod(input.selection ?? { scale: 'mes' }, periodContext);
+  return { today, chosen, lines, periodContext, period };
+}
+
+/** O intervalo que `readDashboardExtras` deve ler para esta composição (segunda-feira inicial, sábado final e
+ * hoje), ou `undefined` quando o período não tem semana. */
+export function portfolioRange(input: Pick<ComposePortfolioInput, 'planning' | 'works' | 'selection' | 'today'>): ExtrasRange | undefined {
+  const { period, today } = resolveBase(input);
+  return period.weeks.length ? { start: period.start, end: period.end, today } : undefined;
+}
+
+export function composePortfolio(input: ComposePortfolioInput): ComposedPortfolio {
+  const { planning } = input;
+  // Conjunto vazio = sem recorte, como na tela (a URL sem empreiteiro).
+  const companies = input.companies?.size ? input.companies : undefined;
+  const data = planning.data;
+  const { today, chosen, lines, periodContext, period } = resolveBase(input);
+
+  // Acesso e quadros, como `access` e `shown` do hook.
+  const access = Object.fromEntries(
+    PORTFOLIO_MODULES.map(m => [m.id, hasSectionAccess(m.section, { developer: input.developer, modules: input.modules })]),
+  ) as Record<PortfolioModule, boolean>;
+  const picked = PORTFOLIO_MODULES.filter(m => access[m.id] && (!input.shown || input.shown.has(m.id))).map(m => m.id);
+  const shown = new Set(picked.length ? picked : PORTFOLIO_MODULES.filter(m => access[m.id]).map(m => m.id));
 
   // A leitura remota, como o `useFetched` do hook depois de terminar.
   const remoteShown = REMOTE_MODULES.some(module => shown.has(module));
@@ -192,10 +216,30 @@ export function composePortfolio(input: ComposePortfolioInput): ComposedPortfoli
     });
   }
 
+  // Os quadros de 12/11/2026, como `extras` do hook depois de terminar.
+  const extrasShown = EXTRA_ROUTE_MODULES.some(module => shown.has(module));
+  const extras: ExtrasState =
+    !extrasShown || !input.extras || !period.weeks.length
+      ? { status: 'absent' }
+      : 'error' in input.extras
+        ? { status: 'error', message: input.extras.error }
+        : { status: 'ready', data: input.extras };
+  const extraEntries = new Map((extras.status === 'ready' ? extras.data.works : []).map(entry => [entry.workId, entry]));
+
   const rows = included.map(work => {
     const own = lines.get(work.id) ?? { commitments: [], teams: [] };
     const fromLocal = local.get(work.id)!;
     const fromRemote = remote.get(work.id)!;
+    const inPeriod = refs.has(work.id);
+    const legalization =
+      inPeriod && shown.has('balanco') ? buildLegalizationBlock(data, work.id, { start: period.start, end: period.end, today }) : undefined;
+    const fromExtra = extraSources({
+      state: extras,
+      entry: extraEntries.get(work.id),
+      inPeriod,
+      shown,
+      ...(legalization ? { legalization } : {}),
+    });
     return extractRow(
       {
         work,
@@ -208,7 +252,12 @@ export function composePortfolio(input: ComposePortfolioInput): ComposedPortfoli
         longTerm: fromRemote.longTerm,
         terminality: fromRemote.terminality,
         safety: fromRemote.safety,
-        reasons: fromRemote.reasons,
+        balance: fromExtra.balance,
+        restrictions: fromExtra.restrictions,
+        headcount: fromExtra.headcount,
+        production: fromExtra.production,
+        checklist: fromExtra.checklist,
+        reasons: { ...fromRemote.reasons, ...fromExtra.reasons },
       },
       period,
     );
@@ -225,13 +274,16 @@ export function composePortfolio(input: ComposePortfolioInput): ComposedPortfoli
     : aggregated;
 
   const remoteModules = REMOTE_MODULES.filter(module => shown.has(module));
-  const unavailable =
-    sources.status === 'error'
-      ? remoteModules.map(module => ({ module, message: sources.message }))
-      : remoteModules.flatMap(module => {
-          const failed = portfolio.rows.filter(row => row.status[module].kind === 'error').map(row => row.work.name);
-          return failed.length ? [{ module, message: `Não foi possível carregar em ${listText(failed)}.` }] : [];
-        });
+  const extraModules = EXTRA_ROUTE_MODULES.filter(module => shown.has(module));
+  const failedIn = (list: PortfolioModule[]) =>
+    list.flatMap(module => {
+      const failed = portfolio.rows.filter(row => row.status[module].kind === 'error').map(row => row.work.name);
+      return failed.length ? [{ module, message: `Não foi possível carregar em ${listText(failed)}.` }] : [];
+    });
+  const unavailable = [
+    ...(sources.status === 'error' ? remoteModules.map(module => ({ module, message: sources.message })) : failedIn(remoteModules)),
+    ...(extras.status === 'error' ? extraModules.map(module => ({ module, message: extras.message })) : failedIn(extraModules)),
+  ];
 
   return {
     ...portfolio,

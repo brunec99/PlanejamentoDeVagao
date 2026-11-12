@@ -345,6 +345,9 @@ export interface User extends RecordBase {
   /** Técnico de segurança do trabalho (migração 0040, `profiles.tst`): tipo que se soma ao papel. Só quem
    * é TST lança e finaliza apontamentos na aba 6 (Segurança do trabalho). Ausente = não é TST. */
   tst?: boolean;
+  /** Recebe o resumo semanal por e-mail aos sábados (migração 0050, `profiles.weekly_summary`). Só vale para
+   * admin; gravado pela rota `/api/dashboard/resumo-semanal`, fora do `commit_planning`. Ausente = não recebe. */
+  weeklySummary?: boolean;
 }
 export interface HistoryEvent {
   id: Id;

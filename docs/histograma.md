@@ -83,5 +83,5 @@ somadas. Entram 28.789 linhas: BLT 10.432, ESZ 6.954, MZN 6.724, ATM 2.948, BRZ 
 
 - Aplicar a 0045 e importar o histórico.
 - Liberar o módulo para quem lança em cada obra (Configurações → Usuários).
-- O histograma ainda não entra no dashboard da obra nem no dashboard geral.
+- Desde 12/11/2026 o histograma entra na aba 0 e no Dashboard geral (publicado em 12/11/2026); ver `docs/dashboard.md`.
 - Sem PDF e sem modo de campo offline.
