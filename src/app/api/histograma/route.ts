@@ -1,0 +1,30 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { requireModuleAccess } from '@/infrastructure/auth/supabase-server';
+import { canWriteHeadcount } from '@/application/use-cases/headcount-commands';
+import { HeadcountUnavailableError, loadHeadcount } from '@/infrastructure/repositories/supabase/headcount-repository';
+import { logRouteError } from '@/infrastructure/log';
+
+export const runtime = 'nodejs';
+const headers = { 'Cache-Control': 'no-store' };
+const responseError = (error: string, status: number) => NextResponse.json({ error }, { status, headers });
+
+/** O efetivo de uma obra, inteiro: a tela filtra e agrega no navegador. Lê quem tem o módulo e a obra
+ * liberados; `canEdit` diz se quem pediu pode lançar (a tela só esconde botões, quem barra é o POST).
+ * Sem a migração 0045 responde "indisponível": só a aba 7 fica fora. */
+export async function GET(request: NextRequest) {
+  const gate = await requireModuleAccess('histograma');
+  if (gate.error) return gate.error;
+  const profile = gate.access.profile;
+  const workId = request.nextUrl.searchParams.get('workId') ?? '';
+  if (!workId) return responseError('Obra não informada.', 400);
+  if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);
+  if (!profile.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
+  try {
+    const data = await loadHeadcount(workId);
+    return NextResponse.json({ available: true, canEdit: canWriteHeadcount(profile), ...data }, { headers });
+  } catch (error) {
+    if (error instanceof HeadcountUnavailableError) return NextResponse.json({ available: false }, { headers });
+    logRouteError('GET /api/histograma', error, { actorId: profile.id, workId });
+    return responseError('Não foi possível carregar o histograma da obra.', 502);
+  }
+}

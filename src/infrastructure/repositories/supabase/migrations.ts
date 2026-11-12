@@ -281,6 +281,20 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A visão Custos da aba 1 pede a migração e não grava; o avanço físico e o IDP da Linha de Balanço seguem pesados pela duração.',
     critical: false,
   },
+  {
+    migration: '0045_headcount',
+    label: 'Histograma de mão de obra: efetivo diário por empresa e função',
+    probe: { kind: 'table', table: 'headcount_entries' },
+    effect: 'A aba 7 (Histograma) responde "indisponível"; as demais seguem normais.',
+    critical: false,
+  },
+  {
+    migration: '0046_production',
+    label: 'Controle de produtividade: serviço, equipe e produção do dia',
+    probe: { kind: 'table', table: 'production_entries' },
+    effect: 'A aba 8 (Controle de produtividade) responde "indisponível"; as demais seguem normais.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

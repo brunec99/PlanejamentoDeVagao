@@ -10,6 +10,8 @@ import { sections as medioPrazo } from './medio-prazo';
 import { sections as curtoPrazo } from './curto-prazo';
 import { sections as terminalidade } from './terminalidade';
 import { sections as seguranca } from './seguranca';
+import { sections as histograma } from './histograma';
+import { sections as produtividade } from './produtividade';
 import { sections as apoioBim } from './apoio-bim';
 import { sections as agente } from './agente';
 
@@ -31,6 +33,8 @@ export const MANUAL_SECTIONS: readonly ManualSection[] = [
   ...curtoPrazo,
   ...terminalidade,
   ...seguranca,
+  ...histograma,
+  ...produtividade,
   ...apoioBim,
   ...agente,
 ];
@@ -48,6 +52,8 @@ export const SCREEN_LABEL: Readonly<Record<string, string>> = {
   'curto-prazo': 'Aba 4 · Cronograma de curto prazo',
   terminalidade: 'Aba 5 · Terminalidade',
   seguranca: 'Aba 6 · Segurança do trabalho',
+  histograma: 'Aba 7 · Histograma de mão de obra',
+  produtividade: 'Aba 8 · Controle de produtividade',
   federacao: 'Apoio · Modelo federado',
   ifc: 'Apoio · Arquivos IFC',
   dividas: 'Apoio · Dívidas',
@@ -176,6 +182,8 @@ const SCREEN_NAMES: Readonly<Record<string, readonly string[]>> = {
   'curto-prazo': ['curto prazo', 'planilha da semana', 'planilha semanal', 'aba 4'],
   terminalidade: ['terminalidade', 'aba 5'],
   seguranca: ['seguranca do trabalho', 'aba 6', 'tst', 'vistoria de seguranca'],
+  histograma: ['histograma', 'aba 7', 'efetivo', 'mao de obra'],
+  produtividade: ['controle de produtividade', 'produtividade', 'aba 8', 'controle da producao'],
   federacao: ['modelo federado', 'federacao', 'federado'],
   ifc: ['arquivos ifc', 'ifc'],
   dividas: ['dividas', 'divida'],

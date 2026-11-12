@@ -171,6 +171,24 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
   await insert('lob_cost_items', { id: `${p}-cost2`, work_id: w, service_id: null, description: 'Administração', amount: 0 });
   // 0040: a segurança do trabalho cai com a obra pelo `on delete cascade` de work_id (delete_work não as cita).
   await insert('safety_items', { id: `${p}-sst`, work_id: w, type_id: 'sst-tipo-01', consequence: 'Morte', probability: 'Possível' });
+  // 0045: o efetivo do histograma sai pela cascata de work_id.
+  // 0046: os lançamentos de produção também saem pela cascata.
+  await insert('production_entries', {
+    id: `${p}-prod`,
+    work_id: w,
+    worked_on: '2026-11-03',
+    service: 'Reboco',
+    contractor: 'GGP',
+    professionals: 2,
+  });
+  await insert('headcount_entries', {
+    id: `${p}-hc`,
+    work_id: w,
+    worked_on: '2026-11-03',
+    company: 'ATR',
+    role: 'Engenheiro',
+    quantity: 1,
+  });
   await insert('safety_photos', {
     id: `${p}-sstphoto`,
     item_id: `${p}-sst`,

@@ -72,8 +72,9 @@ test('toda tela do sistema tem ao menos uma seção do manual, e o índice lista
   const index = manualIndex();
   for (const section of MANUAL_SECTIONS) assert.ok(index.includes(`- ${section.id}: `), `fora do índice: ${section.id}`);
   for (const label of Object.values(SCREEN_LABEL)) assert.ok(index.includes(label), `rótulo fora do índice: ${label}`);
-  // O índice vai no prompt do sistema a cada pergunta (em cache): tem de continuar pequeno.
-  assert.ok(index.length <= 14000, `índice grande demais: ${index.length} caracteres`);
+  // O índice vai no prompt do sistema a cada pergunta (em cache): tem de continuar pequeno. O teto subiu de
+  // 14000 para 14500 em 11/11/2026, com as abas 7 (Histograma) e 8 (Produtividade).
+  assert.ok(index.length <= 14500, `índice grande demais: ${index.length} caracteres`);
 });
 
 test('busca pelo id exato e pelo id dentro da frase devolve só aquela seção', () => {
