@@ -2,12 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TERMINALITY_BUCKET } from './terminality-repository';
 import { LOB_BUCKET } from './lob-repository';
 import { SAFETY_BUCKET } from '../../../domain/safety';
+import { CHECKLIST_BUCKET } from '../../../domain/equipment-checklist';
 
 /** Os buckets em que cada obra tem uma pasta com o próprio id: os IFC e a geometria convertida em
  * `ifc/<obra>/<modelo>/…`, as fotos da terminalidade em `terminalidade/<obra>/<item>/…` e as fotos
  * das medições da Linha de Balanço em `medicoes/<obra>/<lançamento>/…` (0038) e as fotos da segurança do
- * trabalho em `seguranca/<obra>/<apontamento>/…` (0040). */
-export const WORK_BUCKETS = ['ifc', TERMINALITY_BUCKET, LOB_BUCKET, SAFETY_BUCKET] as const;
+ * trabalho em `seguranca/<obra>/<apontamento>/…` (0040) e a assinatura e as fotos do checklist de equipamentos
+ * em `checklist/<obra>/<inspeção>/…` (0048). */
+export const WORK_BUCKETS = ['ifc', TERMINALITY_BUCKET, LOB_BUCKET, SAFETY_BUCKET, CHECKLIST_BUCKET] as const;
 const PAGE = 1000;
 const REMOVE_BATCH = 100;
 

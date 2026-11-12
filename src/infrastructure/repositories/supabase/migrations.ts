@@ -302,6 +302,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A aba 9 (Checklist de equipamentos) responde "indisponível"; as demais seguem normais.',
     critical: false,
   },
+  {
+    migration: '0048_checklist_operator',
+    label: 'Checklist de equipamentos: link do operador (QR), assinatura e fotos',
+    probe: { kind: 'column', table: 'checklist_equipment', column: 'public_token' },
+    effect: 'A aba 9 segue lendo, mas não grava inspeção nem equipamento, e o QR do operador não existe.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

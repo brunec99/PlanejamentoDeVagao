@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import type { ChecklistCommand, ChecklistData, ChecklistResponse } from '@/domain/equipment-checklist';
+import type { ChecklistCommand, ChecklistData, ChecklistPhoto, ChecklistResponse } from '@/domain/equipment-checklist';
 
 /** Cliente da aba 9, Checklist de equipamentos (11/11/2026). Leitura e gravação próprias, fora do
  * snapshot: GET /api/checklist traz os modelos, os equipamentos e as inspeções recentes da obra, e POST
@@ -9,6 +9,8 @@ import type { ChecklistCommand, ChecklistData, ChecklistResponse } from '@/domai
 export interface ChecklistView extends ChecklistData {
   /** Quem está logado é TST ou admin. O servidor confere de novo. */
   canEdit: boolean;
+  /** Quem está logado é admin: cadastra modelos e equipamentos e troca o link do QR. */
+  canManage: boolean;
   /** "Hoje" no fuso da obra, vindo do servidor. */
   today: string;
 }
@@ -35,10 +37,21 @@ async function sendChecklistCommand(command: ChecklistCommand, workId: string): 
   );
 }
 
+export interface RunFiles {
+  signatureUrl: string | null;
+  photos: ChecklistPhoto[];
+}
+/** A assinatura e as fotos de uma inspeção, em URLs assinadas: pedidas só quando alguém abre a inspeção. */
+export async function fetchRunFiles(workId: string, runId: string): Promise<RunFiles> {
+  return readJson(
+    await fetch(`/api/checklist/arquivos?workId=${encodeURIComponent(workId)}&runId=${encodeURIComponent(runId)}`, { cache: 'no-store' }),
+  );
+}
+
 const toState = (response: ChecklistResponse): ChecklistState => {
   if (!response.available) return { status: 'unavailable' };
-  const { models, equipment, runs, canEdit, today } = response;
-  return { status: 'ready', data: { models, equipment, runs, canEdit, today } };
+  const { models, equipment, runs, canEdit, canManage, today } = response;
+  return { status: 'ready', data: { models, equipment, runs, canEdit, canManage: canManage === true, today } };
 };
 
 /** Estado da aba para uma obra: carrega, executa comandos e aplica o retorno do servidor. */

@@ -39,10 +39,20 @@ export interface ChecklistEquipment {
   name: string;
   equipmentType: string;
   active: boolean;
+  /** O segredo do link do operador (`/checklist/<token>`), desde 12/11/2026. Só TST e admin o recebem; vazio
+   * antes da migração 0048. */
+  publicToken: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
+/** Foto da inspeção no bucket `checklist`. `url` é a URL assinada, preenchida só quando a tela pede. */
+export interface ChecklistPhoto {
+  id: string;
+  path: string;
+  url?: string;
+}
+export type ChecklistRunSource = 'app' | 'link';
 export interface ChecklistRunAnswer {
   itemId: string;
   /** O texto do item no dia da inspeção. */
@@ -61,6 +71,14 @@ export interface ChecklistRun {
   doneOn: string;
   answers: ChecklistRunAnswer[];
   note: string;
+  /** Quem operou e respondeu (nome digitado). Obrigatório pelo link do operador; opcional na tela logada. */
+  operatorName: string;
+  /** Assinatura desenhada: o PNG no bucket e a hora em que foi colhida. */
+  signaturePath: string | null;
+  signedAt: string | null;
+  photos: ChecklistPhoto[];
+  /** 'link': preenchida pelo operador, sem login, pelo QR do equipamento (`createdBy` = 'qr'). */
+  source: ChecklistRunSource;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -73,7 +91,17 @@ export interface ChecklistData {
   equipment: ChecklistEquipment[];
   runs: ChecklistRun[];
 }
-export type ChecklistResponse = { available: false } | ({ available: true; canEdit: boolean; today: string } & ChecklistData);
+/** `canEdit`: registra e corrige inspeções (TST e admin). `canManage`: cadastra modelos e equipamentos e
+ * troca o link do QR (só admin, desde 12/11/2026). */
+export type ChecklistResponse =
+  | { available: false }
+  | ({ available: true; canEdit: boolean; canManage: boolean; today: string; work?: { code: string; name: string } } & ChecklistData);
+
+/** Foto na gravação: só `id` mantém uma foto que a inspeção já tem; com `data` (JPEG em base64) é nova. */
+export interface ChecklistPhotoInput {
+  id: string;
+  data?: string;
+}
 
 export type ChecklistCommand =
   | {
@@ -88,6 +116,8 @@ export type ChecklistCommand =
   | { type: 'set_model_active'; id: string; active: boolean }
   | { type: 'save_equipment'; id?: string; workId: string; name: string; equipmentType: string }
   | { type: 'set_equipment_active'; id: string; active: boolean }
+  /** Troca o segredo do link: a etiqueta antiga deixa de valer. */
+  | { type: 'rotate_equipment_token'; id: string }
   | {
       type: 'save_run';
       id?: string;
@@ -97,11 +127,69 @@ export type ChecklistCommand =
       doneOn: string;
       answers: { itemId: string; answer: ChecklistAnswer; note?: string }[];
       note?: string;
+      operatorName?: string;
+      /** PNG em base64 de uma assinatura nova. Ausente mantém a que a inspeção já tem. */
+      signature?: string;
+      /** A lista final de fotos, na ordem. Ausente mantém as que a inspeção já tem. */
+      photos?: ChecklistPhotoInput[];
     }
   | { type: 'delete_run'; id: string };
 
-export const CHECKLIST_TST_ONLY_MESSAGE = 'Só técnicos de segurança (TST) e administradores editam os checklists de equipamentos.';
-export const CHECKLIST_LIMITS = { name: 80, item: 200, items: 60, note: 300 } as const;
+export const CHECKLIST_TST_ONLY_MESSAGE =
+  'Só técnicos de segurança (TST) e administradores registram e corrigem inspeções pela tela; o operador usa o QR do equipamento.';
+export const CHECKLIST_ADMIN_ONLY_MESSAGE = 'Só administradores cadastram modelos e equipamentos e trocam o link do QR.';
+export const CHECKLIST_LIMITS = {
+  name: 80,
+  item: 200,
+  items: 60,
+  note: 300,
+  operator: 80,
+  photos: 4,
+  /** Tamanho em base64 (caracteres): ~900 KB de JPEG por foto e ~220 KB de PNG na assinatura. */
+  photoData: 1_200_000,
+  signatureData: 300_000,
+} as const;
+
+export const CHECKLIST_BUCKET = 'checklist';
+/** Caminhos no bucket `checklist`. A assinatura leva um id próprio: assinar de novo não reaproveita o arquivo. */
+export const checklistPhotoPath = (workId: string, runId: string, photoId: string) => `${workId}/${runId}/${photoId}.jpg`;
+export const checklistSignaturePath = (workId: string, runId: string, id: string) => `${workId}/${runId}/assinatura-${id}.png`;
+/** O arquivo é o que diz ser? Confere a assinatura do formato no começo do base64 (JPEG `FF D8 FF`, PNG). */
+export const isJpegBase64 = (data: string) => /^\/9j\/[A-Za-z0-9+/]+={0,2}$/.test(data);
+export const isPngBase64 = (data: string) => /^iVBORw0KGgo[A-Za-z0-9+/]+={0,2}$/.test(data);
+
+/** O segredo do link do operador: 32 a 64 caracteres de URL. */
+export const CHECKLIST_TOKEN = /^[A-Za-z0-9_-]{32,64}$/;
+export const checklistPublicPath = (token: string) => `/checklist/${token}`;
+
+/** O que o operador vê ao abrir o link do QR: o equipamento, os checklists dele e a situação de cada um no
+ * período corrente. Nada além disso sai do sistema por este caminho. */
+export interface OperatorChecklistDue {
+  modelId: string;
+  name: string;
+  frequency: ChecklistFrequency;
+  items: ChecklistModelItem[];
+  status: ChecklistStatus;
+  doneOn: string | null;
+  doneBy: string;
+}
+export type OperatorChecklistView =
+  | { available: false; reason: 'not_found' | 'inactive' | 'unavailable' }
+  | {
+      available: true;
+      today: string;
+      work: { code: string; name: string };
+      equipment: { name: string; equipmentType: string };
+      dues: OperatorChecklistDue[];
+    };
+export interface OperatorRunInput {
+  modelId: string;
+  answers: { itemId: string; answer: ChecklistAnswer; note?: string }[];
+  note?: string;
+  operatorName: string;
+  signature: string;
+  photos?: ChecklistPhotoInput[];
+}
 /** Janela de inspeções que a tela carrega (cobre o mês corrente e o histórico recente). */
 export const CHECKLIST_WINDOW_DAYS = 120;
 
@@ -223,3 +311,17 @@ export function checklistSummary(board: readonly ChecklistBoardRow[]): Checklist
 /** As inspeções mais recentes primeiro (dia, depois hora de gravação). */
 export const recentRuns = (runs: readonly ChecklistRun[]): ChecklistRun[] =>
   runs.slice().sort((a, b) => b.doneOn.localeCompare(a.doneOn) || b.createdAt.localeCompare(a.createdAt));
+
+/** A visão do operador para um equipamento, a partir do quadro: sem ids internos além do modelo. */
+export function operatorDues(data: ChecklistData, equipmentId: string, today: string): OperatorChecklistDue[] {
+  const row = checklistBoard(data, today).find(r => r.equipment.id === equipmentId);
+  return (row?.dues ?? []).map(due => ({
+    modelId: due.model.id,
+    name: due.model.name,
+    frequency: due.model.frequency,
+    items: due.model.items,
+    status: due.status,
+    doneOn: due.run?.doneOn ?? null,
+    doneBy: due.run?.operatorName ?? '',
+  }));
+}

@@ -1,12 +1,13 @@
 import type { ManualSection } from './types';
 
-/** Manual da aba 9, Checklist de equipamentos (11/11/2026). Escrito a partir do código da tela e dos
+/** Manual da aba 9, Checklist de equipamentos (11/11/2026; operador pelo QR, assinatura, fotos e cadastro só com admin em 12/11/2026). Escrito a partir do código da tela e dos
  * comandos; descreve só o que está implementado. */
 export const sections: ManualSection[] = [
   {
     id: 'checklist-equipamentos',
     title: 'Checklist de equipamentos: modelos, equipamentos e inspeções',
-    summary: 'Aba 9: inspeção diária, semanal e mensal; TST edita.',
+    summary:
+      'Aba 9: inspeção diária, semanal e mensal; operador preenche pelo QR sem login, com assinatura e fotos; cadastro só com admin.',
     keywords: [
       'checklist',
       'checklist de equipamentos',
@@ -21,6 +22,14 @@ export const sections: ManualSection[] = [
       'modelo de checklist',
       'cadastrar equipamento',
       'tst',
+      'qr code',
+      'qr do equipamento',
+      'etiqueta',
+      'operador',
+      'assinatura',
+      'foto do checklist',
+      'sem login',
+      'gerar novo link',
     ],
     screen: 'checklist',
     body: `## O que é a aba 9, Checklist de equipamentos
@@ -30,7 +39,9 @@ export const sections: ManualSection[] = [
 ### Quem pode o quê
 
 - Todos que têm a obra **consultam** (a aba é aberta, como a aba 6).
-- Só quem é do tipo **TST** e os **administradores** criam e editam modelos, cadastram equipamentos e registram, editam ou excluem inspeções. O tipo TST é marcado pelo administrador, na mesma tela da aba 6.
+- O **operador do equipamento** preenche pelo **QR colado na máquina**, sem login e sem conta (ver "Checklist pelo QR" abaixo).
+- Quem é do tipo **TST** e os **administradores** registram, editam e excluem inspeções na tela, e veem o QR de cada equipamento. O tipo TST é marcado pelo administrador, na mesma tela da aba 6.
+- **Só administradores** fazem o cadastro: criam e editam modelos, cadastram, renomeiam e desativam equipamentos e geram um novo link de QR (desde 12/11/2026, a pedido da equipe de SST, para não haver conflito nas informações). Para o TST, a mensagem é "Só administradores cadastram modelos e equipamentos e trocam o link do QR.".
 
 ### As três peças
 
@@ -40,9 +51,19 @@ export const sections: ManualSection[] = [
 
 ### Como usar
 
-1. Em **Modelos de checklist**, clique em **Novo checklist**, preencha nome, tipo e periodicidade e escreva os itens. "Colar vários itens de uma vez" aceita a lista da ficha em papel, um item por linha. As setas mudam a ordem.
-2. Em **Equipamentos da obra**, cadastre cada equipamento com a identificação e o tipo. Um tipo sem modelo aparece com o aviso "Nenhum checklist para o tipo".
-3. No quadro, clique no checklist do equipamento: âmbar é **pendente** no período, verde é **feito**, vermelho é **feito com não conformidade**. Responda os itens e clique em **Registrar inspeção**. "Marcar os demais como conforme" preenche o que ficou em branco.
+1. (Admin) Em **Modelos de checklist**, clique em **Novo checklist**, preencha nome, tipo e periodicidade e escreva os itens. "Colar vários itens de uma vez" aceita a lista da ficha em papel, um item por linha. As setas mudam a ordem.
+2. (Admin) Em **Equipamentos da obra**, cadastre cada equipamento com a identificação e o tipo. Um tipo sem modelo aparece com o aviso "Nenhum checklist para o tipo".
+3. No quadro, clique no checklist do equipamento: âmbar é **pendente** no período, verde é **feito**, vermelho é **feito com não conformidade**. Responda os itens e clique em **Registrar inspeção**. "Marcar os demais como conforme" preenche o que ficou em branco. Na tela logada dá para anexar **até 4 fotos**, escrever o **nome do operador** e colher a **assinatura** dele no quadro (os três são opcionais ali; quem assina precisa ter o nome escrito).
+
+### Checklist pelo QR (operador, sem login)
+
+- Cada equipamento tem um **link secreto**. Na linha do equipamento, **QR do operador** mostra o QR, o endereço, **Copiar link** e **Imprimir etiqueta**; **Imprimir etiquetas com QR**, no alto do quadro, gera a folha com todos os equipamentos ativos da obra, para recortar e colar nas máquinas.
+- O operador aponta a câmera do celular para a etiqueta. Abre uma tela só daquele equipamento, com os checklists dele: **pendente** tem o botão **Preencher**; **feito** mostra o dia e quem fez.
+- No formulário ele responde C / NC / N/A, pode tirar **até 4 fotos** e escrever uma observação, e precisa escrever o **nome completo** e **assinar com o dedo**. Depois toca em **Enviar checklist**. Se houver item não conforme, a confirmação manda avisar o técnico de segurança antes de operar.
+- Pelo link só se registra **o dia de hoje** e só o que está **pendente no período** (diário uma vez por dia, semanal uma por semana, mensal uma por mês). O operador não edita nem apaga: corrigir é com TST ou admin, na tela logada.
+- Quem tem o link vê apenas aquele equipamento, nada mais do sistema. Se o link vazar, o admin clica em **Gerar novo link**: a etiqueta antiga para de funcionar e é preciso imprimir a nova. Equipamento desativado também fecha o link.
+- No histórico, a inspeção mostra o nome do operador e a marca **pelo QR**; "Ver respostas" mostra a assinatura (com data e hora) e as fotos.
+- O link precisa de internet no celular; não funciona sem sinal.
 
 ### Regras
 
@@ -55,6 +76,6 @@ export const sections: ManualSection[] = [
 
 ### O que ainda não existe
 
-Fotos na inspeção, preenchimento sem internet, impressão em PDF e a abertura automática de um apontamento na aba 6 a partir de uma não conformidade.`,
+Preenchimento sem internet, foto presa a um item específico, impressão da inspeção em PDF e a abertura automática de um apontamento na aba 6 a partir de uma não conformidade.`,
   },
 ];

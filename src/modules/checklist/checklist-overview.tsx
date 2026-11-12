@@ -1,20 +1,20 @@
 'use client';
-import { useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowUp, CheckCheck, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowDown, ArrowUp, CheckCheck, Copy, Pencil, Plus, Printer, QrCode as QrIcon, RefreshCw, Trash2, X } from 'lucide-react';
 import {
   ANSWER_LABEL,
-  CHECKLIST_ANSWERS,
   CHECKLIST_FREQUENCIES,
+  CHECKLIST_LIMITS,
   FREQUENCY_LABEL,
   FREQUENCY_PERIOD,
   checklistBoard,
   checklistKey,
+  checklistPublicPath,
   checklistSummary,
   equipmentTypes,
   formatChecklistDay,
   nonConformities,
   recentRuns,
-  type ChecklistAnswer,
   type ChecklistCommand,
   type ChecklistDue,
   type ChecklistEquipment,
@@ -27,7 +27,10 @@ import { Callout, Empty, LoadState, Missing, StatCard } from '@/modules/planejam
 import { TabHeader } from '@/modules/layout/tab-header';
 import { useToast } from '@/modules/layout/toast';
 import { useConfirm } from '@/modules/layout/confirm';
-import { useChecklist } from './api';
+import { fetchRunFiles, useChecklist, type RunFiles } from './api';
+import { AnswerList, type AnswerDraft } from './answer-list';
+import { QrCode } from './qr';
+import { PhotoPicker, SignaturePad, type PhotoDraft } from './run-fields';
 
 /** Tela da aba 9, Checklist de equipamentos (11/11/2026). De cima para baixo: os cartões do período, o
  * quadro (cada equipamento com os checklists devidos hoje, na semana e no mês), o formulário de inspeção
@@ -38,12 +41,161 @@ const STATUS_STYLE = {
   done: 'border-emerald-300 bg-emerald-50 text-emerald-900',
   nonconforming: 'border-red-300 bg-red-50 text-red-900',
 } as const;
-const ANSWER_STYLE: Record<ChecklistAnswer, string> = {
-  c: 'bg-emerald-600 text-white',
-  nc: 'bg-red-600 text-white',
-  na: 'bg-slate-600 text-white',
-};
-const ANSWER_SHORT: Record<ChecklistAnswer, string> = { c: 'C', nc: 'NC', na: 'N/A' };
+
+/** Assinatura e fotos de uma inspeção, buscadas quando ela é aberta (URLs assinadas de uma hora). */
+function useRunFiles(workId: string, run: ChecklistRun | undefined): RunFiles | 'loading' | 'error' | undefined {
+  const wanted = run && (run.signaturePath || run.photos.length) ? `${run.id}|${run.updatedAt}` : undefined;
+  const [loaded, setLoaded] = useState<{ key: string; files: RunFiles | 'error' }>();
+  useEffect(() => {
+    if (!wanted) return;
+    let active = true;
+    fetchRunFiles(workId, wanted.split('|')[0])
+      .then(files => active && setLoaded({ key: wanted, files }))
+      .catch(() => active && setLoaded({ key: wanted, files: 'error' }));
+    return () => {
+      active = false;
+    };
+  }, [workId, wanted]);
+  if (!wanted) return undefined;
+  return loaded?.key === wanted ? loaded.files : 'loading';
+}
+
+const signedAtText = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/** O que a inspeção guarda além das respostas: quem operou, a assinatura e as fotos. */
+function RunEvidence({ workId, run }: { workId: string; run: ChecklistRun }) {
+  const files = useRunFiles(workId, run);
+  if (!run.operatorName && !run.signaturePath && !run.photos.length) return null;
+  return (
+    <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-sm text-slate-700">
+      {run.operatorName && (
+        <p>
+          Operador: <strong>{run.operatorName}</strong>
+          {run.source === 'link' && <span className="text-slate-500"> · preenchido pelo QR, sem login</span>}
+        </p>
+      )}
+      {files === 'loading' && <p className="text-xs text-slate-500">Carregando assinatura e fotos…</p>}
+      {files === 'error' && <p className="text-xs text-danger">Não foi possível carregar a assinatura e as fotos.</p>}
+      {files && typeof files === 'object' && (
+        <>
+          {files.signatureUrl && (
+            <figure>
+              {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada do bucket privado */}
+              <img
+                src={files.signatureUrl}
+                alt={`Assinatura de ${run.operatorName}`}
+                className="h-20 rounded-lg border border-slate-200 bg-white"
+              />
+              <figcaption className="mt-0.5 text-xs text-slate-500">
+                Assinado em {run.signedAt ? signedAtText(run.signedAt) : '—'}
+              </figcaption>
+            </figure>
+          )}
+          {files.photos.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {files.photos.map((photo, index) => (
+                <li key={photo.id}>
+                  <a href={photo.url} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada do bucket privado */}
+                    <img
+                      src={photo.url}
+                      alt={`Foto ${index + 1} da inspeção`}
+                      className="size-20 rounded-lg border border-slate-200 object-cover"
+                    />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** O link do operador de um equipamento: o QR, o endereço para copiar, a etiqueta para imprimir e, para o
+ * admin, a troca do segredo (a etiqueta antiga deixa de valer). */
+function EquipmentLink({
+  equipment,
+  workId,
+  canManage,
+  busy,
+  execute,
+  onClose,
+}: {
+  equipment: ChecklistEquipment;
+  workId: string;
+  canManage: boolean;
+  busy: boolean;
+  execute: Execute;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const confirm = useConfirm();
+  if (!equipment.publicToken)
+    return (
+      <div className="mt-3 w-full rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+        O link do operador ainda não existe: falta aplicar a migração 0048_checklist_operator.sql no Supabase.
+      </div>
+    );
+  const url = `${window.location.origin}${checklistPublicPath(equipment.publicToken)}`;
+  const rotate = async () => {
+    const ok = await confirm({
+      title: `Gerar um novo link para ${equipment.name}?`,
+      description: 'A etiqueta já colada no equipamento deixa de funcionar. Será preciso imprimir e colar a nova.',
+      confirmLabel: 'Gerar novo link',
+      tone: 'danger',
+    });
+    if (ok) await execute({ type: 'rotate_equipment_token', id: equipment.id }, 'Link novo gerado: imprima a etiqueta de novo');
+  };
+  return (
+    <div data-tour="checklist-qr" className="mt-3 flex w-full flex-wrap items-start gap-4 rounded-xl bg-slate-50 p-3">
+      <QrCode value={url} size={132} label={`QR do checklist de ${equipment.name}`} />
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="text-sm text-slate-700">
+          Cole a etiqueta no equipamento. O operador aponta a câmera, preenche os checklists pendentes de <strong>{equipment.name}</strong>,
+          tira fotos e assina, <strong>sem login</strong>. Quem tem este link só vê este equipamento.
+        </p>
+        <p className="break-all rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs text-slate-600">{url}</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="button-ghost"
+            onClick={() =>
+              navigator.clipboard.writeText(url).then(
+                () => toast({ title: 'Link copiado' }),
+                () => toast({ title: 'Não foi possível copiar', description: 'Selecione o endereço e copie à mão.', tone: 'danger' }),
+              )
+            }
+          >
+            <Copy size={15} aria-hidden />
+            Copiar link
+          </button>
+          <a
+            className="button-ghost"
+            href={`/imprimir/checklist/${encodeURIComponent(workId)}?equipamento=${encodeURIComponent(equipment.id)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Printer size={15} aria-hidden />
+            Imprimir etiqueta
+          </a>
+          {canManage && (
+            <button type="button" className="button-ghost" disabled={busy} onClick={rotate}>
+              <RefreshCw size={15} aria-hidden />
+              Gerar novo link
+            </button>
+          )}
+          <button type="button" className="button-ghost" onClick={onClose}>
+            <X size={15} aria-hidden />
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function dueText(due: ChecklistDue): string {
   if (due.status === 'pending')
@@ -79,9 +231,17 @@ function RunForm({
   const items = run ? run.answers.map(a => ({ id: a.itemId, text: a.text })) : (model?.items ?? []);
   const [doneOn, setDoneOn] = useState(run?.doneOn ?? today);
   const [note, setNote] = useState(run?.note ?? '');
-  const [answers, setAnswers] = useState<Record<string, { answer?: ChecklistAnswer; note: string }>>(() =>
+  const [answers, setAnswers] = useState<AnswerDraft>(() =>
     Object.fromEntries((run?.answers ?? []).map(a => [a.itemId, { answer: a.answer, note: a.note }])),
   );
+  const [operatorName, setOperatorName] = useState(run?.operatorName ?? '');
+  const [signature, setSignature] = useState<string>();
+  const [resign, setResign] = useState(!run?.signaturePath);
+  // As fotos já gravadas entram pelo id; a miniatura chega quando as URLs assinadas carregam.
+  const [photos, setPhotos] = useState<PhotoDraft[]>(() => (run?.photos ?? []).map(p => ({ id: p.id })));
+  const files = useRunFiles(workId, run);
+  const fileUrls = new Map(typeof files === 'object' ? files.photos.map(p => [p.id, p.url]) : []);
+  const signatureUrl = typeof files === 'object' ? files.signatureUrl : null;
   const title = run?.modelName ?? model?.name ?? '';
   const missing = items.filter(item => !answers[item.id]?.answer).length;
 
@@ -97,6 +257,9 @@ function RunForm({
         doneOn,
         answers: items.map(item => ({ itemId: item.id, answer: answers[item.id]!.answer!, note: answers[item.id]?.note ?? '' })),
         note,
+        operatorName,
+        ...(signature ? { signature } : {}),
+        photos: photos.map(photo => ({ id: photo.id, ...(photo.data ? { data: photo.data } : {}) })),
       },
       'Inspeção registrada',
     );
@@ -144,55 +307,64 @@ function RunForm({
               </button>
             )}
           </div>
-          <ol className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {items.map((item, index) => {
-              const current = answers[item.id];
-              return (
-                <li key={item.id} className="p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="min-w-0 flex-1 text-sm text-slate-800">
-                      <span className="mr-2 tabular-nums text-slate-400">{index + 1}.</span>
-                      {item.text}
-                    </p>
-                    <div
-                      role="radiogroup"
-                      aria-label={`Item ${index + 1}: ${item.text}`}
-                      className="inline-flex gap-1 rounded-lg bg-slate-100 p-1"
-                    >
-                      {CHECKLIST_ANSWERS.map(option => (
-                        <button
-                          key={option}
-                          type="button"
-                          role="radio"
-                          aria-checked={current?.answer === option}
-                          title={ANSWER_LABEL[option]}
-                          onClick={() => setAnswers(all => ({ ...all, [item.id]: { answer: option, note: all[item.id]?.note ?? '' } }))}
-                          className={`min-h-9 min-w-11 rounded-md px-2.5 text-xs font-bold transition-colors ${current?.answer === option ? ANSWER_STYLE[option] : 'text-slate-600 hover:bg-white'}`}
-                        >
-                          {ANSWER_SHORT[option]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {(current?.answer === 'nc' || current?.note) && (
-                    <input
-                      className="field mt-2"
-                      aria-label={`Observação do item ${index + 1}`}
-                      placeholder={current?.answer === 'nc' ? 'Descreva a não conformidade (obrigatório)' : 'Observação'}
-                      value={current?.note ?? ''}
-                      maxLength={300}
-                      required={current?.answer === 'nc'}
-                      onChange={e => setAnswers(all => ({ ...all, [item.id]: { ...all[item.id], note: e.target.value } }))}
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+          <AnswerList items={items} answers={answers} onChange={setAnswers} />
           <label className="block text-sm font-medium text-slate-700">
             Observação geral
-            <input className="field mt-1" value={note} maxLength={300} onChange={e => setNote(e.target.value)} />
+            <input className="field mt-1" value={note} maxLength={CHECKLIST_LIMITS.note} onChange={e => setNote(e.target.value)} />
           </label>
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-700">Fotos (opcional, até {CHECKLIST_LIMITS.photos})</p>
+            <PhotoPicker
+              photos={photos.map(photo => (photo.data ? photo : { ...photo, url: fileUrls.get(photo.id) }))}
+              onChange={setPhotos}
+              disabled={!canEdit || busy}
+            />
+          </div>
+          <div className="grid gap-4 rounded-xl bg-slate-50 p-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              Operador do equipamento (opcional)
+              <input
+                className="field mt-1"
+                value={operatorName}
+                maxLength={CHECKLIST_LIMITS.operator}
+                placeholder="Nome completo de quem opera"
+                required={!!signature}
+                onChange={e => setOperatorName(e.target.value)}
+              />
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Preenchendo junto com o operador, escreva o nome dele e peça a assinatura ao lado.
+              </span>
+            </label>
+            <div>
+              <p className="mb-1 text-sm font-medium text-slate-700">Assinatura do operador (opcional)</p>
+              {resign ? (
+                <SignaturePad onChange={setSignature} disabled={!canEdit || busy} />
+              ) : (
+                <>
+                  {signatureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- URL assinada do bucket privado
+                    <img
+                      src={signatureUrl}
+                      alt={`Assinatura de ${run?.operatorName ?? 'operador'}`}
+                      className="h-20 rounded-lg border border-slate-200 bg-white"
+                    />
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {files === 'error' ? 'Assinatura guardada (não foi possível exibir).' : 'Carregando a assinatura…'}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-slate-500">
+                    {run?.signedAt ? `Assinado em ${signedAtText(run.signedAt)}. ` : ''}
+                    {canEdit && (
+                      <button type="button" className="text-link" onClick={() => setResign(true)}>
+                        Assinar de novo
+                      </button>
+                    )}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-3">
               <button type="submit" className="button" disabled={busy || missing > 0}>
@@ -404,6 +576,7 @@ export function ChecklistOverview({ workId }: { workId: string }) {
   const [equipmentForm, setEquipmentForm] = useState({ name: '', equipmentType: '' });
   const [showInactive, setShowInactive] = useState(false);
   const [openRun, setOpenRun] = useState<string>();
+  const [linkOf, setLinkOf] = useState<string>();
 
   if (context.state !== 'ready') return <LoadState error={context.state === 'error'} />;
   const { planning } = context;
@@ -430,7 +603,14 @@ export function ChecklistOverview({ workId }: { workId: string }) {
             A <strong>inspeção</strong> é o modelo preenchido num dia: cada item é Conforme, Não conforme (com a descrição) ou Não se
             aplica. O quadro mostra o que falta hoje, nesta semana (segunda a domingo) e neste mês.
           </p>
-          <p>Só técnicos de segurança (TST) e administradores editam modelos, equipamentos e inspeções; os demais consultam.</p>
+          <p>
+            Cada equipamento tem um <strong>QR</strong> para colar na máquina: o operador aponta a câmera do celular e preenche os
+            checklists pendentes, com fotos e assinatura, sem login.
+          </p>
+          <p>
+            Técnicos de segurança (TST) e administradores registram e corrigem inspeções. O cadastro de modelos e equipamentos e a troca do
+            link do QR são só dos administradores. Os demais consultam.
+          </p>
         </>
       }
     />
@@ -472,7 +652,7 @@ export function ChecklistOverview({ workId }: { workId: string }) {
     );
 
   const { data } = state;
-  const { canEdit, today } = data;
+  const { canEdit, canManage, today } = data;
   const board = checklistBoard(data, today);
   const summary = checklistSummary(board);
   const types = equipmentTypes(data);
@@ -545,7 +725,10 @@ export function ChecklistOverview({ workId }: { workId: string }) {
       {header}
       {!canEdit && (
         <div className="mb-4">
-          <Callout tone="info">Você está em modo de consulta: só técnicos de segurança (TST) e administradores registram e editam.</Callout>
+          <Callout tone="info">
+            Você está em modo de consulta: técnicos de segurança (TST) e administradores registram inspeções, e o cadastro é dos
+            administradores.
+          </Callout>
         </div>
       )}
 
@@ -590,21 +773,29 @@ export function ChecklistOverview({ workId }: { workId: string }) {
       )}
 
       <section data-tour="checklist-board" className="panel mb-6 p-5" aria-labelledby="ck-board">
-        <div className="mb-4">
-          <h2 id="ck-board" className="text-base font-bold text-slate-900">
-            Equipamentos da obra · {formatChecklistDay(today)}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {canEdit
-              ? 'Clique num checklist para preencher ou abrir a inspeção do período.'
-              : 'Clique num checklist feito para ver as respostas.'}
-          </p>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="ck-board" className="text-base font-bold text-slate-900">
+              Equipamentos da obra · {formatChecklistDay(today)}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {canEdit
+                ? 'Clique num checklist para preencher ou abrir a inspeção do período. O QR de cada equipamento é o link do operador.'
+                : 'Clique num checklist feito para ver as respostas.'}
+            </p>
+          </div>
+          {canEdit && board.length > 0 && (
+            <a className="button-ghost" href={`/imprimir/checklist/${encodeURIComponent(workId)}`} target="_blank" rel="noreferrer">
+              <Printer size={15} aria-hidden />
+              Imprimir etiquetas com QR
+            </a>
+          )}
         </div>
         {board.length === 0 ? (
           <Empty>
-            {canEdit
+            {canManage
               ? 'Nenhum equipamento cadastrado nesta obra. Cadastre o primeiro abaixo.'
-              : 'Nenhum equipamento cadastrado nesta obra ainda.'}
+              : 'Nenhum equipamento cadastrado nesta obra ainda. O cadastro é feito pelos administradores.'}
           </Empty>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
@@ -614,25 +805,43 @@ export function ChecklistOverview({ workId }: { workId: string }) {
                   <p className="truncate text-sm font-bold text-slate-800">{row.equipment.name}</p>
                   <p className="truncate text-xs text-slate-500">{row.equipment.equipmentType}</p>
                   {canEdit && (
-                    <p className="mt-1 flex gap-3">
-                      <button type="button" className="text-link text-xs" disabled={busy} onClick={() => renameEquipment(row.equipment)}>
-                        Renomear
-                      </button>
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                       <button
                         type="button"
-                        className="text-link text-xs"
-                        disabled={busy}
-                        onClick={() => deactivateEquipment(row.equipment)}
+                        className="text-link inline-flex items-center gap-1 text-xs"
+                        aria-expanded={linkOf === row.equipment.id}
+                        onClick={() => setLinkOf(linkOf === row.equipment.id ? undefined : row.equipment.id)}
                       >
-                        Desativar
+                        <QrIcon size={13} aria-hidden />
+                        QR do operador
                       </button>
+                      {canManage && (
+                        <>
+                          <button
+                            type="button"
+                            className="text-link text-xs"
+                            disabled={busy}
+                            onClick={() => renameEquipment(row.equipment)}
+                          >
+                            Renomear
+                          </button>
+                          <button
+                            type="button"
+                            className="text-link text-xs"
+                            disabled={busy}
+                            onClick={() => deactivateEquipment(row.equipment)}
+                          >
+                            Desativar
+                          </button>
+                        </>
+                      )}
                     </p>
                   )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-wrap gap-2">
                   {row.dues.length === 0 && (
                     <p className="text-xs text-warning">
-                      Nenhum checklist para o tipo “{row.equipment.equipmentType}”. {canEdit ? 'Crie um modelo abaixo.' : ''}
+                      Nenhum checklist para o tipo “{row.equipment.equipmentType}”. {canManage ? 'Crie um modelo abaixo.' : ''}
                     </p>
                   )}
                   {row.dues.map(due => {
@@ -653,11 +862,21 @@ export function ChecklistOverview({ workId }: { workId: string }) {
                     );
                   })}
                 </div>
+                {canEdit && linkOf === row.equipment.id && (
+                  <EquipmentLink
+                    equipment={row.equipment}
+                    workId={workId}
+                    canManage={canManage}
+                    busy={busy}
+                    execute={execute}
+                    onClose={() => setLinkOf(undefined)}
+                  />
+                )}
               </li>
             ))}
           </ul>
         )}
-        {canEdit && (
+        {canManage && (
           <form onSubmit={addEquipment} className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-12">
             <label className="text-xs font-medium text-slate-600 sm:col-span-5">
               Identificação do equipamento
@@ -707,7 +926,7 @@ export function ChecklistOverview({ workId }: { workId: string }) {
               {inactiveEquipment.map(equipment => (
                 <li key={equipment.id} className="flex items-center gap-3 text-sm text-slate-600">
                   {equipment.name} · {equipment.equipmentType}
-                  {canEdit && (
+                  {canManage && (
                     <button
                       type="button"
                       className="text-link text-xs"
@@ -736,7 +955,7 @@ export function ChecklistOverview({ workId }: { workId: string }) {
             {history.map(run => {
               const nc = nonConformities(run);
               const open = openRun === run.id;
-              const author = planning.data.users.find(u => u.id === run.createdBy)?.name;
+              const author = run.operatorName || planning.data.users.find(u => u.id === run.createdBy)?.name;
               return (
                 <li key={run.id} className="p-3">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -744,6 +963,11 @@ export function ChecklistOverview({ workId }: { workId: string }) {
                     <span className="min-w-0 flex-1 text-sm text-slate-800">
                       <strong>{equipmentById.get(run.equipmentId)?.name ?? 'Equipamento'}</strong> · {run.modelName}
                       {author && <span className="text-slate-500"> · {author}</span>}
+                      {run.source === 'link' && (
+                        <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary-ink">
+                          pelo QR
+                        </span>
+                      )}
                     </span>
                     <span className={`text-xs font-bold ${nc ? 'text-danger' : 'text-success'}`}>
                       {nc ? `${nc} não conforme${nc > 1 ? 's' : ''}` : 'Conforme'}
@@ -796,6 +1020,9 @@ export function ChecklistOverview({ workId }: { workId: string }) {
                         </li>
                       ))}
                       {run.note && <li className="pt-1 text-sm text-slate-600">Observação: {run.note}</li>}
+                      <li>
+                        <RunEvidence workId={workId} run={run} />
+                      </li>
                     </ol>
                   )}
                 </li>
@@ -811,16 +1038,18 @@ export function ChecklistOverview({ workId }: { workId: string }) {
             <h2 id="ck-models" className="text-base font-bold text-slate-900">
               Modelos de checklist
             </h2>
-            <p className="text-sm text-slate-500">Lista única para todas as obras. Alterar aqui vale para todas.</p>
+            <p className="text-sm text-slate-500">
+              Lista única para todas as obras. Alterar aqui vale para todas. {canManage ? '' : 'Só administradores criam e editam.'}
+            </p>
           </div>
-          {canEdit && editingModel === undefined && (
+          {canManage && editingModel === undefined && (
             <button type="button" className="button" onClick={() => setEditingModel('new')}>
               <Plus size={15} aria-hidden />
               Novo checklist
             </button>
           )}
         </div>
-        {canEdit && editingModel !== undefined && (
+        {canManage && editingModel !== undefined && (
           <ModelEditor
             key={editingModel}
             model={editingModel === 'new' ? undefined : data.models.find(m => m.id === editingModel)}
@@ -832,9 +1061,9 @@ export function ChecklistOverview({ workId }: { workId: string }) {
         )}
         {models.length === 0 ? (
           <Empty>
-            {canEdit
+            {canManage
               ? 'Nenhum modelo ainda. Crie o primeiro com os itens da ficha que vocês usam hoje.'
-              : 'Nenhum modelo cadastrado ainda. Os técnicos de segurança criam os modelos.'}
+              : 'Nenhum modelo cadastrado ainda. Os administradores criam os modelos.'}
           </Empty>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
@@ -850,7 +1079,7 @@ export function ChecklistOverview({ workId }: { workId: string }) {
                     </span>
                     {!model.active && <span className="ml-2 text-xs font-bold text-slate-500">Desativado</span>}
                   </span>
-                  {canEdit && (
+                  {canManage && (
                     <>
                       <button type="button" className="text-link text-xs" disabled={busy} onClick={() => setEditingModel(model.id)}>
                         Editar

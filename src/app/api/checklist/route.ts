@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
-import { canWriteChecklist } from '@/application/use-cases/checklist-commands';
+import { canManageChecklist, canWriteChecklist } from '@/application/use-cases/checklist-commands';
 import { CHECKLIST_WINDOW_DAYS, shiftDay } from '@/domain/equipment-checklist';
-import { ChecklistUnavailableError, loadChecklist } from '@/infrastructure/repositories/supabase/checklist-repository';
+import { ChecklistUnavailableError, findWorkLabel, loadChecklist } from '@/infrastructure/repositories/supabase/checklist-repository';
 import { todayInSaoPaulo } from '@/infrastructure/clock';
 import { logRouteError } from '@/infrastructure/log';
 
@@ -12,7 +12,7 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
 
 /** Checklists de equipamentos de uma obra: os modelos (lista única), os equipamentos dela e as inspeções
  * dos últimos `CHECKLIST_WINDOW_DAYS` dias. Lê quem tem a obra liberada, como na aba 6; `canEdit` diz se
- * quem pediu é TST ou admin (a tela só esconde botões, quem barra é o POST). Sem a migração 0047 responde
+ * quem pediu é TST ou admin e `canManage` se é admin (a tela só esconde botões, quem barra é o POST). Sem a migração 0047 responde
  * "indisponível": só a aba 9 fica fora. */
 export async function GET(request: NextRequest) {
   const workId = request.nextUrl.searchParams.get('workId') ?? '';
@@ -22,8 +22,14 @@ export async function GET(request: NextRequest) {
   if (!profile.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
   try {
     const today = todayInSaoPaulo();
-    const data = await loadChecklist(workId, shiftDay(today, -CHECKLIST_WINDOW_DAYS));
-    return NextResponse.json({ available: true, canEdit: canWriteChecklist(profile), today, ...data }, { headers });
+    const [data, work] = await Promise.all([loadChecklist(workId, shiftDay(today, -CHECKLIST_WINDOW_DAYS)), findWorkLabel(workId)]);
+    const canEdit = canWriteChecklist(profile);
+    // O segredo do link do operador só vai para quem já pode gravar inspeção (TST e admin).
+    const equipment = canEdit ? data.equipment : data.equipment.map(e => ({ ...e, publicToken: '' }));
+    return NextResponse.json(
+      { available: true, canEdit, canManage: canManageChecklist(profile), today, ...(work ? { work } : {}), ...data, equipment },
+      { headers },
+    );
   } catch (error) {
     if (error instanceof ChecklistUnavailableError) return NextResponse.json({ available: false }, { headers });
     logRouteError('GET /api/checklist', error, { actorId: profile.id, workId });

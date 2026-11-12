@@ -3,15 +3,22 @@ import {
   CHECKLIST_FREQUENCIES,
   CHECKLIST_LIMITS,
   checklistKey,
+  checklistPhotoPath,
+  checklistSignaturePath,
   cleanChecklistText,
   isIsoDay,
+  isJpegBase64,
+  isPngBase64,
+  periodKey,
   type ChecklistAnswer,
   type ChecklistCommand,
   type ChecklistData,
   type ChecklistEquipment,
   type ChecklistFrequency,
   type ChecklistModel,
+  type ChecklistPhotoInput,
   type ChecklistRun,
+  type OperatorRunInput,
 } from '../../domain/equipment-checklist';
 
 /** Regras da aba 9, Checklist de equipamentos (11/11/2026). Mesmo desenho da segurança
@@ -25,6 +32,10 @@ export interface ChecklistMutation {
   insert: { models: ChecklistModel[]; equipment: ChecklistEquipment[]; runs: ChecklistRun[] };
   update: { models: ChecklistModel[]; equipment: ChecklistEquipment[]; runs: ChecklistRun[] };
   deleteRuns: string[];
+  /** Arquivos do bucket `checklist` (12/11/2026): os que sobem antes de gravar as linhas (base64) e os que
+   * saem depois (foto removida, assinatura trocada, inspeção excluída). */
+  uploads: { path: string; contentType: 'image/jpeg' | 'image/png'; data: string }[];
+  removeFiles: string[];
 }
 
 export interface ChecklistContext {
@@ -33,6 +44,11 @@ export interface ChecklistContext {
   /** Data civil de hoje no fuso da obra. */
   today?: string;
   newId: () => string;
+  /** Segredo novo para o link do operador. Sem ele (testes), sai dois ids colados. */
+  newToken?: () => string;
+  /** O comando veio do link do operador (sem login): só inspeção nova, de hoje, do que está pendente no
+   * período, com nome e assinatura. */
+  viaLink?: boolean;
 }
 
 /** Onde o comando atua: na lista única de modelos, direto numa obra, ou num registro cuja obra a rota descobre. */
@@ -42,6 +58,12 @@ export type ChecklistTarget = { global: true } | { workId: string } | { table: '
  * aba 6 — pedido do usuário em 11/11/2026: "checklist permita que o tst edite". Os demais só consultam. */
 export const canWriteChecklist = (profile: { tst?: boolean; role?: string } | null | undefined): boolean =>
   profile?.tst === true || profile?.role === 'admin';
+
+/** Cadastro (modelos, equipamentos e o link do QR) só com administradores, desde 12/11/2026 — pedido da
+ * equipe de SST, "para não gerar conflito nas informações". O TST segue registrando e corrigindo inspeções. */
+export const canManageChecklist = (profile: { role?: string } | null | undefined): boolean => profile?.role === 'admin';
+export const checklistCommandNeedsAdmin = (command: ChecklistCommand): boolean =>
+  command.type !== 'save_run' && command.type !== 'delete_run';
 
 const fail = (message: string): never => {
   throw new Error(message);
@@ -99,6 +121,9 @@ export function parseChecklistCommand(body: unknown): ChecklistCommand {
         const answerNote = optionalText(answer.note, 'answers.note');
         return { itemId: text(answer.itemId, 'answers.itemId'), answer: value, ...(answerNote !== undefined ? { note: answerNote } : {}) };
       });
+      const operatorName = optionalText(body.operatorName, 'operatorName');
+      const signature = optionalText(body.signature, 'signature');
+      const photos = parsePhotos(body.photos);
       return {
         type: 'save_run',
         ...(id ? { id } : {}),
@@ -108,13 +133,43 @@ export function parseChecklistCommand(body: unknown): ChecklistCommand {
         doneOn: text(body.doneOn, 'doneOn'),
         answers,
         ...(note !== undefined ? { note } : {}),
+        ...(operatorName !== undefined ? { operatorName } : {}),
+        ...(signature ? { signature } : {}),
+        ...(photos ? { photos } : {}),
       };
     }
+    case 'rotate_equipment_token':
+      return { type: 'rotate_equipment_token', id: text(body.id, 'id') };
     case 'delete_run':
       return { type: 'delete_run', id: text(body.id, 'id') };
     default:
       return fail('Comando desconhecido.');
   }
+}
+
+function parsePhotos(value: unknown): ChecklistPhotoInput[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return fail('Campo inválido: photos.');
+  return value.map(photo => {
+    if (!isRecord(photo)) return fail('Campo inválido: photos.');
+    const data = optionalText(photo.data, 'photos.data');
+    return { id: text(photo.id, 'photos.id'), ...(data ? { data } : {}) };
+  });
+}
+
+/** O corpo que o link do operador manda: sem obra, equipamento, data nem id — quem define é o servidor. */
+export function parseOperatorRun(body: unknown): OperatorRunInput {
+  if (!isRecord(body)) return fail('Envio inválido.');
+  const parsed = parseChecklistCommand({ ...body, type: 'save_run', id: undefined, workId: '', equipmentId: '', doneOn: '' });
+  if (parsed.type !== 'save_run') return fail('Envio inválido.');
+  return {
+    modelId: parsed.modelId,
+    answers: parsed.answers,
+    ...(parsed.note !== undefined ? { note: parsed.note } : {}),
+    operatorName: text(body.operatorName, 'operatorName'),
+    signature: text(body.signature, 'signature'),
+    ...(parsed.photos ? { photos: parsed.photos } : {}),
+  };
 }
 
 export function checklistCommandTarget(command: ChecklistCommand): ChecklistTarget {
@@ -125,6 +180,7 @@ export function checklistCommandTarget(command: ChecklistCommand): ChecklistTarg
     case 'save_equipment':
       return command.id ? { table: 'equipment', id: command.id } : { workId: command.workId };
     case 'set_equipment_active':
+    case 'rotate_equipment_token':
       return { table: 'equipment', id: command.id };
     case 'save_run':
       return command.id ? { table: 'runs', id: command.id } : { workId: command.workId };
@@ -138,7 +194,12 @@ const emptyMutation = (workId?: string): ChecklistMutation => ({
   insert: { models: [], equipment: [], runs: [] },
   update: { models: [], equipment: [], runs: [] },
   deleteRuns: [],
+  uploads: [],
+  removeFiles: [],
 });
+
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const newToken = (ctx: ChecklistContext) => (ctx.newToken ? ctx.newToken() : `${ctx.newId()}${ctx.newId()}`.replace(/[^A-Za-z0-9_-]/g, ''));
 
 function cleanName(value: string, label: string): string {
   const clean = cleanChecklistText(value);
@@ -230,10 +291,19 @@ export function planChecklistCommand(
           name,
           equipmentType,
           active: true,
+          publicToken: newToken(ctx),
           createdBy: ctx.actorId,
           createdAt: ctx.now,
           updatedAt: ctx.now,
         });
+      return mutation;
+    }
+
+    case 'rotate_equipment_token': {
+      const mutation = emptyMutation(workId);
+      const current = data.equipment.find(e => e.id === command.id);
+      if (!current) return fail('Equipamento não encontrado. Recarregue a página.');
+      mutation.update.equipment.push({ ...current, publicToken: newToken(ctx), updatedAt: ctx.now });
       return mutation;
     }
 
@@ -247,8 +317,10 @@ export function planChecklistCommand(
 
     case 'delete_run': {
       const mutation = emptyMutation(workId);
-      if (!data.runs.some(r => r.id === command.id)) fail('Inspeção não encontrada. Recarregue a página.');
+      const run = data.runs.find(r => r.id === command.id);
+      if (!run) return fail('Inspeção não encontrada. Recarregue a página.');
       mutation.deleteRuns.push(command.id);
+      mutation.removeFiles.push(...run.photos.map(p => p.path), ...(run.signaturePath ? [run.signaturePath] : []));
       return mutation;
     }
 
@@ -271,6 +343,16 @@ export function planChecklistCommand(
       if (!isIsoDay(command.doneOn)) fail('Data inválida.');
       if (command.doneOn > today) fail('Data no futuro: a inspeção é registrada no dia ou depois dele.');
       if (command.doneOn < '2020-01-01') fail('Data anterior a 2020: confira o ano.');
+      if (ctx.viaLink) {
+        // Pelo link do operador: só inspeção nova, de hoje, e só o que ainda está pendente no período.
+        if (current) fail('Pelo link não se edita uma inspeção. Procure o técnico de segurança.');
+        if (command.doneOn !== today) fail('Pelo link só se registra a inspeção de hoje.');
+        const period = periodKey(model.frequency, today);
+        const done = data.runs.find(
+          r => r.equipmentId === equipment.id && r.modelId === model.id && periodKey(model.frequency, r.doneOn) === period,
+        );
+        if (done) fail(`"${model.name}" já foi preenchido neste período. Atualize a página.`);
+      }
       if (
         data.runs.some(r => r.id !== command.id && r.equipmentId === equipment.id && r.modelId === model.id && r.doneOn === command.doneOn)
       )
@@ -293,10 +375,62 @@ export function planChecklistCommand(
       const note = cleanChecklistText(command.note ?? '');
       if (note.length > CHECKLIST_LIMITS.note) fail(`Observação: até ${CHECKLIST_LIMITS.note} caracteres.`);
 
-      if (current) mutation.update.runs.push({ ...current, doneOn: command.doneOn, answers, note, updatedAt: ctx.now });
+      const runId = current?.id ?? ctx.newId();
+      const operatorName = command.operatorName === undefined ? (current?.operatorName ?? '') : cleanChecklistText(command.operatorName);
+      if (operatorName.length > CHECKLIST_LIMITS.operator) fail(`Nome do operador: até ${CHECKLIST_LIMITS.operator} caracteres.`);
+      if (ctx.viaLink && operatorName.split(' ').length < 2) fail('Escreva seu nome completo (nome e sobrenome).');
+
+      // Assinatura: uma nova substitui a guardada (o arquivo antigo sai); sem nova, fica a que existe.
+      let signaturePath = current?.signaturePath ?? null;
+      let signedAt = current?.signedAt ?? null;
+      if (command.signature) {
+        if (command.signature.length > CHECKLIST_LIMITS.signatureData || !isPngBase64(command.signature))
+          fail('Assinatura inválida. Limpe o quadro e assine de novo.');
+        if (!operatorName) fail('Informe o nome de quem assina.');
+        if (signaturePath) mutation.removeFiles.push(signaturePath);
+        signaturePath = checklistSignaturePath(workId, runId, ctx.newId());
+        signedAt = ctx.now;
+        mutation.uploads.push({ path: signaturePath, contentType: 'image/png', data: command.signature });
+      }
+      if (ctx.viaLink && !signaturePath) fail('Assine no quadro antes de enviar.');
+
+      // Fotos: a lista do comando é a final. Id que a inspeção já tem fica; o resto precisa trazer o JPEG.
+      let photos = current?.photos ?? [];
+      if (command.photos) {
+        if (command.photos.length > CHECKLIST_LIMITS.photos) fail(`Uma inspeção tem até ${CHECKLIST_LIMITS.photos} fotos.`);
+        const kept = new Map(photos.map(p => [p.id, p]));
+        const seen = new Set<string>();
+        const next = command.photos.map(photo => {
+          if (!SAFE_ID.test(photo.id) || seen.has(photo.id)) return fail('Foto inválida. Remova e escolha de novo.');
+          seen.add(photo.id);
+          const existing = kept.get(photo.id);
+          if (existing) return { id: existing.id, path: existing.path };
+          if (!photo.data) return fail('Foto não encontrada. Recarregue a página.');
+          if (photo.data.length > CHECKLIST_LIMITS.photoData || !isJpegBase64(photo.data))
+            return fail('Foto inválida ou grande demais. Tire a foto de novo.');
+          const path = checklistPhotoPath(workId, runId, photo.id);
+          mutation.uploads.push({ path, contentType: 'image/jpeg', data: photo.data });
+          return { id: photo.id, path };
+        });
+        mutation.removeFiles.push(...photos.filter(p => !seen.has(p.id)).map(p => p.path));
+        photos = next;
+      }
+
+      if (current)
+        mutation.update.runs.push({
+          ...current,
+          doneOn: command.doneOn,
+          answers,
+          note,
+          operatorName,
+          signaturePath,
+          signedAt,
+          photos,
+          updatedAt: ctx.now,
+        });
       else
         mutation.insert.runs.push({
-          id: ctx.newId(),
+          id: runId,
           workId,
           equipmentId: equipment.id,
           modelId: model.id,
@@ -305,6 +439,11 @@ export function planChecklistCommand(
           doneOn: command.doneOn,
           answers,
           note,
+          operatorName,
+          signaturePath,
+          signedAt,
+          photos,
+          source: ctx.viaLink ? 'link' : 'app',
           createdBy: ctx.actorId,
           createdAt: ctx.now,
           updatedAt: ctx.now,
@@ -312,4 +451,20 @@ export function planChecklistCommand(
       return mutation;
     }
   }
+}
+
+/** A inspeção que chega pelo link do operador vira um `save_run` de hoje, com as regras do link. */
+export function planOperatorRun(
+  data: ChecklistData,
+  input: OperatorRunInput,
+  ctx: ChecklistContext,
+  equipment: Pick<ChecklistEquipment, 'id' | 'workId'>,
+): ChecklistMutation {
+  const today = ctx.today ?? ctx.now.slice(0, 10);
+  return planChecklistCommand(
+    data,
+    { type: 'save_run', workId: equipment.workId, equipmentId: equipment.id, doneOn: today, ...input },
+    { ...ctx, viaLink: true },
+    equipment.workId,
+  );
 }

@@ -37,7 +37,8 @@ A interface de cada obra é organizada em **seis abas numeradas**: os quatro ní
 
 9. **Checklist de equipamentos** (11/11/2026): a inspeção diária, semanal e mensal dos equipamentos da obra, no grupo SST.
    - Modelos (tipo de equipamento, periodicidade e itens) numa lista única para todas as obras; equipamentos por obra; inspeção com Conforme / Não conforme (com descrição) / Não se aplica por item.
-   - Quadro do que falta hoje, na semana e no mês. Aberta a todos para consulta; só o tipo TST e os admins editam modelos, equipamentos e inspeções.
+   - Quadro do que falta hoje, na semana e no mês. Aberta a todos para consulta; TST e admins registram e corrigem inspeções.
+   - **12/11/2026 (código não publicado; migração 0048 aplicada):** o operador preenche pelo **QR colado no equipamento, sem login** (`/checklist/<token>`), com nome completo, **assinatura desenhada** e **até 4 fotos**; pelo link só entra a inspeção de hoje do que está pendente. O **cadastro de modelos e equipamentos passou a ser só dos administradores**. Etiquetas com QR em `/imprimir/checklist/{obraId}`.
    - Fica fora do snapshot (migração 0047, aplicada no `takt-hub` em 11/11/2026 pela CLI do Supabase). Nenhum modelo vem cadastrado: os TSTs criam. Ver [Checklist de equipamentos](docs/checklist-equipamentos.md).
 
 **Menu da obra em grupos** (11/11/2026): o dashboard no topo; **Prazo** (longo prazo, com Vagões recuado sob ele, médio e curto); **Controles de obra** (terminalidade, histograma e controle de produtividade); **SST** (a aba 6, que no menu aparece como "Vistoria de segurança", e a aba 9, checklist de equipamentos). O número de cada aba não mudou.
@@ -336,3 +337,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0045 | histograma de mão de obra: `headcount_entries` (efetivo diário por empresa e função); ver [Histograma](docs/histograma.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
 | 0046 | controle de produtividade: `production_entries` (serviço, equipe e produção do dia); ver [Controle de produtividade](docs/controle-produtividade.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
 | 0047 | checklist de equipamentos: `checklist_models`, `checklist_equipment` e `checklist_runs`; ver [Checklist de equipamentos](docs/checklist-equipamentos.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
+| 0048 | checklist de equipamentos pelo operador: `checklist_equipment.public_token` (link do QR), `operator_name`, `signature_path`, `signed_at`, `photos` e `source` em `checklist_runs`, bucket privado `checklist`; ver [Checklist de equipamentos](docs/checklist-equipamentos.md) | não | aplicada em 12/11/2026 (transação pelo pooler; conferido: colunas, restrições, índice, bucket e grant) |

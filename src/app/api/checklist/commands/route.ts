@@ -1,14 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
+import { randomBytes } from 'node:crypto';
 import {
+  canManageChecklist,
   canWriteChecklist,
+  checklistCommandNeedsAdmin,
   checklistCommandTarget,
   parseChecklistCommand,
   planChecklistCommand,
   type ChecklistMutation,
   type ChecklistTarget,
 } from '@/application/use-cases/checklist-commands';
-import { CHECKLIST_TST_ONLY_MESSAGE, CHECKLIST_WINDOW_DAYS, shiftDay, type ChecklistCommand } from '@/domain/equipment-checklist';
+import {
+  CHECKLIST_ADMIN_ONLY_MESSAGE,
+  CHECKLIST_TST_ONLY_MESSAGE,
+  CHECKLIST_WINDOW_DAYS,
+  shiftDay,
+  type ChecklistCommand,
+} from '@/domain/equipment-checklist';
 import {
   applyChecklistMutation,
   ChecklistConflictError,
@@ -26,7 +35,8 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
 
 /** Um comando da aba 9 por requisição. `?workId=` é a obra aberta na tela: é a obra que volta na resposta
  * e, nos comandos de modelo (lista única, sem obra), a que serve de conferência de acesso. Só TST e admin
- * gravam (`canWriteChecklist`). Aplica as regras (`planChecklistCommand`) sobre os dados atuais, grava e
+ * gravam inspeções (`canWriteChecklist`); o cadastro é só do admin (`canManageChecklist`, 12/11/2026). A
+ * inspeção pode trazer a assinatura e as fotos em base64 no próprio comando. Aplica as regras (`planChecklistCommand`) sobre os dados atuais, grava e
  * devolve a obra já atualizada, no mesmo formato do GET. */
 export async function POST(request: NextRequest) {
   const profile = await getRouteProfile().catch(() => null);
@@ -42,6 +52,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return responseError(error instanceof Error ? error.message : 'Comando inválido.', 400);
   }
+  // Cadastro (modelos, equipamentos, link do QR) é só do admin; o TST grava e corrige inspeções.
+  if (checklistCommandNeedsAdmin(command) && !canManageChecklist(profile)) return responseError(CHECKLIST_ADMIN_ONLY_MESSAGE, 403);
   if (!workId) return responseError('Obra não informada.', 400);
   if (!profile.workIds.includes(workId)) return responseError('Você não tem acesso a esta obra.', 403);
   // O comando que traz a obra tem de ser da obra aberta: a resposta é dela, e o acesso conferido também.
@@ -52,7 +64,7 @@ export async function POST(request: NextRequest) {
     if ('table' in target && (await findChecklistWorkId(target.table, target.id)) !== workId)
       return responseError('Registro não encontrado. Recarregue a página.', 404);
 
-    const context = commandContext(profile.id);
+    const context = { ...commandContext(profile.id), newToken: () => randomBytes(24).toString('base64url') };
     const since = shiftDay(context.today, -CHECKLIST_WINDOW_DAYS);
     const current = await loadChecklist(workId, since);
     // Inspeção mais antiga que a janela carregada: entra à parte, para a edição e a exclusão a encontrarem.
@@ -71,7 +83,10 @@ export async function POST(request: NextRequest) {
     if (mutation.workId !== undefined && mutation.workId !== workId) return responseError('Você não tem acesso a esta obra.', 403);
     await applyChecklistMutation(mutation);
     const fresh = await loadChecklist(workId, since);
-    return NextResponse.json({ available: true, canEdit: true, today: context.today, ...fresh }, { headers });
+    return NextResponse.json(
+      { available: true, canEdit: true, canManage: canManageChecklist(profile), today: context.today, ...fresh },
+      { headers },
+    );
   } catch (error) {
     if (error instanceof ChecklistUnavailableError) return responseError(error.message, 503);
     if (error instanceof ChecklistConflictError) return responseError(error.message, 409);

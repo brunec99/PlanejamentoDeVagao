@@ -121,8 +121,10 @@ export async function proxy(request: NextRequest) {
 // sem isso o atalho na tela inicial recebia a página de login no lugar do manifest.
 // O `wasm` na lista é o binário do web-ifc: sem ele aqui, a sessão expirada devolveria
 // a página de login no lugar do módulo, e o visualizador falharia sem dizer por quê.
+// `/checklist/<token>` e `/api/publico/` (12/11/2026) são o checklist de equipamentos pelo QR: o operador não
+// tem conta, e quem autoriza é o segredo do link, conferido pela própria rota. Nada mais mora em `api/publico/`.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|privacidade|auth/callback|campo/|campo-sw\\.js|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|apple-icon|manifest\\.webmanifest|login|privacidade|auth/callback|campo/|checklist/|api/publico/|campo-sw\\.js|.*\\.(?:png|jpg|jpeg|svg|webp|gif|ico|wasm)$).*)',
   ],
 };
