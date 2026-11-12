@@ -8,6 +8,8 @@ Observação), que as obras preenchiam uma linha por empresa × função × dia.
 aplicada no Supabase e o histórico da planilha ainda não foi importado.** Sem a 0045 a aba responde
 "indisponível" e as demais seguem normais.
 
+**Atualização de 11/11/2026 (noite):** a migração foi aplicada no `takt-hub` pela CLI do Supabase, a pedido do usuário, e conferida no catálogo (tabela, RLS ligada, grant para `service_role`, sem acesso de `anon`). O histórico da planilha foi importado: 28.789 linhas (BLT 10.432, ESZ 6.954, MZN 6.724, ATM 2.948, BRZ 924, TAU 807), 50.010 homens-dia. Ficaram de fora LMM (465), MYS (2.977) e AMA (190), que não existem como obra no sistema. Desde então o Histograma do SGI (App-ATR) lê `works` e `headcount_entries` deste banco, pela API REST, no lugar da planilha. A tela ainda não foi aberta logada em produção.
+
 ## O que a tela faz
 
 `/obras/{obraId}/histograma`, grupo **Controles de obra** do menu.

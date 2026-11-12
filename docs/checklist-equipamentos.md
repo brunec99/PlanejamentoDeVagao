@@ -10,6 +10,8 @@ navegador e nenhuma gravação foi feita num banco real. Sem a 0047 a aba respon
 demais seguem normais. **Nenhum modelo vem cadastrado:** as fichas da empresa não foram fornecidas, então
 os TSTs criam os modelos na própria tela.
 
+**Atualização de 11/11/2026 (noite):** a migração foi aplicada no `takt-hub` pela CLI do Supabase, a pedido do usuário, e conferida no catálogo (tabela, RLS ligada, grant para `service_role`, sem acesso de `anon`). A tela ainda não foi aberta logada em produção.
+
 ## As três peças
 
 - **Modelo** (`checklist_models`): a ficha. Nome, tipo de equipamento, periodicidade (`daily`, `weekly`,

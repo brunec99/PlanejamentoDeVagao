@@ -8,6 +8,8 @@ Unid., Obs.), que as obras preenchiam uma linha por serviço × empreiteiro × d
 aplicada no Supabase e o histórico da planilha ainda não foi importado.** Sem a 0046 a aba responde
 "indisponível" e as demais seguem normais.
 
+**Atualização de 11/11/2026 (noite):** a migração foi aplicada no `takt-hub` pela CLI do Supabase, a pedido do usuário, e conferida no catálogo (tabela, RLS ligada, grant para `service_role`, sem acesso de `anon`). O histórico da planilha foi importado: 6.593 linhas (MZN 2.540, ESZ 2.066, ATM 886, BLT 862, TAU 205, BRZ 34), 4.052 sem produção medida. Ficaram de fora LUMMI (223) e MY SUNSET (916). A tela ainda não foi aberta logada em produção.
+
 ## O que a tela faz
 
 `/obras/{obraId}/produtividade`, grupo **Controles de obra** do menu.

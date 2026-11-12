@@ -27,18 +27,18 @@ A interface de cada obra é organizada em **seis abas numeradas**: os quatro ní
 7. **Histograma de mão de obra** (11/11/2026): o efetivo diário por empresa e função, no lugar da planilha "ATR Histograma - Todas as obras".
    - Folha do dia para lançar (com "Repetir o último dia"), cartões, histograma empilhado por dia, semana ou mês (próprio × empreiteiro, empresa ou função) e rankings por empresa e função.
    - Liberado por pessoa; quem tem o módulo lança, o papel consulta só visualiza. A mesma empresa e função só existe uma vez por dia, e a grafia que a obra já usa vence.
-   - Fica fora do snapshot (migração 0045, **ainda não aplicada**). O histórico da planilha entra por `scripts/import-histograma.ts` (**ainda não importado**).
+   - Fica fora do snapshot (migração 0045, aplicada no `takt-hub` em 11/11/2026 pela CLI do Supabase). O histórico da planilha entrou por `scripts/import-histograma.ts` em 11/11/2026: 28.789 linhas em seis obras; LMM, MYS e AMA não existem como obra no sistema e ficaram de fora.
    - Veja [docs/histograma.md](docs/histograma.md).
 8. **Controle de produtividade** (11/11/2026): o lançamento diário de serviço, empreiteiro, equipe e produção, no lugar da planilha "ATR - Controle da produção".
    - Folha do dia para lançar (produção em branco é "a medir" e se preenche depois, na linha; "Repetir o último dia" copia as equipes) e quadro de produção por homem-dia por serviço, que abre nos empreiteiros.
    - Liberado por pessoa; quem tem o módulo lança, o papel consulta só visualiza. Sete unidades (m², m³, m, kg, un, vb, t).
-   - Fica fora do snapshot (migração 0046, **ainda não aplicada**). O histórico entra por `scripts/import-produtividade.ts` (**ainda não importado**).
+   - Fica fora do snapshot (migração 0046, aplicada no `takt-hub` em 11/11/2026 pela CLI do Supabase). O histórico entrou por `scripts/import-produtividade.ts` em 11/11/2026: 6.593 linhas em seis obras; LUMMI e MY SUNSET ficaram de fora.
    - Veja [docs/controle-produtividade.md](docs/controle-produtividade.md).
 
 9. **Checklist de equipamentos** (11/11/2026): a inspeção diária, semanal e mensal dos equipamentos da obra, no grupo SST.
    - Modelos (tipo de equipamento, periodicidade e itens) numa lista única para todas as obras; equipamentos por obra; inspeção com Conforme / Não conforme (com descrição) / Não se aplica por item.
    - Quadro do que falta hoje, na semana e no mês. Aberta a todos para consulta; só o tipo TST e os admins editam modelos, equipamentos e inspeções.
-   - Fica fora do snapshot (migração 0047, **ainda não aplicada**). Nenhum modelo vem cadastrado: os TSTs criam. Ver [Checklist de equipamentos](docs/checklist-equipamentos.md).
+   - Fica fora do snapshot (migração 0047, aplicada no `takt-hub` em 11/11/2026 pela CLI do Supabase). Nenhum modelo vem cadastrado: os TSTs criam. Ver [Checklist de equipamentos](docs/checklist-equipamentos.md).
 
 **Menu da obra em grupos** (11/11/2026): o dashboard no topo; **Prazo** (longo prazo, com Vagões recuado sob ele, médio e curto); **Controles de obra** (terminalidade, histograma e controle de produtividade); **SST** (a aba 6, que no menu aparece como "Vistoria de segurança", e a aba 9, checklist de equipamentos). O número de cada aba não mudou.
 
@@ -333,6 +333,6 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0038 | Linha de Balanço no estilo Prevision, fluxos de serviços e medições com fotos: `service_flows`, `lob_locals`, `lob_services`, `lob_launches`, `lob_activities`, `lob_dependencies`, `lob_baselines`, `lob_measurements`, `lob_measurement_items`, `lob_photos` e o bucket privado `medicoes` | não | **aplicada no `takt-hub` em 04/11/2026** por conexão direta ao banco, numa transação; conferidos as 10 tabelas, o `grant` para `service_role`, o bucket privado (JPEG até 2 MB) e a leitura pela API REST (200) |
 | 0040 | segurança do trabalho: `profiles.tst`, `safety_types` (lista global com 16 tipos semeados), `safety_items`, `safety_photos` e o bucket privado `seguranca`; ver [Segurança do trabalho](docs/seguranca-trabalho.md) | não | **aplicada no `takt-hub` em 05/11/2026** por conexão direta ao banco, numa transação; conferidos as 3 tabelas, a coluna `tst`, os 16 tipos, os grants, o bucket privado (JPEG até 2 MB) e a leitura pela API REST (200). Em seguida, 3.261 apontamentos de 6 obras importados da planilha SST, sem fotos |
 | 0044 | apropriação de custos por pacote de serviço da Linha de Balanço (`lob_cost_items`), peso do IDP; ver [IDP ponderado por custo](docs/planejamento-tres-niveis.md#longo-prazo-idp-ponderado-por-custo-e-tela-custos-11112026) | não | **aplicada no `takt-hub` em 11/11/2026** por conexão direta ao banco, numa transação; conferidos as colunas, as chaves (obra em cascata, pacote com set null), RLS, os índices, o grant para `service_role` e a leitura REST (200 com a chave de serviço, 401 anônima) |
-| 0045 | histograma de mão de obra: `headcount_entries` (efetivo diário por empresa e função); ver [Histograma](docs/histograma.md) | não | **não aplicada** (criada em 11/11/2026) |
-| 0046 | controle de produtividade: `production_entries` (serviço, equipe e produção do dia); ver [Controle de produtividade](docs/controle-produtividade.md) | não | **não aplicada** (criada em 11/11/2026) |
-| 0047 | checklist de equipamentos: `checklist_models`, `checklist_equipment` e `checklist_runs`; ver [Checklist de equipamentos](docs/checklist-equipamentos.md) | não | **não aplicada** (criada em 11/11/2026) |
+| 0045 | histograma de mão de obra: `headcount_entries` (efetivo diário por empresa e função); ver [Histograma](docs/histograma.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
+| 0046 | controle de produtividade: `production_entries` (serviço, equipe e produção do dia); ver [Controle de produtividade](docs/controle-produtividade.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
+| 0047 | checklist de equipamentos: `checklist_models`, `checklist_equipment` e `checklist_runs`; ver [Checklist de equipamentos](docs/checklist-equipamentos.md) | não | aplicada em 11/11/2026 (CLI do Supabase; conferido: tabelas, RLS e grant) |
