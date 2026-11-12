@@ -11,6 +11,7 @@ import { sections as curtoPrazo } from './curto-prazo';
 import { sections as terminalidade } from './terminalidade';
 import { sections as seguranca } from './seguranca';
 import { sections as histograma } from './histograma';
+import { sections as checklist } from './checklist';
 import { sections as produtividade } from './produtividade';
 import { sections as apoioBim } from './apoio-bim';
 import { sections as agente } from './agente';
@@ -35,6 +36,7 @@ export const MANUAL_SECTIONS: readonly ManualSection[] = [
   ...seguranca,
   ...histograma,
   ...produtividade,
+  ...checklist,
   ...apoioBim,
   ...agente,
 ];
@@ -54,6 +56,7 @@ export const SCREEN_LABEL: Readonly<Record<string, string>> = {
   seguranca: 'Aba 6 · Segurança do trabalho',
   histograma: 'Aba 7 · Histograma de mão de obra',
   produtividade: 'Aba 8 · Controle de produtividade',
+  checklist: 'Aba 9 · Checklist de equipamentos',
   federacao: 'Apoio · Modelo federado',
   ifc: 'Apoio · Arquivos IFC',
   dividas: 'Apoio · Dívidas',
@@ -184,6 +187,7 @@ const SCREEN_NAMES: Readonly<Record<string, readonly string[]>> = {
   seguranca: ['seguranca do trabalho', 'aba 6', 'tst', 'vistoria de seguranca'],
   histograma: ['histograma', 'aba 7', 'efetivo', 'mao de obra'],
   produtividade: ['controle de produtividade', 'produtividade', 'aba 8', 'controle da producao'],
+  checklist: ['checklist de equipamentos', 'checklist', 'aba 9', 'inspecao de equipamento'],
   federacao: ['modelo federado', 'federacao', 'federado'],
   ifc: ['arquivos ifc', 'ifc'],
   dividas: ['dividas', 'divida'],

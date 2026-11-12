@@ -295,6 +295,13 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
     effect: 'A aba 8 (Controle de produtividade) responde "indisponível"; as demais seguem normais.',
     critical: false,
   },
+  {
+    migration: '0047_equipment_checklist',
+    label: 'Checklist de equipamentos: modelos, equipamentos da obra e inspeções',
+    probe: { kind: 'table', table: 'checklist_runs' },
+    effect: 'A aba 9 (Checklist de equipamentos) responde "indisponível"; as demais seguem normais.',
+    critical: false,
+  },
 ];
 
 export type MigrationStatus = { migration: string; label: string; effect: string; critical: boolean; applied: boolean; detail?: string };

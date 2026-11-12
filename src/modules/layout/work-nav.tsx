@@ -91,6 +91,16 @@ export const WORK_TABS = [
     nav: 'Vistoria de segurança',
     hint: 'Vistorias dos TSTs · Fotos',
   },
+  // 11/11/2026: a inspeção diária, semanal e mensal dos equipamentos. Aberta a todos para consulta, como a
+  // aba 6; só o TST e o admin editam modelos, equipamentos e inspeções.
+  {
+    section: 'checklist',
+    group: 'sst',
+    number: 9,
+    short: 'Checklist',
+    label: 'Checklist de equipamentos',
+    hint: 'Diário · Semanal · Mensal',
+  },
 ] as const;
 
 /** Grupos do menu da obra (11/11/2026, a pedido do usuário): o dashboard sozinho no topo, depois Prazo

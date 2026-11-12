@@ -181,6 +181,28 @@ async function seedWork(db: PGlite, required: Map<string, Columns>, p: string, c
     contractor: 'GGP',
     professionals: 2,
   });
+  // 0047: os equipamentos e as inspeções do checklist saem pela cascata; o modelo é da lista única e fica
+  // (por isso o id dele não começa pelo prefixo da obra).
+  await insert('checklist_models', {
+    id: `ck-model-${p}`,
+    name: `Betoneira diário ${p}`,
+    equipment_type: 'Betoneira',
+    frequency: 'daily',
+    items: JSON.stringify([{ id: 'i1', text: 'Proteção das partes móveis' }]),
+    created_by: 'u1',
+  });
+  await insert('checklist_equipment', { id: `${p}-ckeq`, work_id: w, name: 'Betoneira 01', equipment_type: 'Betoneira', created_by: 'u1' });
+  await insert('checklist_runs', {
+    id: `${p}-ckrun`,
+    work_id: w,
+    equipment_id: `${p}-ckeq`,
+    model_id: `ck-model-${p}`,
+    model_name: 'Betoneira diário',
+    frequency: 'daily',
+    done_on: '2026-11-03',
+    answers: JSON.stringify([{ itemId: 'i1', text: 'Proteção das partes móveis', answer: 'c', note: '' }]),
+    created_by: 'u1',
+  });
   await insert('headcount_entries', {
     id: `${p}-hc`,
     work_id: w,

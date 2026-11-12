@@ -35,7 +35,12 @@ A interface de cada obra é organizada em **seis abas numeradas**: os quatro ní
    - Fica fora do snapshot (migração 0046, **ainda não aplicada**). O histórico entra por `scripts/import-produtividade.ts` (**ainda não importado**).
    - Veja [docs/controle-produtividade.md](docs/controle-produtividade.md).
 
-**Menu da obra em grupos** (11/11/2026): o dashboard no topo; **Prazo** (longo prazo, com Vagões recuado sob ele, médio e curto); **Controles de obra** (terminalidade, histograma e controle de produtividade); **SST** (a aba 6, que no menu aparece como "Vistoria de segurança"). O número de cada aba não mudou.
+9. **Checklist de equipamentos** (11/11/2026): a inspeção diária, semanal e mensal dos equipamentos da obra, no grupo SST.
+   - Modelos (tipo de equipamento, periodicidade e itens) numa lista única para todas as obras; equipamentos por obra; inspeção com Conforme / Não conforme (com descrição) / Não se aplica por item.
+   - Quadro do que falta hoje, na semana e no mês. Aberta a todos para consulta; só o tipo TST e os admins editam modelos, equipamentos e inspeções.
+   - Fica fora do snapshot (migração 0047, **ainda não aplicada**). Nenhum modelo vem cadastrado: os TSTs criam. Ver [Checklist de equipamentos](docs/checklist-equipamentos.md).
+
+**Menu da obra em grupos** (11/11/2026): o dashboard no topo; **Prazo** (longo prazo, com Vagões recuado sob ele, médio e curto); **Controles de obra** (terminalidade, histograma e controle de produtividade); **SST** (a aba 6, que no menu aparece como "Vistoria de segurança", e a aba 9, checklist de equipamentos). O número de cada aba não mudou.
 
 Em todas as telas, o botão **"Como usar"** (?) do cabeçalho abre um tour que escurece a tela e explica cada botão e campo, um por vez (20/10/2026) — veja [Tour guiado](docs/tour-guiado.md).
 
@@ -330,3 +335,4 @@ A tela Configurações (admin) → Banco de dados sonda o esquema e mostra o est
 | 0044 | apropriação de custos por pacote de serviço da Linha de Balanço (`lob_cost_items`), peso do IDP; ver [IDP ponderado por custo](docs/planejamento-tres-niveis.md#longo-prazo-idp-ponderado-por-custo-e-tela-custos-11112026) | não | **aplicada no `takt-hub` em 11/11/2026** por conexão direta ao banco, numa transação; conferidos as colunas, as chaves (obra em cascata, pacote com set null), RLS, os índices, o grant para `service_role` e a leitura REST (200 com a chave de serviço, 401 anônima) |
 | 0045 | histograma de mão de obra: `headcount_entries` (efetivo diário por empresa e função); ver [Histograma](docs/histograma.md) | não | **não aplicada** (criada em 11/11/2026) |
 | 0046 | controle de produtividade: `production_entries` (serviço, equipe e produção do dia); ver [Controle de produtividade](docs/controle-produtividade.md) | não | **não aplicada** (criada em 11/11/2026) |
+| 0047 | checklist de equipamentos: `checklist_models`, `checklist_equipment` e `checklist_runs`; ver [Checklist de equipamentos](docs/checklist-equipamentos.md) | não | **não aplicada** (criada em 11/11/2026) |

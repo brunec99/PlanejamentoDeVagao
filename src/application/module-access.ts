@@ -11,7 +11,7 @@ export const BOOTSTRAP_ADMIN_EMAIL = 'bruno.engenharia@atrincorporadora.com.br';
 
 export const RESTRICTED_MODULE_MESSAGE = 'Módulo não liberado para você. Peça a liberação a um administrador.';
 
-/** Seções da obra liberadas por pessoa. Ficam abertas `dashboard`, `seguranca` e `configuracoes`. Curto prazo e
+/** Seções da obra liberadas por pessoa. Ficam abertas `dashboard`, `seguranca`, `checklist` e `configuracoes`. Curto prazo e
  * terminalidade entraram aqui em 08/11/2026, a pedido do usuário; quem já os usava foi mantido (migração 0042).
  * O histograma (aba 7) e o controle de produtividade (aba 8) nasceram aqui em 11/11/2026. */
 export const RESTRICTED_SECTIONS = [
@@ -83,6 +83,14 @@ export const MODULES: readonly ModuleInfo[] = [
   { section: 'histograma', label: 'Histograma', hint: 'Efetivo diário por empresa e função', group: 'Planejamento' },
   // 11/11/2026: aba 8, liberada por pessoa; quem tem o módulo lança, o papel consulta só visualiza.
   { section: 'produtividade', label: 'Produtividade', hint: 'Serviço, equipe e produção por homem-dia', group: 'Planejamento' },
+  // 11/11/2026: aba 9, aberta a todos para consulta; só o tipo TST (`User.tst`) e os admins editam.
+  {
+    section: 'checklist',
+    label: 'Checklist de equipamentos',
+    hint: 'Inspeção diária, semanal e mensal',
+    group: 'Planejamento',
+    open: true,
+  },
   { section: 'federacao', label: 'Modelo federado', hint: 'Modelos IFC combinados', group: 'Apoio' },
   { section: 'ifc', label: 'Arquivos IFC', hint: 'Repositório e versões dos modelos', group: 'Apoio' },
   { section: 'dividas', label: 'Dívidas', hint: 'Pendências que passam de um vagão para outro', group: 'Apoio' },
