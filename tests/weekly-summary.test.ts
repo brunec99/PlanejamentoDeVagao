@@ -339,3 +339,13 @@ test('ciclo do agendador: envia uma vez por semana, repete depois de falha e nã
   const busy: WeeklyTickState = { running: true };
   assert.equal(await weeklyTick(saturday, busy, ok, log), 'skipped');
 });
+
+test('endereço dos links de e-mail: PUBLIC_SITE_URL vence o padrão da imagem; valor inválido é ignorado', async () => {
+  const { emailSiteOrigin } = await import('../src/infrastructure/public-origin');
+  assert.equal(
+    emailSiteOrigin({ PUBLIC_SITE_URL: 'https://a.exemplo.com/x', SITE_URL_PADRAO: 'https://b.exemplo.com' }),
+    'https://a.exemplo.com',
+  );
+  assert.equal(emailSiteOrigin({ SITE_URL_PADRAO: 'https://b.exemplo.com/' }), 'https://b.exemplo.com');
+  assert.equal(emailSiteOrigin({ PUBLIC_SITE_URL: 'ftp://x', SITE_URL_PADRAO: '' }), undefined);
+});

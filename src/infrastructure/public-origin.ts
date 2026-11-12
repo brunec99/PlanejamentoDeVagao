@@ -43,3 +43,10 @@ export function publicOrigin(headers: HeaderReader, fallback: string, configured
   const protocol = forwarded === 'http' || forwarded === 'https' ? forwarded : new URL(fallback).protocol.slice(0, -1);
   return `${protocol}://${host}`;
 }
+
+/** Endereço para os links de e-mail que saem sem requisição (o resumo semanal de sábado é disparado pelo
+ * relógio do servidor): `PUBLIC_SITE_URL` se o servidor a definir; senão `SITE_URL_PADRAO`, que a imagem
+ * Docker traz da variável de mesmo nome do GitHub (12/11/2026). O padrão vale só para e-mail: o retorno do
+ * login continua pelo `Host` da requisição, para não prender o login a um endereço embutido na imagem. */
+export const emailSiteOrigin = (env: Record<string, string | undefined> = process.env): string | undefined =>
+  configuredOrigin(env.PUBLIC_SITE_URL) ?? configuredOrigin(env.SITE_URL_PADRAO) ?? undefined;

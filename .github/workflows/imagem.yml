@@ -43,6 +43,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_URL=${{ github.event_name == 'pull_request' && 'http://127.0.0.1:54321' || vars.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ github.event_name == 'pull_request' && 'ci-anon-key' || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_AGENT_NAME=${{ vars.NEXT_PUBLIC_AGENT_NAME }}
+            SITE_URL_PADRAO=${{ vars.SITE_URL_PADRAO }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # Roda a imagem do jeito que o servidor roda (disco só leitura, sem privilégios) e confere

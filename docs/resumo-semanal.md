@@ -9,7 +9,14 @@ e depois: `20261112100000_obra360_resumo_semanal_email.sql` (Takt Hub: o modelo 
 da central de notificações) e `0050_weekly_summary.sql` (coluna `profiles.weekly_summary`). A chave foi ligada
 só para o usuário que pediu o resumo (1 perfil). **Falta:** publicar de novo a Edge Function `email-dispatch`
 do Takt Hub (sem isso a linha do e-mail falha com `modelo_desconhecido`), definir `PUBLIC_SITE_URL` no servidor
-da ATR (sem ela o e-mail sai sem o botão) e um e-mail real de ponta a ponta. Onde o texto abaixo disser "não
+da ATR (sem ela o e-mail sai sem o botão) e um e-mail real de ponta a ponta.
+
+**Atualização de 12/11/2026 (mais tarde):** a Edge Function `email-dispatch` foi **publicada** no `takt-hub`
+(`npx supabase functions deploy email-dispatch --no-verify-jwt`), a pedido do usuário. O endereço público que
+ele informou (`https://planejamento-teste.aironlab.com.br`, atrás do Cloudflare Access) foi gravado na variável
+`SITE_URL_PADRAO` do GitHub: a imagem Docker a recebe como padrão **só para os links de e-mail**
+(`emailSiteOrigin`, em `src/infrastructure/public-origin.ts`); `PUBLIC_SITE_URL`, se o servidor a definir, tem
+prioridade, e o retorno do login não usa o padrão. Falta só um e-mail real de ponta a ponta. Onde o texto abaixo disser "não
 aplicada", vale esta atualização.
 
 ## O pedido

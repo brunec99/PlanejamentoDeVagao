@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { logRouteError } from '@/infrastructure/log';
+import { emailSiteOrigin } from '@/infrastructure/public-origin';
 import { sendWeeklySummaryTo, setWeeklySummary, WeeklySummaryUnavailableError } from '@/infrastructure/email/weekly-summary';
 import { brasiliaClock, lastClosedWeek } from '@/domain/weekly-summary';
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     const sent = await sendWeeklySummaryTo({
       week: lastClosedWeek(today),
       today,
-      origin: process.env.PUBLIC_SITE_URL,
+      origin: emailSiteOrigin(),
       recipient: { userId: profile.id, name: profile.name },
       now: new Date(now).toISOString(),
     });

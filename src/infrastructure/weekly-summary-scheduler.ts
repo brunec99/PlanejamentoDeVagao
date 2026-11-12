@@ -90,7 +90,8 @@ export function startWeeklySummaryScheduler(env: Env = process.env): boolean {
       state,
       async due => {
         const { sendWeeklySummary } = await import('./email/weekly-summary');
-        return sendWeeklySummary({ ...due, origin: process.env.PUBLIC_SITE_URL });
+        const { emailSiteOrigin } = await import('./public-origin');
+        return sendWeeklySummary({ ...due, origin: emailSiteOrigin() });
       },
       (message, context) => console.log(JSON.stringify({ level: 'info', route: LABEL, at: new Date().toISOString(), message, ...context })),
     ).catch(cause => logRouteError(LABEL, cause, { part: 'tick' }));
