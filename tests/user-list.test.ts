@@ -5,6 +5,7 @@ import {
   DEFAULT_USER_SORT,
   EMPTY_USER_FILTER,
   NO_WORK,
+  bulkTargetsLabel,
   isFiltered,
   listUsers,
   matchesUser,
@@ -117,4 +118,15 @@ test('TST é um tipo de usuário: consulta com a marca, com filtro e ordem próp
   assert.deepEqual(names(listUsers(all, {}, { ...EMPTY_USER_FILTER, role: 'viewer' }, DEFAULT_USER_SORT)), ['Bruno']);
   const byType = names(listUsers(all, {}, EMPTY_USER_FILTER, { key: 'role', dir: 'asc' }));
   assert.deepEqual(byType.slice(0, 2), ['Bruno', 'Carla'], 'consulta, depois TST, depois planejador…');
+});
+
+test('rótulo do lote de acessos: obras e módulos juntos por extenso; de quatro itens em diante, a contagem por campo', () => {
+  assert.equal(bulkTargetsLabel([], []), '');
+  assert.equal(bulkTargetsLabel(['Mozine'], []), 'Mozine');
+  assert.equal(bulkTargetsLabel([], ['Curto prazo']), 'Curto prazo');
+  assert.equal(bulkTargetsLabel(['Mozine'], ['Curto prazo']), 'Mozine e Curto prazo');
+  assert.equal(bulkTargetsLabel(['Atmos', 'Mozine'], ['Curto prazo']), 'Atmos, Mozine e Curto prazo');
+  assert.equal(bulkTargetsLabel(['Atmos', 'Mozine', 'Tauá'], ['Curto prazo']), '3 obras e 1 módulo');
+  assert.equal(bulkTargetsLabel(['Atmos', 'Mozine', 'Tauá', 'Brizz'], []), '4 obras');
+  assert.equal(bulkTargetsLabel(['Atmos'], ['IFC', 'Curto prazo', 'Terminalidade']), '1 obra e 3 módulos');
 });

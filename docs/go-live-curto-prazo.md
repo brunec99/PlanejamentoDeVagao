@@ -291,6 +291,24 @@ Quem entra com o Google e não tem cadastro vê, abaixo do aviso, o botão **"So
 - Tela aberta com `next dev` local, Supabase falso e as APIs respondidas pelo Playwright com as regras reais (`applyCommand`), com 9 usuários e 3 obras, a 1280 px e a 390 px. Foram conferidos: Shift+clique marcando 4 pessoas; "Liberar para 4 pessoas" mandando **um** comando com os 4; a célula marcada 150 ms após o clique, com o servidor simulado levando 500 ms; o botão passando a "Revogar de 4 pessoas"; o diálogo de confirmação e a revogação; na visão Módulos, "Selecionar todos" com "Todos" dando "Liberar para 8 pessoas" e o admin de fora; a pesquisa mantendo a seleção com o aviso dos que estão fora da lista; e nenhuma rolagem horizontal da página no celular.
 - **Não validado:** a tela logada em produção com o banco real.
 
+### Obras e módulos no mesmo lote (12/11/2026)
+
+**Pedido do usuário:** "permita que sejam feitas liberações em massa tanto no campo de obra quanto de módulos." Até aqui a barra mostrava um campo só, o da visão aberta (obras na visão Obras, módulos na visão Módulos), e a escolha voltava a zero ao trocar de visão. Liberar três obras e dois módulos para a mesma turma eram dois lotes.
+
+**O que mudou:** a barra do lote traz sempre os **dois campos**, "Obras" (com "Todas") e "Módulos" (com "Todos"), em qualquer visão da grade. Isso substitui os itens 2, 5 (última frase) e 6 da lista acima.
+
+1. O lote leva obras, módulos ou os dois, numa gravação só. A escolha dos dois campos continua ao trocar a visão Obras/Módulos.
+2. Os botões continuam contando quem muda de fato: entra na conta quem muda em pelo menos um dos campos.
+3. O aviso e o diálogo de revogação citam tudo por extenso até três itens ("Revogar Atmos, Mozine e Curto prazo de 4 pessoas?"); de quatro em diante, a contagem por campo ("3 obras e 2 módulos"), por `bulkTargetsLabel` em `src/modules/configuracoes/user-list.ts`.
+4. **Admin:** no lote só de módulos, fica de fora, como antes. Com obras junto, entra e só as obras dele mudam; a barra avisa ("1 admin já vê todos os módulos; para ele só as obras mudam.").
+5. Obra excluída com a barra aberta sai do lote sozinha, porque a escolha é lida contra as obras atuais.
+
+**Servidor e banco:** nada mudou. `set_access_batch` já aceitava `workIds` e `sections` juntos, e a projeção local já fazia a mesma conta. Sem migração.
+
+**Código:** `src/modules/configuracoes/users-table.tsx` (`BulkAccessBar`, sem a propriedade `view`), `user-list.ts` (`bulkTargetsLabel`), tour, ajuda "Como funciona", rodapé da grade e manual da Claudia.
+
+**Validação:** testes novos em `tests/module-access.test.ts` (`accessBatchChange` com obras e módulos juntos, inclusive admin) e `tests/user-list.test.ts` (`bulkTargetsLabel`). Sequência do CI rodada localmente (tipos, lint, Prettier, 1.355 testes, migrações, build e e2e). Tela aberta com `next dev` local, Supabase falso e as APIs respondidas pelo Playwright com as regras reais (`applyCommand`), a 1280 px e a 390 px: os dois campos na barra; "Todas" as obras mais dois módulos dando "Liberar para 3 pessoas" e **um** comando com `workIds` e `sections`; o aviso do admin; a escolha mantida ao trocar para a visão Módulos; o diálogo "Revogar 2 obras e 2 módulos de 3 pessoas?"; e nenhuma rolagem horizontal da página no celular. **Não validado:** a tela logada em produção com o banco real.
+
 ## Curto prazo e terminalidade liberados por pessoa (08/11/2026)
 
 **Pedido do usuário:** "coloque terminalidade e curto prazo no pool de funções que são liberadas apenas para pessoas selecionadas." Até aqui as abas 4 e 5 eram abertas a todos que tinham a obra liberada.

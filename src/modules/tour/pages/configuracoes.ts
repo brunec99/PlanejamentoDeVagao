@@ -68,7 +68,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-users-select',
     title: 'Várias pessoas de uma vez',
-    body: 'Marque a caixa ao lado de cada nome; a do cabeçalho marca todos os listados, e Shift+clique marca o intervalo. Aparece uma barra: escolha as obras (ou, na visão Módulos, os módulos) e clique em Liberar ou Revogar. Os botões dizem quantas pessoas mudam de fato. A seleção continua ao pesquisar e filtrar, para montar a turma nome a nome.',
+    body: 'Marque a caixa ao lado de cada nome; a do cabeçalho marca todos os listados, e Shift+clique marca o intervalo. Aparece uma barra com dois campos, Obras e Módulos: escolha as obras, os módulos ou os dois no mesmo lote e clique em Liberar ou Revogar. Os botões dizem quantas pessoas mudam de fato. A seleção continua ao pesquisar e filtrar, para montar a turma nome a nome.',
   },
   {
     target: 'config-user-role',

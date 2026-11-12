@@ -73,3 +73,18 @@ export const isFiltered = (filter: UserFilter) => !!(filter.query.trim() || filt
 
 /** Colunas de obra em ordem alfabética, como a lista de obras. */
 export const worksByName = (works: readonly Work[]) => [...works].sort(byName);
+
+/** O que o lote de acessos leva, por extenso (12/11/2026): "Mozine", "Mozine e Curto prazo", "Atmos, Mozine e
+ * Curto prazo"; de quatro itens em diante, só a contagem por campo ("5 obras e 2 módulos"). */
+export function bulkTargetsLabel(workNames: readonly string[], moduleNames: readonly string[]): string {
+  const names = [...workNames, ...moduleNames];
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length <= 3) return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
+  const count = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+  return [
+    workNames.length ? count(workNames.length, 'obra', 'obras') : '',
+    moduleNames.length ? count(moduleNames.length, 'módulo', 'módulos') : '',
+  ]
+    .filter(Boolean)
+    .join(' e ');
+}

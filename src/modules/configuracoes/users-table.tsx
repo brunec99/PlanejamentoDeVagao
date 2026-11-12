@@ -21,6 +21,7 @@ import {
   type UserSort,
   type UserSortKey,
   type UserType,
+  bulkTargetsLabel,
   typeToProfile,
   userType,
 } from './user-list';
@@ -232,49 +233,40 @@ const CELL = 'border-b border-slate-100 px-2 py-2 align-middle group-hover:bg-br
 const CHECKBOX = 'size-4 shrink-0 cursor-pointer accent-primary disabled:cursor-default';
 
 const people = (n: number) => (n === 1 ? '1 pessoa' : `${n} pessoas`);
-/** "Mozine", "Mozine e Tauá", "Atmos, Mozine e Tauá"; de quatro em diante, só a contagem. */
-function joinNames(names: readonly string[], many: string) {
-  if (names.length > 3) return `${names.length} ${many}`;
-  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
-}
-
 /** Liberação em lote (08/11/2026): o admin marca várias pessoas na grade e libera ou revoga as mesmas obras
- * (ou módulos, na visão Módulos) de uma vez, numa gravação só (`set_access_batch`), em vez de um clique por
- * célula. A seleção sobrevive à pesquisa e aos filtros, para dar para montar a turma pesquisando nome a
- * nome; quem saiu da lista continua marcado, entra no lote e a barra avisa quantos são. Os botões dizem
- * quantas pessoas mudam de fato, pela mesma conta do servidor (`accessBatchChange`), e só elas vão no comando. */
-function BulkAccessBar({
-  view,
-  selected,
-  hidden,
-  works,
-  onClear,
-}: {
-  view: View;
-  selected: User[];
-  hidden: number;
-  works: Work[];
-  onClear: () => void;
-}) {
+ * e os mesmos módulos de uma vez, numa gravação só (`set_access_batch`), em vez de um clique por célula.
+ * Desde 12/11/2026 a barra traz os dois campos juntos, Obras e Módulos, em qualquer visão da grade: o mesmo
+ * lote pode levar obras, módulos ou os dois, e a escolha não se perde ao trocar de visão. A seleção sobrevive
+ * à pesquisa e aos filtros, para dar para montar a turma pesquisando nome a nome; quem saiu da lista continua
+ * marcado, entra no lote e a barra avisa quantos são. Os botões dizem quantas pessoas mudam de fato, pela
+ * mesma conta do servidor (`accessBatchChange`), e só elas vão no comando. */
+type BulkOption = { id: string; short: string; name: string };
+const MODULE_OPTIONS: BulkOption[] = RESTRICTED_MODULES.map(m => ({ id: m.section, short: m.label, name: m.label }));
+
+function BulkAccessBar({ selected, hidden, works, onClear }: { selected: User[]; hidden: number; works: Work[]; onClear: () => void }) {
   const c = usePlanning();
   const { toast } = useToast();
   const confirm = useConfirm();
-  const [targets, setTargets] = useState<string[]>([]);
+  const [workTargets, setWorkTargets] = useState<string[]>([]);
+  const [moduleTargets, setModuleTargets] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const obras = view === 'obras';
-  const options = obras
-    ? works.map(w => ({ id: w.id, short: w.code, name: w.name }))
-    : RESTRICTED_MODULES.map(m => ({ id: m.section, short: m.label, name: m.label }));
-  const chosen = options.filter(o => targets.includes(o.id));
-  const batch = (enabled: boolean) => (obras ? { workIds: targets, enabled } : { sections: targets, enabled });
-  const changing = (enabled: boolean) => (targets.length ? selected.filter(user => accessBatchChange(user, batch(enabled))) : []);
+  const workOptions: BulkOption[] = works.map(w => ({ id: w.id, short: w.code, name: w.name }));
+  // Obra excluída enquanto a barra está aberta sai do lote sozinha: a escolha é lida contra as obras atuais.
+  const chosenWorks = workOptions.filter(o => workTargets.includes(o.id));
+  const chosenModules = MODULE_OPTIONS.filter(o => moduleTargets.includes(o.id));
+  const any = chosenWorks.length + chosenModules.length > 0;
+  const batch = (enabled: boolean) => ({
+    ...(chosenWorks.length ? { workIds: chosenWorks.map(o => o.id) } : {}),
+    ...(chosenModules.length ? { sections: chosenModules.map(o => o.id) } : {}),
+    enabled,
+  });
+  const changing = (enabled: boolean) => (any ? selected.filter(user => accessBatchChange(user, batch(enabled))) : []);
   const toGrant = changing(true);
   const toRevoke = changing(false);
-  const admins = obras ? 0 : selected.filter(u => u.role === 'admin').length;
-  const all = options.length > 0 && chosen.length === options.length;
-  const what = joinNames(
-    chosen.map(o => o.name),
-    obras ? 'obras' : 'módulos',
+  const admins = chosenModules.length ? selected.filter(u => u.role === 'admin').length : 0;
+  const what = bulkTargetsLabel(
+    chosenWorks.map(o => o.name),
+    chosenModules.map(o => o.name),
   );
 
   const apply = async (enabled: boolean) => {
@@ -283,9 +275,13 @@ function BulkAccessBar({
     if (!enabled) {
       const ok = await confirm({
         title: `Revogar ${what} de ${people(users.length)}?`,
-        description: obras
-          ? 'Quem perde a obra deixa de vê-la na lista de obras. Dá para liberar de novo pela mesma barra ou pela célula.'
-          : 'Quem perde o módulo deixa de ver a aba dele. Dá para liberar de novo pela mesma barra ou pela célula.',
+        description: [
+          chosenWorks.length ? 'Quem perde a obra deixa de vê-la na lista de obras.' : '',
+          chosenModules.length ? 'Quem perde o módulo deixa de ver a aba dele.' : '',
+          'Dá para liberar de novo pela mesma barra ou pela célula.',
+        ]
+          .filter(Boolean)
+          .join(' '),
         confirmLabel: 'Revogar',
         tone: 'danger',
       });
@@ -311,17 +307,63 @@ function BulkAccessBar({
         ? 'border-primary bg-primary text-white hover:bg-primary-strong'
         : 'border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary-ink'
     }`;
-  const hint = !targets.length
-    ? obras
-      ? 'Escolha uma ou mais obras.'
-      : 'Escolha um ou mais módulos.'
-    : admins > 0
-      ? admins === selected.length
-        ? 'Admins já veem todos os módulos.'
-        : admins === 1
-          ? '1 admin já vê todos os módulos e fica de fora.'
-          : `${admins} admins já veem todos os módulos e ficam de fora.`
-      : '';
+  // Admin vê todos os módulos: no lote só de módulos fica de fora; com obras junto, só as obras dele mudam.
+  const adminHint =
+    admins === 0
+      ? ''
+      : chosenWorks.length
+        ? admins === 1
+          ? '1 admin já vê todos os módulos; para ele só as obras mudam.'
+          : `${admins} admins já veem todos os módulos; para eles só as obras mudam.`
+        : admins === selected.length
+          ? 'Admins já veem todos os módulos.'
+          : admins === 1
+            ? '1 admin já vê todos os módulos e fica de fora.'
+            : `${admins} admins já veem todos os módulos e ficam de fora.`;
+  const hint = any ? adminHint : 'Escolha obras, módulos ou os dois.';
+
+  const group = (
+    label: string,
+    groupLabel: string,
+    allLabel: string,
+    options: BulkOption[],
+    targets: string[],
+    setTargets: (update: (current: string[]) => string[]) => void,
+    obras: boolean,
+  ) => {
+    const all = options.length > 0 && options.every(o => targets.includes(o.id));
+    return (
+      <div role="group" aria-label={groupLabel} className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 w-16 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+        <button
+          type="button"
+          aria-pressed={all}
+          className={chip(all)}
+          disabled={busy || options.length === 0}
+          onClick={() => setTargets(() => (all ? [] : options.map(o => o.id)))}
+        >
+          {allLabel}
+        </button>
+        {options.map(o => {
+          const on = targets.includes(o.id);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={on}
+              aria-label={obras ? `${o.name} (${o.short})` : o.name}
+              title={o.name}
+              className={chip(on)}
+              disabled={busy}
+              onClick={() => setTargets(current => (on ? current.filter(id => id !== o.id) : [...current, o.id]))}
+            >
+              {o.short}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -343,42 +385,15 @@ function BulkAccessBar({
           Limpar seleção
         </button>
       </div>
-      <div role="group" aria-label={obras ? 'Obras do lote' : 'Módulos do lote'} className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{obras ? 'Obras' : 'Módulos'}</span>
-        <button
-          type="button"
-          aria-pressed={all}
-          className={chip(all)}
-          disabled={busy}
-          onClick={() => setTargets(all ? [] : options.map(o => o.id))}
-        >
-          {obras ? 'Todas' : 'Todos'}
-        </button>
-        {options.map(o => {
-          const on = targets.includes(o.id);
-          return (
-            <button
-              key={o.id}
-              type="button"
-              aria-pressed={on}
-              aria-label={obras ? `${o.name} (${o.short})` : o.name}
-              title={o.name}
-              className={chip(on)}
-              disabled={busy}
-              onClick={() => setTargets(current => (on ? current.filter(id => id !== o.id) : [...current, o.id]))}
-            >
-              {o.short}
-            </button>
-          );
-        })}
-      </div>
+      {group('Obras', 'Obras do lote', 'Todas', workOptions, workTargets, setWorkTargets, true)}
+      {group('Módulos', 'Módulos do lote', 'Todos', MODULE_OPTIONS, moduleTargets, setModuleTargets, false)}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           className="button px-3 py-1.5 text-xs"
           disabled={busy || toGrant.length === 0}
           onClick={() => void apply(true)}
-          title={toGrant.length === 0 && targets.length ? 'Todos os selecionados já têm esse acesso.' : undefined}
+          title={toGrant.length === 0 && any ? 'Todos os selecionados já têm esse acesso.' : undefined}
         >
           <CheckCheck size={14} aria-hidden />
           {busy ? 'Salvando…' : toGrant.length ? `Liberar para ${people(toGrant.length)}` : 'Liberar'}
@@ -388,7 +403,7 @@ function BulkAccessBar({
           className="button-ghost px-3 py-1.5 text-xs"
           disabled={busy || toRevoke.length === 0}
           onClick={() => void apply(false)}
-          title={toRevoke.length === 0 && targets.length ? 'Nenhum dos selecionados tem esse acesso.' : undefined}
+          title={toRevoke.length === 0 && any ? 'Nenhum dos selecionados tem esse acesso.' : undefined}
         >
           <X size={14} aria-hidden />
           {toRevoke.length ? `Revogar de ${people(toRevoke.length)}` : 'Revogar'}
@@ -560,8 +575,6 @@ export function UsersTable({
 
       {selectedUsers.length > 0 && (
         <BulkAccessBar
-          key={view}
-          view={view}
           selected={selectedUsers}
           hidden={selectedUsers.length - listedSelected}
           works={columns}
@@ -720,7 +733,7 @@ export function UsersTable({
           ? 'Clique na célula para liberar ou revogar a obra; vale na hora, sem botão de salvar. Quem não tem a obra liberada não a vê na lista de obras. O número no cabeçalho é quantos dos usuários listados têm a obra.'
           : `${OPEN_MODULES.map(m => m.label).join(', ')} são abertos a todos e não aparecem aqui. Administradores veem todos os módulos, por isso as células deles ficam marcadas em cinza, sem clique. O número no cabeçalho é quantos dos usuários listados têm o módulo.`}{' '}
         Para várias pessoas de uma vez, marque a caixa ao lado do nome (Shift+clique marca o intervalo; a do cabeçalho marca todos os
-        listados), escolha {view === 'obras' ? 'as obras' : 'os módulos'} na barra que aparece e clique em Liberar ou Revogar.
+        listados), escolha as obras e os módulos na barra que aparece (dá para levar os dois no mesmo lote) e clique em Liberar ou Revogar.
       </p>
     </div>
   );

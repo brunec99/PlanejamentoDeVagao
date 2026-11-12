@@ -275,6 +275,19 @@ test('acessos em lote (08/11/2026): só muda quem precisa, e admin não ganha ne
   assert.equal(accessBatchChange(ana, { sections: ['ifc'], enabled: true }), null);
   assert.equal(accessBatchChange({ role: 'admin', workIds: [] }, { sections: ['ifc'], enabled: true }), null);
   assert.deepEqual(accessBatchChange({ role: 'admin', workIds: [] }, { workIds: ['obra-1'], enabled: true }), { workIds: ['obra-1'] });
+  // 12/11/2026: a barra manda obras e módulos no mesmo lote. Para o admin, só as obras mudam.
+  assert.deepEqual(accessBatchChange(ana, { workIds: ['obra-2'], sections: ['medio-prazo'], enabled: true }), {
+    workIds: ['obra-1', 'obra-2'],
+    modules: ['medio-prazo', 'ifc'],
+  });
+  assert.deepEqual(accessBatchChange(ana, { workIds: ['obra-1'], sections: ['medio-prazo'], enabled: true }), {
+    modules: ['medio-prazo', 'ifc'],
+  });
+  assert.deepEqual(accessBatchChange(ana, { workIds: ['obra-1'], sections: ['ifc'], enabled: false }), { workIds: [], modules: [] });
+  assert.equal(accessBatchChange(ana, { workIds: ['obra-1'], sections: ['ifc'], enabled: true }), null);
+  assert.deepEqual(accessBatchChange({ role: 'admin', workIds: [] }, { workIds: ['obra-1'], sections: ['ifc'], enabled: true }), {
+    workIds: ['obra-1'],
+  });
   assert.deepEqual(ana, { role: 'viewer', workIds: ['obra-1'], modules: ['ifc'] });
 });
 
