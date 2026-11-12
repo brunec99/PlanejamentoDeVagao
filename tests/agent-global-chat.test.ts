@@ -28,7 +28,7 @@ test('teto da pergunta geral: vale o do mês e o da pessoa, não a parte da obra
 test('globalContextBlock: com obra, pergunta sem obra vale para ela; fora de obra, vale para todas', () => {
   const inside = globalContextBlock({ screen: 'terminalidade', work: { name: 'Mozine', code: 'MZN' }, today: '2026-11-08' });
   assert.match(inside.text, /Hoje é 08\/11\/2026/);
-  assert.match(inside.text, /Aba 5 · Terminalidade/);
+  assert.match(inside.text, /Aba 2\.1 · Terminalidade/);
   assert.match(inside.text, /obra Mozine \(MZN\)/);
   assert.match(inside.text, /vale para a obra Mozine/);
   assert.equal('cache_control' in inside, false);

@@ -5,7 +5,7 @@ import type { TourStep } from '../tours';
  * quadro, e o passo dele é pulado quando o alvo não está na tela. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 9 · Checklist de equipamentos',
+    title: 'Aba 3.2 · Checklist de equipamentos',
     body: 'A inspeção diária, semanal e mensal dos equipamentos da obra. O operador preenche pelo QR colado na máquina, sem login. Técnicos de segurança (TST) e administradores registram e corrigem inspeções; o cadastro de modelos e equipamentos é dos administradores. Os demais consultam.',
   },
   {

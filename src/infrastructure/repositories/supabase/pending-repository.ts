@@ -31,7 +31,7 @@ const IN_CHUNK = 100;
 /** Migração 0043 não aplicada: a lista responde "indisponível" em vez de erro. */
 export class PendingUnavailableError extends Error {
   constructor() {
-    super('Aplique a migração 0043_pending_board.sql no Supabase para usar a lista de pendência.');
+    super('Aplique a migração 0043_pending_board.sql no Supabase para usar o Quadro de Restrições.');
     this.name = 'PendingUnavailableError';
   }
 }
@@ -475,7 +475,7 @@ const toRow = (table: PendingTable, record: AnyRecord) =>
 export async function applyMutation(mutation: PendingMutation): Promise<void> {
   const client = getServiceClient();
   const { workId } = mutation;
-  if (!workId) throw new Error('Gravação da lista de pendência sem obra.');
+  if (!workId) throw new Error('Gravação do Quadro de Restrições sem obra.');
   for (const table of DELETE_ORDER) {
     for (const batch of chunks(mutation.delete[table], IN_CHUNK)) {
       const { error } = await client.from(TABLE_NAMES[table]).delete().in('id', batch).eq('work_id', workId);

@@ -5,7 +5,7 @@ import type { TourStep } from '../tours';
  * analisada; as dos botões de Apontamento, na primeira linha que tem o botão. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 4 · Curto prazo',
+    title: 'Aba 1.3 · Curto prazo',
     body: 'A planilha da semana: o que cada empreiteiro se compromete a fazer, se cumpriu (Sim ou Não) e por quê. Ela se sustenta sozinha, sem depender do plano do mês. O fechamento, com a série do PPC e o Pareto das causas, fica numa seção à parte.',
   },
   {
@@ -178,7 +178,7 @@ export const steps: TourStep[] = [
   {
     target: 'curto-gerar-restricao',
     title: 'Gerar restrição',
-    body: 'Transforma o não cumprido numa restrição de um vagão (ela aparece no detalhe do vagão, na aba 2), ligada, se quiser, a uma atividade com lead time. A linha continua com o Não e a causa. Em desenvolvimento: só aparece para desenvolvedores.',
+    body: 'Transforma o não cumprido numa restrição de um vagão (ela aparece no detalhe do vagão, no Planejamento de vagão), ligada, se quiser, a uma atividade com lead time. A linha continua com o Não e a causa. Em desenvolvimento: só aparece para desenvolvedores.',
   },
   {
     target: 'curto-limpar-apontamento',

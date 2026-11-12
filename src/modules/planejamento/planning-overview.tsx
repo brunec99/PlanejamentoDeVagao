@@ -11,7 +11,7 @@ import { TabHeader } from '@/modules/layout/tab-header';
 
 const COLUMNS = ['Vagão', 'Período previsto', 'Atividades', 'Progresso', 'Status', 'Prazo', 'Liberação'];
 
-/** `switcher` é o seletor das visões da aba 2 (Vagões | Lista de pendência), montado pela página. */
+/** `switcher` é o atalho de volta ao longo prazo (1.1), de onde esta tela se abre desde 12/11/2026, montado pela página. */
 export function PlanningOverview({ workId, switcher }: { workId: string; switcher?: ReactNode }) {
   const context = usePlanning();
   const [showPast, setShowPast] = useState(false);

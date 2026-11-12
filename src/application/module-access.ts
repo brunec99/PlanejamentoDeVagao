@@ -1,8 +1,9 @@
 import type { Command } from './use-cases/commands';
 
-/** Acesso aos módulos da obra. Abertos a todos que têm a obra: a lista de obras, o dashboard (aba 0), a
- * segurança do trabalho (aba 6) e as configurações da obra. Os demais, inclusive o curto prazo e a
- * terminalidade desde 08/11/2026, ficam com quem desenvolve, com os admins e com quem tem o módulo liberado
+/** Acesso aos módulos da obra. Abertos a todos que têm a obra: a lista de obras, o dashboard (aba 0) e as
+ * configurações da obra. Os demais — inclusive o curto prazo e a terminalidade desde 08/11/2026 e, desde
+ * 12/11/2026, a segurança do trabalho, o checklist de equipamentos e o Quadro de Restrições (migração 0049,
+ * que manteve quem já usava) — ficam com quem desenvolve, com os admins e com quem tem o módulo liberado
  * pelo admin. Ser desenvolvedor não é um papel: soma-se ao papel (consulta, planejador, gestor, admin) e às
  * obras liberadas, que continuam valendo. Funções puras: o proxy, as rotas e os testes usam as mesmas. */
 
@@ -11,7 +12,8 @@ export const BOOTSTRAP_ADMIN_EMAIL = 'bruno.engenharia@atrincorporadora.com.br';
 
 export const RESTRICTED_MODULE_MESSAGE = 'Módulo não liberado para você. Peça a liberação a um administrador.';
 
-/** Seções da obra liberadas por pessoa. Ficam abertas `dashboard`, `seguranca`, `checklist` e `configuracoes`. Curto prazo e
+/** Seções da obra liberadas por pessoa. Ficam abertas `dashboard` e `configuracoes`. `restricoes` (o Kanban, antes
+ * dentro de `vagoes`), `seguranca` e `checklist` entraram em 12/11/2026, a pedido do usuário. Curto prazo e
  * terminalidade entraram aqui em 08/11/2026, a pedido do usuário; quem já os usava foi mantido (migração 0042).
  * O histograma (aba 7) e o controle de produtividade (aba 8) nasceram aqui em 11/11/2026. */
 export const RESTRICTED_SECTIONS = [
@@ -19,9 +21,12 @@ export const RESTRICTED_SECTIONS = [
   'vagoes',
   'medio-prazo',
   'curto-prazo',
+  'restricoes',
   'terminalidade',
   'histograma',
   'produtividade',
+  'seguranca',
+  'checklist',
   'federacao',
   'ifc',
   'dividas',
@@ -41,6 +46,10 @@ export const RESTRICTED_API_PREFIXES = [
   '/api/terminalidade',
   '/api/histograma',
   '/api/produtividade',
+  // 12/11/2026. `/api/seguranca/campo` (modo de campo, fora do proxy) e `/api/checklist/arquivos` vão junto.
+  // O link do operador do checklist fica em `/api/publico/`, fora do proxy, e não depende de módulo.
+  '/api/seguranca',
+  '/api/checklist',
 ] as const;
 
 /** Comandos das equipes (configurações da obra) e da administração; o resto é dos módulos liberados por pessoa
@@ -72,25 +81,26 @@ export const MODULES: readonly ModuleInfo[] = [
   // 04/11/2026: a aba 0 é aberta a todos; dentro dela, cada quadro segue o acesso ao módulo de origem.
   { section: 'dashboard', label: 'Dashboard', hint: 'Os cinco níveis numa página, com filtros e PDF', group: 'Planejamento', open: true },
   { section: 'longo-prazo', label: 'Longo prazo', hint: 'Linha de balanço, fluxos e medições', group: 'Planejamento' },
-  { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações', group: 'Planejamento' },
+  { section: 'vagoes', label: 'Vagões', hint: 'Períodos de takt, atividades e liberações (abre pelo longo prazo)', group: 'Planejamento' },
   { section: 'medio-prazo', label: 'Médio prazo', hint: 'Cronograma do mês no padrão do Project', group: 'Planejamento' },
   // 08/11/2026: curto prazo e terminalidade deixaram de ser abertos a todos e passaram a ser liberados por pessoa.
   { section: 'curto-prazo', label: 'Curto prazo', hint: 'Planilha semanal, PPC e causas', group: 'Planejamento' },
+  // 12/11/2026: o Kanban (antes "Lista de pendência", dentro de Vagões) com item e liberação próprios.
+  {
+    section: 'restricoes',
+    label: 'Quadro de Restrições',
+    hint: 'Kanban de pendências com prazo, conversa e checklist',
+    group: 'Planejamento',
+  },
   { section: 'terminalidade', label: 'Terminalidade', hint: 'Pendências por apartamento, com fotos', group: 'Planejamento' },
-  // 05/11/2026: aberta a todos para consulta; só o tipo TST (`User.tst`) e os admins lançam e finalizam.
-  { section: 'seguranca', label: 'Segurança do trabalho', hint: 'Vistorias dos TSTs, com fotos', group: 'Planejamento', open: true },
+  // Liberada por pessoa desde 12/11/2026 (antes, aberta a todos); dentro dela só o tipo TST (`User.tst`) e os admins gravam.
+  { section: 'seguranca', label: 'Segurança do trabalho', hint: 'Vistorias dos TSTs, com fotos', group: 'Planejamento' },
   // 11/11/2026: aba 7, liberada por pessoa; quem tem o módulo lança, o papel consulta só visualiza.
   { section: 'histograma', label: 'Histograma', hint: 'Efetivo diário por empresa e função', group: 'Planejamento' },
   // 11/11/2026: aba 8, liberada por pessoa; quem tem o módulo lança, o papel consulta só visualiza.
   { section: 'produtividade', label: 'Produtividade', hint: 'Serviço, equipe e produção por homem-dia', group: 'Planejamento' },
-  // 11/11/2026: aba 9, aberta a todos para consulta; só o tipo TST (`User.tst`) e os admins editam.
-  {
-    section: 'checklist',
-    label: 'Checklist de equipamentos',
-    hint: 'Inspeção diária, semanal e mensal',
-    group: 'Planejamento',
-    open: true,
-  },
+  // Liberado por pessoa desde 12/11/2026; TST e admins registram, o cadastro é do admin. O QR do operador não passa por aqui.
+  { section: 'checklist', label: 'Checklist de equipamentos', hint: 'Inspeção diária, semanal e mensal', group: 'Planejamento' },
   { section: 'federacao', label: 'Modelo federado', hint: 'Modelos IFC combinados', group: 'Apoio' },
   { section: 'ifc', label: 'Arquivos IFC', hint: 'Repositório e versões dos modelos', group: 'Apoio' },
   { section: 'dividas', label: 'Dívidas', hint: 'Pendências que passam de um vagão para outro', group: 'Apoio' },
@@ -104,13 +114,16 @@ export const grantableSection = (section: string) => isRestrictedSection(section
 /** APIs de cada módulo: quem tem o módulo liberado usa a API dele. */
 const SECTION_APIS: Record<string, readonly string[]> = {
   'longo-prazo': ['/api/long-term-plan', '/api/lob', '/api/prevision'],
-  // 10/11/2026: a lista de pendência (Kanban da aba 2) é só de quem abre a aba 2.
-  vagoes: ['/api/history', '/api/pendencias'],
+  vagoes: ['/api/history'],
+  // 12/11/2026: o Kanban tem módulo próprio; até então ia com `vagoes`.
+  restricoes: ['/api/pendencias'],
   'medio-prazo': ['/api/history'],
   'curto-prazo': ['/api/curto-prazo'],
   terminalidade: ['/api/terminalidade'],
   histograma: ['/api/histograma'],
   produtividade: ['/api/produtividade'],
+  seguranca: ['/api/seguranca'],
+  checklist: ['/api/checklist'],
   federacao: ['/api/ifc'],
   ifc: ['/api/ifc'],
   importar: ['/api/prevision'],

@@ -9,7 +9,7 @@ import type { TourStep } from '../tours';
 export const steps: TourStep[] = [
   {
     title: 'Terminalidade no celular',
-    body: 'A lista de pendências da obra para usar andando pelo canteiro. Baixe a obra com sinal; depois ela abre sem internet, o que você lançar fica no aparelho e sobe sozinho quando a conexão voltar. Editar e excluir pendências é no computador, na aba 5.',
+    body: 'A lista de pendências da obra para usar andando pelo canteiro. Baixe a obra com sinal; depois ela abre sem internet, o que você lançar fica no aparelho e sobe sozinho quando a conexão voltar. Editar e excluir pendências é no computador, na aba 2.1.',
   },
 
   // Folha "Nova pendência"

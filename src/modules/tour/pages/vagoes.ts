@@ -2,18 +2,13 @@ import type { TourStep } from '../tours';
 
 export const steps: TourStep[] = [
   {
-    title: 'Aba 2 · Planejamento de vagão e lista de pendência',
-    body: 'A aba tem duas visões. No planejamento de vagão, os vagões da obra ficam organizados em sequências de produção: cada vagão é um período fixo de takt que reúne as atividades previstas entre o marco inicial e o final. Na Lista de pendência, um quadro de cards acompanha o que precisa ser resolvido na obra, com prazo, responsável, conversa e checklists. O tour explica a visão que estiver aberta.',
-  },
-  {
-    target: 'vagoes-visoes',
-    title: 'As duas visões da aba',
-    body: '"Vagões" é o planejamento por períodos de takt. "Lista de pendência" é o quadro de cards do que precisa ser resolvido na obra: prazo em dias úteis, responsável, conversa com @ e checklists. O card não trava vagão; o que bloqueia um vagão continua sendo a restrição registrada no detalhe dele.',
+    title: 'Planejamento de vagão',
+    body: 'Os vagões da obra ficam organizados em sequências de produção: cada vagão é um período fixo de takt que reúne as atividades previstas entre o marco inicial e o final. Esta tela não tem item no menu: abre pelo botão "Planejamento de vagão" da aba 1.1, Cronograma de longo prazo. O que precisa ser resolvido na obra fica em outra tela, o Quadro de Restrições (aba 1.4): um quadro de cards com prazo, responsável, conversa e checklists.',
   },
   {
     target: 'work-nav',
     title: 'Seções da obra',
-    body: 'Toda a navegação da obra fica aqui na lateral: as abas numeradas e, em Apoio, o modelo federado, os arquivos IFC, as dívidas, as integrações e as configurações da obra. Só aparecem as seções liberadas para o seu acesso.',
+    body: 'Toda a navegação da obra fica aqui na lateral: as abas numeradas, nos grupos "1 · Prazo", "2 · Controles de obra" e "3 · SST", e, em Apoio, o modelo federado, os arquivos IFC, as dívidas, as integrações e as configurações da obra. Só aparecem as seções liberadas para o seu acesso.',
   },
   {
     target: 'modo-reuniao',
@@ -64,22 +59,5 @@ export const steps: TourStep[] = [
     target: 'vagoes-abrir-vagao',
     title: 'Abrir o vagão',
     body: 'Clique no nome do vagão para abrir o detalhe dele: atividades, critérios de terminalidade, liberação, pendências, restrições, dívidas e histórico.',
-  },
-
-  // ─── Lista de pendência (visão `?visao=pendencias`, 10/11/2026) ──────────────
-  {
-    target: 'pendencias-nova',
-    title: 'Nova pendência',
-    body: 'Cria um card: título, data de término, tempo de execução em dias úteis e responsável. Em "Ligar a" dá para prender o card a uma tarefa do médio prazo ou a um serviço do longo prazo, escolhidos numa lista. Os cards também nascem de uma tarefa do médio prazo ("Criar pendência" no cronograma) e de um serviço da Linha de Balanço do longo prazo; nesses, a entrega é o dia útil anterior ao início e acompanha a reprogramação.',
-  },
-  {
-    target: 'pendencias-filtros',
-    title: 'Filtros do quadro',
-    body: 'Mostra só os cards de um responsável ou de uma origem: Manual, Médio prazo, Longo prazo ou Restrição (as restrições do antigo quadro do longo prazo, copiadas para cá). "Limpar filtros" volta a mostrar tudo.',
-  },
-  {
-    target: 'pendencias-quadro',
-    title: 'O quadro',
-    body: 'Cinco colunas: A fazer, Fazendo, Pausado, Concluído e Cancelado. Pausar e cancelar pedem o motivo. O sinal do card é vermelho quando a entrega passou ou quando o "começar até" (a entrega menos o tempo de execução, em dias úteis) passou com o card ainda em A fazer; amarelo quando precisa começar nos próximos 5 dias úteis; verde dentro do prazo. Abra um card para a conversa (marque alguém com @: a pessoa recebe e-mail), as checklists e o histórico de mudanças.',
   },
 ];

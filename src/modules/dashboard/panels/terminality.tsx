@@ -65,7 +65,7 @@ export function TerminalityPanel({
     return (
       <>
         <div className="dsh-panel">
-          <h3>{weekly ? 'Aba 5 · Evolução nas 12 semanas' : `Aba 5 · ${chart.title}`}</h3>
+          <h3>{weekly ? 'Aba 2.1 · Evolução nas 12 semanas' : `Aba 2.1 · ${chart.title}`}</h3>
           <p className="dsh-desc">
             {chart.desc} Até {refDay}
             {data.filtered ? ', no recorte de empreiteiro ou pavimento escolhido' : ''}.
@@ -75,7 +75,7 @@ export function TerminalityPanel({
           <EvolutionChart weeks={chart.items} bucket={chart.bucket} width={560} height={250} />
         </div>
         <div className="dsh-panel">
-          <h3>Aba 5 · {CONTRACTOR_TITLE}</h3>
+          <h3>Aba 2.1 · {CONTRACTOR_TITLE}</h3>
           <p className="dsh-desc">{contractorDesc(data)}</p>
           {empty ? <p className="dsh-empty">{empty}</p> : <HBars rows={contractorRows(data)} />}
           <p className="dsh-desc" style={{ marginTop: 10, fontWeight: 700, color: '#1f2937' }}>
@@ -88,7 +88,7 @@ export function TerminalityPanel({
           )}
         </div>
         <div className="dsh-panel">
-          <h3>Aba 5 · {FLOOR_TITLE}</h3>
+          <h3>Aba 2.1 · {FLOOR_TITLE}</h3>
           <p className="dsh-desc">{floorDesc(data)}</p>
           {empty ? <p className="dsh-empty">{empty}</p> : <HBars rows={floorRows(data)} />}
         </div>

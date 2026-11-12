@@ -103,7 +103,7 @@ export const steps: TourStep[] = [
   {
     target: 'obra-config-locais',
     title: 'Locais da obra',
-    body: 'Torres, pavimentos e áreas, de cima para baixo. É a lista da coluna Local do curto prazo (e do filtro de local do PDF) e do eixo da Linha de Balanço da aba 1: uma lista só por obra.',
+    body: 'Torres, pavimentos e áreas, de cima para baixo. É a lista da coluna Local do curto prazo (e do filtro de local do PDF) e do eixo da Linha de Balanço da aba 1.1: uma lista só por obra.',
   },
   {
     target: 'obra-config-locais-editar',

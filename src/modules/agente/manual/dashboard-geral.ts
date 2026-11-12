@@ -24,7 +24,7 @@ export const sections: ManualSection[] = [
     screen: 'dashboard-geral',
     body: `## O que é o Dashboard geral
 
-É uma página **fora das obras** que mostra as obras liberadas para você lado a lado, no período escolhido. Os quadros são os mesmos da aba 0 (Dashboard da obra), agora comparando as obras: curto prazo, longo prazo, vagões, médio prazo e terminalidade, mais a **segurança do trabalho** (aba 6), que desde 06/11/2026 existe só aqui. Responde a perguntas como "qual obra está cumprindo menos o que assume neste mês?", "quantas obras estão atrás no físico?", "qual empreiteiro vai mal em mais de uma obra?" e "quantos apontamentos de segurança estão abertos há mais de 7 dias?".
+É uma página **fora das obras** que mostra as obras liberadas para você lado a lado, no período escolhido. Os quadros são os mesmos da aba 0 (Dashboard da obra), agora comparando as obras: curto prazo, longo prazo, vagões, médio prazo e terminalidade, mais a **segurança do trabalho** (aba 3.1), que desde 06/11/2026 existe só aqui. Responde a perguntas como "qual obra está cumprindo menos o que assume neste mês?", "quantas obras estão atrás no físico?", "qual empreiteiro vai mal em mais de uma obra?" e "quantos apontamentos de segurança estão abertos há mais de 7 dias?".
 
 Nada aqui se edita. Clicar numa obra da tabela abre a aba 0 dela **no mesmo período e na mesma escala**; de lá, "Abrir aba N →" leva à aba de origem, onde o dado se altera.
 
@@ -39,7 +39,7 @@ A lista de obras continua sendo a página inicial do sistema.
 
 - O item e o botão aparecem para quem tem **duas obras ou mais** liberadas (com uma só não há o que comparar), e **sempre** para admin e desenvolvedor.
 - Cada pessoa vê **as mesmas obras da lista de obras**, e nenhuma outra.
-- Os quadros e as colunas seguem os **módulos liberados**, como na aba 0: segurança do trabalho para todos; longo prazo, vagões, médio prazo, curto prazo e terminalidade para quem o admin liberou (curto prazo e terminalidade entraram nessa regra em 08/11/2026; admin e desenvolvedor veem todos). Módulo que você não pode abrir não aparece nem vira coluna. A segurança aparece para todos com a obra liberada, como a aba 6, e não só para TST e admin.
+- Os quadros e as colunas seguem os **módulos liberados**, como na aba 0: longo prazo, vagões, médio prazo, curto prazo, terminalidade e segurança do trabalho para quem o admin liberou (curto prazo e terminalidade entraram nessa regra em 08/11/2026 e a segurança do trabalho em 12/11/2026; admin e desenvolvedor veem todos). Módulo que você não pode abrir não aparece nem vira coluna. A segurança aparece para quem tem o módulo "Segurança do trabalho" liberado, como a aba 3.1 (antes de 12/11/2026, para todos com a obra), e não só para TST e admin.
 - O papel "Consulta" também vê a página e gera o PDF, como nas outras telas de leitura.
 
 ## A página, de cima para baixo
@@ -95,7 +95,7 @@ Trocar a escala **mantém o lugar**: vendo outubro em Mensal, o Trimestral abre 
 - No Personalizado, "de" recua para a segunda-feira e "até" avança para o sábado da sua semana; "até" não passa da semana atual.
 - Nada depois do sábado final entra: uma pendência resolvida depois conta como aberta, um apontamento de segurança finalizado depois conta como em aberto, uma medição posterior não entra. Por isso o PDF de um período antigo sai igual quando é gerado de novo.
 
-Datas exatas do calendário (01 a 31/10) cortariam semanas da planilha ao meio, e o PPC deixaria de bater com a aba 4.
+Datas exatas do calendário (01 a 31/10) cortariam semanas da planilha ao meio, e o PPC deixaria de bater com a aba 1.3.
 
 ## Período em andamento: "parcial"
 
@@ -153,15 +153,15 @@ No topo, uma frase conta o período: o PPC das obras e a diferença para o perí
 
 ## Os cartões
 
-Até sete números consolidados (até seis antes da segurança do trabalho, em 06/11/2026; a aba 0 continua com até seis). Os dois cartões do curto prazo aparecem sempre que o quadro do curto prazo está visível (com "—" quando nenhuma obra tem semana apurada); os demais só aparecem quando alguma obra tem dado daquele módulo. Quadro desmarcado em "Quadros" ou módulo sem acesso não deixa cartão vazio; sem o curto prazo, o primeiro cartão que sobra vira o destaque. Cada cartão diz de que aba vem e quantas obras entram na conta:
+Até sete números consolidados (até seis antes da segurança do trabalho, em 06/11/2026; a aba 0 continua com até seis). Os dois cartões do curto prazo aparecem sempre que o quadro do curto prazo está visível (com "—" quando nenhuma obra tem semana apurada); os demais só aparecem quando alguma obra tem dado daquele módulo. Quadro desmarcado em "Quadros" ou módulo sem acesso não deixa cartão vazio; sem o curto prazo, o primeiro cartão que sobra vira o destaque. Cada cartão diz de que aba vem e quantas obras entram na conta (os números abaixo são os do menu renumerado em 12/11/2026; o Planejamento de vagão, antiga aba 2, não tem mais número e abre pela aba 1.1):
 
-- **PPC das obras** (aba 4): cumpridos ÷ assumidos de todas as obras no período, somando as linhas, com a seta contra o período anterior.
-- **Obras abaixo de 70%** (aba 4): quantas das obras com PPC no período ficaram abaixo da linha de alerta, e quais.
-- **Atrás no físico** (aba 1): quantas obras com medição estão abaixo do planejado no sábado final, e a pior.
-- **Takt vencido** (aba 2): vagões com o período vencido sem serem terminais, somando as obras, no sábado final.
-- **Restrições vencidas** (aba 2): restrições abertas com o limite de resolução vencido, somando as obras, no sábado final.
-- **Pendências em aberto** (aba 5): em aberto no sábado final, somando as obras, com a diferença para o início do período e quantas foram abertas e resolvidas nele.
-- **Apontamentos de segurança em aberto** (aba 6): em aberto no sábado final, somando as obras, com a seta da diferença para o início do período e a dica "N feitos e N finalizados no período · N obras".
+- **PPC das obras** (aba 1.3): cumpridos ÷ assumidos de todas as obras no período, somando as linhas, com a seta contra o período anterior.
+- **Obras abaixo de 70%** (aba 1.3): quantas das obras com PPC no período ficaram abaixo da linha de alerta, e quais.
+- **Atrás no físico** (aba 1.1): quantas obras com medição estão abaixo do planejado no sábado final, e a pior.
+- **Takt vencido** (Planejamento de vagão): vagões com o período vencido sem serem terminais, somando as obras, no sábado final.
+- **Restrições vencidas** (Planejamento de vagão): restrições abertas com o limite de resolução vencido, somando as obras, no sábado final.
+- **Pendências em aberto** (aba 2.1): em aberto no sábado final, somando as obras, com a diferença para o início do período e quantas foram abertas e resolvidas nele.
+- **Apontamentos de segurança em aberto** (aba 3.1): em aberto no sábado final, somando as obras, com a seta da diferença para o início do período e a dica "N feitos e N finalizados no período · N obras".
 
 Cada cartão diz também se o número é **o que aconteceu no período** ou **o retrato do sábado final** (seção "Longo prazo, vagões, médio prazo e terminalidade no Dashboard geral").
 
@@ -245,7 +245,7 @@ O Pareto das linhas com Não de todas as obras no período, da causa mais freque
 
 ## Empreiteiros em mais de uma obra
 
-As empresas que aparecem na coluna **Empresa** da planilha da semana de **duas obras ou mais** no período, da que tem mais linhas para a que tem menos. Para cada uma, o PPC dela em cada obra e no total. O nome é comparado sem acento nem maiúscula ("Elétrica São José" e "eletrica sao jose" são a mesma empresa), e aparece na grafia que tem mais linhas; grafias diferentes ("Elétrica S. José") contam como empresas diferentes. Corrija o nome na planilha da semana (aba 4) para elas se juntarem.
+As empresas que aparecem na coluna **Empresa** da planilha da semana de **duas obras ou mais** no período, da que tem mais linhas para a que tem menos. Para cada uma, o PPC dela em cada obra e no total. O nome é comparado sem acento nem maiúscula ("Elétrica São José" e "eletrica sao jose" são a mesma empresa), e aparece na grafia que tem mais linhas; grafias diferentes ("Elétrica S. José") contam como empresas diferentes. Corrija o nome na planilha da semana (aba 1.3) para elas se juntarem.
 
 Com o filtro "Empreiteiro" do topo marcado, o quadro mostra só as empresas escolhidas.`,
   },
@@ -282,37 +282,37 @@ Cada número do Dashboard geral (e da aba 0 fora da escala semanal) é de um de 
 
 Cada quadro aparece quando o dado dele chega; se a leitura de um módulo falhar, só aquele quadro fica indisponível. Embaixo de cada quadro, a lista das **obras sem dado** dele ("Sem plano de longo prazo: …").
 
-## Longo prazo (aba 1)
+## Longo prazo (aba 1.1)
 
 - **Medido × planejado por obra**: a última medição até o sábado final contra o planejado nessa data pela linha de base mais recente (sem linha de base, pelo plano vivo), e o **desvio** em pontos percentuais. Atrás do planejado fica em âmbar; mais de 10 p.p. atrás, em vermelho, as mesmas faixas da aba 0.
 - **Avanço no período**: quanto cada obra avançou dentro do período (medido no fim menos o medido na véspera, o domingo antes da segunda-feira inicial) contra o que o plano previa para o mesmo intervalo, em pontos percentuais. Sem medição antes do período, conta o medido no fim.
 - **Prazo contra a linha de base**: o término do plano vivo contra o da linha de base, em dias; positivo é atraso.
 
-## Vagões (aba 2)
+## Vagões (Planejamento de vagão, aberto pela aba 1.1)
 
 No sábado final: os vagões de cada obra por status (não iniciado, em produção, com restrição, terminal) numa barra, o **takt vencido** e as **restrições vencidas**. Obra que não usa vagões mostra "—".
 
-## Médio prazo (aba 3)
+## Médio prazo (aba 1.2)
 
 O plano vivo do mês do sábado final, em cada obra: tarefas concluídas, em andamento e não iniciadas (só as tarefas de detalhe, sem os resumos), **atrasadas** (término previsto antes do sábado e menos de 100%), a **variação do término contra a linha de base** em dias úteis (sem linha de base, não aparece) e as **equipes superalocadas**.
 
-## Terminalidade (aba 5)
+## Terminalidade (aba 2.1)
 
 - **Abertas × resolvidas no período**, por obra.
 - **Em aberto no sábado final** e a diferença para a véspera do período (subiu ou desceu). A conta fecha: em aberto no início + abertas − resolvidas = em aberto no fim.
-- **% resolvidas** desde a primeira pendência da obra até o sábado final, como a aba 5 mostra.
+- **% resolvidas** desde a primeira pendência da obra até o sábado final, como a aba 2.1 mostra.
 - **Tempo médio até a correção**, em dias, das pendências resolvidas no período. Sem resolvida no período, "—". No consolidado, a média pesa cada obra pelo número de pendências resolvidas.
 - **Responsáveis terceiros com mais pendências em aberto**, somando as obras: até 6 responsáveis, com quantas pendências cada um tem em cada obra. O nome é o digitado no "Responsável terceiro" de cada obra, pareado sem acento nem maiúscula e mostrado na grafia que tem mais pendências; as pendências sem responsável ficam juntas em "Sem responsável".
 
-As fotos das pendências não são carregadas nesta página; elas ficam na aba 5 de cada obra.
+As fotos das pendências não são carregadas nesta página; elas ficam na aba 2.1 de cada obra.
 
-## Segurança do trabalho (aba 6)
+## Segurança do trabalho (aba 3.1)
 
-O quadro 6 compara a vistoria dos técnicos de segurança (TST) das obras. Existe desde 06/11/2026 e **só no Dashboard geral**: a aba 0 de cada obra ainda não tem este quadro. Aparece para todos que têm a obra liberada, como a aba 6, e entra ou sai pela chave "Segurança" de "Quadros".
+O quadro 6 compara a vistoria dos técnicos de segurança (TST) das obras. Existe desde 06/11/2026 e **só no Dashboard geral**: a aba 0 de cada obra ainda não tem este quadro. Desde 12/11/2026 aparece só para quem tem o módulo "Segurança do trabalho" liberado (antes, para todos com a obra), como a aba 3.1, e entra ou sai pela chave "Segurança" de "Quadros".
 
 Que data conta:
 
-- **Feitos**: pela data do apontamento, dentro do período (a mesma data do filtro de período da aba 6).
+- **Feitos**: pela data do apontamento, dentro do período (a mesma data do filtro de período da aba 3.1).
 - **Finalizados**: pela data de correção, dentro do período.
 - **Em aberto**: o retrato do sábado final, apontado até ele e não finalizado até ele, com a variação contra a véspera do período. A conta fecha: em aberto no início + feitos − finalizados = em aberto no fim.
 - **Abertos há mais de 7 dias**: em aberto no sábado final com mais de 7 dias desde a data do apontamento, contados até o sábado final, ou até hoje se o período ainda está em andamento.
@@ -325,7 +325,7 @@ Os três blocos:
 2. **Risco dos apontamentos feitos no período**: uma barra por obra dividida pela "Risco: consequência", da mais grave para a mais leve (Morte, Severa, Significativa, Leve, Nenhuma, Autuação/Multa), e a linha "Todas". À direita, os **graves** (Morte + Severa) e a parte deles nos feitos da obra.
 3. **Tipos com mais apontamentos no período, somando as obras**: até 6 tipos, com o total e a contagem em cada obra. A lista de tipos é a mesma em todas as obras.
 
-Embaixo, as obras sem nenhum apontamento até o fim do período. Com um empreiteiro escolhido no topo, o quadro continua mostrando a vistoria inteira das obras que ficam na tela e avisa "sem recorte de empreiteiro" no subtítulo: a vistoria não registra a empresa responsável. A segurança não muda o estado da obra. As fotos dos apontamentos não são carregadas aqui; ficam na aba 6.`,
+Embaixo, as obras sem nenhum apontamento até o fim do período. Com um empreiteiro escolhido no topo, o quadro continua mostrando a vistoria inteira das obras que ficam na tela e avisa "sem recorte de empreiteiro" no subtítulo: a vistoria não registra a empresa responsável. A segurança não muda o estado da obra. As fotos dos apontamentos não são carregadas aqui; ficam na aba 3.1.`,
   },
   {
     id: 'dashboard-geral-pdf',
@@ -386,7 +386,10 @@ O PDF da aba 0 de cada obra também passou a mostrar a escala e o período no ca
       'meta de ppc por obra',
       'exportar para planilha',
       'segurança diferente da aba 6',
+      'segurança diferente da aba 3.1',
       'segurança do trabalho não aparece',
+      'módulo segurança do trabalho',
+      'quadro de segurança sumiu',
     ],
     screen: 'dashboard-geral',
     body: `## "O número do Dashboard geral é diferente do da aba 0"
@@ -436,19 +439,20 @@ Grafias diferentes de um mesmo nome ("Elétrica S. José" e "Elétrica São Jos�
 
 A segurança do trabalho não se recorta por empreiteiro: a vistoria não registra a empresa responsável. Com o recorte, o quadro de segurança mostra a vistoria inteira das obras que continuam na tela e diz "sem recorte de empreiteiro".
 
-## "O número da segurança é diferente da aba 6"
+## "O número da segurança é diferente da aba 3.1"
 
-- **O período**: o geral usa semanas inteiras (outubro de 2026 = 05/10 a 31/10); o filtro de período da aba 6 usa as datas exatas de "Início" e "Término".
-- **Finalizados**: o geral conta pela data de correção dentro do período; o filtro da aba 6 é sempre pela data do apontamento. Um apontamento de setembro finalizado em outubro é finalizado de outubro aqui, e não aparece na aba 6 filtrada em outubro.
-- **Abertos há mais de 7 dias**: aqui, contados até o sábado final do período (ou até hoje, se o período está em andamento); na aba 6, sempre até hoje.
-- **Os filtros da aba 6** (situação, tipo, consequência, probabilidade, local, busca) não existem no geral: aqui entra a vistoria inteira de cada obra.
+- **O período**: o geral usa semanas inteiras (outubro de 2026 = 05/10 a 31/10); o filtro de período da aba 3.1 usa as datas exatas de "Início" e "Término".
+- **Finalizados**: o geral conta pela data de correção dentro do período; o filtro da aba 3.1 é sempre pela data do apontamento. Um apontamento de setembro finalizado em outubro é finalizado de outubro aqui, e não aparece na aba 3.1 filtrada em outubro.
+- **Abertos há mais de 7 dias**: aqui, contados até o sábado final do período (ou até hoje, se o período está em andamento); na aba 3.1, sempre até hoje.
+- **Os filtros da aba 3.1** (situação, tipo, consequência, probabilidade, local, busca) não existem no geral: aqui entra a vistoria inteira de cada obra.
 
 ## "A segurança do trabalho não aparece"
 
 - Na **aba 0** de cada obra ela ainda não existe: nesta etapa, o quadro de segurança está só no Dashboard geral.
+- Desde 12/11/2026 o quadro, as colunas e o cartão de segurança só aparecem para quem tem o módulo "Segurança do trabalho" liberado (Configurações → Usuários → Módulos). Quem já usava a vistoria foi mantido; usuário novo começa sem. Peça a liberação a um administrador.
 - No geral, confira a chave "Segurança" em "Quadros".
 - Obra sem nenhum apontamento até o fim do período mostra "—" nas colunas de segurança e é citada embaixo do quadro.
-- "A segurança do trabalho não está disponível neste ambiente." quer dizer que o banco ainda não tem a aba 6; se a leitura falhar, só o quadro de segurança fica indisponível e o resto da página abre normalmente.
+- "A segurança do trabalho não está disponível neste ambiente." quer dizer que o banco ainda não tem a aba 3.1; se a leitura falhar, só o quadro de segurança fica indisponível e o resto da página abre normalmente.
 
 ## O que ainda não existe
 

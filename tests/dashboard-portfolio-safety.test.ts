@@ -221,7 +221,7 @@ test('tipos com mais apontamentos no período, somando as obras pelo id (regra 7
 // ─── quadros, URL e rota ────────────────────────────────────────────────────────────────────────────────
 
 test('a segurança é o 6º quadro do geral; a aba 0 continua com os cinco (regra 2)', () => {
-  assert.deepEqual(moduleInfo('seguranca'), { id: 'seguranca', number: 6, label: 'Segurança do trabalho' });
+  assert.deepEqual(moduleInfo('seguranca'), { id: 'seguranca', number: '3.1', label: 'Segurança do trabalho' });
   assert.equal(DASHBOARD_MODULES.length, 5);
   assert.ok(!DASHBOARD_MODULES.some(m => (m.id as string) === 'seguranca'));
   assert.deepEqual([...(parsePortfolioParams({ quadros: 'seguranca,curto-prazo,xyz' }).modules ?? [])], ['seguranca', 'curto-prazo']);

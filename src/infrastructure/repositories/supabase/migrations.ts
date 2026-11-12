@@ -269,9 +269,9 @@ export const MIGRATION_CHECKS: MigrationCheck[] = [
   },
   {
     migration: '0043_pending_board',
-    label: 'Lista de pendência: quadro Kanban da aba 2, com conversa e checklists',
+    label: 'Quadro de Restrições (aba 1.4): quadro Kanban com conversa e checklists',
     probe: { kind: 'table', table: 'pending_cards' },
-    effect: 'A lista de pendência da aba 2 responde "indisponível"; os vagões e as demais abas seguem normais.',
+    effect: 'O Quadro de Restrições (aba 1.4) responde "indisponível"; as demais abas seguem normais.',
     critical: false,
   },
   {

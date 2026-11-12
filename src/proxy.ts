@@ -84,6 +84,18 @@ export async function proxy(request: NextRequest) {
   const forwarded = NextResponse.next({ request: { headers: forwardedHeaders(request, user) } });
   response.cookies.getAll().forEach(cookie => forwarded.cookies.set(cookie));
   response = forwarded;
+  // 12/11/2026: o Kanban saiu de `vagoes?visao=pendencias` para `/restricoes` (aba 1.4, módulo próprio). O
+  // endereço antigo, que está nos e-mails já enviados, é desviado aqui, antes da conferência do módulo
+  // `vagoes`: quem tem só o quadro não pode cair no dashboard por causa do endereço velho.
+  const oldBoard = request.nextUrl.pathname.match(/^\/obras\/([^/]+)\/vagoes\/?$/);
+  if (oldBoard && request.nextUrl.searchParams.get('visao') === 'pendencias') {
+    const url = request.nextUrl.clone();
+    url.pathname = `/obras/${oldBoard[1]}/restricoes`;
+    url.searchParams.delete('visao');
+    const moved = NextResponse.redirect(url);
+    response.cookies.getAll().forEach(cookie => moved.cookies.set(cookie));
+    return moved;
+  }
   // Módulos liberados por pessoa (desde 08/11/2026 também o curto prazo e a terminalidade): ficam com quem
   // desenvolve (DEVELOPER_EMAILS), com os admins e com quem tem o módulo liberado pelo admin; quem não tem
   // cai no dashboard da obra. O acesso local sem login já saiu acima e conta como desenvolvedor. As rotas

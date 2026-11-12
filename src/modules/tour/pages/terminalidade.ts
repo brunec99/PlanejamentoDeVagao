@@ -6,7 +6,7 @@ import type { TourStep } from '../tours';
  * lote, Reabrir) são pulados quando o alvo não está na tela. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 5 · Terminalidade',
+    title: 'Aba 2.1 · Terminalidade',
     body: 'A lista de pendências da obra por pavimento, apartamento e empreiteiro, com foto do problema e da correção. A lista existe para ser zerada: cada pendência só fecha com a foto do serviço corrigido.',
   },
   {

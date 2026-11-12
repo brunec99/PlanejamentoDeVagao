@@ -1,5 +1,6 @@
 import { hasSectionAccess } from '@/application/module-access';
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { getRouteAccess } from '@/infrastructure/auth/supabase-server';
 import { BaselinesOverview } from '@/modules/longo-prazo/baselines-overview';
@@ -88,14 +89,15 @@ export default async function Page({
         de Balanço.
       </p>
       <p>
-        <strong>Vagões</strong> mostra as atividades dos vagões só para leitura, com a curva de avanço e as linhas de base. As pendências da
-        obra ficam na{' '}
-        {hasSectionAccess('vagoes', access) ? (
-          <Link className="text-link" href={`${workPath(obraId, 'vagoes')}?visao=pendencias`}>
-            aba 2 → Lista de pendência
+        <strong>Vagões</strong> mostra as atividades dos vagões só para leitura, com a curva de avanço e as linhas de base; o botão{' '}
+        <strong>Planejamento de vagão</strong> abre a tela dos períodos de takt, com atividades, terminalidade e liberações. As pendências
+        da obra ficam na{' '}
+        {hasSectionAccess('restricoes', access) ? (
+          <Link className="text-link" href={workPath(obraId, 'restricoes')}>
+            aba 1.4, Quadro de Restrições
           </Link>
         ) : (
-          'aba 2 → Lista de pendência'
+          'aba 1.4, Quadro de Restrições'
         )}
         , inclusive as restrições que estavam aqui, copiadas como cards. O <strong>Planejador</strong> é a ferramenta anterior (fluxograma
         por pavimento); o plano dele pode ser importado para a Linha de Balanço pelo botão "Importar do Planejador", e ele continua gerando
@@ -127,6 +129,13 @@ export default async function Page({
             </Link>
           ))}
         </nav>
+        {/* 12/11/2026: o planejamento de vagão (períodos de takt) saiu do menu e abre por aqui. */}
+        {hasSectionAccess('vagoes', access) && (
+          <Link data-tour="longo-vagoes-link" className="button-ghost" href={workPath(obraId, 'vagoes')}>
+            Planejamento de vagão
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+        )}
       </TabHeader>
       {view === 'lob' && <LobView workId={obraId} />}
       {view === 'fluxos' && <FlowsView workId={obraId} />}

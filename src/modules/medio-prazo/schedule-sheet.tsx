@@ -576,7 +576,7 @@ export function Sheet({
   // usa esta mesma tela, mas as tarefas dele não são origem de card.
   const developer = useDeveloper(),
     modules = useModules();
-  const canPend = !variant && hasSectionAccess('vagoes', { developer, modules });
+  const canPend = !variant && hasSectionAccess('restricoes', { developer, modules });
   const [pending, setPending] = useState<PendingSource | null>(null);
   // Selecionar uma tarefa escondida (resumo recolhido ou filtro) abre o caminho até ela; a rolagem
   // até a barra espera a pintura em que a linha aparece.
@@ -2143,7 +2143,7 @@ export function Sheet({
                   onClick={() => active && setPending(pendingSource(active))}
                   title={
                     pendingBlock(active) ||
-                    'Cria um card na Lista de pendência (aba 2) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
+                    'Cria um card no Quadro de Restrições (aba 1.4) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
                   }
                 >
                   <ClipboardList size={14} aria-hidden />

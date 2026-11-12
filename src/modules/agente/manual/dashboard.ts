@@ -17,6 +17,12 @@ export const sections: ManualSection[] = [
       'dashboard',
       'dashboard da obra',
       'aba 0',
+      'aba 1.1',
+      'aba 1.2',
+      'aba 1.3',
+      'aba 2.1',
+      'menu renumerado',
+      'planejamento de vagão',
       'visão geral da obra',
       'painel da obra',
       'resumo da obra',
@@ -32,7 +38,7 @@ export const sections: ManualSection[] = [
     screen: 'dashboard',
     body: `## O que é a aba 0, Dashboard da obra
 
-É a primeira aba de toda obra (o chip 0 no topo da lista de abas) e a tela em que a obra abre quando você a escolhe na lista de obras. Ela reúne numa página só o que as outras cinco abas respondem: o curto prazo (aba 4), o longo prazo (aba 1), os vagões (aba 2), o médio prazo (aba 3) e a terminalidade (aba 5). Nada aqui se edita: a aba lê o que as outras já guardam e, em cada quadro, o link "Abrir aba N →" leva à aba de origem, onde o dado se consulta no detalhe e se altera.
+É a primeira aba de toda obra (o chip 0 no topo da lista de abas) e a tela em que a obra abre quando você a escolhe na lista de obras. Ela reúne numa página só o que cinco módulos respondem: o curto prazo (aba 1.3), o longo prazo (aba 1.1), os vagões (o "Planejamento de vagão", que não tem número no menu e abre pelo botão "Planejamento de vagão" dentro da aba 1.1), o médio prazo (aba 1.2) e a terminalidade (aba 2.1). Os números são os do menu renumerado em 12/11/2026, com os grupos "1 · Prazo", "2 · Controles de obra" e "3 · SST"; antes eram, na ordem, as abas 4, 1, 2, 3 e 5, e a aba 0 continua sendo a 0. Nada aqui se edita: a aba lê o que as outras já guardam e, em cada quadro, o link "Abrir aba N →" leva à aba de origem, onde o dado se consulta no detalhe e se altera.
 
 Tudo é contado no **período escolhido** (seção "Filtros: escala e período, empreiteiro, pavimento e quadros"): por padrão a semana atual, na escala semanal, mas pode ser uma semana antiga, um mês, um trimestre, um ano ou um intervalo de datas. Cada quadro conta só até o sábado da última semana do período e mostra a obra como estava naquele sábado.
 
@@ -40,7 +46,7 @@ Para comparar esta obra com as outras, use o **Dashboard geral** (no menu, em Em
 
 ## Quem vê, e o que aparece para cada pessoa
 
-- A aba é aberta a todo papel com a obra liberada, inclusive "Consulta". Como nada se edita, não há diferença entre os papéis dentro dela. É também para ela que o sistema leva quem abre o endereço de uma aba sem liberação.
+- A aba é aberta a todo papel com a obra liberada, inclusive "Consulta". Como nada se edita, não há diferença entre os papéis dentro dela. É também para ela que o sistema leva quem abre o endereço de uma aba sem liberação (desde 12/11/2026, também a Vistoria de segurança, aba 3.1, o Checklist de equipamentos, aba 3.2, e o Quadro de Restrições, aba 1.4, que passaram a ser liberados por pessoa).
 - Só entram os **módulos que a pessoa pode abrir**: os que o admin liberou para ela em Configurações → Usuários (longo prazo, vagões, médio prazo e, desde 08/11/2026, também curto prazo e terminalidade); admin e desenvolvedor veem todos. Um módulo que a pessoa não pode abrir não aparece nem é citado.
 - Dos módulos que a pessoa pode abrir, só entram os que **têm dado nesta obra**. Módulo sem dado não ocupa espaço: a linha abaixo dos filtros diz "Módulos sem dados nesta obra: …".
 - Duas pessoas com permissões diferentes veem, portanto, dashboards diferentes da mesma obra. O PDF segue a mesma regra de quem o gera.
@@ -64,12 +70,12 @@ Uma frase no topo diz o estado da obra no período escolhido, com os números ar
 
 Até seis cartões, um por módulo presente na página; os módulos ausentes não deixam cartão vazio. Cada cartão diz, no rótulo, de que aba o número vem:
 
-- **PPC da semana** (aba 4, curto prazo): o cartão em destaque quando o curto prazo está presente. Compromissos cumpridos sobre assumidos na semana analisada; com linha sem Status, o cartão marca "em aberto". Nas outras escalas vira **PPC do mês**, do trimestre, do ano ou do período: cumpridos ÷ assumidos de todas as semanas apuradas do período, somando as linhas (semana apurada = todas as linhas com Status; a semana em aberto fica fora e é contada à parte). A dica mostra os compromissos e a comparação com o período anterior ("30 de 40 compromissos · ▲ 5 p.p. vs set/26"), e o período em andamento ganha a etiqueta "parcial · N de M semanas apuradas".
-- **Avanço físico** (aba 1, longo prazo): o percentual medido até a data, com o desvio em pontos percentuais contra o planejado na mesma data.
-- **Takt vencido** (aba 2, vagões): vagões cujo período acabou até a data sem o vagão ser terminal.
-- **Tarefas atrasadas** (aba 3, médio prazo): tarefas do plano do mês com término previsto antes da data e menos de 100%.
-- **Pendências abertas** (aba 5, terminalidade): pendências observadas até a data e não resolvidas até ela.
-- **Restrições vencidas** (abas 1 e 2): restrições abertas cujo limite de resolução passou antes da data.
+- **PPC da semana** (aba 1.3, curto prazo): o cartão em destaque quando o curto prazo está presente. Compromissos cumpridos sobre assumidos na semana analisada; com linha sem Status, o cartão marca "em aberto". Nas outras escalas vira **PPC do mês**, do trimestre, do ano ou do período: cumpridos ÷ assumidos de todas as semanas apuradas do período, somando as linhas (semana apurada = todas as linhas com Status; a semana em aberto fica fora e é contada à parte). A dica mostra os compromissos e a comparação com o período anterior ("30 de 40 compromissos · ▲ 5 p.p. vs set/26"), e o período em andamento ganha a etiqueta "parcial · N de M semanas apuradas".
+- **Avanço físico** (aba 1.1, longo prazo): o percentual medido até a data, com o desvio em pontos percentuais contra o planejado na mesma data.
+- **Takt vencido** (Planejamento de vagão): vagões cujo período acabou até a data sem o vagão ser terminal.
+- **Tarefas atrasadas** (aba 1.2, médio prazo): tarefas do plano do mês com término previsto antes da data e menos de 100%.
+- **Pendências abertas** (aba 2.1, terminalidade): pendências observadas até a data e não resolvidas até ela.
+- **Restrições vencidas** (aba 1.1 e Planejamento de vagão): restrições abertas cujo limite de resolução passou antes da data.
 
 Fora da escala semanal, cada cartão diz se o número é **o que aconteceu no período** (PPC, pendências abertas e resolvidas, avanço físico do período) ou **o retrato do sábado final** (avanço acumulado, takt vencido, tarefas atrasadas, pendências em aberto, restrições vencidas).
 
@@ -187,7 +193,7 @@ A linha de escopo lista os módulos que você pode abrir mas que não têm nada 
     screen: 'dashboard',
     body: `## O que o quadro do curto prazo mostra
 
-O quadro lê as linhas da planilha da semana (aba 4) até o fim do período escolhido e mais nada. Os números são **os mesmos do painel da primeira página do PDF do fechamento**: quem comparar os dois na mesma semana encontra os mesmos valores.
+O quadro lê as linhas da planilha da semana (aba 1.3) até o fim do período escolhido e mais nada. Os números são **os mesmos do painel da primeira página do PDF do fechamento**: quem comparar os dois na mesma semana encontra os mesmos valores.
 
 - **PPC da semana**: compromissos cumpridos (Sim) sobre assumidos na semana analisada. Linha sem Status conta como não cumprida; se houver alguma, o quadro marca a semana "em aberto".
 - **PPC do período** (Mensal, Trimestral, Anual, Personalizado): o quadro vira "PPC do mês e dos anteriores" (do trimestre, do ano, do período), com três números, "PPC do mês", "vs anterior" e "Semanas apuradas", e as barras por mês, trimestre ou ano. O PPC é cumpridos ÷ assumidos de todas as semanas apuradas do período, somando as linhas, e não a média dos PPCs semanais; a semana em aberto fica fora e é contada à parte. A comparação é com o período anterior da mesma escala. A frase do topo fica, por exemplo: "Em outubro de 2026 a obra cumpriu 75% do que assumiu (30 de 40 compromissos em 3 semanas apuradas; 1 semana em aberto fica fora), 5 p.p. acima de setembro"; com o período em andamento, "até agora"; com recorte, "o recorte de empreiteiro cumpriu".
@@ -247,7 +253,7 @@ O que foi preenchido na planilha **depois** da carga não está no sistema: o da
       'abertas por responsável',
     ],
     screen: 'dashboard',
-    body: `## Longo prazo (aba 1)
+    body: `## Longo prazo (aba 1.1)
 
 Lê o plano de longo prazo da obra (o Planejador) e as medições registradas nele.
 
@@ -261,39 +267,39 @@ Lê o plano de longo prazo da obra (o Planejador) e as medições registradas ne
 
 Sem nenhuma medição registrada, o quadro mostra só o planejado na data e o aviso de que não há medição. O filtro "Pavimento" recorta o planejado; o avanço medido não se divide por pavimento (a medição é por serviço) e o filtro "Empreiteiro" não se aplica a este quadro.
 
-## Vagões (aba 2)
+## Vagões (Planejamento de vagão, aberto pela aba 1.1)
 
 Lê os vagões da obra como estavam no sábado final do período: os números deste quadro são o retrato daquele sábado (fora do Semanal, com "em 31/10" ao lado). A exceção é "Restrições resolvidas no mês" (ou no trimestre, no ano, no período), que aparece fora do Semanal e conta as restrições resolvidas entre a segunda-feira inicial e o sábado final.
 
 - **Vagões por status**: quantos estão "Não iniciado", "Em produção", "Com restrição" e "Terminal".
-- **Takt vencido**: vagões cujo período acabou até a data sem o vagão ser terminal (o mesmo "Atrasado" da coluna Prazo da aba 2).
+- **Takt vencido**: vagões cujo período acabou até a data sem o vagão ser terminal (o mesmo "Atrasado" da coluna Prazo do Planejamento de vagão).
 - **Dívidas abertas**: as dívidas de terminalidade ainda por resolver na data.
 - **Progresso dos vagões em produção**: os 3 de maior progresso, com o percentual de cada um.
 - **Restrições por coluna**: quantas restrições em "Identificada", "Em tratativa" e "Resolvida", com as **vencidas** (limite de resolução antes da data e ainda não resolvidas) em destaque.
 
 O filtro "Empreiteiro" vale pela empresa das equipes das atividades: só entram os vagões que têm alguma atividade de uma equipe daquelas empresas.
 
-## Médio prazo (aba 3)
+## Médio prazo (aba 1.2)
 
 Lê o **plano vivo do mês** do sábado final do período; se aquele mês não tem plano, o mais recente até ele, e o quadro diz qual ("em 31/10 · plano de outubro"). Atenção ao fim de trimestre: o 3º trimestre de 2026 termina na semana de 28/09, cujo sábado é 03/10, então o quadro lê o plano de outubro.
 
 - **Tarefas**: quantas concluídas (100%), em andamento e não iniciadas.
 - **Atrasadas na data**: término previsto antes do sábado final e menos de 100%.
 - **Variação contra a linha de base**: a diferença de término entre o plano vivo e a **linha de base congelada mais recente**, em dias úteis; sem linha de base, a variação não aparece.
-- **Caminho crítico**: as tarefas sem folga, as mesmas que a aba 3 pinta de vermelho.
+- **Caminho crítico**: as tarefas sem folga, as mesmas que a aba 1.2 pinta de vermelho.
 - **Equipes superalocadas na semana**: equipes cuja carga na última semana do período passa da capacidade cadastrada.
 - **Marcos dos próximos 30 dias**: as tarefas de 0 dias (marcos) com data nos 30 dias seguintes ao sábado final.
 
 O filtro "Empreiteiro" vale pela empresa da equipe (recurso) da tarefa; tarefa sem equipe fica fora quando há recorte.
 
-## Terminalidade (aba 5)
+## Terminalidade (aba 2.1)
 
 Lê a lista de pendências da obra até o sábado final do período: pendência observada depois da data não existe ainda, e pendência resolvida depois da data conta como aberta.
 
 - **Abertas, resolvidas e %**: abertas + resolvidas = total até a data; o % é a parte do total já corrigida na data.
 - **Tempo médio em aberto**: para as pendências abertas na data, a média de dias entre a observação e o sábado; para as resolvidas, entre a observação e a correção.
 - **Abertas por responsável terceiro** e **por pavimento**: as 6 maiores contagens de pendências abertas, com barra proporcional.
-- **Por tipo**: uma rosca com as pendências abertas por tipo, até seis fatias e "Outros" para o resto, como na aba 5.
+- **Por tipo**: uma rosca com as pendências abertas por tipo, até seis fatias e "Outros" para o resto, como na aba 2.1.
 - **Evolução**: por semana (12 semanas no Semanal; por mês, trimestre ou ano nas outras escalas), quantas pendências foram abertas e quantas resolvidas, e o saldo de abertas ao fim de cada uma, até o período analisado. O saldo de uma coluna é o ponto de partida da seguinte.
 - **No período** (fora do Semanal): os números "Abertas no mês" e "Resolvidas no mês" (ou no trimestre, no ano, no período) e "Em aberto em 31/10 (eram N em …)": as em aberto no sábado final e quantas eram na véspera do período. A conta fecha: em aberto no início + abertas − resolvidas = em aberto no fim. O tempo médio até a correção passa a ser o das pendências resolvidas dentro do período; correção com data anterior à observação conta 0 dia.
 
@@ -385,10 +391,10 @@ Um terceiro caso é o filtro "Quadros" com o módulo desmarcado: marque de novo.
 
 Quase sempre pela **data de referência**: o dashboard conta até o sábado final do período, e a aba de origem mostra o estado de agora. Fora da escala semanal, confira também o período: o PPC do mês é o do mês inteiro, não o da última semana.
 
-- Terminalidade: uma pendência resolvida nesta semana continua aberta no dashboard de uma semana anterior. A aba 5 mostra o total de hoje.
-- Longo prazo: uma medição lançada depois do sábado não entra; a aba 1 mostra a medição mais recente.
-- Curto prazo: a tela Fechamento da aba 4 conta também as semanas posteriores à analisada na série e no Pareto; o dashboard (e o painel do PDF do fechamento) não.
-- Médio prazo: "atrasada" no dashboard é término previsto antes do sábado final do período; a aba 3 compara com hoje.
+- Terminalidade: uma pendência resolvida nesta semana continua aberta no dashboard de uma semana anterior. A aba 2.1 mostra o total de hoje.
+- Longo prazo: uma medição lançada depois do sábado não entra; a aba 1.1 mostra a medição mais recente.
+- Curto prazo: a tela Fechamento da aba 1.3 conta também as semanas posteriores à analisada na série e no Pareto; o dashboard (e o painel do PDF do fechamento) não.
+- Médio prazo: "atrasada" no dashboard é término previsto antes do sábado final do período; a aba 1.2 compara com hoje.
 
 Outros motivos: um filtro de "Empreiteiro" ou "Pavimento" ativo (o rodapé e os quadros avisam), ou a aba de origem com um filtro próprio que o dashboard não tem. O ranking das obras e o avanço físico nunca seguem o recorte.
 
@@ -406,7 +412,7 @@ No mesmo período e na mesma escala, os números da obra são os mesmos nas duas
 
 O histórico do curto prazo que estava nas planilhas foi importado para o sistema: a Blentt em 08/10/2026 e Atmos, Tauá, Brizz, Essenza e Mozine em 28/10/2026 (planilha "Dados compilados"). O que a equipe preencheu **na planilha depois dessas datas** não está no sistema. O dashboard mostra o que está no sistema: uma semana recente pode aparecer hachurada (em aberto) ou sem linha porque o apontamento ficou só na planilha.
 
-A saída é apontar no sistema (aba 4) ou pedir uma nova rodada de importação, que só acrescenta o que é novo. Enquanto a obra lançar nos dois lugares, os números divergem.
+A saída é apontar no sistema (aba 1.3) ou pedir uma nova rodada de importação, que só acrescenta o que é novo. Enquanto a obra lançar nos dois lugares, os números divergem.
 
 ## "O quadro diz indisponível"
 
@@ -414,11 +420,11 @@ O dado daquele módulo não chegou: o servidor não respondeu a tempo ou a leitu
 
 ## "Por que a semana aparece hachurada ou sem média?"
 
-Semana com alguma linha sem Status é semana **em aberto**: entra na série hachurada, mas fica fora da média e do PPC geral até ser apurada. Aponte o Sim ou o Não das linhas que faltam na aba 4.
+Semana com alguma linha sem Status é semana **em aberto**: entra na série hachurada, mas fica fora da média e do PPC geral até ser apurada. Aponte o Sim ou o Não das linhas que faltam na aba 1.3.
 
 ## "O avanço físico mostra só o planejado"
 
-A obra não tem medição registrada no plano de longo prazo até a data. Registre uma medição na aba 1 (Planejador, "Nova medição"); o dashboard passa a mostrar o medido e o desvio. Se o quadro avisa que compara com o plano vivo, é porque não há linha de base salva: salve uma na aba 1 para o planejado deixar de acompanhar as reprogramações.
+A obra não tem medição registrada no plano de longo prazo até a data. Registre uma medição na aba 1.1 (Planejador, "Nova medição"); o dashboard passa a mostrar o medido e o desvio. Se o quadro avisa que compara com o plano vivo, é porque não há linha de base salva: salve uma na aba 1.1 para o planejado deixar de acompanhar as reprogramações.
 
 ## "Não consigo editar nada aqui"
 

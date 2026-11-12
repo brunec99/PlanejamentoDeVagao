@@ -88,15 +88,17 @@ const answersOk = [
   { itemId: 'i2', answer: 'c' },
 ];
 
-test('checklist: só TST e admin editam; a aba é aberta para consulta', () => {
+test('checklist: só TST e admin editam; a aba é liberada por pessoa (12/11/2026) e o link do operador não', () => {
   assert.equal(canWriteChecklist({ tst: true, role: 'viewer' }), true);
   assert.equal(canWriteChecklist({ role: 'admin' }), true);
   assert.equal(canWriteChecklist({ role: 'manager' }), false);
   assert.equal(canWriteChecklist({ role: 'planner' }), false);
   assert.equal(canWriteChecklist(null), false);
-  assert.equal(hasSectionAccess('checklist', { developer: false, modules: [] }), true);
-  assert.equal(isRestrictedApi('/api/checklist'), false);
-  assert.equal(MODULES.find(m => m.section === 'checklist')?.open, true);
+  assert.equal(hasSectionAccess('checklist', { developer: false, modules: [] }), false);
+  assert.equal(hasSectionAccess('checklist', { developer: false, modules: ['checklist'] }), true);
+  assert.equal(isRestrictedApi('/api/checklist'), true);
+  assert.equal(isRestrictedApi('/api/publico/checklist/abc'), false);
+  assert.equal(MODULES.find(m => m.section === 'checklist')?.open, undefined);
 });
 
 test('checklist: o período é o dia, a semana de segunda a domingo e o mês', () => {

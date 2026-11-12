@@ -7,12 +7,16 @@ export const sections: ManualSection[] = [
   {
     id: 'terminalidade-visao-geral',
     title: 'Terminalidade: para que serve e como está organizada',
-    summary: 'O que é a lista de pendências da aba 5, suas colunas, de onde vêm os cadastros e quem pode fazer o quê.',
+    summary: 'A lista de pendências da aba 2.1 (antiga 5), suas colunas, de onde vêm os cadastros e quem pode fazer o quê.',
     keywords: [
       'terminalidade',
       'lista de pendências',
       'pendência',
       'aba 5',
+      'aba 2.1',
+      '2.1',
+      'controles de obra',
+      '2 · controles de obra',
       'pavimento',
       'apartamento',
       'apto',
@@ -26,9 +30,11 @@ export const sections: ManualSection[] = [
       'cadastro',
     ],
     screen: 'terminalidade',
-    body: `## O que é a aba 5, Terminalidade
+    body: `## O que é a aba 2.1, Terminalidade
 
 É a "Lista de pendências" da obra, no mesmo formato da planilha usada antes: cada linha é um problema encontrado na vistoria, com local, apartamento, tipo, quem da ATR acompanha, qual empreiteiro corrige, a foto do problema e, depois, a foto da correção. A lista existe para ser zerada: uma pendência só fecha com a foto do serviço corrigido e a data da correção.
+
+No menu da obra, renumerado em 12/11/2026, a Terminalidade é a **aba 2.1**, a primeira do grupo **2 · Controles de obra** (antes era a aba 5). Não confunda com o **Quadro de Restrições** (aba 1.4, grupo 1 · Prazo): é o Kanban que até essa data se chamava "Lista de pendência" e ficava na antiga aba 2.
 
 Desde 08/11/2026 a aba é **liberada por pessoa**: aparece para quem tem a obra e o módulo "Terminalidade" liberados pelo administrador (Configurações → Usuários, visão "Módulos"); admin e desenvolvedor veem sempre. Antes era aberta a todos com a obra; quem já a usava em 08/11/2026 continuou com acesso. Sem o módulo, a aba some da lateral, o endereço leva ao Dashboard da obra (aba 0), e o modo de campo e o PDF também recusam. O botão "?" ("Como funciona") do cabeçalho abre a explicação da tela, e o "Como usar a lista", ao lado do título "Lista de pendências", resume a ordem, a classificação e os cliques.
 
@@ -218,7 +224,7 @@ Nas pendências resolvidas, o botão "Resolver" dá lugar a "Reabrir". A confirm
 
 ## Excluir: apagar a pendência e as fotos
 
-O "✕" no fim da linha ("Excluir pendência") e o botão "Excluir pendência" no rodapé da janela de edição apagam a pendência. A confirmação mostra a descrição e avisa: "sai da lista com as fotos dela. Isto não pode ser desfeito." As fotos saem do armazenamento junto; não existe lixeira nem desfazer. Por isso, se o problema voltou numa pendência já resolvida, prefira "Reabrir", que preserva o histórico. Excluir só existe na aba 5 (no computador ou no navegador do celular); o modo de campo não exclui. Quem é consulta não vê o "✕".`,
+O "✕" no fim da linha ("Excluir pendência") e o botão "Excluir pendência" no rodapé da janela de edição apagam a pendência. A confirmação mostra a descrição e avisa: "sai da lista com as fotos dela. Isto não pode ser desfeito." As fotos saem do armazenamento junto; não existe lixeira nem desfazer. Por isso, se o problema voltou numa pendência já resolvida, prefira "Reabrir", que preserva o histórico. Excluir só existe na aba 2.1 (no computador ou no navegador do celular); o modo de campo não exclui. Quem é consulta não vê o "✕".`,
   },
   {
     id: 'terminalidade-pdf',
@@ -296,11 +302,11 @@ Depois, um bloco por grupo, com o título repetido em cada folha e as colunas "N
     screen: 'terminalidade',
     body: `## Para que serve
 
-O modo de campo, em "/campo/terminalidade", é a lista de pendências feita para o celular no canteiro: baixa-se a obra com sinal e, depois, tudo funciona sem internet. Nele se faz o que se faz andando pelo prédio: lançar pendência com foto, juntar foto, resolver com a foto da correção e reabrir. Editar, excluir e os cadastros ficam na aba 5, no computador. Quem é consulta só vê a lista.
+O modo de campo, em "/campo/terminalidade", é a lista de pendências feita para o celular no canteiro: baixa-se a obra com sinal e, depois, tudo funciona sem internet. Nele se faz o que se faz andando pelo prédio: lançar pendência com foto, juntar foto, resolver com a foto da correção e reabrir. Editar, excluir e os cadastros ficam na aba 2.1, no computador. Quem é consulta só vê a lista.
 
 ## Como abrir e baixar a obra (com sinal)
 
-1. Na aba 5, toque em "Usar no celular, sem sinal", ou digite "/campo/terminalidade" no navegador do celular, com o mesmo login. O modo de campo exige o módulo "Terminalidade" liberado para você, como a aba 5; sem ele, o servidor recusa com "Módulo não liberado para você. Peça a liberação a um administrador."
+1. Na aba 2.1, toque em "Usar no celular, sem sinal", ou digite "/campo/terminalidade" no navegador do celular, com o mesmo login. O modo de campo exige o módulo "Terminalidade" liberado para você, como a aba 2.1; sem ele, o servidor recusa com "Módulo não liberado para você. Peça a liberação a um administrador."
 2. Na primeira vez aparece "Prepare com sinal": toque em "Carregar minhas obras" (só com internet).
 3. Toque na obra: se ainda não está no aparelho, ela é baixada com as fotos das pendências abertas e passa a mostrar "Pronta sem sinal · N abertas"; daí em diante abre mesmo em modo avião.
 4. Com sinal, "Atualizar a obra com o que está no servidor", no fim da lista, traz o que a equipe lançou no computador e em outros celulares, sem perder a fila do aparelho.

@@ -209,7 +209,7 @@ function CreateForm({
   const heading = (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <p className="eyebrow">Lista de pendência</p>
+        <p className="eyebrow">Quadro de Restrições</p>
         <h3 id="pendencia-nova-titulo" className="mt-1 text-base font-bold text-slate-900">
           Nova pendência
         </h3>
@@ -249,18 +249,18 @@ function CreateForm({
         )}
         {load.status === 'unavailable' && (
           <Callout tone="warning" role="status">
-            A lista de pendência fica indisponível até a migração 0043 ser aplicada no banco.
+            O Quadro de Restrições fica indisponível até a migração 0043 ser aplicada no banco.
           </Callout>
         )}
         {load.status === 'ready' && created && (
           <div className="space-y-4">
             <Callout tone="success" role="status">
               <CircleCheckBig size={15} aria-hidden className="mr-1.5 inline align-[-2px]" />
-              Pendência criada: <strong>{created.title}</strong>. Ela está em A fazer, na lista de pendência da aba 2.
+              Pendência criada: <strong>{created.title}</strong>. Ela está em A fazer, no Quadro de Restrições (aba 1.4).
             </Callout>
             <div className="flex flex-wrap items-center gap-2">
               <Link className="button" href={pendingPath(workId, created.cardId)}>
-                {created.cardId ? 'Abrir o card' : 'Abrir a lista de pendência'}
+                {created.cardId ? 'Abrir o card' : 'Abrir o Quadro de Restrições'}
               </Link>
               <button type="button" className="button-ghost" onClick={() => setCreated(undefined)}>
                 Criar outra

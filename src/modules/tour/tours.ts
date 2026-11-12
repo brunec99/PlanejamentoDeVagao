@@ -17,6 +17,7 @@ import { steps as seguranca } from './pages/seguranca';
 import { steps as histograma } from './pages/histograma';
 import { steps as checklist } from './pages/checklist';
 import { steps as produtividade } from './pages/produtividade';
+import { steps as restricoes } from './pages/restricoes';
 import { steps as terminalidade } from './pages/terminalidade';
 import { steps as vagao } from './pages/vagao';
 import { steps as planejamento } from './pages/vagoes';
@@ -45,6 +46,7 @@ export type TourKey =
   | 'produtividade'
   | 'checklist'
   | 'planejamento'
+  | 'restricoes'
   | 'vagao'
   | 'ifc'
   | 'federacao'
@@ -84,6 +86,7 @@ const pages: Record<TourKey, TourStep[]> = {
   produtividade,
   checklist,
   planejamento,
+  restricoes,
   vagao,
   ifc,
   federacao,
@@ -112,6 +115,7 @@ export function resolveTourKey(pathname: string): TourKey | null {
   if (/^\/obras\/[^/]+\/produtividade$/.test(pathname)) return 'produtividade';
   if (/^\/obras\/[^/]+\/checklist$/.test(pathname)) return 'checklist';
   if (/^\/obras\/[^/]+\/vagoes$/.test(pathname)) return 'planejamento';
+  if (/^\/obras\/[^/]+\/restricoes$/.test(pathname)) return 'restricoes';
   if (/^\/obras\/[^/]+\/vagoes\/[^/]+$/.test(pathname)) return 'vagao';
   if (/^\/obras\/[^/]+\/ifc$/.test(pathname)) return 'ifc';
   if (/^\/obras\/[^/]+\/federacao$/.test(pathname)) return 'federacao';

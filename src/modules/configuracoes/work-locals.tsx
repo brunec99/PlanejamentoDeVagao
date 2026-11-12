@@ -109,7 +109,7 @@ export function WorkLocals({ workId }: { workId: string }) {
             <HelpNote title="Como funciona: locais da obra" compact>
               <p>
                 Uma lista só por obra. Ela alimenta a coluna <strong>Local</strong> do curto prazo (e o filtro de local do PDF) e o eixo
-                vertical da <strong>Linha de Balanço</strong> da aba 1, que abre a mesma lista em &quot;Locais da obra&quot;.
+                vertical da <strong>Linha de Balanço</strong> da aba 1.1, que abre a mesma lista em &quot;Locais da obra&quot;.
               </p>
               <p>
                 Cadastre um nome por linha, da base ao topo; as setas mudam a ordem. Renomear muda o nome em todas as linhas do curto prazo.

@@ -92,12 +92,10 @@ test('Páginas restritas da obra desviam para o dashboard da mesma obra', () => 
   for (const open of [
     '/obras',
     '/obras/obra-1/dashboard',
-    '/obras/obra-1/seguranca',
     '/obras/obra-1/configuracoes',
     '/configuracoes',
     '/obras/obra-1/vagoes-extra',
     '/imprimir/dashboard/obra-1',
-    '/imprimir/seguranca/obra-1',
     '/imprimir/dashboard-geral',
   ])
     assert.equal(restrictedPageRedirect(open), null, open);
@@ -115,7 +113,7 @@ test('Curto prazo e terminalidade (08/11/2026): aba, folha de impressão e modo 
   const curto = { developer: false, modules: ['curto-prazo'] };
   const terminal = { developer: false, modules: ['terminalidade'] };
   for (const section of ['curto-prazo', 'terminalidade']) assert.equal(hasSectionAccess(section, nobody), false, section);
-  for (const section of ['dashboard', 'seguranca', 'configuracoes']) assert.equal(hasSectionAccess(section, nobody), true, section);
+  for (const section of ['dashboard', 'configuracoes']) assert.equal(hasSectionAccess(section, nobody), true, section);
   assert.equal(hasSectionAccess('curto-prazo', curto), true);
   assert.equal(hasSectionAccess('terminalidade', curto), false);
   assert.equal(hasSectionAccess('terminalidade', terminal), true);
@@ -161,7 +159,7 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     '/api/planning/commands',
     '/api/work-settings',
     '/api/work-locals',
-    '/api/seguranca',
+    '/api/publico/checklist/abc',
     '/api/dashboard/obras',
     '/api/admin/users',
     '/api/health',
@@ -172,15 +170,16 @@ test('APIs dos módulos restritos são reconhecidas pelo prefixo', () => {
     assert.equal(isRestrictedApi(path), false, path);
 });
 
-test('Lista de pendência (10/11/2026): a API é de quem abre a aba 2, e de mais ninguém', () => {
-  const vagoes = { developer: false, modules: ['vagoes'] };
+test('Quadro de Restrições (12/11/2026): a API é de quem tem o módulo próprio, e de mais ninguém', () => {
+  const vagoes = { developer: false, modules: ['restricoes'] };
   for (const path of ['/api/pendencias', '/api/pendencias/commands']) {
-    assert.deepEqual(sectionsForApi(path), ['vagoes'], path);
+    assert.deepEqual(sectionsForApi(path), ['restricoes'], path);
     assert.equal(hasApiAccess(path, vagoes), true, path);
     assert.equal(hasApiAccess(path, { developer: true, modules: [] }), true, path);
     assert.equal(hasApiAccess(path, { developer: false, modules: [] }), false, path);
     // Os outros módulos, juntos, não abrem a lista de pendência.
-    const others = RESTRICTED_SECTIONS.filter(section => section !== 'vagoes');
+    // Inclusive `vagoes`, com quem o quadro ia até 11/11/2026.
+    const others = RESTRICTED_SECTIONS.filter(section => section !== 'restricoes');
     assert.equal(hasApiAccess(path, { developer: false, modules: others }), false, path);
   }
 });
@@ -193,7 +192,7 @@ test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada al�
   assert.equal(hasSectionAccess('longo-prazo', medio), false);
   assert.equal(hasSectionAccess('curto-prazo', nobody), false);
   assert.equal(hasSectionAccess('terminalidade', nobody), false);
-  assert.equal(hasSectionAccess('seguranca', nobody), true);
+  assert.equal(hasSectionAccess('dashboard', nobody), true);
   assert.equal(hasSectionAccess('medio-prazo', nobody), false);
   assert.equal(hasSectionAccess('ifc', dev), true);
   assert.equal(restrictedSectionOf('/obras/obra-1/medio-prazo'), 'medio-prazo');
@@ -217,7 +216,10 @@ test('Módulos liberados abrem a seção, as APIs e os comandos dela, e nada al�
 });
 
 test('Catálogo: os abertos não são liberáveis, e a lista gravada é limpa e ordenada', () => {
-  assert.ok(MODULES.some(m => m.section === 'seguranca' && m.open));
+  assert.deepEqual(
+    MODULES.filter(m => m.open).map(m => m.section),
+    ['dashboard', 'configuracoes'],
+  );
   assert.ok(!MODULES.some(m => (m.section === 'curto-prazo' || m.section === 'terminalidade') && m.open));
   assert.deepEqual(
     MODULES.filter(m => !m.open)
@@ -226,7 +228,8 @@ test('Catálogo: os abertos não são liberáveis, e a lista gravada é limpa e 
     [...RESTRICTED_SECTIONS].sort(),
   );
   assert.deepEqual(normalizeModules(['ifc', 'configuracoes', 'xyz', 'medio-prazo', 'ifc', 3]), ['medio-prazo', 'ifc']);
-  assert.deepEqual(normalizeModules(['terminalidade', 'seguranca', 'curto-prazo']), ['curto-prazo', 'terminalidade']);
+  assert.deepEqual(normalizeModules(['terminalidade', 'dashboard', 'curto-prazo']), ['curto-prazo', 'terminalidade']);
+  assert.deepEqual(normalizeModules(['checklist', 'seguranca', 'restricoes']), ['restricoes', 'seguranca', 'checklist']);
   assert.deepEqual(normalizeModules('medio-prazo'), []);
 });
 
@@ -244,7 +247,7 @@ test('admin libera e bloqueia módulos; demais papéis e módulos abertos são r
   assert.deepEqual(other.modules, ['medio-prazo']);
   assert.throws(() => run(other.id, { type: 'set_module_access', userId: admin.id, section: 'ifc', enabled: true }), /administradores/);
   assert.throws(
-    () => run(admin.id, { type: 'set_module_access', userId: other.id, section: 'seguranca', enabled: false }),
+    () => run(admin.id, { type: 'set_module_access', userId: other.id, section: 'dashboard', enabled: false }),
     /não é liberado/,
   );
   // 08/11/2026: curto prazo e terminalidade passaram a ser liberados por pessoa.
@@ -333,10 +336,35 @@ test('set_access_batch: admin libera e revoga obras e módulos de várias pessoa
   assert.throws(() => batch({ workIds: [], sections: [] }), /ao menos uma obra ou um módulo/);
   assert.throws(() => batch({ userIds: [ana.id, 'ninguem'] }), /Usuário não encontrado/);
   assert.throws(() => batch({ workIds: ['obra-x'] }), /Obra não encontrada/);
-  assert.throws(() => batch({ workIds: undefined, sections: ['seguranca'] }), /não é liberado/);
+  assert.throws(() => batch({ workIds: undefined, sections: ['dashboard'] }), /não é liberado/);
   assert.throws(() => batch({ enabled: 'sim' as never }), /liberado ou revogado/);
   assert.throws(() => batch({ userIds: 'user-3' as never }), /Lista de usuários inválida/);
 
   const payload = planningDataToPayload(data) as unknown as Rows;
   assert.deepEqual(payload.profiles.find(r => r.id === rafael.id)!.module_access, ['medio-prazo']);
+});
+
+test('Segurança, checklist e Quadro de Restrições (12/11/2026): liberados por pessoa, com tela, impressão e APIs', () => {
+  const nobody = { developer: false, modules: [] };
+  for (const section of ['seguranca', 'checklist', 'restricoes']) {
+    assert.ok((RESTRICTED_SECTIONS as readonly string[]).includes(section), section);
+    assert.equal(hasSectionAccess(section, nobody), false, section);
+    assert.equal(hasSectionAccess(section, { developer: false, modules: [section] }), true, section);
+    assert.equal(hasSectionAccess(section, { developer: true, modules: [] }), true, section);
+    assert.equal(restrictedPageRedirect(`/obras/obra-1/${section}`), '/obras/obra-1/dashboard', section);
+  }
+  assert.equal(restrictedSectionOf('/imprimir/seguranca/obra-1'), 'seguranca');
+  assert.equal(restrictedSectionOf('/imprimir/checklist/obra-1'), 'checklist');
+  const sst = { developer: false, modules: ['seguranca'] };
+  // O modo de campo da segurança (`/campo/seguranca`, fora do proxy) lê desta API.
+  assert.equal(hasApiAccess('/api/seguranca/campo', sst), true);
+  assert.equal(hasApiAccess('/api/seguranca/commands', nobody), false);
+  assert.equal(hasApiAccess('/api/checklist/arquivos', sst), false);
+  assert.equal(hasApiAccess('/api/checklist/commands', { developer: false, modules: ['checklist'] }), true);
+  // Quem tem só Vagões não abre mais o quadro; o histórico do vagão continua dele.
+  const vagoes = { developer: false, modules: ['vagoes'] };
+  assert.equal(hasApiAccess('/api/pendencias', vagoes), false);
+  assert.equal(hasApiAccess('/api/history', vagoes), true);
+  // O link do operador do checklist não é API restrita: quem autoriza é o segredo do endereço.
+  assert.equal(isRestrictedApi('/api/publico/checklist/abc'), false);
 });

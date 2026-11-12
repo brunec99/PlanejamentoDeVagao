@@ -138,6 +138,20 @@ Só e-mails dos dois domínios podem pedir ("Só contas @atrincorporadora.com.br
       'só vejo o curto prazo',
       'aba não aparece',
       'aba sumiu',
+      'tst',
+      'segurança do trabalho',
+      'vistoria de segurança',
+      'checklist de equipamentos',
+      'quadro de restrições',
+      'aba 6',
+      'aba 9',
+      'aba 2',
+      'aba 3.1',
+      'aba 3.2',
+      'aba 1.4',
+      '3.1',
+      '3.2',
+      '1.4',
     ],
     screen: 'geral',
     body: `## Os quatro papéis
@@ -156,15 +170,15 @@ Cada pessoa cadastrada tem um papel, mostrado embaixo do nome na lateral, que va
 | Alterar linhas de semana já encerrada (a partir da quarta-feira seguinte) | Não | Não | Não | Sim |
 | Cadastrar, editar e excluir empreiteiros e equipes | Não | Sim | Sim | Sim |
 | Definir a semana 1 e o local da obra | Não | Sim | Sim | Sim |
-| Editar nos demais módulos liberados por pessoa (terminalidade, longo prazo, vagões, médio prazo...) | Não | Se liberado | Se liberado | Sim |
+| Editar nos demais módulos liberados por pessoa (terminalidade, longo prazo, vagões, médio prazo, Quadro de Restrições...) | Não | Se liberado | Se liberado | Sim |
 | Cadastrar obra | Não | Não | Sim | Sim |
 | Liberar vagão em caráter excepcional | Não | Não | Sim | Sim |
 | Reabrir vagão terminal | Não | Não | Sim | Sim |
 | Cadastrar usuários, definir papel, liberar obras e módulos, excluir perfil, tratar pedidos de acesso | Não | Não | Não | Sim |
 | Ver todos os módulos sem liberação; abrir Configurações e Agente de IA | Não | Não | Não | Sim |
-| Lançar e finalizar apontamentos na Segurança do trabalho (aba 6) | Só o papel TST | Não | Não | Sim |
+| Lançar e finalizar apontamentos na Vistoria de segurança (aba 3.1, módulo "Segurança do trabalho") | Só o papel TST, com o módulo liberado | Não | Não | Sim |
 
-O papel **TST** (técnico de segurança do trabalho) é, no resto do sistema, igual ao Consulta: só vê. A diferença é a aba 6, onde ele lança, edita, finaliza e reabre os apontamentos da vistoria de segurança.
+O papel **TST** (técnico de segurança do trabalho) é, no resto do sistema, igual ao Consulta: só vê. A diferença é a aba 3.1, "Vistoria de segurança" (antiga aba 6), onde ele lança, edita, finaliza e reabre os apontamentos, e a aba 3.2, "Checklist de equipamentos", onde ele grava as inspeções (o cadastro do checklist é só do admin). Desde 12/11/2026 o papel sozinho não basta: o TST também precisa ter os módulos **"Segurança do trabalho"** e **"Checklist de equipamentos"** liberados, senão as abas nem aparecem para ele. Ao marcar alguém como TST, o administrador libera também esses dois módulos.
 
 Regras que valem para todos:
 
@@ -174,19 +188,29 @@ Regras que valem para todos:
 
 ## Módulos: abertos e liberados por pessoa
 
-Os módulos liberados por pessoa aparecem só para quem os tem liberados. Desde 08/11/2026 o curto prazo e a terminalidade fazem parte desse grupo; antes eram abertos a todos.
+Os módulos liberados por pessoa aparecem só para quem os tem liberados. Desde 08/11/2026 o curto prazo e a terminalidade fazem parte desse grupo; antes eram abertos a todos. Desde 12/11/2026 também fazem parte a **Vistoria de segurança** (3.1), o **Checklist de equipamentos** (3.2) e o **Quadro de Restrições** (1.4): a segurança era aberta a todos para consulta, e o quadro vinha junto com o módulo Vagões.
 
-**Abertos a todos** (basta ter a obra liberada): a lista de obras, a aba **0 "Dashboard da obra"** (cada quadro só aparece para quem pode abrir o módulo de origem), a aba **6 "Segurança do trabalho"** (consulta para todos; só TST e admin lançam e finalizam) e **"Configurações da obra"** (em Apoio). O **Dashboard geral** segue a regra dele (duas obras ou mais, e sempre admin e desenvolvedor). A tela "Configurações" geral é só de administradores.
+**Abertos a todos** (basta ter a obra liberada): só a lista de obras, a aba **0 "Dashboard da obra"** (cada quadro só aparece para quem pode abrir o módulo de origem) e **"Configurações da obra"** (em Apoio). O **Dashboard geral** segue a regra dele (duas obras ou mais, e sempre admin e desenvolvedor). A tela "Configurações" geral é só de administradores.
 
-**Liberados por pessoa, pelo administrador** (Configurações → Usuários, visão "Módulos", célula por pessoa ou em lote): aba 1 **"Cronograma de longo prazo"**, aba 2 **"Planejamento de vagão e lista de pendência"** (o módulo "Vagões" da grade, que libera também a Lista de pendência), aba 3 **"Cronograma de médio prazo"**, aba 4 **"Cronograma de curto prazo"**, aba 5 **"Terminalidade"** e, em Apoio, **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**. Administradores e desenvolvedores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
+**Liberados por pessoa, pelo administrador** (Configurações → Usuários, visão "Módulos", célula por pessoa ou em lote):
 
-Quem já usava o curto prazo e a terminalidade em 08/11/2026 continuou com os dois liberados; o administrador revoga de quem não deve ter. Usuário cadastrado a partir dessa data começa sem nenhum módulo, inclusive esses dois: o administrador libera.
+- No grupo **1 · Prazo**: aba 1.1 **"Cronograma de longo prazo"**; aba 1.2 **"Cronograma de médio prazo"**; aba 1.3 **"Cronograma de curto prazo"**; aba 1.4 **"Quadro de Restrições"** (coluna "Quadro de Restrições", separada da de "Vagões" desde 12/11/2026). O módulo **"Vagões"** libera o **Planejamento de vagão**, que não tem item no menu: aparece como o botão "Planejamento de vagão" dentro da aba 1.1.
+- No grupo **2 · Controles de obra**: aba 2.1 **"Terminalidade"**, aba 2.2 **"Histograma de mão de obra"** e aba 2.3 **"Controle de produtividade"**.
+- No grupo **3 · SST**: aba 3.1 **"Vistoria de segurança"** (coluna "Segurança do trabalho") e aba 3.2 **"Checklist de equipamentos"** (coluna "Checklist de equipamentos"). Dentro delas as regras de gravação não mudaram: quem tem o módulo consulta, só TST e admin gravam, e o cadastro do checklist é só do admin.
+- Em Apoio: **"Modelo federado"**, **"Arquivos IFC"**, **"Dívidas"** e **"Integrações"**.
+
+Administradores e desenvolvedores veem todos sem liberação. Módulo liberado não muda o papel: quem é Consulta continua só vendo.
+
+O **link ou QR do operador** do Checklist de equipamentos continua sem login e não depende de módulo.
+
+Quem já usava o curto prazo e a terminalidade em 08/11/2026 continuou com os dois liberados; o administrador revoga de quem não deve ter. O mesmo valeu em 12/11/2026 (migração 0049): todo não-admin ganhou "Segurança do trabalho" e "Checklist de equipamentos", e quem tinha "Vagões" ganhou o "Quadro de Restrições". Usuário cadastrado depois começa sem nenhum módulo, inclusive esses: o administrador libera.
 
 ### O que acontece sem a liberação
 
-- O item **não aparece** na lateral nem na faixa de abas do celular; a numeração das abas não muda (é normal ver, por exemplo, só a 0, a 4, a 5 e a 6).
+- O item **não aparece** na lateral nem na faixa de abas do celular; a numeração das abas não muda (é normal ver, por exemplo, só a 0, a 1.3, a 2.1 e a 3.1), e um grupo sem nenhuma aba liberada não aparece.
 - O endereço de uma aba não liberada **redireciona para o Dashboard da obra** (aba 0) da mesma obra, sem mensagem. Até 08/11/2026 o desvio era para o curto prazo.
 - O modo de campo da terminalidade ("/campo/terminalidade") e os PDFs do curto prazo e da terminalidade também recusam quem não tem o módulo.
+- Sem o módulo "Vagões", o botão "Planejamento de vagão" não aparece na aba 1.1.
 - Um pedido feito pela tela a um módulo não liberado responde **"Módulo não liberado para você. Peça a liberação a um administrador."** (até 08/11/2026, "Módulo disponível apenas para desenvolvimento."). Para liberar, fale com um administrador.`,
   },
   {
@@ -266,6 +290,10 @@ Clique em **"Salvar"** (ou "Cancelar"). Ao salvar, a obra **já fica liberada pa
       'definir papel',
       'mudar papel',
       'marcar como tst',
+      'liberar segurança do trabalho',
+      'liberar checklist de equipamentos',
+      'liberar quadro de restrições',
+      'coluna quadro de restrições',
       'excluir usuário',
       'pedidos de acesso',
       'banco de dados',
@@ -282,11 +310,11 @@ São três blocos: "Takt por obra" (takt padrão e início do primeiro vagão de
 
 ### Pedidos de acesso
 
-O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mail ("e-mail confirmado pelo Google" ou "e-mail digitado, não confirmado"), quando pediu e a mensagem. **"Cadastrar"** cria o usuário como Consulta, sem obras e sem módulos (nem curto prazo e terminalidade), e o pedido sai da lista: libere as obras e os módulos na grade e avise a pessoa para entrar de novo com o Google. **"Dispensar"** só tira o pedido da lista.
+O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mail ("e-mail confirmado pelo Google" ou "e-mail digitado, não confirmado"), quando pediu e a mensagem. **"Cadastrar"** cria o usuário como Consulta, sem obras e sem módulos (nem curto prazo, terminalidade, segurança do trabalho, checklist de equipamentos ou Quadro de Restrições), e o pedido sai da lista: libere as obras e os módulos na grade e avise a pessoa para entrar de novo com o Google. **"Dispensar"** só tira o pedido da lista.
 
 ### Cadastrar usuário
 
-Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. O usuário novo começa sem obras e sem módulos, inclusive curto prazo e terminalidade: libere o que ele precisa na grade. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
+Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. O usuário novo começa sem obras e sem módulos, inclusive curto prazo, terminalidade, segurança do trabalho, checklist de equipamentos e Quadro de Restrições: libere o que ele precisa na grade. Para um TST, libere também os módulos "Segurança do trabalho" e "Checklist de equipamentos": sem eles, as abas 3.1 e 3.2 não aparecem para ele. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
 
 Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuário já cadastrado. Altere o papel e as obras na lista abaixo."
 
@@ -294,11 +322,11 @@ Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuári
 
 Uma linha por pessoa (nome, e-mail e, na sua, o selo "você") e uma coluna por obra, com código, nome e quantos dos listados têm aquela obra. Célula marcada é obra liberada: **clique para liberar ou revogar; vale na hora, sem botão de salvar.** Quem não tem a obra não a vê na lista de obras; quem não tem nenhuma recebe "Sem obra liberada" na linha. Se o servidor recusar, o aviso "Não foi possível salvar." explica e a célula volta.
 
-- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo liberado por pessoa: longo prazo, vagões, médio prazo, curto prazo, terminalidade, modelo federado, arquivos IFC, dívidas e integrações (as colunas "Curto prazo" e "Terminalidade" existem desde 08/11/2026). Os abertos a todos não viram coluna; a nota abaixo da grade os lista: Dashboard, Segurança do trabalho e Configurações da obra. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
+- **"Obras" / "Módulos"** troca as colunas. Em "Módulos", cada célula libera ou bloqueia um módulo liberado por pessoa: longo prazo, vagões, médio prazo, curto prazo, Quadro de Restrições, terminalidade, histograma, controle de produtividade, segurança do trabalho, checklist de equipamentos, modelo federado, arquivos IFC, dívidas e integrações (as colunas "Curto prazo" e "Terminalidade" existem desde 08/11/2026; "Quadro de Restrições", "Segurança do trabalho" e "Checklist de equipamentos", desde 12/11/2026). Os abertos a todos não viram coluna: são só o Dashboard da obra e as Configurações da obra. Nas linhas de administradores as células ficam em cinza, sem clique, porque admin vê tudo.
 - **Várias pessoas de uma vez (liberação em lote):** marque a caixa ao lado do nome de cada pessoa. A caixa do cabeçalho "Usuário" marca todos os listados (com filtro, só os filtrados), e Shift+clique marca o intervalo entre duas caixas. Aparece uma barra com "N usuários selecionados" e dois campos, "Obras" e "Módulos", em qualquer visão da grade: escolha as obras, os módulos ou os dois no mesmo lote (ou "Todas"/"Todos"), e clique em **"Liberar para N pessoas"** ou **"Revogar de N pessoas"**. O número conta só quem muda de fato; quem já tem (ou já não tem) fica como está. Revogar pede confirmação; liberar vale na hora. A seleção continua ao pesquisar e filtrar, então dá para montar a turma pesquisando nome a nome; quem saiu da lista continua marcado e entra no lote, e a barra avisa ("N estão fora da lista atual e também entram"). Nos módulos, admins ficam de fora, porque já veem tudo; se o lote também levar obras, para eles só as obras mudam. "Limpar seleção" desmarca todos. Papel e exclusão continuam linha a linha.
 - **"Pesquisar nome ou e-mail"**: cada palavra digitada precisa aparecer, sem diferença de acento. Filtros **"Todos os papéis"** e **"Todas as obras"** (com "Sem obra liberada" e "Com acesso a [obra]"); "Limpar filtros" desfaz. O contador diz "N de M usuários".
 - Clique em **"Usuário"** ou **"Papel"** no cabeçalho para ordenar; de novo, inverte.
-- **"Papel"**: a lista troca o papel assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O **TST** (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, nas obras liberadas para a pessoa, e consulta o resto do sistema; ao escolher, aparece "[nome] agora é TST.". O Admin também lança na aba 6. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador."). Quem estava com a aba 6 aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo).
+- **"Papel"**: a lista troca o papel assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O **TST** (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 3.1, Vistoria de segurança (antiga aba 6), e grava as inspeções da aba 3.2, Checklist de equipamentos, nas obras liberadas para a pessoa, e consulta o resto do sistema; ao escolher, aparece "[nome] agora é TST.". **O papel não libera as abas:** desde 12/11/2026, ao marcar alguém como TST, libere também, na visão "Módulos", as colunas "Segurança do trabalho" e "Checklist de equipamentos". O Admin também lança na aba 3.1. Na sua própria linha fica travado ("Ninguém tira o próprio acesso de administrador."). Quem estava com a aba 3.1 aberta precisa recarregá-la (no celular, atualizar a obra no modo de campo).
 - **Excluir**: a lixeira no fim da linha, depois de confirmar "Excluir [nome]?". A pessoa perde o acesso ao Obra 360 e precisa ser cadastrada de novo; **a conta Google e o acesso aos outros sistemas da ATR continuam**. Não aparece na sua própria linha.
 
 ## Banco de dados
@@ -430,7 +458,7 @@ Com local salvo, o botão **"Ver o tempo desta semana"** (disponível também pa
 
 ## Locais da obra
 
-Não confundir com o "Local da obra" acima (a cidade). Aqui ficam os **locais dentro da obra**: torres, pavimentos e áreas ("Térreo", "5º pavimento", "Cobertura"), de cima para baixo como o prédio. É uma lista só por obra: ela dá as opções da coluna **"Local"** do curto prazo (e o filtro de local do PDF) e o eixo vertical da **Linha de Balanço** da aba 1, que abre a mesma lista em "Locais da obra".
+Não confundir com o "Local da obra" acima (a cidade). Aqui ficam os **locais dentro da obra**: torres, pavimentos e áreas ("Térreo", "5º pavimento", "Cobertura"), de cima para baixo como o prédio. É uma lista só por obra: ela dá as opções da coluna **"Local"** do curto prazo (e o filtro de local do PDF) e o eixo vertical da **Linha de Balanço** da aba 1.1, que abre a mesma lista em "Locais da obra".
 
 O painel mostra os locais do topo para a base e a contagem, ou "Nenhum local cadastrado. Sem locais, a coluna Local do curto prazo fica travada."
 
@@ -454,12 +482,21 @@ Planejador, gestor e admin com a obra liberada alteram a semana 1 e o local; Con
     id: 'navegacao-geral',
     title: 'Navegação: lateral, abas, cabeçalho, ajuda, modo reunião e celular',
     summary:
-      'Onde fica cada coisa na tela: lateral com as 6 abas e o Apoio, trilha, "Como funciona", "Como usar", Claudia, modo reunião, celular.',
+      'Onde fica cada coisa: lateral com o Dashboard, os grupos 1 Prazo, 2 Controles de obra e 3 SST e o Apoio, trilha, "Como usar", Claudia, modo reunião, celular.',
     keywords: [
       'onde fica',
       'menu',
       'lateral',
       'aba 4',
+      'aba 1.3',
+      '1.3',
+      'grupos do menu',
+      'prazo',
+      'controles de obra',
+      'sst',
+      'numeração das abas',
+      'quadro de restrições',
+      'planejamento de vagão',
       'como funciona',
       'como usar',
       'tour',
@@ -479,7 +516,9 @@ No computador, a barra azul à esquerda é o menu. De cima para baixo:
 
 - Os logos e **"Obra 360"**: voltam à lista de obras.
 - **"Empreendimentos" → "Obras"**: a lista de obras.
-- Dentro de uma obra, o **nome da obra** e as abas numeradas: **1 Cronograma de longo prazo**, **2 Planejamento de vagão e lista de pendência**, **3 Cronograma de médio prazo**, **4 Cronograma de curto prazo**, **5 Terminalidade** e **6 Segurança do trabalho**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
+- Dentro de uma obra, o **nome da obra**, o **0 Dashboard da obra** no topo e três grupos numerados (desde 12/11/2026): **"1 · Prazo"**, com **1.1 Cronograma de longo prazo**, **1.2 Cronograma de médio prazo**, **1.3 Cronograma de curto prazo** e **1.4 Quadro de Restrições**; **"2 · Controles de obra"**, com **2.1 Terminalidade**, **2.2 Histograma de mão de obra** e **2.3 Controle de produtividade**; e **"3 · SST"**, com **3.1 Vistoria de segurança** e **3.2 Checklist de equipamentos**. Abaixo, o grupo **"Apoio"**: **Modelo federado**, **Arquivos IFC**, **Dívidas**, **Integrações** e **Configurações da obra**. Só aparecem as abas e os itens liberados para você; os números não mudam.
+- O **Planejamento de vagão** não está mais na lateral: abre pelo botão "Planejamento de vagão" dentro da aba 1.1, para quem tem o módulo Vagões.
+- Números antigos (até 12/11/2026): 1 = 1.1; 2 = 1.4 (o quadro, antes "Lista de pendência") e o botão da 1.1 (o vagão); 3 = 1.2; 4 = 1.3; 5 = 2.1; 6 = 3.1; 7 = 2.2; 8 = 2.3; 9 = 3.2.
 - **"Administração"** (só admin): **"Configurações"** e **"Agente de IA"**.
 - Embaixo, o cartão com suas iniciais, nome e papel e o botão **"Sair do sistema"**.
 
@@ -493,7 +532,7 @@ A barra fixa no topo mostra a **trilha** "Obras › nome da obra › aba": "Obra
 - **"Modo reunião"** (ícone de apresentação): aumenta o texto do sistema inteiro um degrau, para o projetor da sala. Fica aceso quando ligado, vale em todas as telas e a escolha fica neste navegador.
 - **"Como usar"** ("?"): o tour da tela, descrito abaixo.
 
-Cada aba abre com o mesmo cabeçalho: o número da aba num quadrado, "Aba N · código · nome da obra", o título, uma linha do que a aba responde e o **"Como funciona"** (interrogação pequena), que abre a explicação longa da tela. Fecha com Esc ou clicando fora. Painéis dentro das telas podem ter o próprio "Como funciona".
+Cada aba abre com o mesmo cabeçalho: o número da aba num quadrado, "Aba N · código · nome da obra" (por exemplo, "Aba 1.3"), o título, uma linha do que a aba responde e o **"Como funciona"** (interrogação pequena), que abre a explicação longa da tela. Fecha com Esc ou clicando fora. Painéis dentro das telas podem ter o próprio "Como funciona".
 
 ## O tour "Como usar"
 
@@ -501,7 +540,7 @@ Escurece a tela e destaca, um por vez, cada botão e campo visível, com um cart
 
 ## No celular
 
-A lateral desaparece. O botão de menu (três traços) abre a mesma lateral numa gaveta, com abas, Apoio, perfil e "Sair do sistema"; navegar fecha a gaveta. Dentro de uma obra, uma **faixa de abas** sob o cabeçalho traz o número e o nome curto de cada aba liberada ("4 Curto prazo") e rola de lado. A trilha mostra só a página atual.
+A lateral desaparece. O botão de menu (três traços) abre a mesma lateral numa gaveta, com abas, Apoio, perfil e "Sair do sistema"; navegar fecha a gaveta. Dentro de uma obra, uma **faixa de abas** sob o cabeçalho traz o número e o nome curto de cada aba liberada ("1.3 Curto prazo") e rola de lado. A trilha mostra só a página atual.
 
 ## Atualização dos dados e aviso de conexão
 

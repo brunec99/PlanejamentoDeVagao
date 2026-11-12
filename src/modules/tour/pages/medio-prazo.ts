@@ -5,7 +5,7 @@ import type { TourStep } from '../tours';
  * por padrão aparecem no tour quando a pessoa as liga em "Colunas". */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 3 · Cronograma de médio prazo',
+    title: 'Aba 1.2 · Cronograma de médio prazo',
     body: 'Um cronograma por mês, com horizonte de três meses, no layout do MS Project, e seções de apoio à reunião de médio prazo. O tour mostra os botões e campos da seção aberta: troque de seção e refaça o tour para ver os das outras.',
   },
   {
@@ -88,7 +88,7 @@ export const steps: TourStep[] = [
   {
     target: 'medio-criar-pendencia',
     title: 'Criar pendência',
-    body: 'Cria um card na Lista de pendência (aba 2) ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao início da tarefa e acompanha a reprogramação. Não vale para tarefa-resumo nem para linha de base, e tarefa nova ou alterada pede salvar o cronograma antes. O mesmo botão está no rodapé de "Informações da tarefa". Só aparece para quem tem a aba 2 liberada.',
+    body: 'Cria um card no Quadro de Restrições (aba 1.4) ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao início da tarefa e acompanha a reprogramação. Não vale para tarefa-resumo nem para linha de base, e tarefa nova ou alterada pede salvar o cronograma antes. O mesmo botão está no rodapé de "Informações da tarefa". Só aparece para quem tem a aba 1.4 liberada.',
   },
   {
     target: 'medio-linha-tempo-adicionar',

@@ -68,7 +68,7 @@ function Paper({ data }: { data: WagonsPanelData }) {
   return (
     <>
       <div className="dsh-panel">
-        <h3>Aba 2 · Vagões por status e em produção</h3>
+        <h3>Planejamento de vagão · Vagões por status e em produção</h3>
         <p className="dsh-desc">
           {plural(data.total, 'vagão', 'vagões')}
           {sequences ? ` em ${sequences}` : ''}. {texts.paperStatusNote}
@@ -94,7 +94,7 @@ function Paper({ data }: { data: WagonsPanelData }) {
         </div>
       </div>
       <div className="dsh-panel">
-        <h3>Aba 2 · Restrições</h3>
+        <h3>Planejamento de vagão · Restrições</h3>
         <p className="dsh-desc">{texts.paperRestrictionsNote}</p>
         <RestrictionsMini data={data} compact />
         <PeriodFlow text={texts.resolvedInPeriod} />

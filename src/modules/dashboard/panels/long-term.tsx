@@ -209,7 +209,7 @@ export function LongTermPanel({
       'Nenhum serviço do longo prazo passa pelos pavimentos escolhidos. Limpe o recorte de pavimentos para ver o plano inteiro.';
     return variant === 'paper' ? (
       <div className="dsh-panel">
-        <h3>Aba 1 · Curva S · planejado × medido</h3>
+        <h3>Aba 1.1 · Curva S · planejado × medido</h3>
         <p className="dsh-empty">{empty}</p>
       </div>
     ) : (
@@ -222,7 +222,7 @@ export function LongTermPanel({
   if (variant === 'paper') {
     return (
       <div className="dsh-panel">
-        <h3>Aba 1 · Curva S · planejado × medido</h3>
+        <h3>Aba 1.1 · Curva S · planejado × medido</h3>
         <p className="dsh-desc">
           {description(data)}
           {data.span && (

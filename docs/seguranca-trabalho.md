@@ -1,5 +1,7 @@
 # Aba 6 — Segurança do trabalho (05/11/2026)
 
+> **12/11/2026:** a aba 6 passou a ser a **3.1** no menu e deixou de ser aberta a todos: é liberada por pessoa (módulo `seguranca`), inclusive para o TST. Ver [Menu numerado e liberações](menu-e-liberacoes-2026-11-12.md).
+
 Este documento registra a continuidade entre os modelos de IA que trabalham no repositório: o comportamento entregue, as decisões, os arquivos, a migração, a validação e as pendências. Não registre intenção como se fosse funcionalidade pronta.
 
 ## O que é

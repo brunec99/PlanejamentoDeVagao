@@ -7,11 +7,19 @@ export const sections: ManualSection[] = [
     id: 'checklist-equipamentos',
     title: 'Checklist de equipamentos: modelos, equipamentos e inspeções',
     summary:
-      'Aba 9: inspeção diária, semanal e mensal; operador preenche pelo QR sem login, com assinatura e fotos; cadastro só com admin.',
+      'Aba 3.2 (antiga 9): inspeção diária, semanal e mensal; módulo por pessoa; operador pelo QR sem login, com assinatura e fotos; cadastro só com admin.',
     keywords: [
       'checklist',
       'checklist de equipamentos',
       'aba 9',
+      'aba 3.2',
+      '3.2',
+      'sst',
+      '3 · sst',
+      'módulo checklist de equipamentos',
+      'liberado por pessoa',
+      'checklist sumiu do menu',
+      'não vejo o checklist',
       'inspeção de equipamento',
       'betoneira',
       'serra circular',
@@ -32,15 +40,17 @@ export const sections: ManualSection[] = [
       'gerar novo link',
     ],
     screen: 'checklist',
-    body: `## O que é a aba 9, Checklist de equipamentos
+    body: `## O que é a aba 3.2, Checklist de equipamentos
 
-É a inspeção periódica dos equipamentos da obra. Fica no grupo **SST** do menu, abaixo da vistoria de segurança.
+É a inspeção periódica dos equipamentos da obra. Fica no grupo **3 · SST** do menu, como aba 3.2, logo abaixo da **Vistoria de segurança** (aba 3.1). Até 12/11/2026 era a aba 9.
 
 ### Quem pode o quê
 
-- Todos que têm a obra **consultam** (a aba é aberta, como a aba 6).
-- O **operador do equipamento** preenche pelo **QR colado na máquina**, sem login e sem conta (ver "Checklist pelo QR" abaixo).
-- Quem é do tipo **TST** e os **administradores** registram, editam e excluem inspeções na tela, e veem o QR de cada equipamento. O tipo TST é marcado pelo administrador, na mesma tela da aba 6.
+- Desde 12/11/2026 a aba é **liberada por pessoa**, como a Vistoria de segurança (aba 3.1): aparece para quem tem a obra e o módulo "Checklist de equipamentos" liberados pelo administrador, em Configurações → Usuários → Módulos (coluna "Checklist de equipamentos"). Antes era aberta a todos com a obra: quem já usava foi mantido (migração 0049) e usuário novo começa sem o módulo.
+- Quem não tem o módulo não vê o item no menu e, pelo endereço, é levado ao Dashboard da obra (aba 0). Para ter acesso, peça a liberação a um administrador.
+- Quem tem o módulo e a obra **consulta**.
+- O **operador do equipamento** preenche pelo **QR colado na máquina**, sem login e sem conta (ver "Checklist pelo QR" abaixo). O link do QR não depende de módulo liberado.
+- Quem é do tipo **TST** e os **administradores** registram, editam e excluem inspeções na tela, e veem o QR de cada equipamento. O TST é o mesmo da aba 3.1, marcado pelo administrador em Configurações → Usuários, e também precisa do módulo liberado: ao marcar alguém como TST, o administrador libera também os módulos "Segurança do trabalho" e "Checklist de equipamentos".
 - **Só administradores** fazem o cadastro: criam e editam modelos, cadastram, renomeiam e desativam equipamentos e geram um novo link de QR (desde 12/11/2026, a pedido da equipe de SST, para não haver conflito nas informações). Para o TST, a mensagem é "Só administradores cadastram modelos e equipamentos e trocam o link do QR.".
 
 ### As três peças
@@ -61,6 +71,7 @@ export const sections: ManualSection[] = [
 - O operador aponta a câmera do celular para a etiqueta. Abre uma tela só daquele equipamento, com os checklists dele: **pendente** tem o botão **Preencher**; **feito** mostra o dia e quem fez.
 - No formulário ele responde C / NC / N/A, pode tirar **até 4 fotos** e escrever uma observação, e precisa escrever o **nome completo** e **assinar com o dedo**. Depois toca em **Enviar checklist**. Se houver item não conforme, a confirmação manda avisar o técnico de segurança antes de operar.
 - Pelo link só se registra **o dia de hoje** e só o que está **pendente no período** (diário uma vez por dia, semanal uma por semana, mensal uma por mês). O operador não edita nem apaga: corrigir é com TST ou admin, na tela logada.
+- O link continua sem login e não depende de módulo: a liberação por pessoa de 12/11/2026 vale só para a tela logada.
 - Quem tem o link vê apenas aquele equipamento, nada mais do sistema. Se o link vazar, o admin clica em **Gerar novo link**: a etiqueta antiga para de funcionar e é preciso imprimir a nova. Equipamento desativado também fecha o link.
 - No histórico, a inspeção mostra o nome do operador e a marca **pelo QR**; "Ver respostas" mostra a assinatura (com data e hora) e as fotos.
 - O link precisa de internet no celular; não funciona sem sinal.
@@ -76,6 +87,6 @@ export const sections: ManualSection[] = [
 
 ### O que ainda não existe
 
-Preenchimento sem internet, foto presa a um item específico, impressão da inspeção em PDF e a abertura automática de um apontamento na aba 6 a partir de uma não conformidade.`,
+Preenchimento sem internet, foto presa a um item específico, impressão da inspeção em PDF e a abertura automática de um apontamento na aba 3.1 a partir de uma não conformidade.`,
   },
 ];

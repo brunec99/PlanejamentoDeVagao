@@ -7,11 +7,15 @@ export const sections: ManualSection[] = [
   {
     id: 'produtividade-visao-geral',
     title: 'Controle de produtividade: lançar a produção do dia e ler a produção por homem-dia',
-    summary: 'Aba 8: serviço, equipe e produção do dia; "a medir"; produção por homem-dia por serviço.',
+    summary: 'Aba 2.3 (antiga 8): serviço, equipe e produção do dia; "a medir"; produção por homem-dia por serviço.',
     keywords: [
       'controle de produtividade',
       'produtividade',
       'aba 8',
+      'aba 2.3',
+      '2.3',
+      'controles de obra',
+      '2 · controles de obra',
       'controle da produção',
       'produção por homem-dia',
       'rup',
@@ -25,13 +29,13 @@ export const sections: ManualSection[] = [
       'profissionais e ajudantes',
     ],
     screen: 'produtividade',
-    body: `## O que é a aba 8, Controle de produtividade
+    body: `## O que é a aba 2.3, Controle de produtividade
 
-É a planilha "ATR - Controle da produção" dentro do sistema. Cada linha é a equipe de um **empreiteiro** num **serviço**, num **dia**: profissionais, ajudantes, a **produção** medida e a **unidade**. Fica no grupo **Controles de obra** do menu.
+É a planilha "ATR - Controle da produção" dentro do sistema. Cada linha é a equipe de um **empreiteiro** num **serviço**, num **dia**: profissionais, ajudantes, a **produção** medida e a **unidade**. Fica no grupo **2 · Controles de obra** do menu, como aba 2.3 (até 12/11/2026 era a aba 8).
 
 ### Quem pode o quê
 
-- O módulo é liberado por pessoa, por um administrador (Configurações → Usuários).
+- O módulo é liberado por pessoa, por um administrador (Configurações → Usuários → Módulos).
 - Quem tem o módulo e a obra **lança, edita e exclui**. O papel **consulta** só visualiza.
 
 ### Lançar

@@ -12,11 +12,15 @@ export const sections: ManualSection[] = [
   {
     id: 'curto-prazo-visao-geral',
     title: 'Curto prazo: para que serve e como a tela é organizada',
-    summary: 'O que é a planilha da semana, suas duas seções, as colunas, os botões do topo e o que cada papel pode fazer.',
+    summary: 'Aba 1.3 (antiga 4): a planilha da semana, suas duas seções, as colunas, os botões do topo e o que cada papel pode fazer.',
     keywords: [
       'curto prazo',
       'planilha da semana',
       'aba 4',
+      'aba 1.3',
+      '1.3',
+      'grupo prazo',
+      '1 · prazo',
       'cronograma de curto prazo',
       'colunas',
       'fechamento',
@@ -32,7 +36,7 @@ export const sections: ManualSection[] = [
     screen: 'curto-prazo',
     body: `## Para que serve
 
-A aba 4, "Cronograma de curto prazo", é a planilha semanal de produção: o que cada empreiteiro se compromete a fazer na semana, se cumpriu ("Sim" ou "Não") e por quê. Tem a mesma estrutura da planilha do Google Sheets que a obra usava e está em produção desde 07/10/2026. Ela se sustenta sozinha: não depende do plano do mês nem de cadastro feito em outra tela. Cada linha é um compromisso.
+A aba 1.3, "Cronograma de curto prazo" (grupo **1 · Prazo** do menu; até 12/11/2026 era a aba 4), é a planilha semanal de produção: o que cada empreiteiro se compromete a fazer na semana, se cumpriu ("Sim" ou "Não") e por quê. Tem a mesma estrutura da planilha do Google Sheets que a obra usava e está em produção desde 07/10/2026. Ela se sustenta sozinha: não depende do plano do mês nem de cadastro feito em outra tela. Cada linha é um compromisso.
 
 ## As duas seções
 
@@ -126,13 +130,13 @@ O botão "Inserir linha acima" (ícone de linhas com seta, ao lado do ✕, no fi
 
 ## O local da linha
 
-"Local" (ao lado de "Atividade") diz onde a atividade acontece. É opcional e vem da mesma lista do longo prazo: os "Locais da obra", de cima para baixo, cadastrados em **Configurações da obra** (seção "Locais da obra", aberta a todos que têm a obra, menos Consulta) ou na aba 1, em Linha de Balanço → "Locais da obra". A lista não aceita digitar um local novo; para incluir, renomear ou excluir um local, use as Configurações da obra. Linha sem local mostra a célula vazia; para tirar o local de uma linha, escolha "(sem local)" na lista.
+"Local" (ao lado de "Atividade") diz onde a atividade acontece. É opcional e vem da mesma lista do longo prazo: os "Locais da obra", de cima para baixo, cadastrados em **Configurações da obra** (seção "Locais da obra", aberta a todos que têm a obra, menos Consulta) ou na aba 1.1, em Linha de Balanço → "Locais da obra". A lista não aceita digitar um local novo; para incluir, renomear ou excluir um local, use as Configurações da obra. Linha sem local mostra a célula vazia; para tirar o local de uma linha, escolha "(sem local)" na lista.
 
 - **Para que serve**: filtrar a planilha pelo funil da coluna "Local" e gerar o PDF só de alguns locais (veja a seção dos PDFs).
 - **Obra sem locais**: a lista fica travada e o cabeçalho da coluna explica: "Cadastre os locais em Configurações da obra (Locais da obra)". No celular, o campo "Local" só aparece quando a obra tem locais.
 - **Copiar para as vizinhas**: o quadradinho no canto da célula "Local" é a alça do Sheets: arraste para baixo ou para cima e o local passa para as linhas por onde passou. Linhas que não podem ser editadas (semana encerrada para quem não é administrador, semana anterior nas vizinhas) ficam de fora, com aviso.
 - **O local acompanha a linha**: "Levar ›" cria a linha da semana seguinte com o mesmo local; trocar a "Semana" da linha mantém o local; o "Desfazer" devolve o local anterior (inclusive "sem local") e a exclusão desfeita recria a linha com o local.
-- **Local excluído** (nas Configurações da obra ou na aba 1): as linhas que o usavam ficam sem local. Renomear um local muda o nome em todas as linhas.
+- **Local excluído** (nas Configurações da obra ou na aba 1.1): as linhas que o usavam ficam sem local. Renomear um local muda o nome em todas as linhas.
 - Segue a regra das outras células da linha: semana encerrada, só administradores; Consulta só lê.
 
 ## Início, Término e o calendário
@@ -208,7 +212,7 @@ Enter desce para a mesma coluna da linha de baixo e Shift+Enter sobe (em Status,
 ## Os botões da coluna "Apontamento"
 
 - **"Levar ›"**: cria a mesma linha (empresa, equipe, atividade e período) na semana seguinte, sem apontamento. A origem não muda e, se tinha "Não", ele continua no PPC dela. Aparece na linha com "Não" ou, com "Semanas vizinhas" ligado, em qualquer linha, e só quando a semana seguinte está aberta para você. Se já existe linha igual na semana seguinte, vira "Levar de novo" e avisa que criará outra.
-- **"Restrição"**: transforma o não cumprido numa restrição de um vagão, que aparece no detalhe do vagão (aba 2). Em desenvolvimento: só aparece para desenvolvedores.
+- **"Restrição"**: transforma o não cumprido numa restrição de um vagão, que aparece no detalhe do vagão (no "Planejamento de vagão", que desde 12/11/2026 não tem número no menu e abre pelo botão "Planejamento de vagão" dentro da aba 1.1). Em desenvolvimento: só aparece para desenvolvedores.
 - **"Limpar"**: desfaz um "Sim" ou "Não" marcado por engano. Tira Status, causa e justificativa; a linha continua, sem Status. Pergunta "Limpar o apontamento de “…”?" quando o apontamento já estava gravado; um "Não" ainda aguardando causa é limpo sem perguntar.
 
 ## Apontamento em qualquer semana
@@ -510,6 +514,6 @@ Observações:
 
 **Sou do perfil consulta e não consigo apontar.** O perfil de consulta só lê; peça a um administrador para alterar seu papel em Configurações.
 
-**A aba 4 sumiu (ou o endereço abre o Dashboard da obra).** Desde 08/11/2026 o curto prazo é liberado por pessoa. Sem o módulo "Curto prazo" liberado para você, a aba não aparece e o endereço leva à aba 0. Peça a liberação a um administrador.`,
+**A aba 1.3 (antiga aba 4) sumiu (ou o endereço abre o Dashboard da obra).** Desde 08/11/2026 o curto prazo é liberado por pessoa. Sem o módulo "Curto prazo" liberado para você, a aba não aparece e o endereço leva à aba 0. Peça a liberação a um administrador.`,
   },
 ];

@@ -5,7 +5,7 @@ import type { TourStep } from '../tours';
  * é pulado quando o alvo não está na tela. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 8 · Controle de produtividade',
+    title: 'Aba 2.3 · Controle de produtividade',
     body: 'O que cada equipe produziu em cada dia, no lugar da planilha "ATR - Controle da produção": serviço, empreiteiro, profissionais, ajudantes, produção e unidade.',
   },
   {

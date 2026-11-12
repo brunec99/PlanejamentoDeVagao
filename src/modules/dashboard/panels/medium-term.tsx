@@ -168,18 +168,18 @@ export function MediumTermPanel({
     return (
       <>
         <div className="dsh-panel">
-          <h3>Aba 3 · Tarefas do plano</h3>
+          <h3>Aba 1.2 · Tarefas do plano</h3>
           <p className="dsh-desc">{DESC.status(data)}</p>
           <StatusChart d={data} />
           <p className={`dsh-callout${data.late.count > 0 ? ' alert' : ''}`}>{mediumTermCallout(data)}</p>
         </div>
         <div className="dsh-panel">
-          <h3>Aba 3 · Contra a linha de base</h3>
+          <h3>Aba 1.2 · Contra a linha de base</h3>
           <p className="dsh-desc">{DESC.baseline}</p>
           <BaselineBody d={data} variant={variant} workId={workId} />
         </div>
         <div className="dsh-panel">
-          <h3>Aba 3 · Próximos marcos · 30 dias</h3>
+          <h3>Aba 1.2 · Próximos marcos · 30 dias</h3>
           <p className="dsh-desc">{DESC.milestones(data)}</p>
           <Milestones d={data} />
         </div>

@@ -395,7 +395,7 @@ function LobViewInner({ workId }: { workId: string }) {
   // a aba 2 (a API das pendências é do módulo "vagoes").
   const developer = useDeveloper(),
     modules = useModules();
-  const canPend = hasSectionAccess('vagoes', { developer, modules });
+  const canPend = hasSectionAccess('restricoes', { developer, modules });
   const [pending, setPending] = useState<PendingSource>();
 
   const ready = context.state === 'ready' ? context : undefined;

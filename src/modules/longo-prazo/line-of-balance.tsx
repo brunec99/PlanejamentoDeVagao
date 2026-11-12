@@ -173,8 +173,8 @@ export function LineOfBalance({ workId }: { workId: string }) {
         </p>
         <p>
           Clique numa barra para ver início, término, duração e, com uma linha de base selecionada, o desvio em relação a ela. A linha
-          tracejada âmbar é hoje; a pontilhada cinza, o fim da linha de base selecionada. As pendências da obra ficam na aba 2, visão "Lista
-          de pendência".
+          tracejada âmbar é hoje; a pontilhada cinza, o fim da linha de base selecionada. As pendências da obra ficam na aba 1.4, "Quadro de
+          Restrições".
         </p>
       </HelpNote>
     </div>

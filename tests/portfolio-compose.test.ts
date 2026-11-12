@@ -346,8 +346,8 @@ test('quadros: só os módulos que a pessoa pode abrir; os pedidos restringem; n
   const planning = await load();
   const onlyShort = { developer: false, modules: ['curto-prazo'] };
   const composed = composePortfolio({ planning, works: planning.data.works, sources: sources(), ...onlyShort });
-  // A segurança é aberta a todos; curto prazo liberado; o resto escondido.
-  assert.deepEqual(composed.shown, ['curto-prazo', 'seguranca']);
+  // Curto prazo liberado; o resto escondido, inclusive a segurança (liberada por pessoa desde 12/11/2026).
+  assert.deepEqual(composed.shown, ['curto-prazo']);
   for (const row of composed.rows) {
     for (const hidden of ['longo-prazo', 'vagoes', 'medio-prazo', 'terminalidade'] as const)
       assert.equal(row.status[hidden].kind, 'hidden');
@@ -376,7 +376,7 @@ test('quadros: só os módulos que a pessoa pode abrir; os pedidos restringem; n
     shown: new Set<PortfolioModule>(['vagoes']),
     ...onlyShort,
   });
-  assert.deepEqual(fallback.shown, ['curto-prazo', 'seguranca']);
+  assert.deepEqual(fallback.shown, ['curto-prazo']);
 });
 
 test('fontes remotas: falha vira erro nos três quadros; sem leitura, eles somem; o local continua', async () => {

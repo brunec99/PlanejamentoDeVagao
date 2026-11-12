@@ -1,5 +1,4 @@
 'use client';
-import Link from 'next/link';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { PendingCard, PendingSignal } from '@/domain/pending-board';
 import type { LocalDate } from '@/domain/long-term-plan';
@@ -8,35 +7,10 @@ import { initials, isLinked, originLabel, progressPercent, signalChip } from './
 
 /** Peças pequenas da lista de pendência, usadas no quadro, no card aberto e no formulário de criação. */
 
-/** Endereço da visão "Lista de pendência" da aba 2; com `cardId`, já abre o card (é o link do e-mail). */
+/** Endereço do Quadro de Restrições (aba 1.4 desde 12/11/2026; antes, `vagoes?visao=pendencias`, que ainda
+ * redireciona para cá). Com `cardId`, já abre o card (é o link do e-mail). */
 export const pendingPath = (workId: string, cardId?: string) =>
-  `${workPath(workId, 'vagoes')}?visao=pendencias${cardId ? `&card=${encodeURIComponent(cardId)}` : ''}`;
-
-/** Seletor das duas visões da aba 2 (regra 1). São links: o endereço guarda a visão em `?visao=`. */
-export function PendingViewSwitch({ workId, view }: { workId: string; view: 'vagoes' | 'pendencias' }) {
-  const views = [
-    { id: 'vagoes', label: 'Vagões', href: workPath(workId, 'vagoes') },
-    { id: 'pendencias', label: 'Lista de pendência', href: pendingPath(workId) },
-  ] as const;
-  return (
-    <nav
-      data-tour="vagoes-visoes"
-      aria-label="Visões da aba 2"
-      className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-slate-100/70 p-1"
-    >
-      {views.map(v => (
-        <Link
-          key={v.id}
-          href={v.href}
-          aria-current={view === v.id ? 'page' : undefined}
-          className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === v.id ? 'bg-white text-primary-ink shadow-sm ring-1 ring-primary-ring' : 'text-slate-600 hover:text-slate-900'}`}
-        >
-          {v.label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
+  `${workPath(workId, 'restricoes')}${cardId ? `?card=${encodeURIComponent(cardId)}` : ''}`;
 
 const CHIP = 'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4 ring-1 ring-inset';
 export const SIGNAL_TONE: Record<PendingSignal, string> = {

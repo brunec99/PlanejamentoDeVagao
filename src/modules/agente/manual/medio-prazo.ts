@@ -1,17 +1,19 @@
 import type { ManualSection } from './types';
 
-/** Manual da aba 3, Cronograma de médio prazo (29/10/2026): o cronograma do mês no padrão do MS Project,
+/** Manual da aba 1.2, Cronograma de médio prazo (29/10/2026): o cronograma do mês no padrão do MS Project,
  * as seções de apoio à reunião, as regras do agendamento e as visões de recursos. Escrito a partir do
  * código da tela e do tour; quando os dois divergem, vale o código. */
 export const sections: ManualSection[] = [
   {
     id: 'medio-prazo-visao-geral',
-    title: 'Aba 3: para que serve e como está organizada',
-    summary: 'O que é o cronograma de médio prazo, quem vê e edita, as sete seções da aba e os modos de exibição.',
+    title: 'Aba 1.2 (médio prazo): para que serve e como está organizada',
+    summary: 'O que é o cronograma de médio prazo (aba 1.2, antiga aba 3), quem vê e edita, as sete seções da aba e os modos de exibição.',
     keywords: [
       'médio prazo',
       'medio prazo',
       'aba 3',
+      'aba 1.2',
+      '1.2',
       'cronograma do mês',
       'plano do mês',
       'project',
@@ -28,9 +30,9 @@ export const sections: ManualSection[] = [
     screen: 'medio-prazo',
     body: `## Para que serve
 
-A aba 3, "Cronograma de médio prazo" (endereço /obras/<obra>/medio-prazo), é o cronograma do mês da obra no padrão do MS Project: tabela à esquerda, Gantt à direita e datas calculadas pela rede de predecessoras. Há **um cronograma por mês**, cada um com **horizonte de três meses** (do dia 1 do mês ao último dia do segundo mês seguinte). O primeiro nasce em branco; cada mês seguinte nasce como cópia do anterior, que fica guardado como estava. Em volta dele ficam seções de apoio à reunião de médio prazo.
+A aba 1.2, "Cronograma de médio prazo" (aba 3 até 12/11/2026; grupo "1 · Prazo" do menu; endereço /obras/<obra>/medio-prazo), é o cronograma do mês da obra no padrão do MS Project: tabela à esquerda, Gantt à direita e datas calculadas pela rede de predecessoras. Há **um cronograma por mês**, cada um com **horizonte de três meses** (do dia 1 do mês ao último dia do segundo mês seguinte). O primeiro nasce em branco; cada mês seguinte nasce como cópia do anterior, que fica guardado como estava. Em volta dele ficam seções de apoio à reunião de médio prazo.
 
-O "Gantt de legalização" (os 12 meses até a entrega da obra) usa este mesmo cronograma, com tabela, Gantt, cálculo, linha de base e exportação, mas fica na aba 1 (longo prazo): não aparece na lista de cronogramas do mês nem nas seções desta aba.
+O "Gantt de legalização" (os 12 meses até a entrega da obra) usa este mesmo cronograma, com tabela, Gantt, cálculo, linha de base e exportação, mas fica na aba 1.1 (longo prazo): não aparece na lista de cronogramas do mês nem nas seções desta aba.
 
 ## Quem vê e quem edita
 
@@ -43,7 +45,7 @@ O "Gantt de legalização" (os 12 meses até a entrega da obra) usa este mesmo c
 A barra de seções fica no cabeçalho da aba. A seção vai no endereço da página: um link compartilhado abre a mesma seção para quem o recebe.
 
 - **"Cronograma"**: o plano do mês (grade, Gantt, visões de recursos, Linha do Tempo). Abre por padrão.
-- **"Próximos 90 dias"**: as atividades dos vagões (aba 2) que tocam a janela móvel de hoje a 90 dias, em ordem de início, com vagão, local, período previsto, equipe e percentual. Cartões "Atividades na janela", "Atividades sem equipe", "Equipes em sobrecarga" e "Progresso ponderado da janela". A caixa "Somente sem equipe" deixa só o que a reunião precisa resolver.
+- **"Próximos 90 dias"**: as atividades dos vagões (Planejamento de vagão) que tocam a janela móvel de hoje a 90 dias, em ordem de início, com vagão, local, período previsto, equipe e percentual. Cartões "Atividades na janela", "Atividades sem equipe", "Equipes em sobrecarga" e "Progresso ponderado da janela". A caixa "Somente sem equipe" deixa só o que a reunião precisa resolver.
 - **"Equipes"**: "Carga das equipes na janela". Por equipe, quantas atividades dos vagões e linhas do plano do mês caem nos 90 dias contra a capacidade semanal; "Situação" diz "Dentro da capacidade" ou "Sobrecarga · N além da capacidade". "Gerenciar equipes" leva às Configurações da obra.
 - **"Cobertura"**: duas conferências. "Da janela para o mês" lista frentes da janela que caem no mês e não têm linha no plano; "Do mês para a semana" lista linhas do plano que não aparecem na planilha de nenhuma semana do período delas. "Plano conferido" escolhe o plano. O pareamento é **pelo nome** (sem acento, caixa nem espaço repetido): é sugestão, nada bloqueia nem cria linha sozinho, e erra quando o nome muda de um nível para outro. Resumos ficam de fora.
 - **"Histórico"**: os 20 lançamentos de percentual executado mais recentes das atividades da obra. O histórico completo fica no detalhe do vagão.
@@ -247,9 +249,9 @@ O botão de lixeira ("Excluir tarefa e subitens") pergunta "Excluir X e N subite
 
 ## Criar pendência a partir de uma tarefa
 
-"Criar pendência", na barra de ferramentas (ao lado de "Informações") e no rodapé de "Informações da tarefa", cria um card na "Lista de pendência" da aba 2 ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a **entrega é o dia útil anterior ao início da tarefa** e acompanha a reprogramação (mudou a data da tarefa, muda a entrega do card). Funciona com a grade bloqueada e não altera o cronograma.
+"Criar pendência", na barra de ferramentas (ao lado de "Informações") e no rodapé de "Informações da tarefa", cria um card no "Quadro de Restrições" (aba 1.4) ligado à tarefa selecionada. Você informa só o título, o tempo de execução em dias úteis e o responsável: a **entrega é o dia útil anterior ao início da tarefa** e acompanha a reprogramação (mudou a data da tarefa, muda a entrega do card). Funciona com a grade bloqueada e não altera o cronograma.
 
-O botão fica desabilitado, com o motivo ao passar o mouse, em tarefa-resumo, em linha de base e em tarefa nova ou com alteração ainda não salva ("Salve o cronograma antes de criar a pendência": use "Revisar e salvar" primeiro). No diálogo, com algo digitado e ainda não aplicado, ele também espera o "OK". Só aparece para quem tem a aba 2 liberada, e não existe no Gantt de legalização da aba 1.
+O botão fica desabilitado, com o motivo ao passar o mouse, em tarefa-resumo, em linha de base e em tarefa nova ou com alteração ainda não salva ("Salve o cronograma antes de criar a pendência": use "Revisar e salvar" primeiro). No diálogo, com algo digitado e ainda não aplicado, ele também espera o "OK". Só aparece para quem tem o Quadro de Restrições (aba 1.4) liberado, e não existe no Gantt de legalização da aba 1.
 
 ## Editar pelas barras e pelo Planejador
 

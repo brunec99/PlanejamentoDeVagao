@@ -607,7 +607,7 @@ test('e-mail de menção: assunto, chave, payload do contrato e texto cortado em
     entrega: '2026-11-20',
     status: 'Fazendo',
     responsavelNome: 'Bia Souza',
-    link: 'https://obra360.exemplo/obras/obra%201%2F%C3%A1/vagoes?visao=pendencias&card=c-1',
+    link: 'https://obra360.exemplo/obras/obra%201%2F%C3%A1/restricoes?card=c-1',
   });
   // O pior caso (título, nomes e texto no limite, com acentos) fica bem abaixo dos 4096 bytes.
   const worst = pendingEmail(

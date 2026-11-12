@@ -107,7 +107,7 @@ function Screen({ data, workId }: { data: ShortTermPanelData; workId: string }) 
             </>
           )}
           <p className="dsh-legend">
-            <a href={`${workPath(workId, 'curto-prazo')}?secao=fechamento`}>Abrir o fechamento da aba 4</a>
+            <a href={`${workPath(workId, 'curto-prazo')}?secao=fechamento`}>Abrir o fechamento da aba 1.3</a>
           </p>
         </div>
       </div>
@@ -513,7 +513,7 @@ function Paper({ data }: { data: ShortTermPanelData }) {
       <div className="dsh-panel">
         {weekly ? (
           <>
-            <h3>Aba 4 · PPC da semana e das anteriores</h3>
+            <h3>Aba 1.3 · PPC da semana e das anteriores</h3>
             <p className="dsh-desc">
               As {SERIES_WEEKS} semanas até a semana {n}. Cada barra é uma semana; a faixa âmbar é a semana analisada; o tracejado, a média
               das apuradas.
@@ -526,7 +526,7 @@ function Paper({ data }: { data: ShortTermPanelData }) {
           </>
         ) : (
           <>
-            <h3>Aba 4 · {periodTitle(data)}</h3>
+            <h3>Aba 1.3 · {periodTitle(data)}</h3>
             <p className="dsh-desc">
               <strong>{periodNumbersLine(data)}.</strong> {periodDescription(data)}
             </p>
@@ -536,7 +536,7 @@ function Paper({ data }: { data: ShortTermPanelData }) {
         <RankingNote d={d} />
       </div>
       <div className="dsh-panel">
-        <h3>Aba 4 · Principais causas na obra · Pareto</h3>
+        <h3>Aba 1.3 · Principais causas na obra · Pareto</h3>
         <p className="dsh-desc">
           Só as linhas com Status Não e causa apontada, do início da obra até a semana {n}
           {data.companyFiltered ? ', no recorte de empreiteiro' : ''}.
@@ -546,7 +546,7 @@ function Paper({ data }: { data: ShortTermPanelData }) {
       <div className="dsh-panel" style={{ gridColumn: '1 / -1' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2.3fr 1fr', gap: 14, minHeight: 0 }}>
           <div style={{ minWidth: 0 }}>
-            <h3>Aba 4 · Histórico desde a semana 1 · PPC por mês</h3>
+            <h3>Aba 1.3 · Histórico desde a semana 1 · PPC por mês</h3>
             <p className="dsh-desc">
               As semanas importadas da planilha PCP e as seguintes do sistema. Cada barra é o PPC do mês; o tracejado é o PPC geral.
             </p>

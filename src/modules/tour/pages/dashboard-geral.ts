@@ -49,7 +49,7 @@ export const steps: TourStep[] = [
   {
     target: 'geral-quadros',
     title: 'Quadros',
-    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir: a segurança do trabalho é aberta a todos; os demais, inclusive curto prazo e terminalidade, dependem da liberação do admin.',
+    body: 'Escolhe quais módulos entram na tela e no PDF: as colunas da tabela, os cartões e os quadros de cada módulo seguem a escolha. Só aparecem os módulos que você pode abrir: todos, inclusive curto prazo, terminalidade e segurança do trabalho, dependem da liberação do admin.',
   },
   {
     target: 'geral-escopo',
@@ -94,7 +94,7 @@ export const steps: TourStep[] = [
   {
     target: 'geral-seguranca',
     title: 'Segurança do trabalho',
-    body: 'A vistoria dos TSTs (aba 6) comparando as obras: apontamentos feitos × finalizados no período, o risco dos feitos pela consequência (graves = Morte + Severa) e os tipos com mais apontamentos, somando as obras. Feitos contam pela data do apontamento e finalizados pela data de correção; em aberto e abertos há mais de 7 dias são o retrato do sábado final. A vistoria não registra empresa, então o filtro de empreiteiro não recorta este quadro.',
+    body: 'A vistoria dos TSTs (aba 3.1) comparando as obras: apontamentos feitos × finalizados no período, o risco dos feitos pela consequência (graves = Morte + Severa) e os tipos com mais apontamentos, somando as obras. Feitos contam pela data do apontamento e finalizados pela data de correção; em aberto e abertos há mais de 7 dias são o retrato do sábado final. A vistoria não registra empresa, então o filtro de empreiteiro não recorta este quadro.',
   },
   {
     target: 'geral-pdf',

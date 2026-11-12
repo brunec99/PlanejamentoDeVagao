@@ -1,5 +1,7 @@
 # Checklist de equipamentos (aba 9)
 
+> **12/11/2026:** a aba 9 passou a ser a **3.2** e a tela logada deixou de ser aberta a todos: é liberada por pessoa (módulo `checklist`). O QR do operador não muda. O código do operador pelo QR foi publicado em `df1e428`. Ver [Menu numerado e liberações](menu-e-liberacoes-2026-11-12.md).
+
 Entregue em 11/11/2026, a pedido do usuário ("vamos desenvolver um módulo de checklist diário, semanal e
 mensal de equipamentos"; "checklist permita que o tst edite"). Fica no grupo **SST** do menu, abaixo da
 vistoria de segurança.
@@ -16,7 +18,7 @@ os TSTs criam os modelos na própria tela.
 
 **Pedido:** a equipe de SST levantou quatro pontos e o usuário respondeu a cada um: (1) o preenchimento é do funcionário que opera o equipamento — decidido: **tela sem login**, aberta por QR; (2) assinatura — **sim**, desenhada na tela; (3) cadastro só com a responsável de SST — **só administradores** (ela passa a admin); (4) foto — o campo **já entra**, opcional. O modelo das telas e as sete regras abaixo foram publicados antes do código e aprovados sem mudança.
 
-**Situação:** código, testes e migração `0048_checklist_operator.sql` prontos e validados localmente. **A 0048 foi aplicada no `takt-hub` em 12/11/2026**, a pedido do usuário, numa transação (pelo pooler), com o estado lido antes e depois: colunas novas em `checklist_equipment` e `checklist_runs`, as duas restrições, o índice único do link, o bucket privado `checklist` (2 MB, JPEG e PNG), `service_role` gravando, `anon` sem acesso (401) e a API REST lendo as colunas novas. As três tabelas estavam vazias. **O código ainda não foi publicado** (sem commit): em produção a aba 9 segue como estava até o push. A pessoa de SST ainda precisa ser marcada como admin em Configurações → Usuários.
+**Situação:** código, testes e migração `0048_checklist_operator.sql` prontos e validados localmente. **A 0048 foi aplicada no `takt-hub` em 12/11/2026**, a pedido do usuário, numa transação (pelo pooler), com o estado lido antes e depois: colunas novas em `checklist_equipment` e `checklist_runs`, as duas restrições, o índice único do link, o bucket privado `checklist` (2 MB, JPEG e PNG), `service_role` gravando, `anon` sem acesso (401) e a API REST lendo as colunas novas. As três tabelas estavam vazias. **Código publicado em 12/11/2026** (`df1e428`, CI e Imagem verdes). A pessoa de SST ainda precisa ser marcada como admin em Configurações → Usuários.
 
 ### Regras aprovadas
 

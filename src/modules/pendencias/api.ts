@@ -92,7 +92,7 @@ export function usePending(workId: string) {
     try {
       apply(await fetchPending(workId));
     } catch (error) {
-      commit({ status: 'error', message: errorText(error, 'Falha ao carregar a lista de pendência.') });
+      commit({ status: 'error', message: errorText(error, 'Falha ao carregar o Quadro de Restrições.') });
     }
   }, [apply, commit, workId]);
   /** Relê sem mexer na tela se falhar, e sem atropelar um comando que respondeu no meio do caminho. */
@@ -109,7 +109,7 @@ export function usePending(workId: string) {
     let active = true;
     fetchPending(workId)
       .then(response => active && apply(response))
-      .catch(error => active && commit({ status: 'error', message: errorText(error, 'Falha ao carregar a lista de pendência.') }));
+      .catch(error => active && commit({ status: 'error', message: errorText(error, 'Falha ao carregar o Quadro de Restrições.') }));
     return () => {
       active = false;
     };

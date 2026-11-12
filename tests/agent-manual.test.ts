@@ -74,7 +74,8 @@ test('toda tela do sistema tem ao menos uma seção do manual, e o índice lista
   for (const label of Object.values(SCREEN_LABEL)) assert.ok(index.includes(label), `rótulo fora do índice: ${label}`);
   // O índice vai no prompt do sistema a cada pergunta (em cache): tem de continuar pequeno. O teto subiu de
   // 14000 para 14500 em 11/11/2026, com as abas 7 (Histograma) e 8 (Produtividade).
-  assert.ok(index.length <= 14500, `índice grande demais: ${index.length} caracteres`);
+  // 14500 para 15000 em 12/11/2026: a tela do Quadro de Restrições (1.4) e o número antigo de cada aba nos resumos.
+  assert.ok(index.length <= 15000, `índice grande demais: ${index.length} caracteres`);
 });
 
 test('busca pelo id exato e pelo id dentro da frase devolve só aquela seção', () => {
@@ -158,8 +159,9 @@ test('o manual do curto prazo lista todas as causas de não cumprimento, e o da 
 });
 
 test('screenBlock descreve a tela conhecida e ignora a desconhecida', () => {
-  assert.ok(screenBlock('curto-prazo')?.text.includes('Aba 4 · Cronograma de curto prazo'));
-  assert.ok(screenBlock('vagoes')?.text.includes('Aba 2'));
+  assert.ok(screenBlock('curto-prazo')?.text.includes('Aba 1.3 · Cronograma de curto prazo'));
+  assert.ok(screenBlock('vagoes')?.text.includes('Planejamento de vagão'));
+  assert.ok(screenBlock('restricoes')?.text.includes('Aba 1.4 · Quadro de Restrições'));
   assert.equal(screenBlock('nao-existe'), undefined);
   assert.equal(screenBlock(undefined), undefined);
   assert.equal(isManualScreen('ifc'), true);

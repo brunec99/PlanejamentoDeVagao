@@ -33,7 +33,7 @@ import {
 } from '../../modules/seguranca/safety-view';
 import type { AgentToolSpec } from './agent-tools';
 
-/** Relatórios de terminalidade (aba 5) e de segurança do trabalho (aba 6) para a Claudia geral (08/11/2026).
+/** Relatórios de terminalidade (aba 2.1) e de segurança do trabalho (aba 6) para a Claudia geral (08/11/2026).
  * Só leitura: texto compacto, em linhas separadas por "|", com resumo, contagem por grupo e as linhas da lista,
  * limitado a ~12.000 caracteres. A despachante (`agent-global-tools.ts`) resolve a obra pedida — uma obra, ou
  * "todas" = uma entrada por obra — e passa o `input` sem `obra`; os specs declaram `obra` porque é o que o
@@ -86,7 +86,7 @@ const DAY_INPUT = (what: string) => ({ type: 'string', description: `${what} (YY
 export const TERMINALITY_TOOL_SPEC: AgentToolSpec = {
   name: 'consultar_terminalidade',
   description:
-    'Consulta a lista de pendências da terminalidade (aba 5) de uma obra ou de todas: resumo (abertas, resolvidas, % resolvida, média de dias para resolver, abertas há mais de 7 e de 30 dias, a mais antiga, últimos 7 dias, quantas fotos), contagem por grupo e as pendências uma por linha (local, apto, descrição, tipo, empreiteiro, responsável ATR, data de observação, dias e situação), as abertas mais antigas primeiro. Só leitura; as fotos aparecem só como contagem. Filtros de texto ignoram acento e caixa e aceitam parte do nome; "vazio" pede o campo em branco.',
+    'Consulta a lista de pendências da terminalidade (aba 2.1) de uma obra ou de todas: resumo (abertas, resolvidas, % resolvida, média de dias para resolver, abertas há mais de 7 e de 30 dias, a mais antiga, últimos 7 dias, quantas fotos), contagem por grupo e as pendências uma por linha (local, apto, descrição, tipo, empreiteiro, responsável ATR, data de observação, dias e situação), as abertas mais antigas primeiro. Só leitura; as fotos aparecem só como contagem. Filtros de texto ignoram acento e caixa e aceitam parte do nome; "vazio" pede o campo em branco.',
   input_schema: {
     type: 'object',
     properties: {
@@ -123,7 +123,7 @@ export const TERMINALITY_TOOL_SPEC: AgentToolSpec = {
 export const SAFETY_TOOL_SPEC: AgentToolSpec = {
   name: 'consultar_seguranca',
   description:
-    'Consulta os apontamentos da segurança do trabalho (aba 6, vistoria dos TSTs) de uma obra ou de todas: resumo (abertos, finalizados, % finalizado, média de dias para resolver, abertos há mais de 7 e de 30 dias, o mais antigo, últimos 7 dias, abertos por consequência, quantas fotos), contagem por grupo e os apontamentos um por linha (tipo, risco, local, descrição, data, dias, situação e quem lançou), os abertos mais antigos primeiro. Só leitura; as fotos aparecem só como contagem. Filtros de texto ignoram acento e caixa e aceitam parte do nome; "vazio" pede o campo em branco.',
+    'Consulta os apontamentos da segurança do trabalho (aba 3.1, vistoria dos TSTs) de uma obra ou de todas: resumo (abertos, finalizados, % finalizado, média de dias para resolver, abertos há mais de 7 e de 30 dias, o mais antigo, últimos 7 dias, abertos por consequência, quantas fotos), contagem por grupo e os apontamentos um por linha (tipo, risco, local, descrição, data, dias, situação e quem lançou), os abertos mais antigos primeiro. Só leitura; as fotos aparecem só como contagem. Filtros de texto ignoram acento e caixa e aceitam parte do nome; "vazio" pede o campo em branco.',
   input_schema: {
     type: 'object',
     properties: {
@@ -740,7 +740,7 @@ const NO_ATR_LABEL = 'Sem responsável ATR';
 
 const TERMINALITY: ModuleDef = {
   lex: {
-    title: 'Terminalidade (aba 5)',
+    title: 'Terminalidade (aba 2.1)',
     one: 'pendência',
     many: 'pendências',
     Many: 'Pendências',
@@ -882,7 +882,7 @@ type SafetyNames = { inspectors?: SafetyInspector[]; users?: { id: string; name:
 
 const SAFETY: ModuleDef = {
   lex: {
-    title: 'Segurança do trabalho (aba 6)',
+    title: 'Segurança do trabalho (aba 3.1)',
     one: 'apontamento',
     many: 'apontamentos',
     Many: 'Apontamentos',

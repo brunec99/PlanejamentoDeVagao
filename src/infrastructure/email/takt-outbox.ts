@@ -32,9 +32,9 @@ export interface PendingEmail {
   payload: PendingEmailPayload;
 }
 
-/** Endereço do card na aba 2. `origin` é o endereço público do sistema (`publicOrigin`, em `../public-origin`). */
+/** Endereço do card no Quadro de Restrições (aba 1.4). Os e-mails antigos trazem `vagoes?visao=pendencias&card=`, que redireciona. `origin` é o endereço público do sistema (`publicOrigin`, em `../public-origin`). */
 export const pendingCardLink = (origin: string, workId: string, cardId: string) =>
-  `${origin}/obras/${encodeURIComponent(workId)}/vagoes?visao=pendencias&card=${cardId}`;
+  `${origin}/obras/${encodeURIComponent(workId)}/restricoes?card=${cardId}`;
 
 const subjectLine = (text: string) =>
   text

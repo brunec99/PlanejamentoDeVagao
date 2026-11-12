@@ -115,11 +115,11 @@ test('specs: nomes fixos, obra declarada com a descrição combinada e sem campo
   for (const key of ['tipo', 'local', 'consequencia', 'probabilidade', 'tst']) assert.ok(s.properties[key], key);
 });
 
-test('terminalidade, padrão: abertas, agrupadas por pavimento, a mais antiga primeiro, e o resumo bate com a aba 5', () => {
+test('terminalidade, padrão: abertas, agrupadas por pavimento, a mais antiga primeiro, e o resumo bate com a aba 2.1', () => {
   const data = terminality();
   const report = terminalityReport(one(data), {}, TODAY);
   const summary = summarizeTerminality(data.items, indexTerminality(data));
-  assert.match(report, /^Terminalidade \(aba 5\) · Mozine · hoje 08\/11\/2026/);
+  assert.match(report, /^Terminalidade \(aba 2\.1\) · Mozine · hoje 08\/11\/2026/);
   assert.match(report, /Filtros: situação abertas · agrupado por pavimento/);
   assert.ok(
     report.includes(
@@ -259,7 +259,7 @@ test('terminalidade com várias obras: comparativo, grupos com a divisão por ob
     { workId: 'obra-tau', workName: 'Tauá', data: empty },
   ];
   const report = terminalityReport(entries, { agrupar_por: 'empreiteiro' }, TODAY);
-  assert.match(report, /^Terminalidade \(aba 5\) · 3 obras · hoje 08\/11\/2026/);
+  assert.match(report, /^Terminalidade \(aba 2\.1\) · 3 obras · hoje 08\/11\/2026/);
   assert.match(report, /Resumo das 3 obras \(abertas e resolvidas\): 7 pendências · 5 abertas · 2 resolvidas · 29% resolvida/);
   assert.match(report, /Mais antiga aberta: Atmos \| 4° pavto · 402 · Pendência z — desde 01\/08\/2026, há 99 dias/);
   assert.match(
@@ -364,11 +364,11 @@ const withNames = (data: SafetyData) => Object.assign(data, { inspectors: [{ id:
 const sOne = (data: SafetyData = withNames(safety())): ModuleReportEntry<SafetyData>[] => [{ workId: W, workName: 'Mozine', data }];
 const sDetail = (report: string) => report.split('\n').filter(line => / \| \d{2}\/\d{2}\/\d{4} \| \d+ \| /.test(line));
 
-test('segurança, padrão: abertos agrupados por tipo, o mais antigo primeiro, e o resumo bate com a aba 6', () => {
+test('segurança, padrão: abertos agrupados por tipo, o mais antigo primeiro, e o resumo bate com a aba 3.1', () => {
   const data = withNames(safety());
   const report = safetyReport(sOne(data), {}, TODAY);
   const summary = summarizeSafety(data.items, TODAY);
-  assert.match(report, /^Segurança do trabalho \(aba 6\) · Mozine · hoje 08\/11\/2026/);
+  assert.match(report, /^Segurança do trabalho \(aba 3\.1\) · Mozine · hoje 08\/11\/2026/);
   assert.ok(
     report.includes(
       `Resumo (abertos e finalizados): ${summary.total} apontamentos · ${summary.open} abertos · ${summary.resolved} finalizados · 50% finalizado`,

@@ -21,19 +21,20 @@ export type PortfolioModule = DashboardModule | 'seguranca';
 export interface DashboardModuleInfo<M extends PortfolioModule = DashboardModule> {
   id: M;
   /** O número da aba de origem, que o cartão e o quadro mostram ("aba 4"). */
-  number: number;
+  /** O código da tela no menu ("1.3"), desde 12/11/2026; os vagões abrem pelo longo prazo e levam o dele. */
+  number: string;
   label: string;
 }
 export const DASHBOARD_MODULES: readonly DashboardModuleInfo[] = [
-  { id: 'longo-prazo', number: 1, label: 'Longo prazo' },
-  { id: 'vagoes', number: 2, label: 'Vagões' },
-  { id: 'medio-prazo', number: 3, label: 'Médio prazo' },
-  { id: 'curto-prazo', number: 4, label: 'Curto prazo' },
-  { id: 'terminalidade', number: 5, label: 'Terminalidade' },
+  { id: 'longo-prazo', number: '1.1', label: 'Longo prazo' },
+  { id: 'vagoes', number: '1.1', label: 'Vagões' },
+  { id: 'medio-prazo', number: '1.2', label: 'Médio prazo' },
+  { id: 'curto-prazo', number: '1.3', label: 'Curto prazo' },
+  { id: 'terminalidade', number: '2.1', label: 'Terminalidade' },
 ];
 export const PORTFOLIO_MODULES: readonly DashboardModuleInfo<PortfolioModule>[] = [
   ...DASHBOARD_MODULES,
-  { id: 'seguranca', number: 6, label: 'Segurança do trabalho' },
+  { id: 'seguranca', number: '3.1', label: 'Segurança do trabalho' },
 ];
 export const isDashboardModule = (value: unknown): value is DashboardModule =>
   typeof value === 'string' && DASHBOARD_MODULES.some(m => m.id === value);

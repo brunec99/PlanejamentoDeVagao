@@ -14,7 +14,7 @@ const responseError = (error: string, status: number) => NextResponse.json({ err
 export async function GET(request: NextRequest) {
   const workId = request.nextUrl.searchParams.get('workId') ?? '';
   if (!workId) return responseError('Obra não informada.', 400);
-  const gate = await requireModuleAccess('vagoes');
+  const gate = await requireModuleAccess('restricoes');
   if (gate.error) return gate.error;
   const { profile } = gate.access;
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);
@@ -30,6 +30,6 @@ export async function GET(request: NextRequest) {
         { headers },
       );
     logRouteError('GET /api/pendencias', error, { actorId: profile.id, workId });
-    return responseError('Não foi possível carregar a lista de pendência da obra.', 502);
+    return responseError('Não foi possível carregar o Quadro de Restrições da obra.', 502);
   }
 }

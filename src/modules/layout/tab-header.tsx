@@ -26,7 +26,7 @@ export function TabHeader({
 }) {
   const context = usePlanning();
   const tab = WORK_TABS.find(t => t.section === section)!;
-  // O número é o da aba (o dashboard é o zero), não a posição na lista.
+  // O código da tela no menu ("1.3"; o dashboard é o zero). O planejamento de vagão leva o do longo prazo.
   const number = tab.number;
   const work = context.state === 'ready' ? context.planning.data.works.find(w => w.id === workId) : undefined;
   return (
@@ -35,7 +35,7 @@ export function TabHeader({
         {/* O número da aba, no mesmo chip da lateral: liga o título ao item aceso do menu. */}
         <span
           aria-hidden
-          className="mt-1 hidden h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-xl font-bold text-white shadow-md shadow-brand-900/20 ring-1 ring-brand-900/10 sm:grid"
+          className="mt-1 hidden h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-lg font-bold tabular-nums text-white shadow-md shadow-brand-900/20 ring-1 ring-brand-900/10 sm:grid"
         >
           {number}
         </span>

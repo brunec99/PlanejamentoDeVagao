@@ -7,7 +7,7 @@ import type { TourStep } from '../tours';
  * só quem não é TST vê, são pulados quando o alvo não está na tela. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 6 · Segurança do trabalho',
+    title: 'Aba 3.1 · Segurança do trabalho',
     body: 'A vistoria dos técnicos de segurança (TST) na obra, com as colunas da planilha "SST - Controle geral": tipo de apontamento, risco (consequência e probabilidade), local, foto do apontamento e foto da correção. Cada apontamento só se finaliza com a foto do local corrigido e a data da correção.',
   },
   {

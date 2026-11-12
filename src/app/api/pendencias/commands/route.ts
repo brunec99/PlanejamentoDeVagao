@@ -61,7 +61,7 @@ async function sendNotifications(
  * admins. Aplica as regras (`planPendingCommand`) sobre os dados atuais, grava, enfileira os e-mails e
  * devolve a obra já atualizada, no mesmo formato do GET. */
 export async function POST(request: NextRequest) {
-  const gate = await requireModuleAccess('vagoes');
+  const gate = await requireModuleAccess('restricoes');
   if (gate.error) return gate.error;
   const { profile } = gate.access;
   if (!profile) return responseError('Perfil não provisionado. Contate o gestor.', 403);

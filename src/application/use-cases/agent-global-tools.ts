@@ -292,7 +292,7 @@ const RESUMO_SPEC: AgentToolSpec = {
 const VAGOES_SPEC: AgentToolSpec = {
   name: 'consultar_vagoes',
   description:
-    'Vagões da obra (aba 2) por sequência: número, status (terminal, em produção, com restrição, não iniciado), datas previstas, início real, avanço ponderado e takt vencido; mais as restrições abertas (limite, o que bloqueiam, coluna do quadro, responsável), as pendências abertas, as dívidas de terminalidade e as liberações recentes. Filtro: em_producao (em produção, inclusive os com restrição que já começaram), atrasados (takt vencido) ou todos (padrão). Restrições e pendências listadas são as dos vagões do filtro.',
+    'Vagões da obra (Planejamento de vagão, que abre por um botão dentro da aba 1.1) por sequência: número, status (terminal, em produção, com restrição, não iniciado), datas previstas, início real, avanço ponderado e takt vencido; mais as restrições abertas (limite, o que bloqueiam, coluna do quadro, responsável), as pendências abertas, as dívidas de terminalidade e as liberações recentes. Filtro: em_producao (em produção, inclusive os com restrição que já começaram), atrasados (takt vencido) ou todos (padrão). Restrições e pendências listadas são as dos vagões do filtro.',
   input_schema: {
     type: 'object',
     properties: { obra: OBRA_INPUT, filtro: { type: 'string', enum: [...VAGOES_FILTERS] } },
@@ -303,7 +303,7 @@ const VAGOES_SPEC: AgentToolSpec = {
 const LOB_SPEC: AgentToolSpec = {
   name: 'consultar_lob',
   description:
-    'Linha de Balanço da obra (aba 1, visão padrão "Linha de Balanço": blocos por serviço × local, medidos em rodadas): avanço físico medido × previsto para hoje da obra e de cada serviço, o IDP (índice de desempenho de prazo = % físico real ÷ % físico planejado na última medição fechada, contra a linha de base manual mais recente ou o cronograma atual; 1,00 ou mais em dia, 0,90 a 0,99 atenção, abaixo de 0,90 atrasado) da obra e de cada serviço, blocos atrasados com o atraso em dias úteis e o motivo informado na medição, e a última medição fechada. Avanço, previsto e IDP vêm no mesmo peso, dito no texto: por custo quando todos os pacotes de serviço com blocos têm custo apropriado, senão pela duração (valores em reais não saem desta ferramenta). Para o plano do Planejador (serviço por pavimentos), use listar_servicos_macro.',
+    'Linha de Balanço da obra (aba 1.1, visão padrão "Linha de Balanço": blocos por serviço × local, medidos em rodadas): avanço físico medido × previsto para hoje da obra e de cada serviço, o IDP (índice de desempenho de prazo = % físico real ÷ % físico planejado na última medição fechada, contra a linha de base manual mais recente ou o cronograma atual; 1,00 ou mais em dia, 0,90 a 0,99 atenção, abaixo de 0,90 atrasado) da obra e de cada serviço, blocos atrasados com o atraso em dias úteis e o motivo informado na medição, e a última medição fechada. Avanço, previsto e IDP vêm no mesmo peso, dito no texto: por custo quando todos os pacotes de serviço com blocos têm custo apropriado, senão pela duração (valores em reais não saem desta ferramenta). Para o plano do Planejador (serviço por pavimentos), use listar_servicos_macro.',
   input_schema: { type: 'object', properties: { obra: OBRA_INPUT }, additionalProperties: false },
 };
 

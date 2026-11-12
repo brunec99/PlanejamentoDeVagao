@@ -22,7 +22,7 @@ import { PendingCardDialog } from './card-dialog';
 import { CreatePendingDialog } from './create-pending-dialog';
 import { PendingCardFace } from './pending-card';
 import { ReasonDialog } from './reason-dialog';
-import { Chip, PendingViewSwitch, SIGNAL_TONE, pendingPath } from './parts';
+import { Chip, SIGNAL_TONE, pendingPath } from './parts';
 import {
   NO_FILTERS,
   applyMove,
@@ -70,9 +70,9 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
   const header = (
     <TabHeader
       workId={workId}
-      section="vagoes"
+      section="restricoes"
       description="As pendências que precisam estar resolvidas antes de cada frente começar, com prazo, responsável, conversa e checklist."
-      helpTitle="Como funciona: lista de pendência"
+      helpTitle="Como funciona: quadro de restrições"
       help={
         <>
           <p>
@@ -93,14 +93,12 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
       }
     />
   );
-  const switcher = <PendingViewSwitch workId={workId} view="pendencias" />;
 
   if (state.status === 'loading')
     return (
       <>
         {header}
-        {switcher}
-        <div role="status" aria-label="Carregando a lista de pendência" className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div role="status" aria-label="Carregando o Quadro de Restrições" className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {PENDING_STATUSES.map(status => (
             <div key={status} className="skeleton h-40" />
           ))}
@@ -111,10 +109,9 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
     return (
       <>
         {header}
-        {switcher}
         <div className="panel mt-4 space-y-4 p-6">
           <Callout tone="danger" role="alert">
-            Não foi possível carregar a lista de pendência. {state.message}
+            Não foi possível carregar o Quadro de Restrições. {state.message}
           </Callout>
           <button
             type="button"
@@ -135,10 +132,9 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
     return (
       <>
         {header}
-        {switcher}
         <div className="mt-4">
           <Callout tone="warning" role="status">
-            A lista de pendência fica indisponível até a migração 0043 ser aplicada no banco.
+            O Quadro de Restrições fica indisponível até a migração 0043 ser aplicada no banco.
           </Callout>
         </div>
       </>
@@ -225,7 +221,6 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
     <>
       {header}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {switcher}
         <div className="flex flex-wrap items-center gap-2">
           <div data-tour="pendencias-filtros" className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -297,7 +292,7 @@ export function PendingBoard({ workId, initialCardId }: { workId: string; initia
       <div
         data-tour="pendencias-quadro"
         role="region"
-        aria-label="Quadro da lista de pendência"
+        aria-label="Quadro de Restrições"
         tabIndex={0}
         className="custom-scrollbar mt-4 max-w-full overflow-x-auto pb-2"
       >

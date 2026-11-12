@@ -67,7 +67,7 @@ const HELP = (
       prazo, pendências e apontamentos de segurança em aberto e o avanço acumulado são o retrato no sábado final.
     </p>
     <p>
-      <strong>Segurança do trabalho (aba 6).</strong> Feitos contam pela data do apontamento e finalizados pela data de correção; o
+      <strong>Segurança do trabalho (aba 3.1).</strong> Feitos contam pela data do apontamento e finalizados pela data de correção; o
       histórico importado da planilha conta igual. Em aberto e abertos há mais de 7 dias são o retrato no sábado final (no período em
       andamento, os dias contam até hoje). A vistoria não registra a empresa, então o quadro não tem recorte de empreiteiro.
     </p>

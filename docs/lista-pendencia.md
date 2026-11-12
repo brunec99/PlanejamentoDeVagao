@@ -1,5 +1,7 @@
 # Lista de pendência (aba 2)
 
+> **12/11/2026:** o quadro passou a se chamar **Quadro de Restrições**, é a **aba 1.4** (`/obras/{obraId}/restricoes`, módulo próprio `restricoes`) e não é mais uma visão da aba 2; o texto abaixo descreve a entrega de 10/11 com os nomes da época. Ver [Menu numerado e liberações](menu-e-liberacoes-2026-11-12.md).
+
 Entregue em 10/11/2026. A aba 2 passou a se chamar **Planejamento de vagão e lista de pendência** e tem duas visões: **Vagões** (a tela de sempre, sem mudança) e **Lista de pendência** (`/obras/{obraId}/vagoes?visao=pendencias`).
 
 ## Estado

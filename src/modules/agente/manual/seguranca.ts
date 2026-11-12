@@ -10,10 +10,18 @@ export const sections: ManualSection[] = [
   {
     id: 'seguranca-visao-geral',
     title: 'Segurança do trabalho: para que serve e quem pode o quê',
-    summary: 'Aba 6: vistoria dos TSTs, colunas, quem grava (TST e admin) e o histórico da planilha SST (selo "Planilha").',
+    summary:
+      'Aba 3.1 (antiga 6): vistoria dos TSTs, módulo por pessoa, quem grava (TST e admin) e o histórico da planilha SST (selo "Planilha").',
     keywords: [
       'segurança do trabalho',
       'aba 6',
+      'aba 3.1',
+      '3.1',
+      'sst',
+      '3 · sst',
+      'módulo segurança do trabalho',
+      'liberado por pessoa',
+      'quem vê a vistoria de segurança',
       'tst',
       'técnico de segurança',
       'vistoria de segurança',
@@ -27,11 +35,13 @@ export const sections: ManualSection[] = [
       'ordem da tela',
     ],
     screen: 'seguranca',
-    body: `## O que é a aba 6, Segurança do trabalho
+    body: `## O que é a aba 3.1, Segurança do trabalho ("Vistoria de segurança")
 
-É a vistoria de segurança da obra feita pelos técnicos de segurança do trabalho (TST), no formato da planilha "SST - Controle geral" usada antes. Cada linha é um apontamento: um risco encontrado na vistoria, com tipo, risco (consequência e probabilidade), descrição, local, data e foto. O processo é o da aba 5, Terminalidade: o apontamento fica aberto até ser finalizado com a foto da correção e a data em que foi corrigido.
+É a vistoria de segurança da obra feita pelos técnicos de segurança do trabalho (TST), no formato da planilha "SST - Controle geral" usada antes. Cada linha é um apontamento: um risco encontrado na vistoria, com tipo, risco (consequência e probabilidade), descrição, local, data e foto. O processo é o da aba 2.1, Terminalidade: o apontamento fica aberto até ser finalizado com a foto da correção e a data em que foi corrigido.
 
-A aba fica logo abaixo da Terminalidade na lateral e é aberta a todos que têm a obra liberada. O botão "?" ("Como funciona") do cabeçalho explica a tela, e "Como usar a lista", ao lado do título "Apontamentos", resume a ordem, a classificação, os filtros e os cliques.
+No menu da obra, renumerado em 12/11/2026, ela aparece como **"Vistoria de segurança"**, aba **3.1**, a primeira do grupo **3 · SST**, logo acima do Checklist de equipamentos (aba 3.2). Antes era a aba 6 e ficava logo abaixo da Terminalidade.
+
+Desde 12/11/2026 a aba é **liberada por pessoa**: aparece para quem tem a obra e o módulo "Segurança do trabalho" liberados pelo administrador, em Configurações → Usuários → Módulos (coluna "Segurança do trabalho"). Antes era aberta a todos com a obra: quem já usava foi mantido (migração 0049) e usuário novo começa sem o módulo. Quem não tem o módulo não vê o item no menu e, pelo endereço, é levado ao Dashboard da obra (aba 0). O botão "?" ("Como funciona") do cabeçalho explica a tela, e "Como usar a lista", ao lado do título "Apontamentos", resume a ordem, a classificação, os filtros e os cliques.
 
 ## Como a tela está organizada (desde 10/11/2026)
 
@@ -51,10 +61,10 @@ Esses ajustes vieram de um pedido da equipe de SST em 10/11/2026: antes, os cart
 ## Quem pode fazer o quê
 
 - **TST e Admin**: só quem tem o papel **TST** (técnico de segurança do trabalho) e os **administradores** lançam, editam, editam em lote, finalizam, reabrem e excluem apontamentos, juntam e excluem fotos e mexem na lista de "Tipos de apontamento". Vale nas obras liberadas para a pessoa.
-- **Consulta, Planejador e Gestor**: só consultam. Veem a lista, os indicadores e as fotos, abrem o apontamento ("Ver"), filtram, classificam e geram o PDF. Não aparecem "Novo apontamento", "Tipos de apontamento", as caixas de marcar, "Finalizar", "Reabrir" nem o "✕".
+- **Consulta, Planejador e Gestor**: com o módulo "Segurança do trabalho" liberado, só consultam. Veem a lista, os indicadores e as fotos, abrem o apontamento ("Ver"), filtram, classificam e geram o PDF. Não aparecem "Novo apontamento", "Tipos de apontamento", as caixas de marcar, "Finalizar", "Reabrir" nem o "✕".
 - Para quem só consulta, o topo mostra "Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos." com os nomes ("TSTs desta obra: …") ou o aviso de que nenhum TST tem acesso à obra.
 - Se algo tentar gravar sem permissão, o servidor recusa: "Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos."
-- O papel TST é dado pelo administrador, em Configurações → Usuários, no campo "Papel" da grade (ou ao cadastrar a pessoa). A obra também precisa estar liberada para ela. No resto do sistema, o TST só consulta, como o papel Consulta.
+- O papel TST é dado pelo administrador, em Configurações → Usuários, no campo "Papel" da grade (ou ao cadastrar a pessoa). A obra também precisa estar liberada para ela, e o TST também precisa do módulo: ao marcar alguém como TST, o administrador libera também os módulos "Segurança do trabalho" e "Checklist de equipamentos" (Configurações → Usuários → Módulos). No resto do sistema, o TST só consulta, como o papel Consulta.
 
 ## Colunas da lista
 
@@ -400,11 +410,11 @@ Depois, um bloco por grupo, aberto pela faixa azul com o título, repetido em ca
     screen: 'seguranca',
     body: `## Para que serve
 
-"/campo/seguranca" ("Segurança em campo") é a vistoria feita para o celular no canteiro: baixa-se a obra com sinal e, depois, tudo funciona sem internet. Nele o TST lança apontamento com foto, junta foto, finaliza com a foto da correção e reabre. Editar, editar em lote, excluir e cadastrar tipos ficam na aba 6, no computador. Quem não é TST vê a lista, os filtros e as fotos, com o aviso "Só técnicos de segurança (TST) lançam e finalizam apontamentos." e os nomes dos TSTs da obra; nada entra na fila.
+"/campo/seguranca" ("Segurança em campo") é a vistoria feita para o celular no canteiro: baixa-se a obra com sinal e, depois, tudo funciona sem internet. Nele o TST lança apontamento com foto, junta foto, finaliza com a foto da correção e reabre. Editar, editar em lote, excluir e cadastrar tipos ficam na aba 3.1, no computador. Quem não é TST vê a lista, os filtros e as fotos, com o aviso "Só técnicos de segurança (TST) lançam e finalizam apontamentos." e os nomes dos TSTs da obra; nada entra na fila.
 
 ## Como abrir e baixar a obra (com sinal)
 
-1. Na aba 6, toque em "Usar no celular, sem sinal", ou digite "/campo/seguranca" no navegador do celular, com o mesmo login.
+1. Na aba 3.1, toque em "Usar no celular, sem sinal", ou digite "/campo/seguranca" no navegador do celular, com o mesmo login.
 2. Na primeira vez aparece "Prepare com sinal": toque em "Carregar minhas obras". A lista mostra o seu nome, com "(TST)" se você for TST ou "(admin)" se for administrador.
 3. Toque na obra ("Toque para baixar e usar sem sinal"): ela é baixada com as fotos dos apontamentos abertos e passa a mostrar "Pronta sem sinal · N abertos". Daí em diante abre mesmo em modo avião. As fotos do histórico finalizado só aparecem com sinal.
 4. Com sinal, "Atualizar a obra com o que está no servidor", no fim da lista, traz o que foi lançado no computador e em outros celulares, sem perder a fila do aparelho.
@@ -440,6 +450,13 @@ A fila sobe sozinha, na ordem em que foi lançada: ao abrir a tela com sinal, qu
     summary: 'Não vejo os botões, virar TST, não finaliza, foto não sobe, sumiu, cartão e roscas que mudaram, histórico sem fotos.',
     keywords: [
       'não vejo novo apontamento',
+      'aba 6',
+      'aba 3.1',
+      '3.1',
+      'segurança sumiu do menu',
+      'não vejo a vistoria de segurança',
+      'módulo não liberado',
+      'liberar segurança do trabalho',
       'como virar tst',
       'quero ser tst',
       'não consigo finalizar',
@@ -458,10 +475,15 @@ A fila sobe sozinha, na ordem em que foi lançada: ao abrir a tela com sinal, qu
     screen: 'seguranca',
     body: `## Não vejo "Novo apontamento" nem "Finalizar"
 
-Esses botões são só do TST e do admin. O aviso "Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos." no topo confirma que o seu papel não grava nesta aba e lista os TSTs da obra. Ser gestor ou planejador não basta. Para virar TST, peça a um administrador, que escolhe "TST" no campo "Papel" da grade de Configurações → Usuários. Depois, recarregue a aba (no modo de campo, atualize a obra com sinal).
+Esses botões são só do TST e do admin. O aviso "Consulta: só os técnicos de segurança (TST) e os administradores lançam e finalizam apontamentos." no topo confirma que o seu papel não grava nesta aba e lista os TSTs da obra. Ser gestor ou planejador não basta. Para virar TST, peça a um administrador, que escolhe "TST" no campo "Papel" da grade de Configurações → Usuários e libera os módulos "Segurança do trabalho" e "Checklist de equipamentos". Depois, recarregue a aba (no modo de campo, atualize a obra com sinal).
+
+## A aba sumiu do menu (ou o endereço abre o Dashboard da obra)
+
+Desde 12/11/2026 a Vistoria de segurança (aba 3.1, antiga aba 6) e o Checklist de equipamentos (aba 3.2, antiga aba 9) são liberados por pessoa. Quem já usava foi mantido; usuário novo começa sem. Sem o módulo "Segurança do trabalho", o item não aparece no menu, o endereço leva ao Dashboard da obra (aba 0) e os quadros de segurança dos dashboards também não aparecem. Peça a liberação a um administrador (Configurações → Usuários → Módulos, coluna "Segurança do trabalho").
 
 ## Sou TST e não consigo gravar
 
+- A aba nem aparece: o TST também precisa do módulo "Segurança do trabalho" liberado (e do "Checklist de equipamentos", para a aba 3.2). Peça ao administrador.
 - "Você não tem acesso a esta obra.": a obra também precisa estar liberada para você na grade de acessos.
 - "Só técnicos de segurança (TST) e administradores lançam e finalizam apontamentos.": o seu papel deixou de ser TST, ou a tela foi aberta antes da troca; recarregue.
 - No modo de campo, a marcação vale a partir da próxima vez que a obra for baixada ou atualizada.
@@ -498,7 +520,7 @@ Ele fica na coluna "Ações", presa na borda direita da tabela, em verde, só pa
 
 - Os apontamentos com o selo "Planilha" vieram da planilha **sem fotos, por enquanto**, e os que já estavam corrigidos entraram finalizados sem foto da correção. Não é erro: anexar as fotos da planilha é uma etapa posterior, feita pela equipe de desenvolvimento.
 - As obras "My Sunset" e "Amariles" não tiveram o histórico importado, porque não existem no sistema. Se forem cadastradas e precisarem do histórico, peça a importação à equipe de desenvolvimento.
-- Linhas novas na planilha também entram só por nova importação, a pedido; ela não duplica nem sobrescreve o que o TST já corrigiu na tela. O caminho normal agora é lançar direto na aba 6.
+- Linhas novas na planilha também entram só por nova importação, a pedido; ela não duplica nem sobrescreve o que o TST já corrigiu na tela. O caminho normal agora é lançar direto na aba 3.1.
 
 ## Outras mensagens
 

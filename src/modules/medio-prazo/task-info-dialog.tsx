@@ -550,7 +550,7 @@ export function TaskInfoDialog({
               onClick={pendency.onCreate}
               title={
                 pendencyBlock ||
-                'Cria um card na Lista de pendência (aba 2) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
+                'Cria um card no Quadro de Restrições (aba 1.4) ligado a esta tarefa: a entrega é o dia útil anterior ao início e acompanha a reprogramação'
               }
             >
               <ClipboardList size={15} aria-hidden />

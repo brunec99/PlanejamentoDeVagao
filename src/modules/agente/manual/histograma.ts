@@ -7,10 +7,15 @@ export const sections: ManualSection[] = [
   {
     id: 'histograma-visao-geral',
     title: 'Histograma de mão de obra: para que serve e quem pode o quê',
-    summary: 'Aba 7: efetivo diário, quem lança e como ler.',
+    summary: 'Aba 2.2 (antiga 7): efetivo diário, quem lança e como ler.',
     keywords: [
       'histograma',
       'aba 7',
+      'aba 2.2',
+      '2.2',
+      'controles de obra',
+      '2 · controles de obra',
+      'módulo histograma',
       'efetivo',
       'mão de obra',
       'quantas pessoas na obra',
@@ -24,13 +29,13 @@ export const sections: ManualSection[] = [
       'por função',
     ],
     screen: 'histograma',
-    body: `## O que é a aba 7, Histograma de mão de obra
+    body: `## O que é a aba 2.2, Histograma de mão de obra
 
-É a planilha "ATR Histograma" dentro do sistema. Cada linha diz quantas pessoas de uma **função**, de uma **empresa**, estavam na obra num **dia**. Fica no grupo **Controles de obra** do menu.
+É a planilha "ATR Histograma" dentro do sistema. Cada linha diz quantas pessoas de uma **função**, de uma **empresa**, estavam na obra num **dia**. Fica no grupo **2 · Controles de obra** do menu, como aba 2.2 (até 12/11/2026 era a aba 7).
 
 ### Quem pode o quê
 
-- O módulo é liberado por pessoa, por um administrador (Configurações → Usuários).
+- O módulo é liberado por pessoa, por um administrador (Configurações → Usuários → Módulos).
 - Quem tem o módulo e a obra **lança, edita e exclui**. O papel **consulta** só visualiza.
 
 ### O que a tela mostra

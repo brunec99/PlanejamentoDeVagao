@@ -7,13 +7,13 @@ import type { TourStep } from '../tours';
  * restrições saiu daqui em 10/11/2026: virou a "Lista de pendência" da aba 2). */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 1 · Cronograma de longo prazo',
-    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, o Gantt de legalização dos 12 meses até a entrega, "Vagões" e o Planejador anterior. As pendências da obra ficam na aba 2, visão "Lista de pendência".',
+    title: 'Aba 1.1 · Cronograma de longo prazo',
+    body: 'O macro da obra: a Linha de Balanço no estilo do Prevision (um bloco por serviço e local), os Fluxos de serviços que alimentam o lançamento, as Medições com fotos, o Gantt de legalização dos 12 meses até a entrega, "Vagões" e o Planejador anterior. As pendências da obra ficam na aba 1.4, o Quadro de Restrições; o Planejamento de vagão abre pelo botão "Planejamento de vagão" desta aba.',
   },
   {
     target: 'work-nav',
     title: 'As abas da obra',
-    body: 'As quatro abas numeradas seguem o planejamento do macro para a semana: longo prazo, vagões, médio prazo e curto prazo. Abaixo delas, em Apoio, ficam o modelo federado, os arquivos IFC, as dívidas, as integrações e as configurações da obra.',
+    body: 'O menu é dividido em grupos numerados. Em "1 · Prazo", as abas seguem o planejamento do macro para a semana: longo prazo (1.1), médio prazo (1.2) e curto prazo (1.3), mais o Quadro de Restrições (1.4). Depois vêm "2 · Controles de obra" (2.1 a 2.3) e "3 · SST" (3.1 e 3.2). Abaixo deles, em Apoio, ficam o modelo federado, os arquivos IFC, as dívidas, as integrações e as configurações da obra.',
   },
   {
     target: 'modo-reuniao',
@@ -29,6 +29,11 @@ export const steps: TourStep[] = [
     target: 'longo-visoes',
     title: 'As visões da aba',
     body: 'Linha de Balanço (padrão) é o cronograma; Fluxos de serviços guarda as sequências padrão da empresa; Medições registra o realizado com fotos; o Gantt de legalização mostra os 12 meses até a entrega, com o caminho crítico da obra e a legalização. "Vagões" mostra as atividades dos vagões, a curva de avanço e as linhas de base, e o Planejador é a ferramenta anterior, que ainda gera os vagões. O tour explica a visão que estiver aberta.',
+  },
+  {
+    target: 'longo-vagoes-link',
+    title: 'Planejamento de vagão',
+    body: 'Abre a tela dos períodos de takt (os vagões), com atividades, terminalidade e liberações. Ela não tem item no menu: o caminho é este botão. Só aparece para quem tem o módulo Vagões liberado.',
   },
 
   // ─── Linha de Balanço ─────────────────────────────────────────────────────────
@@ -70,7 +75,7 @@ export const steps: TourStep[] = [
   {
     target: 'longo-lob-criar-pendencia',
     title: 'Criar pendência do serviço',
-    body: 'Cria um card na Lista de pendência (aba 2) ligado ao serviço do bloco selecionado. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação. Só aparece para quem tem a aba 2 liberada.',
+    body: 'Cria um card no Quadro de Restrições (aba 1.4) ligado ao serviço do bloco selecionado. Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação. Só aparece para quem tem a aba 1.4 liberada.',
   },
   {
     target: 'longo-lob-desfazer',

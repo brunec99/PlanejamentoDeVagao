@@ -5,7 +5,7 @@ import type { TourStep } from '../tours';
  * passo dele é pulado quando o alvo não está na tela. */
 export const steps: TourStep[] = [
   {
-    title: 'Aba 7 · Histograma de mão de obra',
+    title: 'Aba 2.2 · Histograma de mão de obra',
     body: 'O efetivo de cada dia, por empresa e função, no lugar da planilha "ATR Histograma": quem estava na obra, quanto é mão de obra própria e quanto é de empreiteiro.',
   },
   {

@@ -48,7 +48,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-invite-role',
     title: 'Papel',
-    body: 'Consulta só vê; TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6 e consulta o resto; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela e também lança na aba 6. Dá para trocar depois, na grade.',
+    body: 'Consulta só vê; TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 3.1 e consulta o resto; Planejador edita o planejamento; Gestor também cadastra obras, libera vagão em caráter excepcional e reabre vagão terminal; Admin, além disso, usa esta tela e também lança na aba 3.1. Dá para trocar depois, na grade.',
   },
   {
     target: 'config-users',
@@ -63,7 +63,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-users-view',
     title: 'Obras ou módulos',
-    body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo liberado por pessoa, inclusive Curto prazo e Terminalidade. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
+    body: 'Troca as colunas da grade: Obras mostra uma coluna por obra; Módulos, uma por módulo liberado por pessoa, inclusive Curto prazo, Quadro de Restrições, Terminalidade, Vistoria de segurança e Checklist de equipamentos. O número embaixo do nome da coluna diz quantos dos usuários listados têm aquele acesso.',
   },
   {
     target: 'config-users-select',
@@ -73,7 +73,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-user-role',
     title: 'Papel do usuário',
-    body: 'Troca o papel da pessoa assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 6, Segurança do trabalho, e consulta o resto do sistema; o Admin também lança na aba 6. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
+    body: 'Troca o papel da pessoa assim que você escolhe outro: Consulta, TST, Planejador, Gestor ou Admin. O TST (técnico de segurança do trabalho) lança e finaliza apontamentos na aba 3.1, Segurança do trabalho, e consulta o resto do sistema; o Admin também lança na aba 3.1. Na sua própria linha o campo fica travado: ninguém tira o próprio acesso de administrador.',
   },
   {
     target: 'config-user-works',
@@ -83,7 +83,7 @@ export const steps: TourStep[] = [
   {
     target: 'config-user-modules',
     title: 'Módulos liberados',
-    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo para a pessoa: longo prazo, vagões, médio prazo, curto prazo, terminalidade e, no Apoio, modelo federado, arquivos IFC, dívidas e integrações. Sem o módulo, a aba some e o endereço leva ao Dashboard da obra. Dashboard, segurança do trabalho e configurações da obra são abertos a todos e não aparecem, como diz a nota abaixo da grade. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
+    body: 'Na visão Módulos, cada célula libera ou bloqueia um módulo para a pessoa: longo prazo, vagões, médio prazo, curto prazo, Quadro de Restrições, terminalidade, vistoria de segurança, checklist de equipamentos e, no Apoio, modelo federado, arquivos IFC, dívidas e integrações. Sem o módulo, a aba some e o endereço leva ao Dashboard da obra. O Dashboard da obra e as configurações da obra são abertos a todos e não aparecem, como diz a nota abaixo da grade. Admin vê todos: as células dele ficam marcadas em cinza, sem clique.',
   },
   {
     target: 'config-user-delete',

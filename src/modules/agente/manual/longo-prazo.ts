@@ -1,21 +1,28 @@
 import type { ManualSection } from './types';
 
-/** Manual da aba 1, Cronograma de longo prazo (29/10/2026): as duas visões (Planejador e "Vagões"), o
+/** Manual da aba 1.1, Cronograma de longo prazo (29/10/2026): as duas visões (Planejador e "Vagões"), o
  * cadastro de serviços, o gráfico, linhas de base e medições, a geração de vagões e a curva de avanço
- * (o módulo de restrições saiu em 10/11/2026: virou a Lista de pendência da aba 2). Escrito a partir do código dos componentes; quando o
+ * (o módulo de restrições saiu em 10/11/2026: virou o Quadro de Restrições, aba 1.4). Escrito a partir do código dos componentes; quando o
  * tour ou a documentação divergiam, valeu o código. Em 04/11/2026 entraram a Linha de Balanço, os
  * fluxos de serviços, as medições e o Gantt de legalização; em 11/11/2026, o IDP e a visão Custos. */
 export const sections: ManualSection[] = [
   {
     id: 'longo-prazo-visao-geral',
-    title: 'Aba 1 · Cronograma de longo prazo: as duas visões, quem edita e como o plano é salvo',
-    summary: 'As visões da aba 1, permissões, salvamento automático do Planejador, trava de revisão, exportar e importar.',
+    title: 'Aba 1.1 · Cronograma de longo prazo: as visões, o botão Planejamento de vagão, quem edita e como o plano é salvo',
+    summary:
+      'As visões da aba 1.1 (antiga aba 1), o botão "Planejamento de vagão", permissões, salvamento automático do Planejador, trava de revisão, exportar e importar.',
     keywords: [
       'longo prazo',
       'cronograma de longo prazo',
       'aba 1',
+      'aba 1.1',
+      '1.1',
       'planejador',
       'visões da aba 1',
+      'visões da aba 1.1',
+      'planejamento de vagão',
+      'botão planejamento de vagão',
+      'onde fica o planejamento de vagão',
       'somente leitura',
       'salvando',
       'não salvo',
@@ -29,15 +36,17 @@ export const sections: ManualSection[] = [
     ],
     screen: 'longo-prazo',
     body: `## Para que serve
-A aba 1, "Cronograma de longo prazo", é o macro da obra: a sequência de serviços por pavimento e o que deriva dela (datas, prazo, equipes, avanço).
+A aba 1.1, "Cronograma de longo prazo" (aba 1 até 12/11/2026), é a primeira do grupo "1 · Prazo" e o macro da obra: a sequência de serviços por pavimento e o que deriva dela (datas, prazo, equipes, avanço).
+
+É também por ela que se chega ao **Planejamento de vagão**: o botão **"Planejamento de vagão"**, dentro da aba, abre a tela dos vagões (períodos de takt, atividades, terminalidade e liberações), que desde 12/11/2026 não tem mais item nem número no menu lateral. O botão só aparece para quem tem o módulo Vagões.
 
 Ela tem seis visões, alternadas pelo seletor no cabeçalho (desde 04/11/2026):
 - **"Linha de Balanço"** (padrão): o cronograma de longo prazo no estilo do Prevision, uma atividade por serviço × local, com o que já foi medido. Os blocos nascem do lançamento de um fluxo de serviços; arrastar um bloco empurra as sucessoras. Veja a seção "Linha de Balanço".
 - **"Fluxos de serviços"**: o molde da empresa (o "macrofluxo" do Prevision) com a sequência de serviços, a duração por local e as dependências, pronto para lançar em qualquer obra. Veja "Fluxos de serviços" e "Lançar um fluxo".
 - **"Medições"**: rodadas com data em que se lança o acumulado realizado de cada bloco, com foto de cada avanço. Veja "Medições".
 - **"Gantt de legalização"**: os 12 meses até a entrega da obra, com o caminho crítico da obra e a legalização por órgão até as chaves, no mesmo cronograma do médio prazo (tabela e Gantt do Project). Um por obra. Veja "Gantt de legalização".
-- **"Vagões"** (antes "Vagões e restrições"): as atividades dos vagões em Linha de Balanço, só para leitura, mais a curva de avanço acumulado e as linhas de base da obra. O módulo de restrições que ficava aqui virou a "Lista de pendência" da aba 2. Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
-- **"Planejador"**: a ferramenta anterior, um fluxograma de serviços por pavimento que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. Ainda é o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (aba 2). O plano dele pode ser levado para a Linha de Balanço nova por "Importar do Planejador".
+- **"Vagões"** (antes "Vagões e restrições"): as atividades dos vagões em Linha de Balanço, só para leitura, mais a curva de avanço acumulado e as linhas de base da obra. O módulo de restrições que ficava aqui virou o "Quadro de Restrições", aba 1.4 (antes "Lista de pendência"). Para mudar datas, serviços ou pavimentos, edite o Planejador e gere os vagões de novo. Obras que nunca geraram vagões pelo plano mostram ali o que veio do Prevision.
+- **"Planejador"**: a ferramenta anterior, um fluxograma de serviços por pavimento que se expande em Linha de Balanço, com linhas de base, medições e alocação de equipes. Ainda é o Planejador que responde pelas atividades dos vagões: "Gerar vagões" transforma cada serviço × pavimento em atividades de vagão (no Planejamento de vagão, aberto pelo botão desta aba). O plano dele pode ser levado para a Linha de Balanço nova por "Importar do Planejador".
 
 As seções abaixo sobre salvamento, exportar e importar valem para o Planejador; a Linha de Balanço, os fluxos e as medições gravam cada alteração na hora, sem botão de salvar (as medições têm "Salvar medição", que fecha a rodada). O Gantt de legalização grava como o médio prazo: rascunho e "Revisar e salvar".
 
@@ -231,7 +240,7 @@ O "Avanço físico" dos indicadores é a média dos serviços com unidade, ponde
     ],
     screen: 'longo-prazo',
     body: `## O que faz
-O Planejador é o dono das atividades dos vagões (aba 2). "Gerar vagões" leva o plano **salvo** para uma sequência de vagões da obra: cada serviço × pavimento vira uma atividade, com o pavimento como local (criado se não existir), fatiada nos vagões que atravessa ("parte 2 de 3", com peso proporcional aos dias em cada vagão). Editar o plano não muda os vagões sozinho: é preciso gerar de novo; o médio prazo (aba 3), que lê as atividades dos vagões, só reflete o plano depois disso.
+O Planejador é o dono das atividades dos vagões (Planejamento de vagão). "Gerar vagões" leva o plano **salvo** para uma sequência de vagões da obra: cada serviço × pavimento vira uma atividade, com o pavimento como local (criado se não existir), fatiada nos vagões que atravessa ("parte 2 de 3", com peso proporcional aos dias em cada vagão). Editar o plano não muda os vagões sozinho: é preciso gerar de novo; o médio prazo (aba 1.2), que lê as atividades dos vagões, só reflete o plano depois disso.
 
 Só planejador, gestor e admin veem o botão; ele fica desabilitado com o plano vazio.
 
@@ -285,12 +294,12 @@ Abaixo do gráfico ficam a curva de avanço acumulado e as linhas de base da obr
 ## O módulo de restrições saiu daqui
 Até 10/11/2026 esta visão tinha o "Módulo de restrições": o botão "Registrar restrição", os indicadores e o quadro "Identificada", "Em tratativa" e "Resolvida", além de "Criar pendência para esta tarefa" no diálogo da barra. Tudo isso foi retirado do longo prazo.
 
-- O acompanhamento passou para a **"Lista de pendência"**, na aba 2 ("Planejamento de vagão e lista de pendência"): um quadro de cards com cinco colunas, prazo em dias úteis, responsável, conversa e checklists. Veja a seção "Lista de pendência".
+- O acompanhamento passou para o **"Quadro de Restrições"**, aba 1.4 (até 12/11/2026, "Lista de pendência", na antiga aba 2): um quadro de cards com cinco colunas, prazo em dias úteis, responsável, conversa e checklists. Veja a seção "Quadro de Restrições".
 - As restrições que estavam no quadro antigo **foram copiadas para lá como cards de origem "Restrição"**; nada se perdeu.
 - Para ligar uma pendência a um serviço do longo prazo, use **"Criar pendência do serviço"** no painel do bloco, na visão "Linha de Balanço".
 
 ## O que continua travando o vagão
-O card da Lista de pendência não trava vagão. A **restrição impeditiva do vagão** continua existindo e é registrada no detalhe do vagão (aba 2, botão "Restrição"): enquanto estiver aberta com "Bloqueia execução", a atividade dela (ou o vagão inteiro, se não há atividade vinculada) não aceita lançamento de progresso ("Resolva a restrição de execução antes de avançar"); com "Bloqueia terminalidade", o vagão não fecha. Restrições impeditivas abertas nos vagões anteriores também impedem a liberação do vagão seguinte. Ao "Gerar vagões", as restrições dos vagões que saem da cauda saem junto (a prévia avisa).`,
+O card do Quadro de Restrições não trava vagão. A **restrição impeditiva do vagão** continua existindo e é registrada no detalhe do vagão (Planejamento de vagão, botão "Restrição"): enquanto estiver aberta com "Bloqueia execução", a atividade dela (ou o vagão inteiro, se não há atividade vinculada) não aceita lançamento de progresso ("Resolva a restrição de execução antes de avançar"); com "Bloqueia terminalidade", o vagão não fecha. Restrições impeditivas abertas nos vagões anteriores também impedem a liberação do vagão seguinte. Ao "Gerar vagões", as restrições dos vagões que saem da cauda saem junto (a prévia avisa).`,
   },
   {
     id: 'longo-prazo-curva-avanco-linhas-base',
@@ -319,7 +328,7 @@ Responde se a obra está adiantada ou atrasada (a Linha de Balanço responde ond
 
 - **Planejado**: supõe avanço linear de cada atividade de vagão entre o início e o término previstos, ponderado pelo peso dela. É aproximação declarada, não produção medida.
 - **"Planejado de"**: por padrão, a linha de base mais recente da obra, porque comparar o executado com um cronograma já reprogramado esconderia o atraso. "Planejamento atual" usa as datas de hoje dos vagões; o subtítulo então lembra "já reprogramado; escolha uma linha de base para comparar com o prometido". Sem linha de base salva aparece "Sem linha de base salva", e só existe o atual.
-- **Executado**: sai dos lançamentos de progresso com data feitos na tela do vagão (aba 2). Por isso a curva para em hoje: depois não há medição, e prolongar inventaria avanço. Sem lançamento datado: "Ainda não há lançamento datado nesta obra, então só o planejado está desenhado" (se as atividades declaram um % sem data, o aviso explica que ele não pode ser colocado no tempo).
+- **Executado**: sai dos lançamentos de progresso com data feitos na tela do vagão (Planejamento de vagão). Por isso a curva para em hoje: depois não há medição, e prolongar inventaria avanço. Sem lançamento datado: "Ainda não há lançamento datado nesta obra, então só o planejado está desenhado" (se as atividades declaram um % sem data, o aviso explica que ele não pode ser colocado no tempo).
 - **"De"** e **"até"** recortam o período; por padrão vai do primeiro início ao último término, incluindo hoje. "Período padrão" desfaz. Data inicial depois da final: "A data inicial do período é posterior à final".
 
 **Leitura de hoje**: "Planejado até dd/mm", "Executado medido até hoje", "Desvio de hoje (executado − planejado)" em pontos percentuais e, quando dá para calcular, "Atraso medido em tempo" ou "Avanço medido em tempo" em dias: a distância até a data em que o planejado marcava o avanço de hoje. A frase abaixo resume: "A obra está em dia / adiantada / atrasada em N pontos percentuais — X% executados contra Y% previstos para dd/mm", e "O avanço de hoje é o que o planejado já marcava em dd/mm: N dias atrás". "Ver os pontos da curva em tabela (N)" abre data, planejado e executado de cada ponto.
@@ -389,7 +398,7 @@ No alto: Serviços (com quantos lançamentos e blocos), Locais, Término previst
 ## Painel do bloco selecionado
 Início e duração (em dias úteis) editáveis, término calculado, equipe e unidade do serviço, observação, as predecessoras ("Depois de", com a espera em dias e a ligação "equipe segue" para o mesmo serviço no local anterior), quantos blocos acompanham ao arrastar, o aviso de atraso com o motivo informado na medição, as datas reais (início real e término real, que a medição preenche e aqui podem ser corrigidas), as fotos da última medição e "Excluir bloco". Um bloco já medido não pode ser excluído.
 
-**"Criar pendência do serviço"**, logo abaixo de equipe e unidade, cria um card na "Lista de pendência" da aba 2 ligado ao serviço do bloco (ao serviço inteiro, não ao local). Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra (o bloco que começa mais cedo) e acompanha a reprogramação. O botão só aparece para quem tem a aba 2 liberada; o perfil não muda isso.
+**"Criar pendência do serviço"**, logo abaixo de equipe e unidade, cria um card no "Quadro de Restrições" (aba 1.4) ligado ao serviço do bloco (ao serviço inteiro, não ao local). Você informa só o título, o tempo de execução em dias úteis e o responsável: a entrega é o dia útil anterior ao primeiro início do serviço na obra (o bloco que começa mais cedo) e acompanha a reprogramação. O botão só aparece para quem tem o Quadro de Restrições (aba 1.4) liberado; o perfil não muda isso.
 
 ## Locais, linhas de base e outras ações
 - "Lançar fluxo" abre o lançamento de um fluxo de serviços (veja "Lançar um fluxo"). Sem locais cadastrados, a tela pede para cadastrá-los primeiro.
@@ -645,10 +654,10 @@ Os Dashboards (aba 0 e o geral) ainda não mostram o IDP.`,
     ],
     screen: 'longo-prazo',
     body: `## Para que serve
-A visão "Gantt de legalização" (barra de visões da aba 1, depois de "Medições") é o cronograma dos 12 meses até a entrega da obra: o caminho crítico da obra e a legalização por órgão até as chaves. Responde se a entrega cabe na data prometida ao cliente e, se não cabe, que cadeia de tarefas a empurra. Um Gantt por obra, vivo até a entrega (não há um por mês).
+A visão "Gantt de legalização" (barra de visões da aba 1.1, depois de "Medições") é o cronograma dos 12 meses até a entrega da obra: o caminho crítico da obra e a legalização por órgão até as chaves. Responde se a entrega cabe na data prometida ao cliente e, se não cabe, que cadeia de tarefas a empurra. Um Gantt por obra, vivo até a entrega (não há um por mês).
 
 ## É o mesmo cronograma do médio prazo
-Tabela e Gantt no padrão do MS Project, com o mesmo cálculo, linha de base, desfazer, "Informações da tarefa" e "Exportar para o Project (.xml)" da aba 3: o que o manual do médio prazo diz sobre editar a grade, predecessoras, restrições e prazo final vale aqui. Muda: o horizonte é a janela de 12 meses antes da entrega (entrega em 30/09/2027 dá 01/10/2026 a 30/09/2027), sombreada no Gantt; o zoom abre em meses; a coluna "Folga total" vem à mostra. Tarefa que começa antes da janela (projeto de incêndio, aprovação na concessionária) continua no cálculo; o filtro "Fora da janela" mostra quais.
+Tabela e Gantt no padrão do MS Project, com o mesmo cálculo, linha de base, desfazer, "Informações da tarefa" e "Exportar para o Project (.xml)" da aba 1.2: o que o manual do médio prazo diz sobre editar a grade, predecessoras, restrições e prazo final vale aqui. Muda: o horizonte é a janela de 12 meses antes da entrega (entrega em 30/09/2027 dá 01/10/2026 a 30/09/2027), sombreada no Gantt; o zoom abre em meses; a coluna "Folga total" vem à mostra. Tarefa que começa antes da janela (projeto de incêndio, aprovação na concessionária) continua no cálculo; o filtro "Fora da janela" mostra quais.
 
 ## Criar o Gantt
 Obra sem Gantt mostra o botão "Criar Gantt de legalização" (o perfil de consulta não o vê). O diálogo pede:
@@ -681,7 +690,7 @@ Tudo entra no rascunho: nada é gravado antes de "Revisar e salvar". Trazer de n
 Como no médio prazo: a grade abre bloqueada ("Liberar edição"), toda edição fica em rascunho, "Revisar e salvar" pede o motivo e "Definir linha de base" congela as datas gravadas, só quando você clicar.
 
 ## Quem vê e quem edita
-Quem tem a aba 1 (módulo "Longo prazo") vê o Gantt, sem precisar do médio prazo. Planejador, gestor e admin criam, alteram a entrega, trazem da Linha de Balanço, salvam e definem linha de base; o perfil de consulta só vê.
+Quem tem a aba 1.1 (módulo "Longo prazo") vê o Gantt, sem precisar do médio prazo. Planejador, gestor e admin criam, alteram a entrega, trazem da Linha de Balanço, salvam e definem linha de base; o perfil de consulta só vê.
 
 ## Onde ele não aparece
 Nesta etapa o Gantt de legalização fica só na aba 1. Não entra na lista de cronogramas do mês do médio prazo, em "Próximos 90 dias", em "Cobertura", na carga das equipes ("Equipes" e "Recursos"), na seção "Linha de base" do médio prazo, no quadro do médio prazo do dashboard nem nas respostas da assistente de IA, que não lê as tarefas dele. Ainda não há PDF do Gantt nem anexo do documento emitido (AVCB, Habite-se); para imprimir, exporte o .xml e abra no Project.`,

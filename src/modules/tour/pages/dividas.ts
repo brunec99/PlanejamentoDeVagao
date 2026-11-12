@@ -8,7 +8,7 @@ export const steps: TourStep[] = [
   {
     target: 'work-nav',
     title: 'Seções da obra',
-    body: 'Dívidas fica em Apoio, na lateral, junto das demais telas de apoio da obra. As abas numeradas acima levam aos níveis de planejamento.',
+    body: 'Dívidas fica em Apoio, na lateral, junto das demais telas de apoio da obra. As abas numeradas acima, nos grupos "1 · Prazo", "2 · Controles de obra" e "3 · SST", levam ao planejamento e aos controles da obra.',
   },
   {
     target: 'modo-reuniao',

@@ -325,7 +325,7 @@ export function LobActivityPanel({
               data-tour="longo-lob-criar-pendencia"
               className="button-ghost mt-2 px-2.5 py-1.5 text-xs"
               onClick={() => onCreatePending(service.id)}
-              title={`Cria um card na Lista de pendência (aba 2) ligado ao serviço ${service.name}: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação`}
+              title={`Cria um card no Quadro de Restrições (aba 1.4) ligado ao serviço ${service.name}: a entrega é o dia útil anterior ao primeiro início do serviço na obra e acompanha a reprogramação`}
             >
               <ClipboardList size={14} aria-hidden /> Criar pendência do serviço
             </button>
