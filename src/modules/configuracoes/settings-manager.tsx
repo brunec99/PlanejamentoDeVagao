@@ -6,7 +6,7 @@ import { Callout, Empty, LoadState } from '@/modules/planejamento/ui';
 import { useToast } from '@/modules/layout/toast';
 import { formatTimestamp } from '@/shared/format';
 import type { Command } from '@/application/use-cases/commands';
-import type { AccessRequest } from '@/application/access-request';
+import { ACCESS_DOMAINS_LABEL, isExternalEmail, type AccessRequest } from '@/application/access-request';
 import { UsersTable } from './users-table';
 import { USER_TYPE_LABELS, USER_TYPE_ORDER, typeToProfile, type UserType } from './user-list';
 
@@ -197,6 +197,9 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   const [role, setRole] = useState<UserType>('viewer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Conta de fora da ATR e da Takt (13/11/2026): o cadastro pede uma confirmação a mais.
+  const external = isExternalEmail(email);
+  const [confirmedExternal, setConfirmedExternal] = useState(false);
   return (
     <form
       data-tour="config-invite"
@@ -211,7 +214,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             // TST vai como papel consulta com a marca de técnico de segurança (`typeToProfile`).
-            body: JSON.stringify({ email, name, ...typeToProfile(role) }),
+            body: JSON.stringify({ email, name, ...typeToProfile(role), ...(external ? { external: confirmedExternal } : {}) }),
           });
           const body = await res.json();
           if (!res.ok) throw new Error(body.error ?? 'Não foi possível cadastrar.');
@@ -223,6 +226,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
           });
           setEmail('');
           setName('');
+          setConfirmedExternal(false);
           onDone();
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : 'Não foi possível cadastrar.');
@@ -237,7 +241,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
       </h3>
       <p className="mt-1 text-sm text-slate-500">
         Só entra quem foi cadastrado aqui. A pessoa entra com a conta Google do mesmo e-mail; nenhum e-mail é enviado. O acesso às obras é
-        liberado abaixo.
+        liberado abaixo. Conta de fora da ATR e da Takt (um Gmail, por exemplo) pede uma confirmação a mais.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block text-xs font-semibold text-slate-600">
@@ -265,11 +269,26 @@ function InviteForm({ onDone }: { onDone: () => void }) {
             ))}
           </select>
         </label>
-        <button className="button" type="submit" disabled={busy}>
+        <button className="button" type="submit" disabled={busy || (external && !confirmedExternal)}>
           <Mail size={15} aria-hidden />
           {busy ? 'Cadastrando…' : 'Cadastrar'}
         </button>
       </div>
+      {external && (
+        <label className="mt-3 flex max-w-2xl items-start gap-2 text-sm text-slate-700">
+          <input
+            id="invite-external"
+            type="checkbox"
+            className="mt-0.5"
+            checked={confirmedExternal}
+            onChange={e => setConfirmedExternal(e.target.checked)}
+          />
+          <span>
+            Este e-mail não é {ACCESS_DOMAINS_LABEL}. Confirmo o cadastro de uma <strong>conta externa</strong>: a pessoa entra com a conta
+            Google desse e-mail e vê só as obras e os módulos que eu liberar.
+          </span>
+        </label>
+      )}
       {error && (
         <div className="mt-3">
           <Callout tone="danger" role="alert">

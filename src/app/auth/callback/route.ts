@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   // Recusas encerram a sessão só neste navegador: a global derrubaria a mesma pessoa no Takt Hub.
-  if (!user?.email || !isAllowedEmail(user.email)) {
+  if (!user?.email) {
     await supabase.auth.signOut({ scope: 'local' });
     return loginError(request, `Apenas contas ${ACCESS_DOMAINS_LABEL} podem acessar este sistema.`);
   }
@@ -68,6 +68,12 @@ export async function GET(request: NextRequest) {
   // A exceção é o primeiro acesso do admin inicial, que não teria quem o cadastrasse.
   const service = getServiceClient();
   const { data: existing } = await service.from('profiles').select('id').eq('id', user.id).maybeSingle();
+  // Conta de fora da ATR e da Takt (13/11/2026): entra só com o perfil que um admin criou para ela; sem ele,
+  // é recusada como antes e não recebe o cartão de "Solicitar acesso".
+  if (!existing && !isAllowedEmail(user.email)) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return loginError(request, `Apenas contas ${ACCESS_DOMAINS_LABEL}, ou cadastradas por um administrador, podem acessar este sistema.`);
+  }
   if (!existing) {
     const isBootstrap = user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
     if (!isBootstrap) {

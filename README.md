@@ -232,7 +232,7 @@ Para publicar na Vercel, configure as mesmas variáveis (`PREVISION_API_TOKEN`, 
 
 ## Login com Google
 
-Autenticação exclusivamente via Google OAuth, restrita aos domínios `atrincorporadora.com.br` e `taktengenharia.com.br` (lista única `ACCESS_DOMAINS` em `src/application/access-request.ts`, conferida no servidor em `src/app/auth/callback/route.ts`, no cadastro pelo admin e no pedido de acesso; o `hd=*` do Google só esconde contas pessoais na escolha de conta). A Takt entrou em 28/10/2026, e ter e-mail de um dos domínios não basta: continua valendo o cadastro feito por um admin. Não existe mais login por e-mail/senha.
+Desde 13/11/2026, conta de fora dos dois domínios entra quando um admin a cadastra como conta externa em Configurações → Usuários ([Contas externas](docs/login-google.md#contas-externas-13112026)). Autenticação exclusivamente via Google OAuth, restrita aos domínios `atrincorporadora.com.br` e `taktengenharia.com.br` (lista única `ACCESS_DOMAINS` em `src/application/access-request.ts`, conferida no servidor em `src/app/auth/callback/route.ts`, no cadastro pelo admin e no pedido de acesso; o `hd=*` do Google só esconde contas pessoais na escolha de conta). A Takt entrou em 28/10/2026, e ter e-mail de um dos domínios não basta: continua valendo o cadastro feito por um admin. Não existe mais login por e-mail/senha.
 
 **Desde 08/10/2026 o projeto Supabase é dividido com o Takt Hub** (`takt-hub`; o Takt fica nos schemas `takt`/`takt_private`, o Obra 360 no `public`). Por isso, três coisas mudaram:
 - **Cadastro obrigatório:** só entra quem tem perfil. O admin cadastra o e-mail em Configurações, sem envio de e-mail, e a exceção é o primeiro acesso do admin inicial.

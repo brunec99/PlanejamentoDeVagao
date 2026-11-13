@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAllowedEmail, validateAccessRequest } from '../src/application/access-request';
+import { isAllowedEmail, isExternalEmail, validateAccessRequest } from '../src/application/access-request';
 import { readIdentity, signIdentity } from '../src/infrastructure/auth/access-request-token';
 
 /* Pedido de acesso (14/10/2026): só contas da ATR, nome obrigatório, mensagem curta; e o cookie que
@@ -55,4 +55,16 @@ test('identidade assinada volta igual, e assinatura trocada, chave errada ou pra
   assert.equal(readIdentity(`${payload}.`, 2_000, key), null);
   assert.equal(readIdentity(undefined, 2_000, key), null);
   assert.equal(readIdentity('lixo', 2_000, key), null);
+});
+
+test('conta externa: e-mail válido fora dos dois domínios; não vale para ATR, Takt nem texto que não é e-mail', () => {
+  assert.equal(isExternalEmail(' Obras@Gmail.com '), true);
+  assert.equal(isExternalEmail('ana@taktengenharia.com.br.evil.com'), true);
+  assert.equal(isExternalEmail('ana@atrincorporadora.com.br'), false);
+  assert.equal(isExternalEmail('joao@taktengenharia.com.br'), false);
+  assert.equal(isExternalEmail('semarroba'), false);
+  assert.equal(isExternalEmail('a@b'), false);
+  assert.equal(isExternalEmail(null), false);
+  // O pedido de acesso pela tela de login continua só para os dois domínios.
+  assert.match(validateAccessRequest({ email: 'obras@gmail.com', name: 'Obras' }).error ?? '', /podem pedir acesso/);
 });

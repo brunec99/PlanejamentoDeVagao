@@ -31,7 +31,7 @@ O Obra 360 não tem senha própria. Quem confirma quem você é é o Google, com
 
 ### O que você precisa
 
-- Uma conta Google **@atrincorporadora.com.br** ou **@taktengenharia.com.br**. Conta Gmail pessoal não entra, mesmo no mesmo computador.
+- Uma conta Google **@atrincorporadora.com.br** ou **@taktengenharia.com.br**. Conta de fora (um Gmail, por exemplo) só entra se um administrador a cadastrou como conta externa.
 - **Ter sido cadastrado por um administrador** do sistema. Estar no domínio da empresa não basta: se o seu e-mail ainda não foi cadastrado, o login é recusado e a tela oferece "Solicitar acesso" (veja a seção sobre mensagens de erro e pedido de acesso).
 
 ### Passo a passo
@@ -87,7 +87,7 @@ A tela de login mostra um quadro vermelho "Não foi possível concluir o login" 
 
 | Mensagem | O que aconteceu | O que fazer |
 | --- | --- | --- |
-| **Apenas contas @atrincorporadora.com.br ou @taktengenharia.com.br podem acessar este sistema.** | Você escolheu uma conta pessoal ou de outro domínio. | Clique em "Continuar com o Google" de novo e escolha a conta da ATR ou da Takt. Se o Google não perguntar, saia da conta errada ou use uma janela anônima. |
+| **Apenas contas @atrincorporadora.com.br ou @taktengenharia.com.br, ou cadastradas por um administrador, podem acessar este sistema.** | Você escolheu uma conta de fora que nenhum administrador cadastrou. | Clique em "Continuar com o Google" de novo e escolha a conta da ATR ou da Takt. Se o Google não perguntar, saia da conta errada ou use uma janela anônima. |
 | **Seu e-mail ainda não foi cadastrado no Obra 360. Peça o cadastro a um administrador.** | Conta do domínio certo, mas ninguém cadastrou o seu e-mail (ou o seu perfil foi excluído). | Use o botão "Solicitar acesso" que aparece junto, ou peça o cadastro a um administrador. Depois, entre de novo com o Google. |
 | **Falha ao entrar com Google. Tente novamente.** | A volta do Google não completou: rede instável ou janela aberta por tempo demais. | Tente de novo. Se insistir, feche a aba e abra o endereço outra vez. |
 | **Login incompleto. Tente novamente.** | O endereço de retorno foi aberto direto, sem passar pelo Google. | Comece pela tela de login, clicando no botão. |
@@ -314,7 +314,7 @@ O painel só aparece quando alguém pediu acesso pela tela de login: nome, e-mai
 
 ### Cadastrar usuário
 
-Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. O usuário novo começa sem obras e sem módulos, inclusive curto prazo, terminalidade, segurança do trabalho, checklist de equipamentos e Quadro de Restrições: libere o que ele precisa na grade. Para um TST, libere também os módulos "Segurança do trabalho" e "Checklist de equipamentos": sem eles, as abas 3.1 e 3.2 não aparecem para ele. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
+Só entra quem foi cadastrado aqui. Informe o **"E-mail"** (@atrincorporadora.com.br ou @taktengenharia.com.br; para um e-mail de fora, como um Gmail de empreiteiro, marque a confirmação de **conta externa** que aparece), o **"Nome (opcional)"** (vazio, vale o começo do e-mail) e o **"Papel"** (Consulta, TST, Planejador, Gestor ou Admin), e clique em **"Cadastrar"**. O usuário novo começa sem obras e sem módulos, inclusive curto prazo, terminalidade, segurança do trabalho, checklist de equipamentos e Quadro de Restrições: libere o que ele precisa na grade. Para um TST, libere também os módulos "Segurança do trabalho" e "Checklist de equipamentos": sem eles, as abas 3.1 e 3.2 não aparecem para ele. **Nenhum e-mail é enviado**: avise a pessoa para entrar com a conta Google desse e-mail. Se ela já usa outro sistema da empresa com a mesma conta, a conta é reaproveitada. Cadastrar também aprova um pedido de acesso pendente do mesmo e-mail.
 
 Mensagens: "Só contas @... podem ser cadastradas." (domínio errado) e "Usuário já cadastrado. Altere o papel e as obras na lista abaixo."
 

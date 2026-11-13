@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getRouteProfile } from '@/infrastructure/auth/supabase-server';
 import { getServiceClient } from '@/infrastructure/repositories/supabase/client';
-import { ACCESS_DOMAINS_LABEL, isAllowedEmail } from '@/application/access-request';
+import { ACCESS_DOMAINS_LABEL, isAllowedEmail, isExternalEmail } from '@/application/access-request';
 
 export const runtime = 'nodejs';
 const ROLES = ['viewer', 'planner', 'manager', 'admin'] as const;
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const profile = await getRouteProfile();
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Somente administradores podem cadastrar usuários.' }, { status: 403 });
 
-  let body: { email?: string; name?: string; role?: string; tst?: boolean; workIds?: string[] };
+  let body: { email?: string; name?: string; role?: string; tst?: boolean; workIds?: string[]; external?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -24,8 +24,16 @@ export async function POST(request: NextRequest) {
   const email = (body.email ?? '').trim().toLowerCase();
   const role = ROLES.includes(body.role as (typeof ROLES)[number]) ? (body.role as (typeof ROLES)[number]) : 'viewer';
   const workIds = Array.isArray(body.workIds) ? body.workIds.filter(id => typeof id === 'string') : [];
-  if (!isAllowedEmail(email))
-    return NextResponse.json({ error: `Só contas ${ACCESS_DOMAINS_LABEL} podem ser cadastradas.` }, { status: 400 });
+  // Conta de fora da ATR e da Takt (13/11/2026): só com a confirmação explícita do admin (`external`), para um
+  // erro de digitação no domínio não virar acesso de terceiro.
+  if (!isAllowedEmail(email)) {
+    if (!isExternalEmail(email)) return NextResponse.json({ error: 'Informe um e-mail válido.' }, { status: 400 });
+    if (body.external !== true)
+      return NextResponse.json(
+        { error: `Este e-mail não é ${ACCESS_DOMAINS_LABEL}. Para cadastrar uma conta externa, marque a confirmação.` },
+        { status: 400 },
+      );
+  }
 
   const service = getServiceClient();
   const created = await service.auth.admin.createUser({ email, email_confirm: true });

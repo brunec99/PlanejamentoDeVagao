@@ -13,6 +13,14 @@ export function isAllowedEmail(email: string | null | undefined): boolean {
   return ACCESS_DOMAINS.some(domain => normalized.endsWith(`@${domain}`));
 }
 
+/** Conta de fora dos dois domínios (13/11/2026, pedido do usuário: empreiteiros com Gmail não conseguiam
+ * entrar). Ela só entra se um admin a cadastrou em Configurações → Usuários, confirmando que é externa: o
+ * cadastro é a lista de exceções, sem tabela nova. Conta externa não pede acesso pela tela de login. */
+export function isExternalEmail(email: string | null | undefined): boolean {
+  const normalized = (email ?? '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) && !isAllowedEmail(normalized);
+}
+
 export const NOT_REGISTERED_REASON = 'sem-cadastro';
 
 export interface AccessRequestInput {

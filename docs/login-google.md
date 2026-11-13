@@ -69,7 +69,7 @@ Numa instalação nova não existe ninguém para liberar o primeiro acesso. Por 
 
 ## O que o sistema não faz
 
-Não cria senha, não envia "esqueci minha senha" e não aceita conta de fora dos dois domínios (ATR e Takt) — nem para visita, nem para cliente, nem temporariamente. Quem precisa ver a obra precisa de uma conta da ATR ou da Takt. Para liberar outro domínio, é uma linha em `ACCESS_DOMAINS` (`src/application/access-request.ts`), seguida de deploy. Se a conta Google de alguém for desativada pela empresa, o acesso ao sistema cai junto, sem nenhum passo adicional aqui.
+Não cria senha e não envia "esqueci minha senha". **Atualizado em 13/11/2026:** conta de fora dos dois domínios (ATR e Takt) passou a entrar quando um admin a cadastra como conta externa (ver "Contas externas", no fim); até então não entrava "nem para visita, nem para cliente, nem temporariamente". Quem precisa ver a obra precisa de uma conta da ATR ou da Takt. Para liberar outro domínio, é uma linha em `ACCESS_DOMAINS` (`src/application/access-request.ts`), seguida de deploy. Se a conta Google de alguém for desativada pela empresa, o acesso ao sistema cai junto, sem nenhum passo adicional aqui.
 
 ## "Faço login e volto para a tela de login" (23/09/2026)
 
@@ -103,3 +103,15 @@ Agora o botão é um formulário comum que abre `/login/google` (`src/app/login/
 A pedido do usuário, para facilitar testes, o sistema pode pular o login do Google **apenas localmente**. Com `DEV_AUTH_BYPASS_PROFILE_ID=<id do perfil>` no `.env.local`, o `next dev` entra direto com aquele perfil: o middleware deixa passar e o `getRouteProfile` devolve o perfil indicado (`src/infrastructure/auth/dev-bypass.ts`). Há duas travas. A variável só vale com `NODE_ENV=development` e é ignorada sempre que `VERCEL` estiver definida, então **o site publicado continua exigindo o Google**, mesmo que alguém configure a variável lá. Remover produção do login foi descartado: exporia dados reais e apagaria o registro de quem alterou o quê.
 
 Para voltar ao normal, apague a linha do `.env.local`. A retirada do código fica para quando o usuário pedir a volta do login também localmente.
+
+## Contas externas (13/11/2026)
+
+Pedido do usuário em 13/11/2026: dois contatos com Gmail (de uma empresa parceira) não conseguiam se cadastrar. O sistema recusava qualquer conta de fora de `@atrincorporadora.com.br` e `@taktengenharia.com.br`; ele pediu para mudar.
+
+- **Regra:** conta de fora dos dois domínios entra **só se um admin a cadastrou** em Configurações → Usuários. O cadastro é a lista de exceções; não há tabela nem migração nova.
+- **Cadastro:** ao digitar um e-mail de fora, o formulário mostra a confirmação "conta externa", e o botão só libera com ela marcada. A rota `POST /api/admin/invite` recusa e-mail de fora sem `external: true`, para um erro de digitação no domínio não virar acesso de terceiro.
+- **Login:** o retorno do login (`src/app/auth/callback/route.ts`) aceita a conta de fora quando ela já tem perfil. Sem perfil, é recusada como antes e **não** recebe o cartão de "Solicitar acesso": o pedido de acesso continua só para os dois domínios.
+- **O que a conta externa vê:** o mesmo que qualquer usuário do papel dela, só nas obras e nos módulos liberados. Não há marca de "externo" no perfil (`profiles` não guarda e-mail).
+- **Arquivos:** `isExternalEmail` em `src/application/access-request.ts`, `src/app/api/admin/invite/route.ts`, `src/app/auth/callback/route.ts`, `InviteForm` em `src/modules/configuracoes/settings-manager.tsx`, manual da Claudia (`acesso-configuracoes.ts`), `tests/access-request.test.ts`.
+- **Fora do sistema, não verificado:** o endereço público fica atrás do Cloudflare Access, que só manda o código para e-mails da política dele; os endereços externos precisam entrar lá também. E a tela de consentimento do Google do projeto precisa aceitar contas de fora da organização (tipo "Externo"); se estiver como "Interno", o Google recusa o Gmail antes de chegar ao sistema.
+- **Validação:** teste novo em `tests/access-request.test.ts`; CI inteiro na máquina. O login real de uma conta Gmail não foi exercitado.
